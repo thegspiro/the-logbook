@@ -1,5 +1,5 @@
 **🚒 Fire Department Intranet Platform**
-
+---
 **🌟 Project Overview**
 This is an internal intranet built using Python/Django and MySQL designed to manage daily operations, track compliance, coordinate events, and handle official department governance (meetings and voting).
 
@@ -8,7 +8,7 @@ The architecture is designed for flexibility and integration:
 **Granular Security:** Uses Object-Level Permissions for sensitive records.
 **API-First Approach:** Enables easy connection to platforms like Vector Solutions and Salesforce.
 **Responsive Design:** Optimized for desktop and mobile access, with an API backbone for a future native mobile app.
-
+---
 **🚀 Getting Started**
 Prerequisites
 Python 3.9
