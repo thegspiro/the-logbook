@@ -1,7 +1,3 @@
-Certainly\! Here is the complete `README.md` file in Markdown format, ready for you to copy and paste directly into your GitHub repository.
-
------
-
 # 🚒 Fire Department Intranet Platform
 
 ## 🌟 Project Overview
