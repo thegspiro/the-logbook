@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load static %}
+{% load mathfilters %}
+
+{% block title %}Shift Calendar & Sign-up{% endblock %}
+
+{% block content %}
+    <h1>📅 Shift Calendar & Sign-up</h1>
+    <hr>
+    
+    <div class="alert alert-info" role="alert">
+        <strong>Your Next Step:</strong> Review open slots and click 'Sign Up' to claim a position. You can only sign up for positions you are qualified for.
+    </div>
+    
+    <div class="d-flex justify-content-between mb-3">
+        <h5>Shifts from {{ today|date:"M d, Y" }} to {{ shift_data|last|default_if_none:""|date:"M d, Y" }}</h5>
+        <a href="{% url 'scheduling:ical_export' %}" class="btn btn-sm btn-outline-dark">📥 Export My Shifts (.ics)</a>
+    </div>
+
+    {% for shift in shift_data %}
+        <div class="card mb-3 shadow-sm 
+            {% if shift.is_fully_staffed %}border-success{% elif shift.date < today|date:"Y-m-d" %}border-secondary{% else %}border-primary{% endif %}">
+            
+            <div class="card-header d-flex justify-content-between align-items-center 
+                {% if shift.is_fully_staffed %}bg-success text-white{% else %}bg-light{% endif %}">
+                
+                <h5 class="mb-0">
+                    {{ shift.date|date:"l, M d" }} | {{ shift.template_name }} 
+                    <small class="text-muted ms-2">({{ shift.start_time|time:"h:i A" }} start)</small>
+                </h5>
+                
+                {% if shift.is_fully_staffed %}
+                    <span class="badge bg-light text-success fs-6">FULLY STAFFED</span>
+                {% elif shift.date < today|date:"Y-m-d" %}
+                    <span class="badge bg-secondary fs-6">PAST</span>
+                {% else %}
+                    <span class="badge bg-danger fs-6">OPEN SLOTS</span>
+                {% endif %}
+            </div>
+
+            <div class="card-body">
+                <div class="row">
+                    {% for slot in shift.slots %}
+                        <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                            <div class="card h-100 p-2 
+                                {% if slot.is_user_signed_up %}bg-primary text-white border-primary{% elif slot.is_filled %}bg-light border-secondary{% elif slot.is_qualified %}border-success{% else %}border-warning{% endif %}">
+                                
+                                <div class="card-title mb-1">
+                                    <span class="fw-bold fs-6">{{ slot.position }}</span>
+                                </div>
+                                
+                                {% if slot.is_user_signed_up %}
+                                    <p class="mb-1 small">You are filling this slot.</p>
+                                    <form method="post" action="{% url 'scheduling:shift_drop' slot.id %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-light w-100" 
+                                            onclick="return confirm('Are you sure you want to drop the {{ slot.position }} shift on {{ shift.date|date:"M d" }}?');">
+                                            DROP SHIFT
+                                        </button>
+                                    </form>
+
+                                {% elif slot.is_filled %}
+                                    <p class="mb-1 small text-muted">Filled by: {{ slot.filled_by|default:"N/A" }}</p>
+                                    <span class="badge bg-secondary">FILLED</span>
+                                    
+                                {% elif slot.is_qualified %}
+                                    <p class="mb-1 small text-success">Open & Qualified!</p>
+                                    <form method="post" action="{% url 'scheduling:shift_signup' slot.id %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-success w-100">
+                                            SIGN UP
+                                        </button>
+                                    </form>
+                                    
+                                {% else %}
+                                    <p class="mb-1 small text-warning">Open (Not Qualified)</p>
+                                    <span class="badge bg-warning text-dark">LACKS CERT</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="alert alert-warning">No upcoming shifts have been generated yet.</div>
+    {% endfor %}
+
+{% endblock %}
