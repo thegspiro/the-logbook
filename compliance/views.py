@@ -1,153 +1,163 @@
-# compliance/views.py
-
 from django.shortcuts import render, redirect, get_object_or_404
-from django.views.generic import View
+from django.urls import reverse_lazy
+from django.views.generic import TemplateView, View, CreateView, UpdateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
-from django.contrib.auth.models import Group
-from django.db import IntegrityError, transaction
+from django.db.models import Q
+from datetime import date, timedelta
 
-# Import local models and forms
-from .models import ComplianceStandard, GroupProfile
-from .forms import ComplianceStandardForm, GroupProfileForm, ComplianceReportForm
-from accounts.models import FireDeptUser # To check member assignments
-from scheduling.utils import get_member_compliance_status # To generate reports
-from fd_intranet.utils import ComplianceOfficerRequiredMixin # For protection
+from fd_intranet.utils import IsComplianceOfficerMixin
+from .models import SafetyStandard, MemberComplianceRecord, SafetyNetConfiguration
+from .forms import SafetyStandardForm, MemberComplianceRecordForm, SafetyNetConfigurationForm
+from accounts.models import UserProfile, MemberCertification
+from scheduling.models import Shift, ShiftSlot, Position
+from django.contrib.auth.models import User
 
+# --- 1. COMPLIANCE OFFICER DASHBOARD AND OVERVIEWS ---
 
-# --- 1. Main Compliance Officer Dashboard View (Protected) ---
-
-class ComplianceOfficerDashboardView(LoginRequiredMixin, ComplianceOfficerRequiredMixin, View):
+class ComplianceDashboardView(IsComplianceOfficerMixin, TemplateView):
     """
-    The central hub for the Compliance Officer to manage standards, groups, and reports.
+    Main landing page for the Compliance Officer.
+    Provides an overview of department compliance and access to safety net tools.
     """
     template_name = 'compliance/compliance_dashboard.html'
-    
-    def get(self, request):
-        standard_form = ComplianceStandardForm()
-        report_form = ComplianceReportForm()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         
-        # Data for display tables
-        all_standards = ComplianceStandard.objects.all().select_related('role').order_by('role__name', 'activity_type')
-        all_groups = Group.objects.all().order_by('name')
+        # 1. Compliance Status Overview
+        # Find all active members
+        active_members_count = User.objects.filter(is_active=True, is_staff=False).count()
         
-        context = {
-            'standard_form': standard_form,
-            'report_form': report_form,
-            'all_standards': all_standards,
-            'all_groups': all_groups,
-            'report_data': None, # Will be populated on POST if running a report
-        }
-        return render(request, self.template_name, context)
-
-    def post(self, request):
-        # Dispatch based on which form was submitted
-        if 'add_group' in request.POST:
-            return self.handle_add_group(request)
-        elif 'delete_group' in request.POST:
-            return self.handle_delete_group(request)
-        elif 'add_standard' in request.POST:
-            return self.handle_add_standard(request)
-        elif 'generate_report' in request.POST:
-            return self.handle_generate_report(request)
+        # Find all mandatory annual standards
+        mandatory_standards = SafetyStandard.objects.filter(is_mandatory_annual=True)
         
-        return redirect('compliance_dashboard')
-
-
-# --- 2. Group Management Handlers ---
-
-def handle_add_group(self, request):
-    group_name = request.POST.get('group_name')
-    if group_name:
-        try:
-            # Create the Django Group
-            new_group = Group.objects.create(name=group_name)
+        # Calculate non-compliant members for all mandatory standards
+        non_compliant_users = User.objects.none()
+        for standard in mandatory_standards:
+            # Users who are active but do NOT have a current, compliant record
+            non_compliant_users |= User.objects.filter(
+                is_active=True, is_staff=False
+            ).exclude(
+                membercompliancerecord__standard=standard,
+                membercompliancerecord__is_compliant=True,
+                membercompliancerecord__date_met__gte=date.today() - timedelta(days=365) # Met within last year
+            )
             
-            # Immediately create an empty GroupProfile for the safety net system
-            GroupProfile.objects.create(group=new_group)
-            
-            messages.success(request, f"Successfully added new membership group: {group_name}.")
-        except IntegrityError:
-            messages.error(request, f"A group named '{group_name}' already exists.")
+        # Get unique non-compliant users
+        non_compliant_count = non_compliant_users.distinct().count()
+
+        context['total_active_members'] = active_members_count
+        context['non_compliant_count'] = non_compliant_count
+        context['compliance_percentage'] = (
+            (active_members_count - non_compliant_count) / active_members_count * 100
+            if active_members_count > 0 else 0
+        )
+
+        # 2. Safety Net Overview
+        context['safety_nets'] = SafetyNetConfiguration.objects.filter(is_active=True).order_by('type', 'name')
         
-    return redirect('compliance_dashboard')
-
-@transaction.atomic
-def handle_delete_group(self, request):
-    group_id = request.POST.get('group_id')
-    group_to_delete = get_object_or_404(Group, id=group_id)
-
-    # 1. CRITICAL CHECK: ENSURE NO MEMBERS ARE ASSIGNED
-    if FireDeptUser.objects.filter(groups=group_to_delete).exists():
-        # THIS IS THE SAFETY NET TRIGGER WE DESIGNED
-        # The user's role will become NONE, triggering the email alert from the scheduled job
-        messages.error(request, f"Cannot delete group **{group_to_delete.name}**! Please reassign all members before deleting.")
-        return redirect('compliance_dashboard')
+        # 3. Qualification Gaps in Upcoming Shifts
+        context['upcoming_gaps'] = self.get_upcoming_gaps()
         
-    # 2. CRITICAL: DELETE RELATED STANDARDS AND PROFILES
-    ComplianceStandard.objects.filter(role=group_to_delete).delete()
-    GroupProfile.objects.filter(group=group_to_delete).delete()
-    
-    # 3. Delete the Group
-    group_to_delete.delete()
-    messages.warning(request, f"Membership group '{group_to_delete.name}' and all associated standards were deleted.")
-    
-    return redirect('compliance_dashboard')
-
-
-# --- 3. Standards Management Handler ---
-
-def handle_add_standard(self, request):
-    standard_form = ComplianceStandardForm(request.POST)
-    if standard_form.is_valid():
-        try:
-            standard_form.save()
-            messages.success(request, "New compliance standard added successfully.")
-        except Exception as e:
-            messages.error(request, f"Error saving standard: {e}")
-    else:
-        messages.error(request, "Failed to add standard. Check form data.")
-    
-    return redirect('compliance_dashboard')
-
-
-# --- 4. Reporting Handler ---
-
-def handle_generate_report(self, request):
-    report_form = ComplianceReportForm(request.POST)
-    if report_form.is_valid():
-        start_date = report_form.cleaned_data['start_date']
-        end_date = report_form.cleaned_data['end_date']
+        return context
         
-        # Get all users who are not superusers/inactive
-        members = FireDeptUser.objects.filter(is_active=True, is_superuser=False)
-        
-        full_compliance_report = []
-        for member in members:
-            # We use the utility function to check the annual status
-            # NOTE: For true report generation, get_member_compliance_status 
-            # would need a mode to check compliance over arbitrary dates (start_date/end_date)
-            # For simplicity here, we rely on the annual check (period='ANNUAL')
-            
-            report_for_member = get_member_compliance_status(member, period='ANNUAL') 
-            
-            for item in report_for_member:
-                full_compliance_report.append({
-                    'member': member.get_full_name(),
-                    'role': item['standard_role'],
-                    'activity': item['activity'],
-                    'required': item['required'],
-                    'actual': item['actual'],
-                    'percentage': item['percentage'],
-                    'status': item['status'],
+    def get_upcoming_gaps(self):
+        """Identifies open slots in upcoming shifts where a qualification gap exists."""
+        shifts = Shift.objects.filter(date__gte=date.today()).order_by('date')[:7]
+        gap_data = []
+
+        for shift in shifts:
+            slots = shift.slots.filter(is_filled=False, position__required_certification__isnull=False)
+            if slots.exists():
+                gap_data.append({
+                    'shift': shift,
+                    'slots_with_gap': [
+                        slot.position.code for slot in slots
+                    ]
                 })
+        return gap_data
 
-        # Render the dashboard again, but this time with the report data
-        context = self.get(request).context
-        context['report_data'] = full_compliance_report
-        context['report_dates'] = {'start': start_date, 'end': end_date}
-        
-        return render(request, self.template_name, context)
+# --- 2. SAFETY STANDARD AND MEMBER RECORD MANAGEMENT ---
+
+class SafetyStandardListView(IsComplianceOfficerMixin, TemplateView):
+    """Lists all defined safety standards."""
+    template_name = 'compliance/safety_standard_list.html'
     
-    messages.error(request, "Invalid dates for report generation.")
-    return redirect('compliance_dashboard')
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['standards'] = SafetyStandard.objects.all().order_by('name')
+        return context
+
+class SafetyStandardCreateUpdateView(IsComplianceOfficerMixin, CreateView, UpdateView):
+    """Allows creation and updating of SafetyStandards."""
+    model = SafetyStandard
+    form_class = SafetyStandardForm
+    template_name = 'compliance/safety_standard_form.html'
+    success_url = reverse_lazy('compliance:safety_standard_list')
+
+    def form_valid(self, form):
+        action = 'updated' if self.object else 'created'
+        messages.success(self.request, f"Safety Standard '{form.instance.name}' {action} successfully.")
+        return super().form_valid(form)
+
+class MemberRecordCreateView(IsComplianceOfficerMixin, CreateView):
+    """Allows creation of a new compliance record for a member."""
+    model = MemberComplianceRecord
+    form_class = MemberComplianceRecordForm
+    template_name = 'compliance/member_record_form.html'
+    success_url = reverse_lazy('compliance:compliance_dashboard')
+
+    def form_valid(self, form):
+        form.instance.verified_by = self.request.user
+        messages.success(self.request, f"Compliance record created for {form.instance.user.username}.")
+        return super().form_valid(form)
+
+# --- 3. SAFETY NET CONFIGURATION ---
+
+class SafetyNetListView(IsComplianceOfficerMixin, TemplateView):
+    """Lists all active and inactive safety net configurations."""
+    template_name = 'compliance/safety_net_list.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['active_nets'] = SafetyNetConfiguration.objects.filter(is_active=True).order_by('type', 'name')
+        context['inactive_nets'] = SafetyNetConfiguration.objects.filter(is_active=False).order_by('type', 'name')
+        return context
+
+class SafetyNetCreateUpdateView(IsComplianceOfficerMixin, CreateView, UpdateView):
+    """Allows creation and updating of SafetyNetConfiguration rules."""
+    model = SafetyNetConfiguration
+    form_class = SafetyNetConfigurationForm
+    template_name = 'compliance/safety_net_form.html'
+    success_url = reverse_lazy('compliance:safety_net_list')
+
+    def form_valid(self, form):
+        action = 'updated' if self.object else 'created'
+        messages.success(self.request, f"Safety Net '{form.instance.name}' {action} successfully.")
+        return super().form_valid(form)
+
+# --- 4. CORE COMPLIANCE CHECK FUNCTION (Used by other apps like Scheduling) ---
+
+class RunSafetyCheckView(IsComplianceOfficerMixin, View):
+    """
+    An administrative endpoint to manually trigger a full department compliance check.
+    (In a production system, this would typically run as a scheduled background task.)
+    """
+    def get(self, request):
+        
+        # Get all active mandatory standards
+        mandatory_standards = SafetyStandard.objects.filter(is_mandatory_annual=True)
+        active_members = User.objects.filter(is_active=True, is_staff=False)
+        
+        non_compliant_count = 0
+        
+        for user in active_members:
+            is_user_compliant = True
+            
+            for standard in mandatory_standards:
+                # Check for a current, compliant record for this standard
+                is_compliant = MemberComplianceRecord.objects.filter(
+                    user=user,
+                    standard=standard,
+                    is_compliant=True
