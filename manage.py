@@ -6,10 +6,11 @@ import sys
 def main():
     """Run administrative tasks."""
     
-    # CRITICAL FIX: Ensure the directory containing the inner 'fd_intranet' 
-    # module is on the path. This handles non-standard project creation.
-    current_path = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, current_path)
+    # CRITICAL FIX for ModuleNotFoundError: No module named 'fd_intranet'
+    # This line explicitly adds the inner project directory to the Python path.
+    # It ensures the 'fd_intranet' module containing settings.py can be found.
+    # 
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'fd_intranet'))
 
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fd_intranet.settings')
     try:
