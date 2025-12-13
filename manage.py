@@ -3,10 +3,12 @@
 import os
 import sys
 
-
 def main():
     """Run administrative tasks."""
-    # CRITICAL LINE: It tells Django where to find your settings.py file.
+    # ADDED LINE: Insert the current directory (project root) into Python's path
+    # This allows 'fd_intranet' to be found.
+    sys.path.insert(0, os.path.join(os.getcwd(), 'fd_intranet')) 
+    
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fd_intranet.settings')
     try:
         from django.core.management import execute_from_command_line
