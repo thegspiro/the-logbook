@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Shift Scheduler Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-calendar-range me-2"></i> Shift Scheduler Dashboard</h1>
+        <p class="lead text-muted">Manage shift templates and use the mass generation tool to build the operational calendar.</p>
+    </div>
+</div>
+
+<div class="row mb-5">
+    
+    <div class="col-lg-5 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white fw-bold">
+                <i class="bi bi-calendar-plus-fill me-2"></i> Create New Shift Template
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{% url 'scheduler_dashboard' %}">
+                    {% csrf_token %}
+                    
+                    {% for field in template_form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<small class="form-text text-muted">{{ field.help_text }}</small>{% endif %}
+                        </div>
+                    {% endfor %}
+                    
+                    <button type="submit" name="create_template" value="true" class="btn btn-primary w-100 mt-3">
+                        Save Shift Template
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-7 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white fw-bold">
+                <i class="bi bi-list-task me-2"></i> Current Shift Templates
+            </div>
+            <div class="card-body p-0">
+                {% if shift_templates %}
+                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+                    <table class="table table-sm table-striped small mb-0">
+                        <thead class="sticky-top bg-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Start Time</th>
+                                <th>Staff Req.</th>
+                                <th>Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for template in shift_templates %}
+                            <tr>
+                                <td><span class="fw-bold">{{ template.name }}</span></td>
+                                <td>{{ template.standard_start_time|time:"g:i A" }}</td>
+                                <td>{{ template.required_staff }}</td>
+                                <td><span class="badge bg-secondary">{{ template.shift_type.name }}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="p-3 text-muted">No shift templates defined yet. Start by creating one!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white fw-bold">
+                <i class="bi bi-calendar2-week-fill me-2"></i> Mass Schedule Generation Tool
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Select a date range and the templates you want to apply to every day within that range. **USE CAUTION**</p>
+                <form method="POST" action="{% url 'scheduler_dashboard' %}">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ generation_form.start_date.id_for_label }}" class="form-label">Start Date</label>
+                            {{ generation_form.start_date }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ generation_form.end_date.id_for_label }}" class="form-label">End Date</label>
+                            {{ generation_form.end_date }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Templates to Apply</label>
+                            <div style="max-height: 100px; overflow-y: auto; border: 1px solid #dee2e6; padding: 5px;">
+                                {{ generation_form.templates_to_generate }}
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end mb-3">
+                            <button type="submit" name="generate_shifts" value="true" class="btn btn-danger w-100">
+                                <i class="bi bi-tools me-2"></i> GENERATE SHIFTS
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
