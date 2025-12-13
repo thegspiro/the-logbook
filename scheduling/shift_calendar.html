@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Shift Calendar{% endblock %}
+
+{% block content %}
+
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-calendar3 me-2"></i> Department Shift Calendar</h1>
+        <p class="lead text-muted">Browse all upcoming operational shifts and sign up for open positions where you are qualified.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white fw-bold">
+                Upcoming Shifts
+            </div>
+            <div class="card-body p-0">
+                {% if assignments %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Date / Shift</th>
+                                <th>Time</th>
+                                <th>Required Positions</th>
+                                <th>Open Slots</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in assignments %}
+                            <tr class="table-primary">
+                                <td colspan="4" class="fw-bold fs-6 pt-3 pb-1">
+                                    {{ assignment.date|date:"l, M j, Y" }} - {{ assignment.shift_template.name }}
+                                </td>
+                            </tr>
+                            {% for slot in assignment.shift_slots.all %}
+                            <tr>
+                                <td></td>
+                                <td>{{ assignment.start_datetime|time:"g:i A" }} - {{ assignment.end_datetime|time:"g:i A" }}</td>
+                                <td>
+                                    <span class="fw-bold">{{ slot.position.name }}</span>
+                                    {% if slot.position.required_roles.all or slot.position.required_certifications.all %}
+                                    <br><small class="text-muted">Requires: 
+                                        {% for role in slot.position.required_roles.all %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        {% for cert in slot.position.required_certifications.all %} | {{ cert.name }}{% endfor %}
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if slot.is_filled %}
+                                        <span class="badge bg-success">FILLED by {{ slot.member.last_name }}</span>
+                                    {% else %}
+                                        <form method="POST" action="{% url 'shift_signup' slot.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Confirm signup for {{ slot.position.name }} on {{ assignment.date }}?');">
+                                                <i class="bi bi-check-circle-fill me-1"></i> Sign Up
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No positions defined for this shift template.</td>
+                            </tr>
+                            {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="p-3 text-muted">No shift assignments have been generated yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
