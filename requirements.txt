@@ -1,26 +1,20 @@
-# Django Framework and Core Utils
+# CORE DJANGO AND WEB SERVER
 Django>=4.2,<5.0
-python-dotenv  # For loading environment variables securely
-psycopg2-binary  # Database driver for PostgreSQL (Replace with 'mysqlclient' if using MySQL)
-gunicorn # WSGI HTTP Server for production deployment
+gunicorn==20.1.0  # For production deployment (optional for local dev)
 
-# Security and Authentication
-django-otp # Core OTP support
-django-two-factor-auth # Mandatory 2FA implementation
-pyotp # Dependency for generating OTPs
-qrcode # Dependency for generating 2FA QR codes
-python-social-auth[django] # Base for social authentication (SSO)
-social-auth-app-django
+# DATABASE
+# Since we are using sqlite3 (default), we don't need a specific package here.
+# If using PostgreSQL, we would add: psycopg2-binary
 
-# Specific Social Authentication Backends
-social-auth-core[google] # For Google SSO
-social-auth-core[azuread] # For Microsoft/Azure AD SSO
+# CONFIGURATION & SECURITY
+python-decouple==3.8  # For reading the .env file
+django-environ==0.11.2 # Alternative/robust .env handler (we'll use this)
+django-otp==1.2.1     # Base package for One-Time Password framework
+django-two-factor-auth==1.15.0 # Integrates two-factor authentication (required for staff)
 
-# File Handling and Image Processing
-Pillow # Required for image manipulation and file validations
+# SCHEDULING & TIME
+python-dateutil==2.8.2 # Robust date/time parsing
+icalendar==5.0.12      # For generating downloadable .ics calendar files
 
-# Email and Messaging (Required for notifications, alerts, and 2FA recovery)
-sendgrid # Example: Replace with your chosen email provider's library if different (e.g., Mailgun)
-
-# Utility and Development (Optional but Recommended)
-django-debug-toolbar # Excellent tool for local development performance tracing
+# EMAIL
+django-sendgrid-v5==3.0.0 # If using SendGrid (we configured for general SMTP/Gmail, so keep it for compatibility)
