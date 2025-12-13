@@ -1,88 +1,103 @@
-# accounts/views.py
-
-from datetime import date
-from django.shortcuts import render, get_object_or_404, redirect
-from django.views.generic import View, UpdateView
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
-from django.contrib.auth.models import Group
+from django.views.generic import TemplateView, UpdateView, CreateView, View
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponse
+from django.contrib import messages
+from django.db import transaction
 
-# Import models from accounts and other apps
-from .models import FireDeptUser, PersonnelRecord, PendingChange
-from scheduling.models import ShiftAssignment, ShiftSlot # For shift data
-from inventory.models import Transaction # For inventory data
-from scheduling.utils import get_member_compliance_status # For hours/compliance
-from fd_intranet.utils import ( # Role mixins for protection
-    is_secretary, is_authorized_role_assignment_officer, 
-    SecretaryRequiredMixin, AuthorizedRoleAssignmentOfficerMixin
-)
+from fd_intranet.utils import IsSecretaryMixin, IsStaffOrAdminMixin
+from .models import UserProfile, MemberCertification, CertificationStandard, DataChangeRequest
+from .forms import ProfileEditForm, CertificationUploadForm
+from django.contrib.auth.models import User
 
-# Placeholder imports for forms (must be created in accounts/forms.py)
-# from .forms import MemberProfileForm, CertificationUploadForm, PendingChangeApprovalForm
+# --- 1. MEMBER-FACING VIEWS ---
 
-
-# --- 1. Member Dashboard View (Aggregates all personalized data) ---
-
-class MemberDashboardView(LoginRequiredMixin, View):
-    """The main landing page showing shifts, compliance, and inventory."""
+class MemberDashboardView(LoginRequiredMixin, TemplateView):
+    """
+    The main landing page for all logged-in members.
+    Displays core profile info and lists pending certifications.
+    """
+    template_name = 'accounts/member_dashboard.html'
     
-    def get(self, request):
-        member = request.user
-        today = date.today()
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
         
-        # A. SHIFTS: Upcoming Assigned Shifts (from scheduling app)
-        upcoming_shifts = ShiftAssignment.objects.filter(
-            shift_slot__member=member,
-            date__gte=today
-        ).order_by('date')
+        # Display the member's approved certifications
+        context['approved_certs'] = MemberCertification.objects.filter(
+            user=user, verification_status='APPROVED'
+        ).select_related('standard').order_by('-expiration_date')
         
-        # B. SHIFTS: Available Open Shifts (Needs qualification check logic)
-        # In a full implementation, you would filter open slots and run 
-        # scheduling.utils.check_member_eligibility() on each one.
-        available_slots = ShiftSlot.objects.filter(
-            is_filled=False,
-            shift_assignment__date__gte=today
-        ).select_related('shift_assignment', 'position').order_by('shift_assignment__date')[:5]
+        # Display certifications pending review
+        context['pending_certs'] = MemberCertification.objects.filter(
+            user=user, verification_status='PENDING'
+        ).select_related('standard').order_by('-submission_date')
         
-        # C. COMPLIANCE: Hours and Status
-        annual_compliance = get_member_compliance_status(member, period='ANNUAL')
-        
-        # D. INVENTORY: Assigned Items (from inventory app)
-        assigned_inventory = Transaction.objects.filter(
-            member=member,
-            transaction_type='ASSIGNMENT',
-            # Assuming a field 'is_returned=False' is added to Transaction model
-            # is_returned=False 
-        ).select_related('item').order_by('-transaction_date')
-        
-        # E. NOTICES: Top Department Notices (from documents app)
-        # notices = Document.objects.filter(category='NOTICE').order_by('-upload_date')[:5]
+        # Display pending data changes
+        context['pending_data_changes'] = DataChangeRequest.objects.filter(
+            user=user, status='PENDING'
+        ).order_by('-submitted_on')
 
-        context = {
-            'member': member,
-            'upcoming_shifts': upcoming_shifts,
-            'available_slots': available_slots,
-            'annual_compliance': annual_compliance,
-            'assigned_inventory': assigned_inventory,
-            # 'notices': notices,
-        }
-        return render(request, 'accounts/member_dashboard.html', context)
-        # 
+        return context
 
-# --- 2. Member Self-Service Update Views ---
+class ProfileEditView(LoginRequiredMixin, UpdateView):
+    """
+    Allows a member to update their core profile fields.
+    Changes are submitted as a DataChangeRequest for Secretary review.
+    """
+    model = UserProfile
+    form_class = ProfileEditForm
+    template_name = 'accounts/profile_edit.html'
+    success_url = reverse_lazy('accounts:member_dashboard')
 
-class MemberProfileUpdateView(LoginRequiredMixin, UpdateView):
-    """Allows member to initiate changes to their core profile data."""
-    model = FireDeptUser
-    # form_class = MemberProfileForm # Placeholder
-    fields = ['address', 'city', 'state', 'zip_code', 'phone_number', 'email'] # Subset of fields
-    template_name = 'accounts/profile_update.html'
-    success_url = reverse_lazy('profile_edit')
+    def get_object(self):
+        # Ensure only the logged-in user can edit their own profile
+        return self.request.user.userprofile
     
-    def get_object(self, queryset=None):
-        return self.request.user
+    def form_valid(self, form):
+        # We process the form data by creating a DataChangeRequest, not saving directly.
+        
+        # 1. Identify which fields changed
+        changed_fields = form.changed_data
+        user = self.request.user
+        
+        if not changed_fields:
+            messages.info(self.request, "No changes detected.")
+            return redirect(self.success_url)
+            
+        # 2. Create a DataChangeRequest for each changed field
+        for field_name in changed_fields:
+            new_value = form.cleaned_data.get(field_name)
+            
+            # Check for existing PENDING requests for this field
+            existing_request = DataChangeRequest.objects.filter(
+                user=user, field_name=field_name, status='PENDING'
+            ).exists()
+            
+            if existing_request:
+                messages.warning(self.request, f"Your request to change '{field_name}' is already pending review.")
+                continue
+
+            # Create the new request
+            DataChangeRequest.objects.create(
+                user=user,
+                field_name=field_name,
+                new_value=str(new_value) if new_value is not None else ''
+            )
+        
+        messages.success(self.request, "Your profile updates have been submitted for Secretary review.")
+        return redirect(self.success_url)
+
+class CertificationUploadView(LoginRequiredMixin, CreateView):
+    """
+    Allows a member to upload a new certification document.
+    The uploaded document enters the verification queue.
+    """
+    model = MemberCertification
+    form_class = CertificationUploadForm
+    template_name = 'accounts/certification_upload.html'
+    success_url = reverse_lazy('accounts:member_dashboard')
 
     def form_valid(self, form):
-        # Instead of saving the user directly, save changes to PendingChange
+        form.instance.user
