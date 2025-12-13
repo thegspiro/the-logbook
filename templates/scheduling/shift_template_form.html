@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Shift Template Form{% endblock %}
+
+{% block content %}
+    <h1>📝 Define Shift Template</h1>
+    <hr>
+    
+    <div class="alert alert-info">
+        Define the template (e.g., 'A-Shift') and then specify the minimum required positions/slots for that template (e.g., 1 Captain, 2 Firefighters).
+    </div>
+
+    <form method="post" id="template-form">
+        {% csrf_token %}
+        
+        <div class="row">
+            <div class="col-lg-4">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">Template Details</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                                {{ field }}
+                                {% for error in field.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+                                {% if field.help_text %}<small class="form-text text-muted">{{ field.help_text }}</small>{% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Required Positions (Slots)</h5>
+                    </div>
+                    <div class="card-body">
+                        {{ slot_formset.management_form }}
+                        
+                        <div id="slot-formset-container">
+                            {% for form in slot_formset %}
+                                <div class="p-3 mb-2 border rounded formset-row {% if form.instance.pk %}border-primary{% else %}border-secondary{% endif %}">
+                                    <div class="row align-items-end">
+                                        <div class="col-6">
+                                            <label for="{{ form.position.id_for_label }}" class="form-label">Position</label>
+                                            {{ form.position }}
+                                            {% for error in form.position.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+                                        </div>
+                                        <div class="col-4">
+                                            <label for="{{ form.count.id_for_label }}" class="form-label">Count</label>
+                                            {{ form.count }}
+                                            {% for error in form.count.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+                                        </div>
+                                        <div class="col-2 text-end">
+                                            {% if form.instance.pk %}
+                                                {{ form.DELETE }}
+                                                <label for="{{ form.DELETE.id_for_label }}" class="btn btn-sm btn-danger w-100 mt-2">Delete</label>
+                                            {% else %}
+                                                <button type="button" class="btn btn-sm btn-outline-danger remove-form-row w-100">Remove</button>
+                                            {% endif %}
+                                            {{ form.id }}
+                                        </div>
+                                    </div>
+                                    <small class="text-danger">{{ form.non_field_errors }}</small>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <button type="button" id="add-form-row" class="btn btn-sm btn-outline-secondary mt-3">➕ Add Another Position</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-success btn-lg">💾 Save Shift Template</button>
+        <a href="{% url 'scheduling:scheduler_dashboard' %}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+
+    </form>
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Find the empty form template provided by Django
+        var $emptyForm = $('#slot-formset-container').children('.formset-row:last').clone(true);
+        $emptyForm.find(':input').each(function() {
+            var name = $(this).attr('name').replace(/-\d+-/g, '-__prefix__-');
+            var id = 'id_' + name;
+            $(this).attr({'name': name, 'id': id}).val('');
+        });
+        $emptyForm.removeClass('border-primary').addClass('border-secondary').show();
+        
+        // Remove the cloned empty form from initial view
+        $('#slot-formset-container').children('.formset-row:last').hide();
+        
+        var formCount = parseInt($('#id_form-TOTAL_FORMS').val());
+
+        $('#add-form-row').click(function() {
+            var newForm = $emptyForm.clone(true);
+            newForm.html(newForm.html().replace(/__prefix__/g, formCount));
+            
+            // Add a remove button for new (non-saved) forms
+            newForm.find('.col-2').html(
+                '<button type="button" class="btn btn-sm btn-outline-danger remove-form-row w-100">Remove</button>'
+            );
+            
+            $('#slot-formset-container').append(newForm);
+            formCount++;
+            $('#id_form-TOTAL_FORMS').val(formCount);
+        });
+
+        // Function to handle removing a form row
+        $(document).on('click', '.remove-form-row', function() {
+            $(this).closest('.formset-row').remove();
+            
+            // Decrement the total form count (optional but good practice)
+            formCount--;
+            $('#id_form-TOTAL_FORMS').val(formCount);
+            
+            // Re-index the remaining forms to prevent formset errors
+            $('#slot-formset-container').children('.formset-row').each(function(index) {
+                $(this).find(':input').each(function() {
+                    var name = $(this).attr('name').replace(/-\d+-/g, '-' + index + '-');
+                    var id = 'id_' + name;
+                    $(this).attr({'name': name, 'id': id});
+                });
+            });
+        });
+        
+        // Handle deletion of existing (saved) forms
+        $('#slot-formset-container').on('change', 'input[type="checkbox"][id$="-DELETE"]', function() {
+            var row = $(this).closest('.formset-row');
+            if ($(this).is(':checked')) {
+                row.addClass('bg-danger text-white').find('.form-control').prop('disabled', true);
+            } else {
+                row.removeClass('bg-danger text-white').find('.form-control').prop('disabled', false);
+            }
+        });
+        
+        // Show existing forms that are not marked for deletion (they are hidden by default cloning logic)
+        $('#slot-formset-container').children('.formset-row').show();
+    });
+</script>
+{% endblock %}
