@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Safety Net Configurations{% endblock %}
+
+{% block content %}
+    <h1>⚙️ Safety Net Configurations</h1>
+    <hr>
+    
+    <div class="mb-3">
+        <a href="{% url 'compliance:safety_net_create' %}" class="btn btn-success">➕ Create New Safety Net</a>
+        <a href="{% url 'compliance:compliance_dashboard' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Active Safety Nets ({{ active_nets.count }})</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Applies to Position</th>
+                        <th>Enforcement Value</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for net in active_nets %}
+                    <tr>
+                        <td><strong>{{ net.name }}</strong></td>
+                        <td><span class="badge bg-dark">{{ net.get_type_display }}</span></td>
+                        <td>{% if net.position %}{{ net.position.name }}{% else %}N/A{% endif %}</td>
+                        <td class="fw-bold text-danger">{{ net.enforcement_value }}</td>
+                        <td>
+                            <a href="{% url 'compliance:safety_net_edit' net.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No active safety net configurations defined.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">Inactive Safety Nets ({{ inactive_nets.count }})</h5>
+        </div>
+        <div class="card-body">
+            {% if inactive_nets %}
+            <ul class="list-group">
+                {% for net in inactive_nets %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ net.name }} - <span class="text-muted">{{ net.get_type_display }}</span>
+                        <a href="{% url 'compliance:safety_net_edit' net.pk %}" class="btn btn-sm btn-outline-secondary">Activate/Edit</a>
+                    </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+                <p class="text-muted mb-0">No inactive safety net configurations.</p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
