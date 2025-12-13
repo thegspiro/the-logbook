@@ -1,63 +1,84 @@
-from django.contrib.auth.mixins import UserPassesTestMixin
+from django.contrib.auth.mixins import AccessMixin
+from django.contrib.auth.models import Group
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.contrib import messages
+import logging
 
-# --- Custom Group-Based Permission Mixins ---
+logger = logging.getLogger(__name__)
 
-class IsSecretaryMixin(UserPassesTestMixin):
-    """
-    Mixin to check if the user belongs to the 'Secretary' group.
-    Used to gate access to member verification queues and core user management.
-    """
-    def test_func(self):
-        # The 'Secretary' group is created via the load_initial_data management command
-        return self.request.user.groups.filter(name='Secretary').exists()
+# --- Core Utility Functions ---
 
-    def handle_no_permission(self):
-        # Redirect unauthorized users to the dashboard
-        return redirect(reverse_lazy('member_dashboard'))
+def is_in_group(user, group_name):
+    """
+    Utility function to check if a user belongs to a specific Django Group.
+    """
+    if user.is_authenticated:
+        # Check if user is a superuser (admin) - they bypass all group checks
+        if user.is_superuser:
+            return True
+        
+        # Check by group name
+        return user.groups.filter(name=group_name).exists()
+    return False
 
-class IsComplianceOfficerMixin(UserPassesTestMixin):
-    """
-    Mixin to check if the user belongs to the 'Compliance Officer' group.
-    Used to gate access to the Compliance Dashboard and monitoring tools.
-    """
-    def test_func(self):
-        return self.request.user.groups.filter(name='Compliance Officer').exists()
+# --- Custom Permission Mixins (Role-Based Access Control) ---
 
-    def handle_no_permission(self):
-        return redirect(reverse_lazy('member_dashboard'))
-
-class IsQuartermasterMixin(UserPassesTestMixin):
+class GroupRequiredMixin(AccessMixin):
     """
-    Mixin to check if the user belongs to the 'Quartermaster' group.
-    Used to gate access to the Inventory Management Dashboard.
+    Mixin that checks if the user is in one of the specified groups.
+    If the user is logged in but not authorized, they are redirected to the dashboard.
     """
-    def test_func(self):
-        return self.request.user.groups.filter(name='Quartermaster').exists()
-
-    def handle_no_permission(self):
-        return redirect(reverse_lazy('member_dashboard'))
-
-class IsSchedulerMixin(UserPassesTestMixin):
-    """
-    Mixin to check if the user belongs to the 'Scheduler' group.
-    Used to gate access to the Shift Template and Mass Generation tools.
-    """
-    def test_func(self):
-        return self.request.user.groups.filter(name='Scheduler').exists()
-
-    def handle_no_permission(self):
-        return redirect(reverse_lazy('member_dashboard'))
-
-# General Staff Mixin (Superusers and Admins are always staff)
-class IsStaffOrAdminMixin(UserPassesTestMixin):
-    """
-    Mixin to check if the user is a staff member or superuser.
-    This is often used for generic admin-level access.
-    """
-    def test_func(self):
-        return self.request.user.is_staff
+    group_required = None
     
-    def handle_no_permission(self):
-        return redirect(reverse_lazy('member_dashboard'))
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            # Not logged in, redirect to login page
+            return self.handle_no_permission()
+        
+        # Check for superuser bypass
+        if request.user.is_superuser:
+            return super().dispatch(request, *args, **kwargs)
+
+        if self.group_required is None:
+            raise AttributeError(f"{self.__class__.__name__} is missing the 'group_required' attribute.")
+
+        user_groups = [g.name for g in request.user.groups.all()]
+        
+        # Accept if ANY of the user's groups match the required group(s)
+        if isinstance(self.group_required, str):
+            groups_list = [self.group_required]
+        else:
+            groups_list = self.group_required
+            
+        if any(group in user_groups for group in groups_list):
+            return super().dispatch(request, *args, **kwargs)
+        
+        # User is logged in but not authorized (handle unauthorized access)
+        messages.error(request, "Access Denied: You do not have the required role for this page.")
+        
+        # Redirect all unauthorized members back to the main member dashboard
+        return redirect(reverse_lazy('accounts:member_dashboard'))
+
+
+# --- Specific Role Mixins (Based on the Groups defined in load_initial_data.py) ---
+
+class IsSecretaryMixin(GroupRequiredMixin):
+    """Requires the user to be in the 'Secretary' group."""
+    group_required = 'Secretary'
+
+class IsComplianceOfficerMixin(GroupRequiredMixin):
+    """Requires the user to be in the 'Compliance Officer' group."""
+    group_required = 'Compliance Officer'
+
+class IsQuartermasterMixin(GroupRequiredMixin):
+    """Requires the user to be in the 'Quartermaster' group."""
+    group_required = 'Quartermaster'
+
+class IsSchedulerMixin(GroupRequiredMixin):
+    """Requires the user to be in the 'Scheduler' group."""
+    group_required = 'Scheduler'
+    
+class IsStaffOrAdminMixin(GroupRequiredMixin):
+    """Requires the user to be in the 'Secretary', 'Compliance Officer', 'Quartermaster', or 'Scheduler' groups, or be a superuser."""
+    group_required = ['Secretary', 'Compliance Officer', 'Quartermaster', 'Scheduler']
