@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance Officer Dashboard{% endblock %}
+
+{% block content %}
+    <h1>🚦 Compliance Officer Dashboard</h1>
+    <hr>
+
+    <div class="row mb-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100 
+                {% if compliance_percentage > 90 %}border-success{% elif compliance_percentage > 75 %}border-warning{% else %}border-danger{% endif %}">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Department Compliance Status</h5>
+                    <div class="display-4 fw-bold 
+                        {% if compliance_percentage > 90 %}text-success{% elif compliance_percentage > 75 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ compliance_percentage|floatformat:1 }}%
+                    </div>
+                    <p class="card-text text-muted">
+                        {{ non_compliant_count }} members non-compliant out of {{ total_active_members }} active personnel.
+                    </p>
+                    <a href="{% url 'compliance:run_safety_check' %}" class="btn btn-sm btn-outline-dark mt-2">Run Full Audit Now</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Member Record Management</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'compliance:member_record_create' %}" class="btn btn-primary">➕ Record New Compliance</a>
+                        <a href="{% url 'compliance:safety_standard_list' %}" class="btn btn-outline-primary">Manage Safety Standards</a>
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Safety Net Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Currently **{{ safety_nets.count }}** active safety nets enforcing minimum staffing or critical qualifications.
+                    </p>
+                    <div class="d-grid">
+                        <a href="{% url 'compliance:safety_net_list' %}" class="btn btn-info">View/Manage Safety Nets</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Upcoming Shift Qualification Gaps (Open Positions Requiring Cert)</h5>
+        </div>
+        <div class="card-body">
+            {% if upcoming_gaps %}
+                <ul class="list-group list-group-flush">
+                    {% for gap in upcoming_gaps %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center bg-warning-subtle">
+                            <div>
+                                <strong>{{ gap.shift.date|date:"l, M d" }}</strong> ({{ gap.shift.shift_template.name }})
+                                <div class="small text-muted">Slots needing qualified personnel: 
+                                    <span class="fw-bold text-danger">{{ gap.slots_with_gap|join:", " }}</span>
+                                </div>
+                            </div>
+                            <a href="{% url 'scheduling:shift_calendar' %}" class="btn btn-sm btn-warning">View Shift</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-success mb-0">No immediate qualification gaps found in upcoming shifts.</p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
