@@ -1,548 +1,469 @@
 """
-Django admin configuration for core security models
+Weekly Audit Log Digest System
+Sends comprehensive reports to IT Director every Monday
 """
-from django.contrib import admin
-from django.utils.html import format_html
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.utils import timezone
-from django.urls import reverse
-from django.contrib import messages
-from django.db import transaction
-from core.geo_security import (
-    IPGeolocation, 
-    InternationalAccessException, 
-    SuspiciousAccessAttempt
-)
-from core.system_config import SystemConfiguration, CountryChangeLog
+from django.contrib.auth.models import User, Group
+from datetime import timedelta
+from core.system_config import CountryChangeLog, SystemConfiguration
 from core.audit import AuditLog, LoginAttempt
-from core.notifications import NotificationManager, NotificationType, NotificationPriority
+from core.geo_security import SuspiciousAccessAttempt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-@admin.register(SystemConfiguration)
-class SystemConfigurationAdmin(admin.ModelAdmin):
+class WeeklyDigestService:
     """
-    Admin interface for system configuration
-    CRITICAL: Changes here affect security for entire system
+    Generate and send weekly audit digest to IT Director
+    Run via scheduled task every Monday morning
     """
-    list_display = [
-        'department_name', 
-        'primary_country_display', 
-        'secondary_country_display',
-        'geo_security_status',
-        'modified_at'
-    ]
     
-    fieldsets = (
-        ('Department Information', {
-            'fields': ('department_name', 'department_abbreviation', 'timezone')
-        }),
-        ('Geographic Security Settings', {
-            'fields': (
-                'geo_security_enabled',
-                'primary_country',
-                'secondary_country',
-            ),
-            'description': (
-                '<div style="background: #fff3cd; padding: 15px; border: 2px solid #ffc107; border-radius: 5px;">'
-                '<strong>⚠️ CRITICAL SECURITY SETTINGS</strong><br>'
-                'Changes to these settings affect ALL users immediately.<br>'
-                'Leadership team will be notified of any changes.<br><br>'
-                '<strong>Primary Country:</strong> Users from this country can access automatically.<br>'
-                '<strong>Secondary Country:</strong> Optional. Useful for border departments.<br>'
-                '<strong>Example:</strong> Department on US-Canada border sets Primary=US, Secondary=CA'
-                '</div>'
-            )
-        }),
-        ('Change History - Primary Country', {
-            'fields': (
-                'previous_primary_country',
-                'primary_country_changed_at',
-                'primary_country_changed_by'
-            ),
-            'classes': ('collapse',),
-            'description': 'Read-only tracking of primary country changes'
-        }),
-        ('Change History - Secondary Country', {
-            'fields': (
-                'previous_secondary_country',
-                'secondary_country_changed_at',
-                'secondary_country_changed_by'
-            ),
-            'classes': ('collapse',),
-            'description': 'Read-only tracking of secondary country changes'
-        }),
-        ('Contact Information', {
-            'fields': ('admin_email', 'it_email', 'security_email'),
-            'classes': ('collapse',)
-        }),
-        ('Setup Information', {
-            'fields': ('setup_completed', 'setup_completed_at', 'setup_completed_by'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    readonly_fields = [
-        'previous_primary_country', 'primary_country_changed_at', 'primary_country_changed_by',
-        'previous_secondary_country', 'secondary_country_changed_at', 'secondary_country_changed_by',
-        'setup_completed_at', 'setup_completed_by'
-    ]
-    
-    def has_add_permission(self, request):
-        # Only one configuration record allowed
-        return not SystemConfiguration.objects.exists()
-    
-    def has_delete_permission(self, request, obj=None):
-        # Cannot delete system configuration
-        return False
-    
-    def primary_country_display(self, obj):
-        """Display primary country with flag"""
-        country_name = dict(obj.COUNTRY_CHOICES).get(obj.primary_country, obj.primary_country)
-        return format_html(
-            '<strong style="color: green;">🟢 {}</strong>',
-            country_name
-        )
-    primary_country_display.short_description = 'Primary Country'
-    
-    def secondary_country_display(self, obj):
-        """Display secondary country with flag"""
-        if obj.secondary_country:
-            country_name = dict(obj.COUNTRY_CHOICES).get(obj.secondary_country, obj.secondary_country)
-            return format_html(
-                '<span style="color: blue;">🔵 {}</span>',
-                country_name
-            )
-        return format_html('<span style="color: gray;">Not configured</span>')
-    secondary_country_display.short_description = 'Secondary Country'
-    
-    def geo_security_status(self, obj):
-        """Display geo security status"""
-        if obj.geo_security_enabled:
-            return format_html('<span style="color: green; font-weight: bold;">✅ ENABLED</span>')
-        return format_html('<span style="color: red; font-weight: bold;">❌ DISABLED</span>')
-    geo_security_status.short_description = 'Geo Security'
-    
-    @transaction.atomic
-    def save_model(self, request, obj, form, change):
-        """Track country changes and set changed_by user"""
-        if change:
-            old_obj = SystemConfiguration.objects.get(pk=obj.pk)
-            
-            # Track primary country change
-            if old_obj.primary_country != obj.primary_country:
-                obj.primary_country_changed_by = request.user
-                
-                # Log to CountryChangeLog
-                CountryChangeLog.log_change(
-                    'PRIMARY',
-                    old_obj.primary_country,
-                    obj.primary_country,
-                    request.user,
-                    request,
-                    reason=request.POST.get('change_reason', 'Changed via admin panel')
-                )
-            
-            # Track secondary country change
-            if old_obj.secondary_country != obj.secondary_country:
-                obj.secondary_country_changed_by = request.user
-                
-                # Log to CountryChangeLog
-                CountryChangeLog.log_change(
-                    'SECONDARY',
-                    old_obj.secondary_country or '',
-                    obj.secondary_country or '',
-                    request.user,
-                    request,
-                    reason=request.POST.get('change_reason', 'Changed via admin panel')
-                )
+    @classmethod
+    def generate_and_send_digest(cls):
+        """
+        Generate complete weekly digest and send to IT Director
         
-        super().save_model(request, obj, form, change)
+        Returns:
+            dict: Results of digest generation
+        """
+        # Get date range (last 7 days)
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=7)
         
-        # Show success message with security warning
-        if change:
-            messages.warning(
-                request,
-                format_html(
-                    '<strong>⚠️ SECURITY CONFIGURATION UPDATED</strong><br>'
-                    'Leadership team has been notified via email.<br>'
-                    'Changes are effective immediately for all users.'
-                )
-            )
-
-
-@admin.register(CountryChangeLog)
-class CountryChangeLogAdmin(admin.ModelAdmin):
-    """
-    Immutable audit log of country configuration changes
-    """
-    list_display = [
-        'timestamp', 
-        'change_type', 
-        'old_value_display',
-        'new_value_display',
-        'changed_by',
-        'leadership_notified'
-    ]
-    list_filter = ['change_type', 'leadership_notified', 'timestamp']
-    search_fields = ['changed_by__username', 'change_reason']
-    readonly_fields = [
-        'timestamp', 'changed_by', 'change_type', 'old_value', 'new_value',
-        'ip_address', 'user_agent', 'leadership_notified', 'leadership_notified_at',
-        'notification_recipient_count', 'change_reason'
-    ]
-    
-    fieldsets = (
-        ('Change Details', {
-            'fields': ('timestamp', 'changed_by', 'change_type', 'old_value', 'new_value')
-        }),
-        ('Justification', {
-            'fields': ('change_reason',)
-        }),
-        ('Technical Details', {
-            'fields': ('ip_address', 'user_agent'),
-            'classes': ('collapse',)
-        }),
-        ('Notification Status', {
-            'fields': ('leadership_notified', 'leadership_notified_at', 'notification_recipient_count'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    def has_add_permission(self, request):
-        # Logs are created automatically
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        # NEVER delete audit logs
-        return False
-    
-    def old_value_display(self, obj):
-        """Display old value with country name"""
-        if obj.change_type in ['PRIMARY', 'SECONDARY']:
-            country_name = dict(SystemConfiguration.COUNTRY_CHOICES).get(obj.old_value, obj.old_value)
-            return country_name if country_name else 'None'
-        return obj.old_value
-    old_value_display.short_description = 'Previous Value'
-    
-    def new_value_display(self, obj):
-        """Display new value with country name"""
-        if obj.change_type in ['PRIMARY', 'SECONDARY']:
-            country_name = dict(SystemConfiguration.COUNTRY_CHOICES).get(obj.new_value, obj.new_value)
-            return country_name if country_name else 'None'
-        return obj.new_value
-    new_value_display.short_description = 'New Value'
-
-
-@admin.register(IPGeolocation)
-class IPGeolocationAdmin(admin.ModelAdmin):
-    list_display = [
-        'ip_address', 'country_flag', 'country_name', 'city', 
-        'access_count', 'last_seen', 'is_suspicious_display'
-    ]
-    list_filter = ['country_code', 'is_proxy', 'is_vpn', 'is_tor']
-    search_fields = ['ip_address', 'country_name', 'city', 'isp']
-    readonly_fields = [
-        'ip_address', 'country_code', 'country_name', 'region', 'city',
-        'isp', 'organization', 'latitude', 'longitude', 'lookup_date',
-        'last_seen', 'access_count', 'is_proxy', 'is_vpn', 'is_tor', 'threat_level'
-    ]
-    
-    def has_add_permission(self, request):
-        # Geolocation records are created automatically
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        # Allow deletion of old records
-        return True
-    
-    def country_flag(self, obj):
-        """Display country flag emoji"""
-        flags = {
-            'US': '🇺🇸', 'GB': '🇬🇧', 'CA': '🇨🇦', 'MX': '🇲🇽',
-            'DE': '🇩🇪', 'FR': '🇫🇷', 'CN': '🇨🇳', 'RU': '🇷🇺',
+        # Get IT Director
+        it_directors = cls._get_it_directors()
+        
+        if not it_directors:
+            logger.error("No IT Directors found to send weekly digest")
+            return {
+                'success': False,
+                'error': 'No IT Directors found'
+            }
+        
+        # Generate digest data
+        digest_data = cls._generate_digest_data(start_date, end_date)
+        
+        # Send email
+        success = cls._send_digest_email(it_directors, digest_data, start_date, end_date)
+        
+        return {
+            'success': success,
+            'recipients': [u.email for u in it_directors],
+            'date_range': f"{start_date.date()} to {end_date.date()}",
+            'country_changes': digest_data['country_changes_count'],
+            'security_events': digest_data['security_events_count']
         }
-        flag = flags.get(obj.country_code, '🌍')
-        return format_html('<span style="font-size: 1.5em;">{}</span>', flag)
-    country_flag.short_description = 'Flag'
     
-    def is_suspicious_display(self, obj):
-        """Display suspicious indicator"""
-        if obj.is_suspicious:
-            return format_html('<span style="color: red;">⚠️ SUSPICIOUS</span>')
-        return format_html('<span style="color: green;">✓ Clean</span>')
-    is_suspicious_display.short_description = 'Status'
-
-
-@admin.register(InternationalAccessException)
-class InternationalAccessExceptionAdmin(admin.ModelAdmin):
-    list_display = [
-        'user', 'destination_country', 'status_display', 
-        'start_date', 'end_date', 'times_used', 'approved_by'
-    ]
-    list_filter = ['status', 'start_date', 'end_date']
-    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'destination_country']
-    readonly_fields = [
-        'requested_by', 'requested_at', 'approved_by', 'approved_at',
-        'times_used', 'last_used'
-    ]
-    
-    fieldsets = (
-        ('User & Destination', {
-            'fields': ('user', 'destination_country', 'reason')
-        }),
-        ('Time Period', {
-            'fields': ('start_date', 'end_date')
-        }),
-        ('Approval', {
-            'fields': ('status', 'admin_notes', 'approved_by', 'approved_at')
-        }),
-        ('Usage Tracking', {
-            'fields': ('times_used', 'last_used'),
-            'classes': ('collapse',)
-        }),
-        ('Request Info', {
-            'fields': ('requested_by', 'requested_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    actions = ['approve_exceptions', 'deny_exceptions', 'revoke_exceptions']
-    
-    def status_display(self, obj):
-        """Display status with color coding"""
-        colors = {
-            'PENDING': 'orange',
-            'APPROVED': 'green',
-            'DENIED': 'red',
-            'EXPIRED': 'gray',
-            'REVOKED': 'darkred',
-        }
-        color = colors.get(obj.status, 'black')
+    @classmethod
+    def _get_it_directors(cls):
+        """
+        Get all IT Directors who should receive weekly digest
         
-        # Check if should be expired
-        obj.check_and_update_status()
+        Returns:
+            QuerySet: IT Director users
+        """
+        # Try to get users in "IT Director" group
+        it_directors = User.objects.filter(
+            groups__name='IT Director',
+            is_active=True
+        ).distinct()
         
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
-            obj.get_status_display()
-        )
-    status_display.short_description = 'Status'
-    
-    def save_model(self, request, obj, form, change):
-        """Handle approval workflow"""
-        if change:
-            # Check if status changed to APPROVED
-            old_obj = InternationalAccessException.objects.get(pk=obj.pk)
-            if old_obj.status != 'APPROVED' and obj.status == 'APPROVED':
-                # Set approval info
-                obj.approved_by = request.user
-                obj.approved_at = timezone.now()
-                
-                # Notify user
-                self._notify_user_approved(obj)
+        # Fallback to Chief Officers if no IT Directors
+        if not it_directors:
+            it_directors = User.objects.filter(
+                groups__name='Chief Officers',
+                is_active=True,
+                is_superuser=True
+            ).distinct()
         
-        super().save_model(request, obj, form, change)
+        return it_directors
     
-    def approve_exceptions(self, request, queryset):
-        """Bulk approve exceptions"""
-        count = 0
-        for exception in queryset.filter(status='PENDING'):
-            exception.status = 'APPROVED'
-            exception.approved_by = request.user
-            exception.approved_at = timezone.now()
-            exception.save()
+    @classmethod
+    def _generate_digest_data(cls, start_date, end_date):
+        """
+        Generate comprehensive digest data
+        
+        Args:
+            start_date: Start of period
+            end_date: End of period
             
-            # Notify user
-            self._notify_user_approved(exception)
-            count += 1
+        Returns:
+            dict: Digest data
+        """
+        # Get system configuration
+        config = SystemConfiguration.get_config()
         
-        self.message_user(request, f'{count} exception(s) approved.', messages.SUCCESS)
-    approve_exceptions.short_description = 'Approve selected exceptions'
-    
-    def deny_exceptions(self, request, queryset):
-        """Bulk deny exceptions"""
-        count = queryset.filter(status='PENDING').update(
-            status='DENIED',
-            approved_by=request.user,
-            approved_at=timezone.now()
+        # Country configuration changes
+        country_changes = CountryChangeLog.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date
+        ).select_related('changed_by')
+        
+        # High-risk audit events
+        high_risk_events = AuditLog.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+            risk_level__in=['HIGH', 'CRITICAL']
+        ).select_related('user')
+        
+        # Failed login attempts
+        failed_logins = LoginAttempt.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+            success=False
         )
-        self.message_user(request, f'{count} exception(s) denied.', messages.WARNING)
-    deny_exceptions.short_description = 'Deny selected exceptions'
-    
-    def revoke_exceptions(self, request, queryset):
-        """Revoke active exceptions"""
-        count = queryset.filter(status='APPROVED').update(status='REVOKED')
-        self.message_user(request, f'{count} exception(s) revoked.', messages.ERROR)
-    revoke_exceptions.short_description = 'Revoke selected exceptions'
-    
-    def _notify_user_approved(self, exception):
-        """Send notification to user when exception is approved"""
-        NotificationManager.send_notification(
-            notification_type=NotificationType.APPROVAL_NEEDED,
-            recipients=[exception.user],
-            subject="International Access Approved",
-            message=f"""
-Your request for international access has been APPROVED.
-
-Destination: {exception.destination_country}
-Valid From: {exception.start_date.strftime('%Y-%m-%d %H:%M')}
-Valid Until: {exception.end_date.strftime('%Y-%m-%d %H:%M')}
-
-You can now access the system from {exception.destination_country} during this time period.
-
-If you have any issues, please contact IT support.
-            """.strip(),
-            priority=NotificationPriority.HIGH
+        
+        # Suspicious access attempts
+        suspicious_access = SuspiciousAccessAttempt.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+            was_blocked=True
+        ).select_related('user', 'geolocation')
+        
+        # Tampering attempts
+        tampering_attempts = AuditLog.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+            action='SUSPICIOUS_ACTIVITY',
+            details__attempt_type__startswith='AUDIT_LOG_TAMPER'
         )
-
-
-@admin.register(SuspiciousAccessAttempt)
-class SuspiciousAccessAttemptAdmin(admin.ModelAdmin):
-    list_display = [
-        'timestamp', 'user', 'ip_address', 'country_display',
-        'attempt_type', 'was_blocked', 'it_notified', 'resolved'
-    ]
-    list_filter = [
-        'attempt_type', 'was_blocked', 'it_notified', 'resolved', 'timestamp'
-    ]
-    search_fields = [
-        'user__username', 'user__first_name', 'user__last_name', 
-        'ip_address'
-    ]
-    readonly_fields = [
-        'timestamp', 'user', 'ip_address', 'geolocation', 'attempt_type',
-        'was_blocked', 'user_agent', 'details', 'it_notified', 'it_notified_at'
-    ]
-    
-    fieldsets = (
-        ('Attempt Details', {
-            'fields': ('timestamp', 'user', 'ip_address', 'geolocation', 'attempt_type', 'was_blocked')
-        }),
-        ('Technical Details', {
-            'fields': ('user_agent', 'details'),
-            'classes': ('collapse',)
-        }),
-        ('Notification', {
-            'fields': ('it_notified', 'it_notified_at')
-        }),
-        ('Resolution', {
-            'fields': ('resolved', 'resolved_by', 'resolved_at', 'resolution_notes')
-        }),
-    )
-    
-    actions = ['mark_resolved', 'create_exception']
-    
-    def has_add_permission(self, request):
-        # Suspicious attempts are logged automatically
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        # Keep for forensics
-        return False
-    
-    def country_display(self, obj):
-        """Display country with flag"""
-        if obj.geolocation:
-            return f"{obj.geolocation.country_name}"
-        return "Unknown"
-    country_display.short_description = 'Country'
-    
-    def mark_resolved(self, request, queryset):
-        """Mark attempts as resolved"""
-        count = queryset.update(
-            resolved=True,
-            resolved_by=request.user,
-            resolved_at=timezone.now()
-        )
-        self.message_user(request, f'{count} attempt(s) marked as resolved.', messages.SUCCESS)
-    mark_resolved.short_description = 'Mark as resolved'
-    
-    def create_exception(self, request, queryset):
-        """Create international access exception from attempt"""
-        if queryset.count() != 1:
-            self.message_user(
-                request, 
-                'Please select exactly one attempt to create an exception.', 
-                messages.ERROR
+        
+        # Integrity verification
+        integrity_results = CountryChangeLog.verify_all_integrity()
+        
+        # Statistics
+        total_logins = LoginAttempt.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date
+        ).count()
+        
+        successful_logins = LoginAttempt.objects.filter(
+            timestamp__gte=start_date,
+            timestamp__lte=end_date,
+            success=True
+        ).count()
+        
+        # Geographic access by country
+        access_by_country = {}
+        from core.geo_security import IPGeolocation
+        recent_ips = IPGeolocation.objects.filter(
+            last_seen__gte=start_date,
+            last_seen__lte=end_date
+        ).values('country_name').annotate(
+            count=models.Count('id')
+        ).order_by('-count')[:10]
+        
+        return {
+            'config': config,
+            'start_date': start_date,
+            'end_date': end_date,
+            
+            # Country changes
+            'country_changes': list(country_changes),
+            'country_changes_count': country_changes.count(),
+            
+            # Security events
+            'high_risk_events': list(high_risk_events[:20]),  # Top 20
+            'high_risk_events_count': high_risk_events.count(),
+            
+            # Login activity
+            'failed_logins': list(failed_logins[:20]),  # Top 20
+            'failed_logins_count': failed_logins.count(),
+            'total_logins': total_logins,
+            'successful_logins': successful_logins,
+            'login_success_rate': (successful_logins / total_logins * 100) if total_logins > 0 else 0,
+            
+            # Suspicious access
+            'suspicious_access': list(suspicious_access[:20]),  # Top 20
+            'suspicious_access_count': suspicious_access.count(),
+            
+            # Tampering
+            'tampering_attempts': list(tampering_attempts),
+            'tampering_attempts_count': tampering_attempts.count(),
+            
+            # Integrity
+            'integrity_results': integrity_results,
+            
+            # Geographic access
+            'access_by_country': list(recent_ips),
+            
+            # Security events total
+            'security_events_count': (
+                high_risk_events.count() + 
+                failed_logins.count() + 
+                suspicious_access.count() + 
+                tampering_attempts.count()
             )
-            return
-        
-        attempt = queryset.first()
-        
-        # Create exception (7 days by default)
-        exception = InternationalAccessException.objects.create(
-            user=attempt.user,
-            destination_country=attempt.geolocation.country_name if attempt.geolocation else 'Unknown',
-            reason='Created from suspicious access attempt',
-            start_date=timezone.now(),
-            end_date=timezone.now() + timezone.timedelta(days=7),
-            requested_by=request.user,
-            status='PENDING'
-        )
-        
-        # Redirect to edit the exception
-        url = reverse('admin:core_internationalaccessexception_change', args=[exception.pk])
-        self.message_user(
-            request,
-            format_html(
-                'Exception created. <a href="{}">Click here to review and approve</a>.',
-                url
-            ),
-            messages.SUCCESS
-        )
-    create_exception.short_description = 'Create access exception'
-
-
-@admin.register(AuditLog)
-class AuditLogAdmin(admin.ModelAdmin):
-    list_display = [
-        'timestamp', 'user', 'action', 'ip_address', 
-        'risk_level_display', 'success'
-    ]
-    list_filter = ['action', 'risk_level', 'success', 'timestamp']
-    search_fields = ['user__username', 'ip_address', 'details']
-    readonly_fields = [
-        'timestamp', 'user', 'action', 'content_type', 'object_id',
-        'ip_address', 'user_agent', 'details', 'success', 'risk_level'
-    ]
-    date_hierarchy = 'timestamp'
-    
-    def has_add_permission(self, request):
-        # Audit logs are created automatically
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        # NEVER allow deletion of audit logs
-        return False
-    
-    def risk_level_display(self, obj):
-        """Display risk level with color"""
-        colors = {
-            'LOW': 'green',
-            'MEDIUM': 'orange',
-            'HIGH': 'red',
-            'CRITICAL': 'darkred',
         }
-        color = colors.get(obj.risk_level, 'black')
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color,
-            obj.get_risk_level_display()
-        )
-    risk_level_display.short_description = 'Risk Level'
+    
+    @classmethod
+    def _send_digest_email(cls, recipients, data, start_date, end_date):
+        """
+        Send weekly digest email
+        
+        Args:
+            recipients: List of User objects
+            data: Digest data dictionary
+            start_date: Start date
+            end_date: End date
+            
+        Returns:
+            bool: True if sent successfully
+        """
+        try:
+            # Generate subject
+            subject = f"Weekly Security Digest - {start_date.strftime('%b %d')} to {end_date.strftime('%b %d, %Y')}"
+            
+            # Generate email body
+            message = cls._generate_email_body(data)
+            
+            # Send to each recipient
+            for recipient in recipients:
+                try:
+                    email = EmailMultiAlternatives(
+                        subject=subject,
+                        body=message,
+                        from_email=data['config'].it_email or 'noreply@yourfiredept.org',
+                        to=[recipient.email]
+                    )
+                    
+                    email.send()
+                    logger.info(f"Weekly digest sent to {recipient.email}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to send digest to {recipient.email}: {e}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to generate/send weekly digest: {e}")
+            return False
+    
+    @classmethod
+    def _generate_email_body(cls, data):
+        """
+        Generate email body text
+        
+        Args:
+            data: Digest data
+            
+        Returns:
+            str: Email body
+        """
+        from django.db.models import Count
+        
+        message = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WEEKLY SECURITY & AUDIT DIGEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Department: {data['config'].department_name}
+Period: {data['start_date'].strftime('%B %d, %Y')} - {data['end_date'].strftime('%B %d, %Y')}
+Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S %Z')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXECUTIVE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Country Configuration Changes: {data['country_changes_count']}
+High-Risk Security Events: {data['high_risk_events_count']}
+Failed Login Attempts: {data['failed_logins_count']}
+Blocked International Access: {data['suspicious_access_count']}
+Audit Log Tampering Attempts: {data['tampering_attempts_count']}
+
+Login Statistics:
+  Total Login Attempts: {data['total_logins']}
+  Successful Logins: {data['successful_logins']}
+  Success Rate: {data['login_success_rate']:.1f}%
+
+Audit Log Integrity:
+  Total Records: {data['integrity_results']['total']}
+  Valid: {data['integrity_results']['valid']} ✓
+  Invalid/Tampered: {data['integrity_results']['invalid']} {'⚠️' if data['integrity_results']['invalid'] > 0 else '✓'}
+
+"""
+
+        # Country Configuration Changes
+        if data['country_changes_count'] > 0:
+            message += """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🌍 COUNTRY CONFIGURATION CHANGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            for change in data['country_changes']:
+                message += f"""
+Date: {change.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+Type: {change.get_change_type_display()}
+Changed From: {change.old_value or 'None'}
+Changed To: {change.new_value}
+Changed By: {change.changed_by.get_full_name() if change.changed_by else 'SYSTEM'}
+Reason: {change.change_reason or 'Not provided'}
+IP Address: {change.ip_address or 'N/A'}
+Leadership Notified: {'Yes' if change.leadership_notified else 'No'}
+Checksum: {change.checksum[:16]}...
+{'─' * 60}
+"""
+        else:
+            message += "\n✓ No country configuration changes this week\n"
+
+        # High-Risk Security Events
+        if data['high_risk_events_count'] > 0:
+            message += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 HIGH-RISK SECURITY EVENTS ({data['high_risk_events_count']} total)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Showing top 20 events:
+
+"""
+            for event in data['high_risk_events']:
+                message += f"""
+{event.timestamp.strftime('%Y-%m-%d %H:%M:%S')} | {event.get_risk_level_display()} | {event.get_action_display()}
+User: {event.user.get_full_name() if event.user else 'SYSTEM'}
+IP: {event.ip_address or 'N/A'}
+Success: {'Yes' if event.success else 'No'}
+Details: {str(event.details)[:100]}
+{'─' * 60}
+"""
+        else:
+            message += "\n✓ No high-risk security events this week\n"
+
+        # Failed Login Attempts
+        if data['failed_logins_count'] > 5:
+            message += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔒 FAILED LOGIN ATTEMPTS ({data['failed_logins_count']} total)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Top usernames with failed attempts:
+
+"""
+            # Group by username
+            from collections import Counter
+            failed_by_username = Counter(
+                [attempt.username for attempt in data['failed_logins']]
+            )
+            
+            for username, count in failed_by_username.most_common(10):
+                message += f"  {username}: {count} failed attempts\n"
+
+        # Suspicious Access Attempts
+        if data['suspicious_access_count'] > 0:
+            message += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🌐 BLOCKED INTERNATIONAL ACCESS ({data['suspicious_access_count']} total)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            # Group by country
+            from collections import Counter
+            by_country = Counter(
+                [attempt.geolocation.country_name for attempt in data['suspicious_access'] 
+                 if attempt.geolocation]
+            )
+            
+            message += "Access attempts by country:\n\n"
+            for country, count in by_country.most_common(10):
+                message += f"  {country}: {count} attempts\n"
+
+        # Tampering Attempts
+        if data['tampering_attempts_count'] > 0:
+            message += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ AUDIT LOG TAMPERING ATTEMPTS - CRITICAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WARNING: {data['tampering_attempts_count']} tampering attempts detected!
+
+"""
+            for attempt in data['tampering_attempts']:
+                message += f"""
+{attempt.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+User: {attempt.user.get_full_name() if attempt.user else 'UNKNOWN'}
+Type: {attempt.details.get('attempt_type', 'UNKNOWN')}
+Target: Log #{attempt.details.get('target_log_id', 'N/A')}
+{'─' * 60}
+"""
+            message += "\n⚠️ INVESTIGATION REQUIRED: Contact security team immediately\n"
+
+        # Integrity Check Results
+        if data['integrity_results']['invalid'] > 0:
+            message += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ INTEGRITY CHECK FAILURES - CRITICAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{data['integrity_results']['invalid']} audit log records failed integrity check!
+
+Tampered records:
+"""
+            for record in data['integrity_results']['tampered_records']:
+                message += f"  Record #{record['id']} - {record['timestamp']} - {record['change_type']}\n"
+            
+            message += "\n🚨 IMMEDIATE ACTION REQUIRED: These records may have been tampered with!\n"
+
+        # Geographic Access Summary
+        if data['access_by_country']:
+            message += """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 GEOGRAPHIC ACCESS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Access attempts by country (top 10):
+
+"""
+            for country_data in data['access_by_country']:
+                message += f"  {country_data['country_name']}: {country_data['count']} accesses\n"
+
+        # Footer
+        message += f"""
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEXT STEPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. REVIEW: Examine all high-risk events for legitimacy
+2. INVESTIGATE: Follow up on any tampering attempts
+3. VERIFY: Check integrity failures immediately
+4. DOCUMENT: Save this report for compliance records
+5. ACTION: Address any security concerns promptly
+
+For detailed logs and investigation:
+Admin Panel → Audit Logs
+Admin Panel → Country Change Logs
+
+Contact:
+  IT Support: {data['config'].it_email or 'it@yourfiredept.org'}
+  Security Team: {data['config'].security_email or 'security@yourfiredept.org'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is an automated weekly security digest.
+Next digest will be sent on {(data['end_date'] + timedelta(days=7)).strftime('%B %d, %Y')}.
+
+Department: {data['config'].department_name}
+System: Fire Department Intranet v1.0
+"""
+        
+        return message.strip()
 
 
-@admin.register(LoginAttempt)
-class LoginAttemptAdmin(admin.ModelAdmin):
-    list_display = ['timestamp', 'username', 'ip_address', 'success', 'failure_reason']
-    list_filter = ['success', 'timestamp']
-    search_fields = ['username', 'ip_address']
-    readonly_fields = ['timestamp', 'username', 'ip_address', 'user_agent', 'success', 'failure_reason']
-    date_hierarchy = 'timestamp'
+# Scheduled task function (called by Django-Q or Celery)
+def send_weekly_digest():
+    """
+    Scheduled task to send weekly digest
+    Should be scheduled to run every Monday at 8:00 AM
+    """
+    logger.info("Starting weekly digest generation...")
+    result = WeeklyDigestService.generate_and_send_digest()
     
-    def has_add_permission(self, request):
-        return False
+    if result['success']:
+        logger.info(f"Weekly digest sent successfully to {len(result['recipients'])} recipients")
+    else:
+        logger.error(f"Weekly digest failed: {result.get('error', 'Unknown error')}")
     
-    def has_delete_permission(self, request, obj=None):
-        # Can delete old login attempts (keep for 90 days)
-        return True
+    return result
