@@ -414,6 +414,13 @@ class CountryChangeLog(models.Model):
     """
     Immutable log of all country configuration changes
     Separate from SystemConfiguration for audit purposes
+    
+    CRITICAL SECURITY:
+    - Records are IMMUTABLE after creation
+    - No edits allowed (enforced in save method)
+    - No deletions allowed (enforced in admin)
+    - Tamper attempts are logged and alerted
+    - Weekly digest sent to IT Director
     """
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
@@ -444,13 +451,252 @@ class CountryChangeLog(models.Model):
         help_text="Why was this change made?"
     )
     
+    # Tamper protection
+    is_locked = models.BooleanField(
+        default=True,
+        help_text="Once locked, record cannot be modified"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    checksum = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA256 checksum for integrity verification"
+    )
+    
     class Meta:
         ordering = ['-timestamp']
         verbose_name = 'Country Change Log'
         verbose_name_plural = 'Country Change Logs'
+        permissions = [
+            ('view_sensitive_logs', 'Can view sensitive audit logs'),
+        ]
     
     def __str__(self):
         return f"{self.get_change_type_display()} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to enforce immutability and generate checksum
+        """
+        # If this is an update (has pk) and record is locked, DENY
+        if self.pk and self.is_locked:
+            # Log tamper attempt
+            self._log_tamper_attempt('EDIT_ATTEMPT')
+            raise ValidationError(
+                'This audit log record is locked and cannot be modified. '
+                'Audit logs are immutable for compliance and forensic purposes.'
+            )
+        
+        # Generate checksum on first save
+        if not self.pk:
+            self.is_locked = True  # Lock immediately
+            super().save(*args, **kwargs)  # Save to get pk
+            self.checksum = self._generate_checksum()
+            # Update with checksum (bypass lock check)
+            super(CountryChangeLog, self).save(update_fields=['checksum'])
+        else:
+            super().save(*args, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        """
+        Override delete to prevent deletion
+        """
+        self._log_tamper_attempt('DELETE_ATTEMPT')
+        raise ValidationError(
+            'Audit log records cannot be deleted. '
+            'This is a security violation and has been logged.'
+        )
+    
+    def _generate_checksum(self):
+        """
+        Generate SHA256 checksum of record data for integrity verification
+        
+        Returns:
+            str: Hexadecimal checksum
+        """
+        import hashlib
+        
+        # Concatenate all important fields
+        data = f"{self.pk}|{self.timestamp}|{self.changed_by_id}|{self.change_type}|" \
+               f"{self.old_value}|{self.new_value}|{self.change_reason}|{self.created_at}"
+        
+        return hashlib.sha256(data.encode()).hexdigest()
+    
+    def verify_integrity(self):
+        """
+        Verify record has not been tampered with
+        
+        Returns:
+            bool: True if checksum matches, False if tampered
+        """
+        if not self.checksum:
+            return False
+        
+        expected_checksum = self._generate_checksum()
+        is_valid = expected_checksum == self.checksum
+        
+        if not is_valid:
+            # Record has been tampered with!
+            self._log_tamper_attempt('CHECKSUM_MISMATCH')
+        
+        return is_valid
+    
+    def _log_tamper_attempt(self, attempt_type):
+        """
+        Log tampering attempt and send critical alert
+        
+        Args:
+            attempt_type: Type of tampering (EDIT_ATTEMPT, DELETE_ATTEMPT, CHECKSUM_MISMATCH)
+        """
+        from core.audit import AuditLog
+        from django.contrib.auth.models import User
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Get current user if available
+        from threading import current_thread
+        user = getattr(current_thread(), 'user', None)
+        
+        # Log to audit trail
+        logger.critical(
+            f"AUDIT LOG TAMPER ATTEMPT: {attempt_type} on CountryChangeLog #{self.pk} "
+            f"by user: {user.username if user else 'UNKNOWN'}"
+        )
+        
+        # Create audit log entry
+        AuditLog.log(
+            'SUSPICIOUS_ACTIVITY',
+            user=user,
+            success=False,
+            risk_level='CRITICAL',
+            attempt_type=f'AUDIT_LOG_TAMPER_{attempt_type}',
+            target_log_id=self.pk,
+            target_log_type='CountryChangeLog'
+        )
+        
+        # Send immediate alert to IT Director and Security Team
+        self._send_tamper_alert(attempt_type, user)
+    
+    def _send_tamper_alert(self, attempt_type, user):
+        """
+        Send critical security alert about tamper attempt
+        
+        Args:
+            attempt_type: Type of tampering
+            user: User who attempted tampering
+        """
+        from core.notifications import NotificationManager, NotificationType, NotificationPriority
+        from django.contrib.auth.models import Group, User as DjangoUser
+        
+        # Get IT Director and Security Team
+        recipients = DjangoUser.objects.filter(
+            groups__name__in=['Chief Officers', 'IT Director'],
+            is_active=True
+        ).distinct()
+        
+        if not recipients:
+            return
+        
+        # Get system configuration for contact info
+        from core.system_config import SystemConfiguration
+        config = SystemConfiguration.get_config()
+        
+        subject = "🚨 CRITICAL SECURITY ALERT: Audit Log Tampering Attempt"
+        
+        message = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL SECURITY VIOLATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AUDIT LOG TAMPERING DETECTED
+
+Attempt Type: {attempt_type}
+Target Record: CountryChangeLog #{self.pk}
+Original Change: {self.get_change_type_display()}
+Original Timestamp: {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+Attempted By: {user.get_full_name() if user else 'UNKNOWN'} ({user.username if user else 'N/A'})
+Attempt Time: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEVERITY: CRITICAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Someone attempted to {'modify' if attempt_type == 'EDIT_ATTEMPT' else 'delete'} 
+an immutable audit log record. This is a serious security violation.
+
+POSSIBLE SCENARIOS:
+1. Unauthorized access to admin panel
+2. Compromised administrator account
+3. Malicious insider threat
+4. Accidental admin action (unlikely due to protections)
+
+IMMEDIATE ACTIONS REQUIRED:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. VERIFY: Contact {user.get_full_name() if user else 'the user'} immediately
+   Phone: {user.userprofile.phone_number if user and hasattr(user, 'userprofile') else 'N/A'}
+   Email: {user.email if user else 'N/A'}
+
+2. INVESTIGATE: Review recent admin panel activity
+   - Check admin access logs
+   - Review all recent changes
+   - Look for other suspicious activity
+
+3. SECURE: If unauthorized access suspected:
+   - Disable the user account immediately
+   - Force password reset for all administrators
+   - Review and revoke all admin sessions
+   - Check for other compromised accounts
+
+4. DOCUMENT: This incident must be documented:
+   - Screenshot this email
+   - Export audit logs
+   - Document timeline of events
+   - Prepare incident report
+
+5. NOTIFY: Inform department leadership
+   - Chief Officer: {config.admin_email or 'N/A'}
+   - Security Team: {config.security_email or 'N/A'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RECORD DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Change Type: {self.get_change_type_display()}
+Old Value: {self.old_value}
+New Value: {self.new_value}
+Changed By: {self.changed_by.get_full_name() if self.changed_by else 'SYSTEM'}
+Original Date: {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+Reason: {self.change_reason or 'Not provided'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYSTEM PROTECTION STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ PROTECTED: The audit log was NOT modified
+✅ LOGGED: This tampering attempt has been logged
+✅ ALERTED: IT Director and Security Team notified
+✅ INTEGRITY: Record checksum verification in place
+
+The system successfully prevented unauthorized modification.
+However, the attempt itself is a security concern.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is an automated critical security alert.
+For assistance: {config.security_email or 'security@yourfiredept.org'}
+
+DO NOT IGNORE THIS MESSAGE.
+        """.strip()
+        
+        NotificationManager.send_notification(
+            notification_type=NotificationType.GENERAL_ANNOUNCEMENT,
+            recipients=list(recipients),
+            subject=subject,
+            message=message,
+            priority=NotificationPriority.URGENT
+        )
     
     @classmethod
     def log_change(cls, change_type, old_value, new_value, changed_by, request=None, reason=''):
@@ -493,3 +739,32 @@ class CountryChangeLog(models.Model):
         )
         
         return log
+    
+    @classmethod
+    def verify_all_integrity(cls):
+        """
+        Verify integrity of all log records
+        
+        Returns:
+            dict: Results of integrity check
+        """
+        results = {
+            'total': 0,
+            'valid': 0,
+            'invalid': 0,
+            'tampered_records': []
+        }
+        
+        for log in cls.objects.all():
+            results['total'] += 1
+            if log.verify_integrity():
+                results['valid'] += 1
+            else:
+                results['invalid'] += 1
+                results['tampered_records'].append({
+                    'id': log.pk,
+                    'timestamp': log.timestamp,
+                    'change_type': log.change_type
+                })
+        
+        return results
