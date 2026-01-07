@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>{% block title %}Fire Department Intranet{% endblock %}</title>
     
     <!-- Bootstrap 5 CSS -->
@@ -12,18 +13,125 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     
     <!-- Custom CSS -->
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/custom.css' %}">
+    <style>
+        :root {
+            --fire-red: #dc3545;
+            --fire-dark: #a71d2a;
+            --fire-gold: #ffc107;
+        }
+        
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--fire-red) 0%, var(--fire-dark) 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.3rem;
+        }
+        
+        .main-content {
+            flex: 1;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+        }
+        
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid var(--fire-red);
+            font-weight: 600;
+        }
+        
+        .btn-fire {
+            background-color: var(--fire-red);
+            border-color: var(--fire-red);
+            color: white;
+        }
+        
+        .btn-fire:hover {
+            background-color: var(--fire-dark);
+            border-color: var(--fire-dark);
+            color: white;
+        }
+        
+        .badge-fire {
+            background-color: var(--fire-red);
+        }
+        
+        .alert-dismissible {
+            position: relative;
+        }
+        
+        footer {
+            background-color: #343a40;
+            color: white;
+            padding: 1.5rem 0;
+            margin-top: auto;
+        }
+        
+        .stat-card {
+            border-left: 4px solid var(--fire-red);
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(220, 53, 69, 0.05);
+        }
+        
+        .nav-pills .nav-link.active {
+            background-color: var(--fire-red);
+        }
+        
+        .progress-bar {
+            background-color: var(--fire-red);
+        }
+        
+        .text-fire {
+            color: var(--fire-red);
+        }
+        
+        .bg-fire {
+            background-color: var(--fire-red);
+            color: white;
+        }
+        
+        .breadcrumb {
+            background-color: transparent;
+            padding: 0;
+            margin-bottom: 1rem;
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--fire-red);
+        }
+    </style>
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-danger">
+    <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'scheduling:shift_calendar' %}">
+            <a class="navbar-brand" href="{% url 'home' %}">
                 <i class="bi bi-fire"></i> FD Intranet
             </a>
+            
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -31,112 +139,160 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     {% if user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'scheduling:shift_calendar' %}">
-                                <i class="bi bi-calendar-week"></i> Shifts
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'training:dashboard' %}">
-                                <i class="bi bi-mortarboard"></i> Training
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'quartermaster:dashboard' %}">
-                                <i class="bi bi-box-seam"></i> Gear
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'compliance:dashboard' %}">
-                                <i class="bi bi-shield-check"></i> Compliance
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'documents:library' %}">
-                                <i class="bi bi-file-text"></i> Documents
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'archives:dashboard' %}">
-                                <i class="bi bi-archive"></i> Archives
-                            </a>
-                        </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'scheduling:shift_calendar' %}">
+                            <i class="bi bi-calendar-week"></i> Shifts
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'training:dashboard' %}">
+                            <i class="bi bi-clipboard-check"></i> Training
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'quartermaster:dashboard' %}">
+                            <i class="bi bi-box-seam"></i> Gear
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'compliance:dashboard' %}">
+                            <i class="bi bi-shield-check"></i> Compliance
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'documents:library' %}">
+                            <i class="bi bi-file-earmark-text"></i> Documents
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'archives:dashboard' %}">
+                            <i class="bi bi-archive"></i> Archives
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
                 
                 <ul class="navbar-nav">
                     {% if user.is_authenticated %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{% url 'accounts:profile_edit' %}">
-                                    <i class="bi bi-person"></i> My Profile
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'compliance:my_status' %}">
-                                    <i class="bi bi-clipboard-check"></i> My Compliance
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'training:my_records' %}">
-                                    <i class="bi bi-journal-check"></i> My Training
-                                </a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                {% if user.is_staff %}
-                                    <li><a class="dropdown-item" href="{% url 'admin:index' %}">
-                                        <i class="bi bi-gear"></i> Admin Panel
-                                    </a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                {% endif %}
-                                <li><a class="dropdown-item" href="{% url 'logout' %}">
-                                    <i class="bi bi-box-arrow-right"></i> Logout
-                                </a></li>
-                            </ul>
-                        </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'accounts:profile_edit' %}">
+                                <i class="bi bi-person"></i> My Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'compliance:dashboard' %}">
+                                <i class="bi bi-heart-pulse"></i> My Compliance
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'training:my_records' %}">
+                                <i class="bi bi-award"></i> My Training
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'quartermaster:my_requests' %}">
+                                <i class="bi bi-box"></i> My Gear
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% if user.is_staff %}
+                            <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                                <i class="bi bi-gear"></i> Admin Panel
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a></li>
+                        </ul>
+                    </li>
                     {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'login' %}">
-                                <i class="bi bi-box-arrow-in-right"></i> Login
-                            </a>
-                        </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}">
+                            <i class="bi bi-box-arrow-in-right"></i> Login
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
-    
+
     <!-- Messages -->
     {% if messages %}
-        <div class="container mt-3">
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
+    <div class="container mt-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {% if message.tags == 'error' %}
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            {% elif message.tags == 'success' %}
+                <i class="bi bi-check-circle-fill"></i>
+            {% elif message.tags == 'warning' %}
+                <i class="bi bi-exclamation-circle-fill"></i>
+            {% else %}
+                <i class="bi bi-info-circle-fill"></i>
+            {% endif %}
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+        {% endfor %}
+    </div>
     {% endif %}
-    
+
     <!-- Main Content -->
-    <main class="container-fluid py-4">
-        {% block content %}{% endblock %}
+    <main class="main-content">
+        <div class="container-fluid">
+            {% block breadcrumb %}{% endblock %}
+            {% block content %}{% endblock %}
+        </div>
     </main>
-    
+
     <!-- Footer -->
-    <footer class="bg-light text-center text-muted py-3 mt-5">
+    <footer>
         <div class="container">
-            <p class="mb-0">
-                &copy; {% now "Y" %} Fire Department Intranet | 
-                <a href="https://github.com/yourusername/fd-intranet" class="text-muted">Open Source</a> | 
-                <a href="#" class="text-muted">Support</a>
-            </p>
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0">
+                        <i class="bi bi-fire"></i> Fire Department Intranet
+                    </p>
+                    <small class="text-muted">Serving our community with pride</small>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <small class="text-muted">
+                        <a href="#" class="text-white text-decoration-none">Help</a> | 
+                        <a href="#" class="text-white text-decoration-none">Contact IT</a> | 
+                        <a href="#" class="text-white text-decoration-none">Privacy</a>
+                    </small>
+                </div>
+            </div>
         </div>
     </footer>
-    
-    <!-- Bootstrap JS Bundle -->
+
+    <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- jQuery (if needed) -->
+    <!-- jQuery (for convenience) -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script>
+        // Auto-dismiss alerts after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var alerts = document.querySelectorAll('.alert');
+                alerts.forEach(function(alert) {
+                    var bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+        });
+        
+        // Confirm delete actions
+        document.querySelectorAll('[data-confirm]').forEach(function(element) {
+            element.addEventListener('click', function(e) {
+                if (!confirm(this.getAttribute('data-confirm'))) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>
