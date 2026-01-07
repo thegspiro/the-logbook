@@ -1,633 +1,657 @@
 """
-Archives Module Views
-Handles historical records, legacy data, and department history
+Documents Module Views
+Handles SOGs, SOPs, policies, and document management
 """
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, View
 from django.contrib import messages
 from django.urls import reverse_lazy
-from django.db.models import Q, Count, Avg, Sum
+from django.db.models import Q, Count
 from django.utils import timezone
-from django.http import JsonResponse
-from datetime import timedelta, date
+from django.http import HttpResponse, FileResponse, Http404
 from .models import (
-    HistoricalShiftRecord, LegacyMemberData, IncidentArchive,
-    AnnualReport, EquipmentHistory
+    DocumentCategory, Document, RevisionHistory,
+    DocumentAcknowledgment, DocumentRequest, DocumentView
 )
 from .forms import (
-    HistoricalShiftRecordForm, LegacyMemberDataForm,
-    IncidentArchiveForm, AnnualReportForm, EquipmentHistoryForm
+    DocumentCategoryForm, DocumentForm, DocumentRequestForm,
+    NewVersionForm, AcknowledgmentForm
 )
+from .storage import DocumentStorageService
 
 
-class IsArchivistMixin(UserPassesTestMixin):
-    """Mixin to restrict access to Chief Officers and designated archivists"""
+class IsDocumentManagerMixin(UserPassesTestMixin):
+    """Mixin to restrict access to document managers"""
     def test_func(self):
         return self.request.user.groups.filter(
-            name__in=['Chief Officers', 'Secretary']
+            name__in=['Chief Officers', 'Training Officers', 'Secretary']
         ).exists()
 
 
 # Public/Member Views
 
-class ArchivesDashboard(LoginRequiredMixin, ListView):
-    """Main archives dashboard"""
-    template_name = 'archives/dashboard.html'
-    context_object_name = 'recent_incidents'
+class DocumentLibrary(LoginRequiredMixin, ListView):
+    """Main document library view"""
+    model = Document
+    template_name = 'documents/library.html'
+    context_object_name = 'documents'
+    paginate_by = 25
     
     def get_queryset(self):
-        return IncidentArchive.objects.all().order_by('-incident_date')[:10]
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+        queryset = Document.objects.filter(
+            status='APPROVED',
+            is_archived=False
+        ).select_related('category', 'author')
         
-        # Statistics
-        current_year = timezone.now().year
+        # Filter by category
+        category_id = self.request.GET.get('category')
+        if category_id:
+            category = get_object_or_404(DocumentCategory, pk=category_id)
+            # Include subcategories
+            categories = [category] + list(category.get_descendants())
+            queryset = queryset.filter(category__in=categories)
         
-        context.update({
-            'total_incidents': IncidentArchive.objects.count(),
-            'total_shifts': HistoricalShiftRecord.objects.count(),
-            'total_legacy_members': LegacyMemberData.objects.count(),
-            'annual_reports': AnnualReport.objects.all().order_by('-year')[:5],
-            'incidents_ytd': IncidentArchive.objects.filter(
-                incident_date__year=current_year
-            ).count(),
-            'equipment_count': EquipmentHistory.objects.count(),
-        })
-        
-        return context
-
-
-class HistoricalShiftList(LoginRequiredMixin, ListView):
-    """List historical shift records"""
-    model = HistoricalShiftRecord
-    template_name = 'archives/shift_list.html'
-    context_object_name = 'shifts'
-    paginate_by = 50
-    
-    def get_queryset(self):
-        queryset = HistoricalShiftRecord.objects.all()
-        
-        # Filter by date range
-        start_date = self.request.GET.get('start_date')
-        end_date = self.request.GET.get('end_date')
-        
-        if start_date:
-            queryset = queryset.filter(shift_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(shift_date__lte=end_date)
-        
-        # Filter by template
-        template = self.request.GET.get('template')
-        if template:
-            queryset = queryset.filter(shift_template_name__icontains=template)
-        
-        # Filter by OIC
-        oic = self.request.GET.get('oic')
-        if oic:
-            queryset = queryset.filter(officer_in_charge__icontains=oic)
-        
-        return queryset.order_by('-shift_date')
-
-
-class HistoricalShiftDetail(LoginRequiredMixin, DetailView):
-    """Detail view of historical shift"""
-    model = HistoricalShiftRecord
-    template_name = 'archives/shift_detail.html'
-    context_object_name = 'shift'
-
-
-class OnThisDay(LoginRequiredMixin, ListView):
-    """Show historical events from this day in history"""
-    template_name = 'archives/on_this_day.html'
-    context_object_name = 'events'
-    
-    def get_queryset(self):
-        today = timezone.now().date()
-        
-        # Get events from this day in previous years
-        incidents = IncidentArchive.objects.filter(
-            incident_date__month=today.month,
-            incident_date__day=today.day
-        ).exclude(
-            incident_date__year=today.year
-        ).order_by('-incident_date')
-        
-        return incidents
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        today = timezone.now().date()
-        
-        # Get shifts from this day
-        context['historical_shifts'] = HistoricalShiftRecord.objects.filter(
-            shift_date__month=today.month,
-            shift_date__day=today.day
-        ).exclude(
-            shift_date__year=today.year
-        ).order_by('-shift_date')
-        
-        context['today'] = today
-        
-        return context
-
-
-class LegacyMemberList(LoginRequiredMixin, ListView):
-    """List legacy/retired members"""
-    model = LegacyMemberData
-    template_name = 'archives/legacy_members.html'
-    context_object_name = 'members'
-    paginate_by = 50
-    
-    def get_queryset(self):
-        queryset = LegacyMemberData.objects.all()
+        # Filter by document type
+        doc_type = self.request.GET.get('type')
+        if doc_type:
+            queryset = queryset.filter(document_type=doc_type)
         
         # Search
         search = self.request.GET.get('search')
         if search:
             queryset = queryset.filter(
-                Q(first_name__icontains=search) |
-                Q(last_name__icontains=search) |
-                Q(badge_number__icontains=search)
+                Q(title__icontains=search) |
+                Q(document_number__icontains=search) |
+                Q(description__icontains=search) |
+                Q(tags__icontains=search)
             )
         
-        # Filter by separation type
-        sep_type = self.request.GET.get('separation_type')
-        if sep_type:
-            queryset = queryset.filter(separation_type=sep_type)
+        # Sort
+        sort = self.request.GET.get('sort', '-modified_at')
+        queryset = queryset.order_by(sort)
         
-        return queryset.order_by('-separation_date')
+        return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['separation_types'] = LegacyMemberData.SEPARATION_TYPES
+        
+        # Get root categories (parent=None)
+        context['categories'] = DocumentCategory.objects.filter(
+            parent=None,
+            is_active=True
+        ).order_by('order')
+        
+        context['document_types'] = Document.DOCUMENT_TYPES
+        
+        # Documents needing review
+        context['needs_review_count'] = Document.objects.filter(
+            status='APPROVED',
+            is_archived=False
+        ).filter(
+            Q(review_date__lte=timezone.now().date()) |
+            Q(needs_review=True)
+        ).count()
+        
         return context
 
 
-class LegacyMemberDetail(LoginRequiredMixin, DetailView):
-    """Detail view of legacy member"""
-    model = LegacyMemberData
-    template_name = 'archives/legacy_member_detail.html'
-    context_object_name = 'member'
-
-
-class IncidentArchiveList(LoginRequiredMixin, ListView):
-    """List archived incidents"""
-    model = IncidentArchive
-    template_name = 'archives/incident_list.html'
-    context_object_name = 'incidents'
-    paginate_by = 50
+class DocumentDetail(LoginRequiredMixin, DetailView):
+    """Detail view of a document"""
+    model = Document
+    template_name = 'documents/document_detail.html'
+    context_object_name = 'document'
     
     def get_queryset(self):
-        queryset = IncidentArchive.objects.all()
+        return Document.objects.filter(
+            Q(status='APPROVED') | Q(author=self.request.user)
+        )
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         
-        # Filter by date range
-        start_date = self.request.GET.get('start_date')
-        end_date = self.request.GET.get('end_date')
+        # Check if user has acknowledged
+        context['has_acknowledged'] = DocumentAcknowledgment.objects.filter(
+            document=self.object,
+            user=self.request.user,
+            version_acknowledged=self.object.version
+        ).exists()
         
-        if start_date:
-            queryset = queryset.filter(incident_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(incident_date__lte=end_date)
+        # Get revision history
+        context['revisions'] = RevisionHistory.objects.filter(
+            document=self.object
+        ).order_by('-revision_date')[:10]
         
-        # Filter by incident type
-        incident_type = self.request.GET.get('incident_type')
-        if incident_type:
-            queryset = queryset.filter(incident_type=incident_type)
+        # Get superseded documents
+        if self.object.supersedes:
+            context['previous_version'] = self.object.supersedes
         
-        # Search
-        search = self.request.GET.get('search')
-        if search:
-            queryset = queryset.filter(
-                Q(incident_number__icontains=search) |
-                Q(address__icontains=search) |
-                Q(description__icontains=search)
+        # Log view
+        self._log_view()
+        
+        return context
+    
+    def _log_view(self):
+        """Log document view"""
+        ip = self.request.META.get('HTTP_X_FORWARDED_FOR', self.request.META.get('REMOTE_ADDR', '')).split(',')[0].strip()
+        user_agent = self.request.META.get('HTTP_USER_AGENT', '')[:500]
+        
+        DocumentView.objects.create(
+            document=self.object,
+            user=self.request.user,
+            ip_address=ip,
+            user_agent=user_agent,
+            access_method='VIEW'
+        )
+        
+        # Increment view counter
+        self.object.views += 1
+        self.object.save(update_fields=['views'])
+
+
+class DocumentViewer(LoginRequiredMixin, DetailView):
+    """PDF viewer for documents"""
+    model = Document
+    template_name = 'documents/viewer.html'
+    context_object_name = 'document'
+    
+    def get_queryset(self):
+        return Document.objects.filter(
+            status='APPROVED',
+            is_archived=False
+        )
+
+
+class DocumentDownload(LoginRequiredMixin, View):
+    """Download a document"""
+    
+    def get(self, request, pk):
+        document = get_object_or_404(
+            Document,
+            pk=pk,
+            status='APPROVED'
+        )
+        
+        # Check if user has access to restricted documents
+        if document.category and document.category.requires_officer:
+            if not request.user.groups.filter(
+                name__in=['Chief Officers', 'Line Officers', 'Training Officers']
+            ).exists():
+                messages.error(request, 'You do not have permission to download this document.')
+                return redirect('documents:document_detail', pk=pk)
+        
+        # Log download
+        self._log_download(document, request)
+        
+        # Get file URL from storage service
+        storage = DocumentStorageService()
+        
+        try:
+            if document.file:
+                # Serve the file
+                response = FileResponse(document.file.open('rb'))
+                response['Content-Type'] = 'application/octet-stream'
+                response['Content-Disposition'] = f'attachment; filename="{document.file.name}"'
+                
+                # Increment download counter
+                document.downloads += 1
+                document.save(update_fields=['downloads'])
+                
+                return response
+            else:
+                raise Http404("Document file not found")
+                
+        except Exception as e:
+            messages.error(request, f'Error downloading document: {str(e)}')
+            return redirect('documents:document_detail', pk=pk)
+    
+    def _log_download(self, document, request):
+        """Log document download"""
+        ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', '')).split(',')[0].strip()
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+        
+        DocumentView.objects.create(
+            document=document,
+            user=request.user,
+            ip_address=ip,
+            user_agent=user_agent,
+            access_method='DOWNLOAD'
+        )
+
+
+class AcknowledgeDocument(LoginRequiredMixin, CreateView):
+    """Acknowledge reading a document"""
+    model = DocumentAcknowledgment
+    form_class = AcknowledgmentForm
+    template_name = 'documents/acknowledge.html'
+    
+    def get_success_url(self):
+        return reverse_lazy('documents:document_detail', kwargs={'pk': self.kwargs['pk']})
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['document'] = get_object_or_404(Document, pk=self.kwargs['pk'])
+        return context
+    
+    def form_valid(self, form):
+        document = get_object_or_404(Document, pk=self.kwargs['pk'])
+        
+        # Check if already acknowledged this version
+        if DocumentAcknowledgment.objects.filter(
+            document=document,
+            user=self.request.user,
+            version_acknowledged=document.version
+        ).exists():
+            messages.warning(self.request, 'You have already acknowledged this document.')
+            return redirect(self.get_success_url())
+        
+        form.instance.document = document
+        form.instance.user = self.request.user
+        form.instance.version_acknowledged = document.version
+        
+        # Get IP and user agent
+        ip = self.request.META.get('HTTP_X_FORWARDED_FOR', self.request.META.get('REMOTE_ADDR', '')).split(',')[0].strip()
+        form.instance.ip_address = ip
+        form.instance.user_agent = self.request.META.get('HTTP_USER_AGENT', '')[:500]
+        
+        response = super().form_valid(form)
+        
+        messages.success(
+            self.request,
+            f'Acknowledgment recorded for {document.title}'
+        )
+        
+        return response
+
+
+class RequestDocument(LoginRequiredMixin, CreateView):
+    """Request a new document or update"""
+    model = DocumentRequest
+    form_class = DocumentRequestForm
+    template_name = 'documents/request_document.html'
+    success_url = reverse_lazy('documents:my_requests')
+    
+    def form_valid(self, form):
+        form.instance.requested_by = self.request.user
+        form.instance.status = 'PENDING'
+        
+        response = super().form_valid(form)
+        
+        messages.success(
+            self.request,
+            'Document request submitted successfully.'
+        )
+        
+        # Notify document managers
+        self._notify_managers()
+        
+        return response
+    
+    def _notify_managers(self):
+        """Notify document managers of new request"""
+        from core.notifications import NotificationManager, NotificationType, NotificationPriority
+        from django.contrib.auth.models import User
+        
+        managers = User.objects.filter(
+            groups__name__in=['Chief Officers', 'Training Officers'],
+            is_active=True
+        ).distinct()
+        
+        if managers:
+            NotificationManager.send_notification(
+                notification_type=NotificationType.APPROVAL_NEEDED,
+                recipients=list(managers),
+                subject=f"New Document Request from {self.request.user.get_full_name()}",
+                message=f"{self.request.user.get_full_name()} has submitted a document request. Please review in the document management dashboard.",
+                priority=NotificationPriority.MEDIUM
             )
-        
-        return queryset.order_by('-incident_date', '-incident_time')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['incident_types'] = IncidentArchive.INCIDENT_TYPES
-        return context
 
 
-class IncidentArchiveDetail(LoginRequiredMixin, DetailView):
-    """Detail view of archived incident"""
-    model = IncidentArchive
-    template_name = 'archives/incident_detail.html'
-    context_object_name = 'incident'
-
-
-class IncidentStatistics(LoginRequiredMixin, ListView):
-    """Generate incident statistics"""
-    template_name = 'archives/incident_stats.html'
-    context_object_name = 'incidents'
+class MyDocumentRequests(LoginRequiredMixin, ListView):
+    """List user's document requests"""
+    template_name = 'documents/my_requests.html'
+    context_object_name = 'requests'
     
     def get_queryset(self):
-        return IncidentArchive.objects.all()
+        return DocumentRequest.objects.filter(
+            requested_by=self.request.user
+        ).order_by('-request_date')
+
+
+# Document Manager Views
+
+class DocumentManagementDashboard(IsDocumentManagerMixin, ListView):
+    """Dashboard for document managers"""
+    template_name = 'documents/management_dashboard.html'
+    context_object_name = 'pending_requests'
+    
+    def get_queryset(self):
+        return DocumentRequest.objects.filter(
+            status='PENDING'
+        ).select_related('requested_by', 'category')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get year filter
-        year = self.request.GET.get('year', timezone.now().year)
+        # Documents needing review
+        context['needs_review'] = Document.objects.filter(
+            status='APPROVED',
+            is_archived=False
+        ).filter(
+            Q(review_date__lte=timezone.now().date()) |
+            Q(needs_review=True)
+        ).count()
         
-        incidents = IncidentArchive.objects.filter(incident_date__year=year)
+        # Drafts
+        context['draft_count'] = Document.objects.filter(
+            status='DRAFT'
+        ).count()
         
-        # Statistics by type
-        by_type = incidents.values('incident_type').annotate(
-            count=Count('id')
-        ).order_by('-count')
+        # Under review
+        context['review_count'] = Document.objects.filter(
+            status='UNDER_REVIEW'
+        ).count()
         
-        # Statistics by month
-        by_month = incidents.extra(
-            select={'month': "EXTRACT(month FROM incident_date)"}
-        ).values('month').annotate(
-            count=Count('id')
-        ).order_by('month')
-        
-        # Average response times
-        avg_times = incidents.aggregate(
-            avg_response=Avg('response_time_minutes'),
-            avg_turnout=Avg('turnout_time_minutes')
-        )
-        
-        # Total calls
-        total_calls = incidents.count()
-        
-        # Breakdown by type
-        fire_calls = incidents.filter(incident_type='FIRE').count()
-        ems_calls = incidents.filter(incident_type='EMS').count()
-        mva_calls = incidents.filter(incident_type='MVA').count()
-        
-        context.update({
-            'year': year,
-            'total_calls': total_calls,
-            'fire_calls': fire_calls,
-            'ems_calls': ems_calls,
-            'mva_calls': mva_calls,
-            'by_type': by_type,
-            'by_month': by_month,
-            'avg_response_time': avg_times['avg_response'],
-            'avg_turnout_time': avg_times['avg_turnout'],
-            'available_years': IncidentArchive.objects.dates('incident_date', 'year', order='DESC'),
-        })
+        # Recent uploads
+        context['recent_documents'] = Document.objects.all().order_by('-created_at')[:10]
         
         return context
 
 
-class AnnualReportList(LoginRequiredMixin, ListView):
-    """List annual reports"""
-    model = AnnualReport
-    template_name = 'archives/annual_reports.html'
-    context_object_name = 'reports'
+class CreateDocument(IsDocumentManagerMixin, CreateView):
+    """Create new document"""
+    model = Document
+    form_class = DocumentForm
+    template_name = 'documents/create_document.html'
+    success_url = reverse_lazy('documents:management_dashboard')
+    
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        form.instance.status = 'DRAFT'
+        
+        response = super().form_valid(form)
+        
+        messages.success(
+            self.request,
+            f'Document {form.instance.document_number} created as draft.'
+        )
+        
+        return response
+
+
+class EditDocument(IsDocumentManagerMixin, UpdateView):
+    """Edit existing document"""
+    model = Document
+    form_class = DocumentForm
+    template_name = 'documents/edit_document.html'
+    success_url = reverse_lazy('documents:management_dashboard')
     
     def get_queryset(self):
-        return AnnualReport.objects.all().order_by('-year')
+        # Can only edit non-finalized documents
+        return Document.objects.filter(
+            status__in=['DRAFT', 'UNDER_REVIEW']
+        )
 
 
-class AnnualReportDetail(LoginRequiredMixin, DetailView):
-    """View annual report"""
-    model = AnnualReport
-    template_name = 'archives/annual_report_detail.html'
-    context_object_name = 'report'
+class CreateNewVersion(IsDocumentManagerMixin, CreateView):
+    """Create new version of existing document"""
+    model = Document
+    form_class = NewVersionForm
+    template_name = 'documents/new_version.html'
+    success_url = reverse_lazy('documents:management_dashboard')
     
-    def get_object(self):
-        return get_object_or_404(AnnualReport, year=self.kwargs['year'])
-
-
-class EquipmentHistoryList(LoginRequiredMixin, ListView):
-    """List equipment history"""
-    model = EquipmentHistory
-    template_name = 'archives/equipment_list.html'
-    context_object_name = 'equipment'
-    
-    def get_queryset(self):
-        queryset = EquipmentHistory.objects.all()
-        
-        # Filter by type
-        eq_type = self.request.GET.get('type')
-        if eq_type:
-            queryset = queryset.filter(equipment_type=eq_type)
-        
-        # Filter by disposition
-        disposition = self.request.GET.get('disposition')
-        if disposition:
-            queryset = queryset.filter(disposition=disposition)
-        
-        return queryset.order_by('-acquisition_date')
-
-
-class EquipmentHistoryDetail(LoginRequiredMixin, DetailView):
-    """Detail view of equipment history"""
-    model = EquipmentHistory
-    template_name = 'archives/equipment_detail.html'
-    context_object_name = 'equipment'
-
-
-class TimelineReport(LoginRequiredMixin, ListView):
-    """Generate visual timeline of department history"""
-    template_name = 'archives/timeline.html'
-    context_object_name = 'events'
-    
-    def get_queryset(self):
-        # Get all events in chronological order
-        events = []
-        
-        # Major incidents
-        incidents = IncidentArchive.objects.filter(
-            Q(fatalities__gt=0) | Q(property_damage__gte=100000)
-        ).order_by('-incident_date')[:50]
-        
-        for incident in incidents:
-            events.append({
-                'date': incident.incident_date,
-                'type': 'incident',
-                'title': f"Major Incident: {incident.incident_number}",
-                'description': incident.description[:200],
-                'object': incident
-            })
-        
-        # Equipment acquisitions/retirements
-        equipment = EquipmentHistory.objects.all().order_by('-acquisition_date')[:50]
-        
-        for eq in equipment:
-            events.append({
-                'date': eq.acquisition_date,
-                'type': 'equipment',
-                'title': f"Acquired: {eq.equipment_name}",
-                'description': f"{eq.equipment_type} - {eq.manufacturer}",
-                'object': eq
-            })
-        
-        # Legacy member separations (retirements, etc.)
-        separations = LegacyMemberData.objects.filter(
-            separation_type__in=['RETIRED', 'DECEASED']
-        ).order_by('-separation_date')[:50]
-        
-        for member in separations:
-            events.append({
-                'date': member.separation_date,
-                'type': 'member',
-                'title': f"{member.get_separation_type_display()}: {member.first_name} {member.last_name}",
-                'description': f"{member.years_of_service} years of service - {member.highest_rank}",
-                'object': member
-            })
-        
-        # Sort all events by date
-        events.sort(key=lambda x: x['date'], reverse=True)
-        
-        return events
-
-
-# Archivist/Admin Views
-
-class AddHistoricalShift(IsArchivistMixin, CreateView):
-    """Add historical shift record"""
-    model = HistoricalShiftRecord
-    form_class = HistoricalShiftRecordForm
-    template_name = 'archives/add_shift.html'
-    success_url = reverse_lazy('archives:shift_list')
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['original'] = get_object_or_404(Document, pk=self.kwargs['pk'])
+        return context
     
     def form_valid(self, form):
-        response = super().form_valid(form)
+        original = get_object_or_404(Document, pk=self.kwargs['pk'])
+        
+        # Create new version
+        new_doc = form.save(commit=False)
+        new_doc.author = self.request.user
+        new_doc.status = 'DRAFT'
+        new_doc.supersedes = original
+        new_doc.category = original.category
+        new_doc.document_type = original.document_type
+        
+        # Increment version
+        try:
+            major, minor = original.version.split('.')
+            new_doc.version = f"{major}.{int(minor) + 1}"
+        except:
+            new_doc.version = "2.0"
+        
+        new_doc.save()
+        
+        # Create revision history
+        RevisionHistory.objects.create(
+            document=new_doc,
+            version=new_doc.version,
+            revised_by=self.request.user,
+            change_summary=form.cleaned_data.get('change_summary', ''),
+            previous_file=original.file
+        )
         
         messages.success(
             self.request,
-            f'Historical shift record added for {form.instance.shift_date}'
+            f'New version {new_doc.version} created for {original.title}'
         )
         
-        return response
+        return redirect('documents:document_detail', pk=new_doc.pk)
 
 
-class EditHistoricalShift(IsArchivistMixin, UpdateView):
-    """Edit historical shift record"""
-    model = HistoricalShiftRecord
-    form_class = HistoricalShiftRecordForm
-    template_name = 'archives/edit_shift.html'
-    success_url = reverse_lazy('archives:shift_list')
-
-
-class AddLegacyMember(IsArchivistMixin, CreateView):
-    """Add legacy member record"""
-    model = LegacyMemberData
-    form_class = LegacyMemberDataForm
-    template_name = 'archives/add_legacy_member.html'
-    success_url = reverse_lazy('archives:legacy_members')
-    
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        
-        messages.success(
-            self.request,
-            f'Legacy member record added for {form.instance.first_name} {form.instance.last_name}'
-        )
-        
-        return response
-
-
-class EditLegacyMember(IsArchivistMixin, UpdateView):
-    """Edit legacy member record"""
-    model = LegacyMemberData
-    form_class = LegacyMemberDataForm
-    template_name = 'archives/edit_legacy_member.html'
-    success_url = reverse_lazy('archives:legacy_members')
-
-
-class AddIncidentArchive(IsArchivistMixin, CreateView):
-    """Add incident archive"""
-    model = IncidentArchive
-    form_class = IncidentArchiveForm
-    template_name = 'archives/add_incident.html'
-    success_url = reverse_lazy('archives:incident_list')
-    
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        
-        messages.success(
-            self.request,
-            f'Incident {form.instance.incident_number} archived'
-        )
-        
-        return response
-
-
-class EditIncidentArchive(IsArchivistMixin, UpdateView):
-    """Edit incident archive"""
-    model = IncidentArchive
-    form_class = IncidentArchiveForm
-    template_name = 'archives/edit_incident.html'
-    success_url = reverse_lazy('archives:incident_list')
-
-
-class CreateAnnualReport(IsArchivistMixin, CreateView):
-    """Create annual report"""
-    model = AnnualReport
-    form_class = AnnualReportForm
-    template_name = 'archives/create_annual_report.html'
-    
-    def get_success_url(self):
-        return reverse_lazy('archives:annual_report_detail', kwargs={'year': self.object.year})
-    
-    def get_initial(self):
-        initial = super().get_initial()
-        year = self.request.GET.get('year', timezone.now().year - 1)
-        
-        # Pre-populate statistics from incidents
-        incidents = IncidentArchive.objects.filter(incident_date__year=year)
-        
-        initial.update({
-            'year': year,
-            'total_calls': incidents.count(),
-            'fire_calls': incidents.filter(incident_type='FIRE').count(),
-            'ems_calls': incidents.filter(incident_type='EMS').count(),
-            'mva_calls': incidents.filter(incident_type='MVA').count(),
-            'service_calls': incidents.filter(incident_type='SERVICE').count(),
-            'false_alarms': incidents.filter(incident_type='FALSE_ALARM').count(),
-        })
-        
-        # Calculate average times
-        avg_times = incidents.aggregate(
-            avg_response=Avg('response_time_minutes'),
-            avg_turnout=Avg('turnout_time_minutes')
-        )
-        
-        if avg_times['avg_response']:
-            initial['avg_response_time'] = round(avg_times['avg_response'], 1)
-        if avg_times['avg_turnout']:
-            initial['avg_turnout_time'] = round(avg_times['avg_turnout'], 1)
-        
-        return initial
-    
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        
-        messages.success(
-            self.request,
-            f'Annual report created for {form.instance.year}'
-        )
-        
-        return response
-
-
-class EditAnnualReport(IsArchivistMixin, UpdateView):
-    """Edit annual report"""
-    model = AnnualReport
-    form_class = AnnualReportForm
-    template_name = 'archives/edit_annual_report.html'
-    
-    def get_object(self):
-        return get_object_or_404(AnnualReport, year=self.kwargs['year'])
-    
-    def get_success_url(self):
-        return reverse_lazy('archives:annual_report_detail', kwargs={'year': self.object.year})
-
-
-class FinalizeAnnualReport(IsArchivistMixin, UpdateView):
-    """Finalize annual report (lock it)"""
-    model = AnnualReport
+class ApproveDocument(IsDocumentManagerMixin, UpdateView):
+    """Approve a document"""
+    model = Document
     fields = []
-    template_name = 'archives/finalize_report.html'
+    template_name = 'documents/approve_document.html'
+    success_url = reverse_lazy('documents:management_dashboard')
     
-    def get_object(self):
-        return get_object_or_404(AnnualReport, year=self.kwargs['year'])
+    def get_queryset(self):
+        return Document.objects.filter(
+            status__in=['DRAFT', 'UNDER_REVIEW']
+        )
     
     def form_valid(self, form):
-        report = form.save(commit=False)
-        report.finalized = True
-        report.save()
+        document = form.save(commit=False)
+        document.status = 'APPROVED'
+        document.approved_by = self.request.user
+        document.approved_date = timezone.now().date()
+        
+        if not document.effective_date:
+            document.effective_date = timezone.now().date()
+        
+        document.save()
+        
+        # If this supersedes another document, archive the old one
+        if document.supersedes:
+            old_doc = document.supersedes
+            old_doc.status = 'SUPERSEDED'
+            old_doc.is_archived = True
+            old_doc.archived_date = timezone.now()
+            old_doc.save()
         
         messages.success(
             self.request,
-            f'Annual report for {report.year} has been finalized and locked.'
+            f'Document {document.document_number} approved and published.'
         )
         
-        return redirect('archives:annual_report_detail', year=report.year)
+        # Notify relevant users
+        self._notify_users(document)
+        
+        return redirect(self.success_url)
+    
+    def _notify_users(self, document):
+        """Notify users of new/updated document"""
+        from core.notifications import notify_document_updated
+        from django.contrib.auth.models import User
+        
+        # Notify all active members if it's a major policy
+        if document.document_type in ['SOP', 'POLICY']:
+            users = User.objects.filter(is_active=True)
+            notify_document_updated(document, users)
 
 
-class AddEquipmentHistory(IsArchivistMixin, CreateView):
-    """Add equipment history"""
-    model = EquipmentHistory
-    form_class = EquipmentHistoryForm
-    template_name = 'archives/add_equipment.html'
-    success_url = reverse_lazy('archives:equipment_list')
+class ArchiveDocument(IsDocumentManagerMixin, UpdateView):
+    """Archive a document"""
+    model = Document
+    fields = []
+    template_name = 'documents/archive_document.html'
+    success_url = reverse_lazy('documents:management_dashboard')
+    
+    def form_valid(self, form):
+        document = form.save(commit=False)
+        document.is_archived = True
+        document.archived_date = timezone.now()
+        document.save()
+        
+        messages.success(
+            self.request,
+            f'Document {document.document_number} archived.'
+        )
+        
+        return redirect(self.success_url)
 
 
-class EditEquipmentHistory(IsArchivistMixin, UpdateView):
-    """Edit equipment history"""
-    model = EquipmentHistory
-    form_class = EquipmentHistoryForm
-    template_name = 'archives/edit_equipment.html'
-    success_url = reverse_lazy('archives:equipment_list')
+class ProcessDocumentRequest(IsDocumentManagerMixin, UpdateView):
+    """Process document request"""
+    model = DocumentRequest
+    template_name = 'documents/process_request.html'
+    fields = ['status', 'assigned_to', 'review_notes', 'completed_document']
+    success_url = reverse_lazy('documents:management_dashboard')
+    
+    def form_valid(self, form):
+        request_obj = form.save(commit=False)
+        
+        action = self.request.POST.get('action')
+        
+        if action == 'approve':
+            request_obj.status = 'APPROVED'
+            request_obj.reviewed_by = self.request.user
+            request_obj.reviewed_at = timezone.now()
+        elif action == 'reject':
+            request_obj.status = 'REJECTED'
+            request_obj.reviewed_by = self.request.user
+            request_obj.reviewed_at = timezone.now()
+        elif action == 'assign':
+            request_obj.status = 'IN_PROGRESS'
+            request_obj.reviewed_by = self.request.user
+            request_obj.reviewed_at = timezone.now()
+        
+        request_obj.save()
+        
+        # Notify requester
+        self._notify_requester(request_obj)
+        
+        messages.success(self.request, 'Document request processed.')
+        return redirect(self.success_url)
+    
+    def _notify_requester(self, request_obj):
+        """Notify requester of decision"""
+        from core.notifications import NotificationManager, NotificationType, NotificationPriority
+        
+        if request_obj.status == 'APPROVED':
+            subject = "Document Request Approved"
+            message = "Your document request has been approved and assigned."
+        elif request_obj.status == 'REJECTED':
+            subject = "Document Request Rejected"
+            message = f"Your document request was rejected. Reason: {request_obj.review_notes or 'Not provided'}"
+        else:
+            subject = "Document Request In Progress"
+            message = "Your document request is being worked on."
+        
+        NotificationManager.send_notification(
+            notification_type=NotificationType.DOCUMENT_UPDATED,
+            recipients=[request_obj.requested_by],
+            subject=subject,
+            message=message,
+            priority=NotificationPriority.MEDIUM
+        )
 
 
-# Search and Reports
+# Category Management
 
-class ArchiveSearch(LoginRequiredMixin, ListView):
-    """Universal archive search"""
-    template_name = 'archives/search_results.html'
-    context_object_name = 'results'
+class CategoryManagement(IsDocumentManagerMixin, ListView):
+    """Manage document categories"""
+    model = DocumentCategory
+    template_name = 'documents/category_management.html'
+    context_object_name = 'categories'
     
     def get_queryset(self):
-        query = self.request.GET.get('q', '')
-        
-        if not query:
-            return []
-        
-        results = []
-        
-        # Search incidents
-        incidents = IncidentArchive.objects.filter(
-            Q(incident_number__icontains=query) |
-            Q(address__icontains=query) |
-            Q(description__icontains=query)
-        )[:20]
-        
-        for incident in incidents:
-            results.append({
-                'type': 'Incident',
-                'title': incident.incident_number,
-                'description': incident.description[:200],
-                'date': incident.incident_date,
-                'url': incident.get_absolute_url() if hasattr(incident, 'get_absolute_url') else None
-            })
-        
-        # Search legacy members
-        members = LegacyMemberData.objects.filter(
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query) |
-            Q(badge_number__icontains=query)
-        )[:20]
-        
-        for member in members:
-            results.append({
-                'type': 'Legacy Member',
-                'title': f"{member.first_name} {member.last_name}",
-                'description': f"Badge {member.badge_number} - {member.highest_rank}",
-                'date': member.separation_date,
-                'url': member.get_absolute_url() if hasattr(member, 'get_absolute_url') else None
-            })
-        
-        # Search equipment
-        equipment = EquipmentHistory.objects.filter(
-            Q(equipment_name__icontains=query) |
-            Q(unit_number__icontains=query)
-        )[:20]
-        
-        for eq in equipment:
-            results.append({
-                'type': 'Equipment',
-                'title': eq.equipment_name,
-                'description': f"{eq.equipment_type} - {eq.manufacturer}",
-                'date': eq.acquisition_date,
-                'url': eq.get_absolute_url() if hasattr(eq, 'get_absolute_url') else None
-            })
-        
-        return results
+        return DocumentCategory.objects.filter(parent=None).order_by('order')
+
+
+class CreateCategory(IsDocumentManagerMixin, CreateView):
+    """Create document category"""
+    model = DocumentCategory
+    form_class = DocumentCategoryForm
+    template_name = 'documents/create_category.html'
+    success_url = reverse_lazy('documents:category_management')
+
+
+class EditCategory(IsDocumentManagerMixin, UpdateView):
+    """Edit document category"""
+    model = DocumentCategory
+    form_class = DocumentCategoryForm
+    template_name = 'documents/edit_category.html'
+    success_url = reverse_lazy('documents:category_management')
+
+
+# Reports and Analytics
+
+class DocumentAnalytics(IsDocumentManagerMixin, ListView):
+    """Document analytics and usage reports"""
+    template_name = 'documents/analytics.html'
+    context_object_name = 'documents'
+    
+    def get_queryset(self):
+        return Document.objects.filter(status='APPROVED')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['query'] = self.request.GET.get('q', '')
+        
+        # Most viewed documents
+        context['most_viewed'] = Document.objects.filter(
+            status='APPROVED'
+        ).order_by('-views')[:10]
+        
+        # Most downloaded
+        context['most_downloaded'] = Document.objects.filter(
+            status='APPROVED'
+        ).order_by('-downloads')[:10]
+        
+        # Documents by type
+        context['by_type'] = Document.objects.filter(
+            status='APPROVED'
+        ).values('document_type').annotate(count=Count('id'))
+        
+        # Recent views
+        context['recent_views'] = DocumentView.objects.all().order_by('-viewed_at')[:20]
+        
+        return context
+
+
+class AcknowledgmentReport(IsDocumentManagerMixin, DetailView):
+    """Show who has acknowledged a document"""
+    model = Document
+    template_name = 'documents/acknowledgment_report.html'
+    context_object_name = 'document'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get all acknowledgments
+        context['acknowledgments'] = DocumentAcknowledgment.objects.filter(
+            document=self.object
+        ).order_by('-acknowledged_at')
+        
+        # Get members who haven't acknowledged (if mandatory)
+        from django.contrib.auth.models import User
+        acknowledged_users = context['acknowledgments'].values_list('user_id', flat=True)
+        context['not_acknowledged'] = User.objects.filter(
+            is_active=True
+        ).exclude(id__in=acknowledged_users)
+        
         return context
