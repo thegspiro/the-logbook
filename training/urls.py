@@ -1,3 +1,6 @@
+"""
+Training Module URL Configuration
+"""
 from django.urls import path
 from . import views
 
@@ -5,28 +8,23 @@ app_name = 'training'
 
 urlpatterns = [
     # Member-facing views
-    path('', views.TrainingDashboardView.as_view(), name='dashboard'),
-    path('requirements/', views.TrainingRequirementListView.as_view(), name='requirement_list'),
-    path('my-records/', views.MyTrainingRecordsView.as_view(), name='my_records'),
-    path('sessions/', views.TrainingSessionListView.as_view(), name='session_list'),
-    path('sessions/<int:pk>/', views.TrainingSessionDetailView.as_view(), name='session_detail'),
-    path('sessions/<int:pk>/register/', views.TrainingSessionRegisterView.as_view(), name='session_register'),
+    path('', views.MemberTrainingDashboard.as_view(), name='dashboard'),
+    path('requirements/', views.TrainingRequirementList.as_view(), name='requirements'),
+    path('requirements/<int:pk>/', views.TrainingRequirementDetail.as_view(), name='requirement_detail'),
+    path('my-records/', views.MyTrainingRecords.as_view(), name='my_records'),
+    path('records/<int:pk>/', views.TrainingRecordDetail.as_view(), name='record_detail'),
+    path('upload/', views.UploadTrainingRecord.as_view(), name='upload_record'),
     
-    # Officer views - Training record management
-    path('records/verify/<int:pk>/', views.TrainingRecordVerifyView.as_view(), name='record_verify'),
-    path('evaluations/', views.PracticalEvaluationListView.as_view(), name='evaluation_list'),
-    path('evaluations/create/<int:user_id>/', views.PracticalEvaluationCreateView.as_view(), name='evaluation_create'),
-    path('evaluations/<int:pk>/', views.PracticalEvaluationDetailView.as_view(), name='evaluation_detail'),
+    # Training sessions
+    path('sessions/', views.TrainingSessionList.as_view(), name='sessions'),
+    path('sessions/<int:pk>/', views.TrainingSessionDetail.as_view(), name='session_detail'),
+    path('sessions/<int:pk>/register/', views.TrainingSessionRegister.as_view(), name='session_register'),
     
     # Training Officer views
-    path('admin/', views.TrainingOfficerDashboardView.as_view(), name='officer_dashboard'),
-    path('admin/requirements/create/', views.TrainingRequirementCreateView.as_view(), name='requirement_create'),
-    path('admin/requirements/<int:pk>/edit/', views.TrainingRequirementUpdateView.as_view(), name='requirement_update'),
-    path('admin/sessions/create/', views.TrainingSessionCreateView.as_view(), name='session_create'),
-    path('admin/sessions/<int:pk>/edit/', views.TrainingSessionUpdateView.as_view(), name='session_update'),
-    path('admin/sessions/<int:pk>/attendance/', views.TrainingSessionAttendanceView.as_view(), name='session_attendance'),
-    path('admin/compliance-report/', views.ComplianceReportView.as_view(), name='compliance_report'),
-    
-    # API sync
-    path('admin/sync-target-solutions/', views.SyncTargetSolutionsView.as_view(), name='sync_target_solutions'),
+    path('officer/', views.TrainingOfficerDashboard.as_view(), name='officer_dashboard'),
+    path('officer/verify/<int:pk>/', views.VerifyTrainingRecord.as_view(), name='verify_record'),
+    path('officer/evaluate/', views.ConductPracticalEvaluation.as_view(), name='conduct_evaluation'),
+    path('officer/session/create/', views.CreateTrainingSession.as_view(), name='create_session'),
+    path('officer/session/<int:pk>/manage/', views.ManageTrainingSession.as_view(), name='manage_session'),
+    path('officer/compliance/', views.ComplianceReport.as_view(), name='compliance_report'),
 ]
