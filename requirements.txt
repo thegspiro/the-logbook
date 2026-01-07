@@ -1,19 +1,47 @@
-# Core Django Framework
+# CORE DJANGO AND WEB SERVER
 Django>=4.2,<5.0
-djangorestframework>=3.14.0
-django-environ>=0.11.0
-django-cors-headers>=4.3.0
+gunicorn==20.1.0
 
-# Database
-psycopg2-binary>=2.9.9  # PostgreSQL adapter
+# CONFIGURATION & SECURITY
+python-decouple==3.8
+django-environ==0.11.2
+django-otp==1.2.1
+django-two-factor-auth==1.15.0
+
+# DATABASE
+# PostgreSQL support (optional, sqlite3 is default)
+psycopg2-binary>=2.9.9
 dj-database-url>=2.1.0
 
-# Authentication & Security
-django-allauth>=0.57.0
-PyJWT>=2.8.0
-cryptography>=41.0.7
+# AUTHENTICATION & PERMISSIONS
+django-guardian>=2.4.0  # Object-level permissions
 
-# API Integrations
+# REST API
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+
+# BACKGROUND TASKS
+django-q2>=1.6.0  # Async task queue
+redis>=5.0.1
+
+# SCHEDULING & TIME
+python-dateutil==2.8.2
+icalendar==5.0.12
+pytz>=2023.3
+
+# EMAIL & NOTIFICATIONS
+django-sendgrid-v5==1.3.0
+
+# FILE STORAGE & PROCESSING
+boto3>=1.34.0  # AWS S3
+Pillow>=10.1.0
+python-magic>=0.4.27
+PyPDF2>=3.0.1
+
+# FORMS & UI
+django-bootstrap5>=23.3
+
+# API INTEGRATIONS
 requests>=2.31.0
 google-auth>=2.25.0
 google-auth-oauthlib>=1.2.0
@@ -21,22 +49,11 @@ google-auth-httplib2>=0.2.0
 google-api-python-client>=2.110.0
 msal>=1.26.0  # Microsoft Graph API
 
-# File Storage & Processing
-boto3>=1.34.0  # AWS S3
-Pillow>=10.1.0
-python-magic>=0.4.27
-PyPDF2>=3.0.1
-
-# Task Queue (for async operations)
-celery>=5.3.4
-redis>=5.0.1
-
-# Utilities
-python-dateutil>=2.8.2
-pytz>=2023.3
-gunicorn>=21.2.0  # Production server
+# UTILITIES
 whitenoise>=6.6.0  # Static file serving
+django-crispy-forms>=2.1
+crispy-bootstrap5>=2024.2
 
-# Development
+# DEVELOPMENT
 django-debug-toolbar>=4.2.0
-faker>=22.0.0  # Test data generation
+faker>=22.0.0
