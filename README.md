@@ -2,176 +2,419 @@
 
 ## 🌟 Project Overview
 
-This is an internal intranet built using **Python/Django** and **MySQL** designed to manage daily operations, track compliance, coordinate events, and handle official department governance (meetings and voting).
+An open-source, self-hosted intranet built with **Django 4.2+** designed specifically for volunteer fire departments. This platform manages:
 
-The architecture is designed for **flexibility** and **integration**:
+- **Shift Scheduling** - Bid board system with qualification checking
+- **Training Management** - Certification tracking, evaluations, and Target Solutions API integration
+- **Gear/Asset Management** - PPE tracking with NFPA 10-year retirement alerts
+- **Compliance** - Health, safety, and standards tracking
+- **Document Management** - SOGs, SOPs, and policy documents
+- **Historical Archives** - Shift logs and legacy data
 
-  * **Hosting-Agnostic Documents:** Links to external hosts (SharePoint, Google Drive, Nextcloud).
-  * **Granular Security:** Uses Object-Level Permissions for sensitive records.
-  * **API-First Approach:** Enables easy connection to platforms like Vector Solutions and Salesforce.
-  * **Responsive Design:** Optimized for desktop and mobile access, with an API backbone for a future native mobile app.
+### Key Features
 
------
+✅ **Open Source & Self-Hosted** - No vendor lock-in, deploy anywhere  
+✅ **API-First Architecture** - Easy integration with external systems  
+✅ **Mobile Responsive** - Optimized for desktop, tablet, and phone  
+✅ **Role-Based Security** - Granular permissions with object-level access control  
+✅ **Background Task Queue** - Async operations for notifications and sync  
+✅ **Flexible Integration** - Connects to Google Calendar, Microsoft 365, Target Solutions, and NocoDB
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
+## 📋 Prerequisites
 
-  * **Python 3.9+**
-  * **MySQL Server** (5.7+)
-  * **pip** (Python package installer)
+- **Python 3.9+**
+- **PostgreSQL 12+** (recommended) or SQLite for development
+- **Redis** (for background tasks via Django-Q2)
+- **pip** (Python package installer)
 
-### ⚙️ Local Setup
+---
 
-1.  **Clone the Repository:**
+## 🚀 Quick Start Installation
 
-    ```bash
-    git clone https://github.com/thegspiro/fd-intranet
-    cd fd-intranet
-    ```
+### 1. Clone the Repository
 
-2.  **Create and Activate Virtual Environment:**
+```bash
+git clone https://github.com/yourusername/fd-intranet.git
+cd fd-intranet
+```
 
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Linux/macOS
-    # .\venv\Scripts\activate  # Windows
-    ```
+### 2. Create Virtual Environment
 
-3.  **Install Dependencies:**
-    The project relies on `Django`, `mysqlclient`, `python-dotenv`, `django-guardian`, and `djangorestframework`.
+```bash
+python -m venv venv
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+# Activate virtual environment
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+.\venv\Scripts\activate
+```
 
-4.  **Database Configuration (Crucial for Security):**
-    Copy the provided template to create your local secrets file. **This file MUST NOT be committed to Git.**
+### 3. Install Dependencies
 
-    ```bash
-    cp env.template .env
-    # Edit the .env file with your local MySQL and Django SECRET_KEY values.
-    ```
+```bash
+pip install -r requirements.txt
+```
 
-5.  **Run Migrations:**
+### 4. Configure Environment Variables
 
-    ```bash
-    python manage.py makemigrations
-    python manage.py migrate
-    ```
+Copy the example environment file and configure it:
 
-6.  **Create Superuser:**
+```bash
+cp .env.example .env
+```
 
-    ```bash
-    python manage.py createsuperuser
-    ```
+Edit `.env` with your settings:
 
-7.  **Run the Server:**
+```bash
+# REQUIRED
+SECRET_KEY='your-very-long-random-django-secret-key'
+DEBUG=True
+ALLOWED_HOSTS='127.0.0.1,localhost'
 
-    ```bash
-    python manage.py runserver
-    ```
+# DATABASE (PostgreSQL recommended for production)
+DATABASE_URL=postgresql://user:password@localhost:5432/fd_intranet
+# For development, you can use:
+# DATABASE_URL=sqlite:///db.sqlite3
 
-    The application will run at `http://127.0.0.1:8000/`.
+# EMAIL (Required for notifications and 2FA)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your.dept.email@gmail.com
+EMAIL_HOST_PASSWORD=your_app_password_here
 
------
+# OPTIONAL INTEGRATIONS
+TARGET_SOLUTIONS_API_KEY=
+NOCODB_API_TOKEN=
+GOOGLE_CLIENT_ID=
+MS_CLIENT_ID=
+```
 
-## 🔒 Configuration and Security Notes
+**🔒 Security Note:** Never commit the `.env` file to version control!
 
-### 1\. Initial Setup Wizard (First Run)
+### 5. Run Database Migrations
 
-The system is configured to run a guided **Setup Wizard** on the first Superuser login. This process collects critical site variables:
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
 
-| Variable Collected | Purpose |
-| :--- | :--- |
-| **Department Name, Timezone** | General utility and scheduling. |
-| **Operational Scope** | Defines primary function: `FIRE_ONLY`, `FIRE_EMS`, or `EMS_ONLY`. |
-| **Primary/Secondary Color** | Branding for all templates (HEX codes). |
-| **Logo Upload** | Department visual identity. |
-| **Initial Roles & Categories** | Auto-creates all 15 specific roles and initial document categories. |
+### 6. Run Initial Setup Script
 
-### 2\. Object-Level Permissions (OLP)
+```bash
+python setup_system.py
+```
 
-The platform uses **`django-guardian`** to implement granular security.
+This will:
+- Create user groups (Chief Officers, Line Officers, Training Officers, etc.)
+- Prompt you to create a superuser account
+- Set up default permissions
 
-  * **Usage:** Used specifically on the **`PersonnelRecord`** model (Annual Reviews, Certifications).
-  * **Visibility:** Access is restricted on a **per-record basis** (e.g., only the Chief, the member, and the Compliance Officer can view a specific annual review document).
+### 7. Load Initial Data (Optional)
 
-### 3\. API Security
+```bash
+# Create some sample positions for shift scheduling
+python manage.py shell
+>>> from scheduling.models import Position
+>>> Position.objects.create(name="Captain", code="CAPT")
+>>> Position.objects.create(name="Driver/Operator", code="DRVR")
+>>> Position.objects.create(name="Firefighter", code="FF")
+>>> exit()
+```
 
-All external APIs (using DRF) must be protected:
+### 8. Start Development Server
 
-  * **Authentication:** Use **Token Authentication** or **API Key authentication** for machine-to-machine access.
-  * **Transport:** **Always** deploy the production environment over **HTTPS**.
+```bash
+python manage.py runserver
+```
 
------
+Visit: **http://localhost:8000**
 
-## 🏗️ Application Structure and Core Models
+---
 
-### 1\. `config` App
+## 🏗️ Project Structure
 
-  * **`SiteConfiguration` (Singleton):** Stores design variables, operational scope, and timezone settings.
+```
+fd-intranet/
+├── core/                       # Project settings & routing
+│   ├── settings.py
+│   ├── urls.py
+│   ├── wsgi.py
+│   └── notifications.py        # Global notification system
+│
+├── accounts/                   # User profiles & certifications
+│   ├── models.py               # UserProfile, CertificationStandard, MemberCertification
+│   └── views.py
+│
+├── scheduling/                 # Shift management & bid board
+│   ├── models.py               # Shift, ShiftSlot, Position, ShiftTemplate
+│   ├── forms.py
+│   ├── views.py
+│   ├── utils.py                # Qualification & overlap checking
+│   └── templates/
+│
+├── training/                   # Training matrix & evaluations
+│   ├── models.py               # TrainingRequirement, TrainingRecord, PracticalEvaluation
+│   ├── services.py             # Target Solutions API integration
+│   └── views.py
+│
+├── quartermaster/              # Gear & asset management
+│   ├── models.py               # GearItem, GearInspection, GearAssignment
+│   ├── services.py             # NFPA retirement alerts
+│   └── views.py
+│
+├── compliance/                 # Health, safety & standards
+│   ├── models.py               # MedicalPhysical, FitTest, OSHA_Log
+│   ├── alerts.py
+│   └── views.py
+│
+├── archives/                   # Historical records
+│   ├── models.py
+│   └── views.py
+│
+├── documents/                  # SOGs, SOPs & digital forms
+│   ├── models.py
+│   ├── storage.py              # AWS S3 connector
+│   └── views.py
+│
+├── integrations/               # External API connectors
+│   ├── target_solutions.py
+│   ├── google_calendar.py
+│   ├── ms_graph.py
+│   └── nocodb_client.py
+│
+├── templates/                  # Global templates
+│   ├── base.html
+│   └── setup_wizard.html
+│
+├── static/                     # CSS, JS, images
+├── media/                      # Uploaded files
+├── requirements.txt
+├── setup_system.py
+├── manage.py
+└── .env                        # Environment secrets (DO NOT COMMIT)
+```
 
-### 2\. `accounts` App
+---
 
-  * **`FireDeptUser`:** Custom user model with `badge_number`, `certification_level`, etc.
-  * **`PersonnelRecord`:** Tracks sensitive records with OLP enforced security.
+## 👥 User Roles & Permissions
 
-### 3\. `tasks` App
+The system includes pre-configured role groups:
 
-Tracks operational checks and equipment status.
+| Role | Permissions |
+|------|------------|
+| **Chief Officers** | Full administrative access, approve all operations |
+| **Line Officers** | Manage shifts for their apparatus, sign off on training |
+| **Training Officers** | Manage training requirements, conduct evaluations, sync Target Solutions |
+| **Compliance Officers** | View all compliance records, manage medical/physical records |
+| **Quartermaster** | Manage gear inventory, conduct inspections, process requests |
+| **Active Members** | Bid on shifts, view training requirements, request gear |
+| **Probationary Members** | View-only access to most features |
 
-  * **`Equipment`:** Tracks all departmental apparatus (e.g., E1, M5, Reserve Engine) using a flexible `equipment_type` field, regardless of the overall `operational_scope`.
-  * **`TaskTemplate` / `TaskInstance`:** Defines recurring checks and assigns them to users/equipment.
+---
 
-### 4\. `documents` App
+## 🔌 API Integrations
 
-  * **`Document`:** Stores metadata and the `file_url` (external link). Uses `is_archived` and `supersedes_document` to maintain a chain of **version history**.
+### Target Solutions / Vector Solutions
 
-### 5\. `meetings` App (New Governance Module)
+Sync training records automatically:
 
-Handles official business, attendance, and secure voting.
+1. Obtain API key from Target Solutions
+2. Add to `.env`: `TARGET_SOLUTIONS_API_KEY=your_key`
+3. Map courses to training requirements using `target_solutions_id` field
+4. Run sync: `python manage.py sync_training_records`
 
-  * **`Meeting` / `Attendance`:** Tracks meeting structure and who was physically present.
-  * **`Motion`:** Defines the vote question, duration, and **eligible voting roles** (Django Groups).
-  * **`Ballot`:** Stores the unique, single-use token sent via email and the final vote choice.
+### Google Calendar
 
------
+Sync shifts to Google Calendar:
 
-## 🗳️ Detailed Voting Logic and Permissions
+1. Create OAuth credentials in Google Cloud Console
+2. Add credentials to `.env`
+3. Configure in admin interface
 
-The custom voting program is tightly integrated with the Role/Group system to ensure legitimacy.
+### Microsoft 365
 
-### A. Role-Based Generation
+Similar to Google Calendar integration for Outlook users.
 
-When a vote is initiated, the system automatically filters eligible voters based on two criteria:
+### NocoDB
 
-1.  **Attendance:** Must have an `Attendance` record for the relevant `Meeting`.
-2.  **Role Eligibility:** The user must belong to one of the **`Motion.eligible_roles`** (e.g., only "Captain" and "Lieutenant" can vote on promotions).
+Mirror administrative data to NocoDB for advanced reporting:
 
-### B. Voting Workflow
+1. Set up NocoDB instance
+2. Configure API token in `.env`
+3. Enable sync in admin settings
 
-1.  **Initiation:** **Secretary, President, or Assistant Secretary** create the `Motion` and select eligible roles.
-2.  **Ballots:** Unique `Ballot` objects are generated for each eligible attendee with a secure, single-use `unique_token`.
-3.  **Email:** Ballots are sent via email with the unique link.
-4.  **Confirmation:** Results are tabulated automatically upon deadline, but must be **manually confirmed** by an officer before any subsequent events (like creating a new task or policy document) are triggered.
+---
 
------
+## 🔒 Security Best Practices
 
-## 🔌 API Integration Points (DRF)
+### Production Deployment Checklist
 
-The platform exposes REST APIs for streamlined data exchange.
+- [ ] Set `DEBUG=False` in production
+- [ ] Use PostgreSQL (not SQLite) for production database
+- [ ] Enable HTTPS with valid SSL certificate
+- [ ] Set strong `SECRET_KEY` (generate with `python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'`)
+- [ ] Configure proper `ALLOWED_HOSTS`
+- [ ] Enable security middleware settings:
+  ```python
+  SECURE_SSL_REDIRECT=True
+  SESSION_COOKIE_SECURE=True
+  CSRF_COOKIE_SECURE=True
+  SECURE_HSTS_SECONDS=31536000
+  ```
+- [ ] Set up regular database backups
+- [ ] Configure Redis with authentication
+- [ ] Use environment variables for all secrets
+- [ ] Set up fail2ban or similar for brute-force protection
+- [ ] Enable Django's two-factor authentication for admin accounts
 
-| Purpose | App / Model | API Endpoint Example | External Platform Example |
-| :--- | :--- | :--- | :--- |
-| **Personnel Sync** | `accounts.FireDeptUser` | `/api/v1/personnel/list/` | Vector Solutions (Training Roster) |
-| **Training Compliance** | `accounts.PersonnelRecord` | `/api/v1/events/certs/` (POST) | Vector Solutions (Reporting course completion) |
-| **Operational Status** | `tasks.Equipment` | `/api/v1/equipment/status/` | Mobile App / Dispatch Systems |
-| **Fundraising/CRM** | `events.Event` | `/api/v1/metrics/events/` | Salesforce (Pulling event dates/goals) |
+### Object-Level Permissions
 
------
+Sensitive personnel records use `django-guardian` for object-level access control:
 
-## 💻 Key Management Links
+```python
+from guardian.shortcuts import assign_perm
 
-  * **Custom Management Dashboard:** `http://127.0.0.1:8000/accounts/management/`
-  * **Django Admin (Superuser Only):** `http://127.0.0.1:8000/admin/`
+# Grant specific user permission to view a record
+assign_perm('view_personnelrecord', user, record_obj)
+```
+
+---
+
+## 📊 Background Tasks
+
+The system uses Django-Q2 for background task processing:
+
+### Start the Task Queue Worker
+
+```bash
+python manage.py qcluster
+```
+
+### Scheduled Tasks
+
+Configure these in the admin interface under "Django Q > Scheduled tasks":
+
+- **Training Expiration Alerts** - Daily at 0700
+- **Gear Inspection Reminders** - Weekly on Mondays
+- **NFPA Retirement Warnings** - Monthly
+- **Target Solutions Sync** - Daily at 0200
+
+---
+
+## 📱 Mobile App Integration
+
+The platform is API-ready for future native mobile apps:
+
+### REST API Endpoints
+
+```
+/api/scheduling/shifts/          - List upcoming shifts
+/api/scheduling/signup/          - Sign up for shift slot
+/api/training/requirements/      - Training requirements
+/api/quartermaster/gear/         - Gear inventory
+/api/compliance/status/          - Compliance status
+```
+
+API authentication uses token-based auth (DRF).
+
+---
+
+## 🧪 Testing
+
+Run tests:
+
+```bash
+python manage.py test
+```
+
+Generate test data:
+
+```bash
+python manage.py shell
+>>> from faker import Faker
+>>> # Create test users, shifts, etc.
+```
+
+---
+
+## 📈 Monitoring & Logging
+
+### Logging Configuration
+
+Logs are written to:
+- Console (development)
+- File: `logs/fd_intranet.log` (production)
+
+Configure logging levels in `settings.py`:
+
+```python
+LOGGING = {
+    'version': 1,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/fd_intranet.log',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'INFO',
+        },
+    },
+}
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🆘 Support & Documentation
+
+- **Issues**: https://github.com/yourusername/fd-intranet/issues
+- **Wiki**: https://github.com/yourusername/fd-intranet/wiki
+- **Email**: support@yourfiredept.org
+
+---
+
+## 🙏 Acknowledgments
+
+Built with:
+- Django 4.2
+- Bootstrap 5
+- Django-Q2
+- django-guardian
+- And many other open-source libraries
+
+---
+
+## 📝 Changelog
+
+### Version 1.0.0 (2025-01-07)
+- Initial release
+- Core scheduling, training, quartermaster, and compliance modules
+- API integrations for Target Solutions, Google, Microsoft
+- Mobile-responsive UI
+- Background task processing
+- Object-level permissions for sensitive data
