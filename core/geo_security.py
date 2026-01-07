@@ -299,6 +299,7 @@ class GeoSecurityService:
             return True, f"Approved international access ({geo.country_name})", geo
         
         # No exception - BLOCK
+        allowed_countries = config.get_allowed_country_names()
         logger.warning(f"Blocked access from {geo.country_name} for user {user.username}")
         
         # Log suspicious attempt
@@ -310,7 +311,7 @@ class GeoSecurityService:
         # Check if this is a repeated attempt - notify IT
         cls._check_repeated_attempts(user, ip_address, geo)
         
-        return False, f"Access from {geo.country_name} is not permitted. Contact IT if you need international access.", geo
+        return False, f"Access from {geo.country_name} is not permitted. Allowed countries: {', '.join(allowed_countries)}. Contact IT if you need international access.", geo
     
     @classmethod
     def get_ip_geolocation(cls, ip_address: str) -> Optional[IPGeolocation]:
