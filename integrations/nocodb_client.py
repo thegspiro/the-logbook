@@ -6,9 +6,9 @@ import requests
 import logging
 from django.conf import settings
 from typing import Dict, List, Optional
+from datetime import date
 
 logger = logging.getLogger(__name__)
-
 
 class NocoDBClient:
     """
