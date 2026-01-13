@@ -8,6 +8,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.db.models import Q, Count
+from django.db import models  
 from django.utils import timezone
 from datetime import timedelta
 from .models import (
