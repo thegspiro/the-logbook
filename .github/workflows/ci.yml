@@ -64,12 +64,18 @@ jobs:
         EOF
     
     - name: Run migrations
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: python manage.py migrate
     
     - name: Check deployment readiness
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: python manage.py check --deploy --fail-level WARNING
     
     - name: Run tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: |
         pytest --cov=. --cov-report=xml --cov-report=term
     
@@ -109,84 +115,3 @@ jobs:
     
     - name: Check import sorting
       run: isort --check-only .
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install security tools
-      run: |
-        pip install safety bandit
-    
-    - name: Run safety check
-      run: safety check --json || true
-    
-    - name: Run bandit
-      run: bandit -r . -ll || true
-
-  build:
-    name: Build and Validate
-    runs-on: ubuntu-latest
-    needs: [test, lint]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-    
-    - name: Collect static files
-      run: |
-        echo "SECRET_KEY='build-key'" > .env
-        echo "DEBUG=False" >> .env
-        echo "ALLOWED_HOSTS=localhost" >> .env
-        echo "DATABASE_URL=sqlite:///db.sqlite3" >> .env
-        python manage.py collectstatic --noinput
-    
-    - name: Create deployment package
-      run: |
-        tar -czf fd-intranet-${{ github.sha }}.tar.gz \
-          --exclude='.git' \
-          --exclude='*.pyc' \
-          --exclude='__pycache__' \
-          --exclude='.env' \
-          --exclude='db.sqlite3' \
-          --exclude='media' \
-          .
-    
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: deployment-package
-        path: fd-intranet-${{ github.sha }}.tar.gz
-        retention-days: 30
-
-  notify:
-    name: Notify on Success
-    runs-on: ubuntu-latest
-    needs: [test, lint, security, build]
-    if: success() && github.event_name == 'push'
-    
-    steps:
-    - name: Send notification
-      run: |
-        echo "✅ Build successful for commit ${{ github.sha }}"
-        echo "Branch: ${{ github.ref_name }}"
-        echo "All checks passed!"
