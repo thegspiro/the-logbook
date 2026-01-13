@@ -7,6 +7,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.contrib.auth.models import User, Group
 from datetime import timedelta
+from django.db import models  # <-- ADD THIS LINE
 from core.system_config import CountryChangeLog, SystemConfiguration
 from core.audit import AuditLog, LoginAttempt
 from core.geo_security import SuspiciousAccessAttempt
