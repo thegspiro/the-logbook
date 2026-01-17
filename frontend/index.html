@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary Meta Tags -->
+    <title>The Logbook - Volunteer Fire Department Intranet</title>
+    <meta name="title" content="The Logbook - Volunteer Fire Department Intranet" />
+    <meta name="description" content="A secure, HIPAA-compliant department intranet built by volunteer firefighters, for volunteer firefighters. Open source and community driven." />
+
+    <!-- SEO Meta Tags -->
+    <meta name="keywords" content="fire department, volunteer fire department, intranet, HIPAA compliant, emergency services, fire department software" />
+    <meta name="author" content="The Logbook Contributors" />
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#991b1b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="The Logbook" />
+
+    <!-- Accessibility -->
+    <meta name="accessibility" content="WCAG 2.1 Level AA" />
+
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  </head>
+  <body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main" class="skip-to-main">Skip to main content</a>
+
+    <!-- Main app container -->
+    <div id="root"></div>
+
+    <!-- Main content landmark for accessibility -->
+    <main id="main" aria-label="Main content"></main>
+
+    <!-- Module script -->
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Noscript fallback -->
+    <noscript>
+      <div style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: linear-gradient(to bottom right, #0f172a, #7f1d1d, #0f172a);
+        color: white;
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 20px;
+        text-align: center;
+      ">
+        <div style="max-width: 600px;">
+          <h1 style="font-size: 2rem; margin-bottom: 1rem;">JavaScript Required</h1>
+          <p style="font-size: 1.125rem; opacity: 0.9;">
+            The Logbook requires JavaScript to be enabled in your browser.
+            Please enable JavaScript and reload the page.
+          </p>
+        </div>
+      </div>
+    </noscript>
+  </body>
+</html>
