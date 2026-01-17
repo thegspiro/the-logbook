@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 // Pages
 import Welcome from './pages/Welcome';
 import OnboardingCheck from './pages/OnboardingCheck';
+import DepartmentInfo from './pages/DepartmentInfo';
 
 function App() {
   return (
@@ -17,17 +18,20 @@ function App() {
           {/* Onboarding flow */}
           <Route path="/onboarding" element={<OnboardingCheck />} />
 
+          {/* Onboarding wizard - Department Info */}
+          <Route path="/onboarding/start" element={<DepartmentInfo />} />
+
           {/* Placeholder routes for future development */}
           <Route
-            path="/onboarding/start"
+            path="/onboarding/security-check"
             element={
               <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
                 <div className="max-w-2xl w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
                   <h2 className="text-3xl font-bold text-white mb-4">
-                    Onboarding Wizard
+                    Security Check - Step 2
                   </h2>
                   <p className="text-slate-300 mb-6">
-                    The onboarding wizard frontend is under development. For
+                    The remaining onboarding steps are under development. For
                     now, please use the API at{' '}
                     <a
                       href="/docs"
@@ -38,24 +42,31 @@ function App() {
                     to complete the setup.
                   </p>
                   <div className="text-left bg-slate-900/50 rounded-lg p-6 text-sm font-mono text-slate-300">
-                    <p className="mb-2">API Documentation:</p>
+                    <p className="mb-2">Department Info Collected:</p>
                     <p className="mb-1">
-                      • GET /api/v1/onboarding/status - Check status
+                      • Name: {sessionStorage.getItem('departmentName') || 'Not set'}
                     </p>
                     <p className="mb-1">
-                      • POST /api/v1/onboarding/start - Start onboarding
+                      • Logo: {sessionStorage.getItem('hasLogo') === 'true' ? 'Uploaded ✓' : 'Skipped'}
+                    </p>
+                    <p className="mt-4 mb-2">Next API Endpoints:</p>
+                    <p className="mb-1">
+                      • GET /api/v1/onboarding/security-check
                     </p>
                     <p className="mb-1">
-                      • POST /api/v1/onboarding/organization - Create org
+                      • POST /api/v1/onboarding/organization
                     </p>
                     <p className="mb-1">
-                      • POST /api/v1/onboarding/admin-user - Create admin
-                    </p>
-                    <p className="mb-1">
-                      • POST /api/v1/onboarding/complete - Finish setup
+                      • POST /api/v1/onboarding/admin-user
                     </p>
                   </div>
-                  <div className="mt-6">
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => window.history.back()}
+                      className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all duration-300"
+                    >
+                      ← Go Back
+                    </button>
                     <a
                       href={
                         import.meta.env.VITE_API_URL
@@ -64,9 +75,9 @@ function App() {
                       }
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-block px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300 text-center"
                     >
-                      Open API Documentation
+                      Open API Docs
                     </a>
                   </div>
                 </div>
