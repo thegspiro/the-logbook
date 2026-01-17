@@ -3,6 +3,7 @@ Audit Log Database Models
 
 SQLAlchemy models for tamper-proof audit logging.
 These tables are append-only and protected from modifications.
+Compatible with MySQL database.
 """
 
 from sqlalchemy import (
@@ -14,8 +15,8 @@ from sqlalchemy import (
     Integer,
     Text,
     Index,
+    JSON,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
@@ -53,18 +54,18 @@ class AuditLog(Base):
     severity = Column(Enum(SeverityLevel), nullable=False)
     
     # Actor Information
-    user_id = Column(UUID(as_uuid=True), index=True)
+    user_id = Column(String(36), index=True)
     username = Column(String(255))
-    session_id = Column(UUID(as_uuid=True))
-    
+    session_id = Column(String(36))
+
     # Context
-    ip_address = Column(INET)
+    ip_address = Column(String(45))  # Support IPv6
     user_agent = Column(Text)
-    geo_location = Column(JSONB)
-    
+    geo_location = Column(JSON)
+
     # Event Data
-    event_data = Column(JSONB, nullable=False)
-    sensitive_data_encrypted = Column(Text)  # PGP encrypted sensitive fields
+    event_data = Column(JSON, nullable=False)
+    sensitive_data_encrypted = Column(Text)  # AES encrypted sensitive fields
     
     # Integrity Chain (Blockchain-inspired)
     previous_hash = Column(String(64), nullable=False)
@@ -117,7 +118,7 @@ class AuditLogCheckpoint(Base):
     # Verification results
     verified_at = Column(DateTime(timezone=True))
     verification_status = Column(String(20))  # pending, verified, failed
-    verification_details = Column(JSONB)
+    verification_details = Column(JSON)
     
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     

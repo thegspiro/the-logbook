@@ -1,0 +1,180 @@
+# ============================================
+# THE LOGBOOK - GITIGNORE
+# ============================================
+
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.cover
+*.log
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+mysql_data/
+postgres_data/
+
+# Uploads and user data
+uploads/
+backups/
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+coverage/
+.next/
+out/
+build/
+.cache/
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+ssl/
+certificates/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Package manager lock files (uncomment if needed)
+# package-lock.json
+# yarn.lock
+
+# Alembic
+# Keep the migrations but ignore autogenerate temp files
+alembic/versions/__pycache__/
+
+# Redis
+dump.rdb
+
+# Elasticsearch
+data/
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Static files (if generated)
+staticfiles/
+static/
+
+# Media files
+media/
+
+# Backup files
+*.backup
+*.bak
+
+# Editor directories and files
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local configuration
+local_settings.py
+config.local.js
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Custom
+/data/
+/secrets/

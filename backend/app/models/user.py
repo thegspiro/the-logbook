@@ -2,6 +2,7 @@
 User Database Models
 
 SQLAlchemy models for user management, authentication, and authorization.
+Compatible with MySQL database.
 """
 
 from sqlalchemy import (
@@ -16,8 +17,8 @@ from sqlalchemy import (
     ForeignKey,
     Table,
     Index,
+    JSON,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -25,6 +26,11 @@ import enum
 import uuid
 
 from app.core.database import Base
+
+
+def generate_uuid():
+    """Generate UUID as string for MySQL compatibility"""
+    return str(uuid.uuid4())
 
 
 class UserStatus(str, enum.Enum):
@@ -39,18 +45,18 @@ class UserStatus(str, enum.Enum):
 class Organization(Base):
     """
     Organization/Department model
-    
+
     Supports multi-tenancy - each organization is isolated.
     """
-    
+
     __tablename__ = "organizations"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(255), nullable=False)
     slug = Column(String(100), nullable=False, unique=True)
     description = Column(Text)
     type = Column(String(50), default="fire_department")
-    settings = Column(JSONB, default={})
+    settings = Column(JSON, default={})
     active = Column(Boolean, default=True, index=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -68,12 +74,12 @@ class User(Base):
     """
     User model with comprehensive authentication and profile support
     """
-    
+
     __tablename__ = "users"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
     # Basic Info
     username = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, index=True)
@@ -83,21 +89,21 @@ class User(Base):
     badge_number = Column(String(50))
     phone = Column(String(20))
     mobile = Column(String(20))
-    
+
     # Profile
     photo_url = Column(Text)
     date_of_birth = Column(Date)
     hire_date = Column(Date)
-    
+
     # Status
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVE, index=True)
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
-    
+
     # MFA
     mfa_enabled = Column(Boolean, default=False)
     mfa_secret = Column(String(32))
-    mfa_backup_codes = Column(JSONB)
+    mfa_backup_codes = Column(JSON)
     
     # Password Management
     password_changed_at = Column(DateTime(timezone=True))
@@ -145,16 +151,16 @@ class Role(Base):
     """
     Role model for RBAC (Role-Based Access Control)
     """
-    
+
     __tablename__ = "roles"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
     name = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False)
     description = Column(Text)
-    permissions = Column(JSONB, default=[])
+    permissions = Column(JSON, default=[])
     is_system = Column(Boolean, default=False)  # System roles can't be deleted
     priority = Column(Integer, default=0)  # Higher priority = more powerful
     
@@ -177,11 +183,11 @@ class Role(Base):
 user_roles = Table(
     'user_roles',
     Base.metadata,
-    Column('id', UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
-    Column('user_id', UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-    Column('role_id', UUID(as_uuid=True), ForeignKey('roles.id', ondelete='CASCADE'), nullable=False),
+    Column('id', String(36), primary_key=True, default=generate_uuid),
+    Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), nullable=False),
     Column('assigned_at', DateTime(timezone=True), server_default=func.now()),
-    Column('assigned_by', UUID(as_uuid=True), ForeignKey('users.id')),
+    Column('assigned_by', String(36), ForeignKey('users.id')),
     Index('idx_user_role', 'user_id', 'role_id', unique=True),
 )
 
@@ -190,18 +196,18 @@ class Session(Base):
     """
     User session model for tracking active sessions
     """
-    
+
     __tablename__ = "sessions"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
     token = Column(Text, nullable=False, unique=True, index=True)
     refresh_token = Column(Text)
     ip_address = Column(String(45))
     user_agent = Column(Text)
-    device_info = Column(JSONB)
-    geo_location = Column(JSONB)
+    device_info = Column(JSON)
+    geo_location = Column(JSON)
     
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

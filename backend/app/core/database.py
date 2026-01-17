@@ -1,7 +1,7 @@
 """
 Database Connection Manager
 
-Uses SQLAlchemy async with connection pooling for PostgreSQL.
+Uses SQLAlchemy async with connection pooling for MySQL.
 """
 
 from sqlalchemy.ext.asyncio import (
@@ -52,7 +52,8 @@ class DatabaseManager:
             
             # Test connection
             async with self.engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                from sqlalchemy import text
+                await conn.execute(text("SELECT 1"))
             
             logger.info("Database connection established")
             
