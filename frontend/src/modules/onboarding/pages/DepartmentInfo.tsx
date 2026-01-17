@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Building2, Image as ImageIcon, X } from 'lucide-react';
+import { isValidImageFile } from '../utils/validation';
 
 const DepartmentInfo: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
@@ -18,16 +19,10 @@ const DepartmentInfo: React.FC = () => {
       return;
     }
 
-    // Validate file type
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setError('Please upload a valid image file (PNG, JPG, SVG, or WebP)');
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Logo file size must be less than 5MB');
+    // Validate file using secure validation utility
+    const validation = isValidImageFile(file);
+    if (!validation.valid) {
+      setError(validation.error || 'Invalid file');
       return;
     }
 
@@ -181,7 +176,7 @@ const DepartmentInfo: React.FC = () => {
                   ref={fileInputRef}
                   type="file"
                   onChange={handleFileInputChange}
-                  accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
                   className="hidden"
                   aria-label="File input for logo"
                 />
@@ -194,7 +189,7 @@ const DepartmentInfo: React.FC = () => {
                       Drop your logo here, or click to browse
                     </p>
                     <p className="text-sm text-slate-400">
-                      PNG, JPG, SVG or WebP (max 5MB)
+                      PNG, JPG or WebP (max 5MB)
                     </p>
                   </div>
                 </div>

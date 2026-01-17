@@ -1,8 +1,16 @@
 /**
  * Validation Utilities for Onboarding Module
+ * Enhanced with security improvements
  */
 
 import { PasswordStrength } from '../types';
+import {
+  isValidEmailSecure,
+  isValidUsernameSecure,
+  isValidHostSecure,
+  isValidPhone,
+  sanitizeInput,
+} from './security';
 
 /**
  * Check password strength
@@ -21,30 +29,32 @@ export const checkPasswordStrength = (password: string): PasswordStrength => {
 };
 
 /**
- * Validate email format
+ * Validate email format (secure version)
  */
 export const isValidEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return isValidEmailSecure(email);
 };
 
 /**
- * Validate username format
+ * Validate username format (secure version with length limits)
  */
 export const isValidUsername = (username: string): boolean => {
-  return /^[a-zA-Z0-9_-]+$/.test(username) && username.length >= 3;
+  return isValidUsernameSecure(username);
 };
 
 /**
  * Validate image file
+ * SECURITY NOTE: SVG files are NOT allowed as they can contain XSS payloads
  */
 export const isValidImageFile = (file: File): { valid: boolean; error?: string } => {
-  const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+  // SECURITY: Removed SVG from allowed types due to XSS risk
+  const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
   const maxSize = 5 * 1024 * 1024; // 5MB
 
   if (!validTypes.includes(file.type)) {
     return {
       valid: false,
-      error: 'Please upload a valid image file (PNG, JPG, SVG, or WebP)',
+      error: 'Please upload a valid image file (PNG, JPG, or WebP only)',
     };
   }
 
@@ -52,6 +62,17 @@ export const isValidImageFile = (file: File): { valid: boolean; error?: string }
     return {
       valid: false,
       error: 'Logo file size must be less than 5MB',
+    };
+  }
+
+  // Additional check: verify file extension matches MIME type
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  const validExtensions = ['png', 'jpg', 'jpeg', 'webp'];
+
+  if (!extension || !validExtensions.includes(extension)) {
+    return {
+      valid: false,
+      error: 'Invalid file extension',
     };
   }
 
@@ -66,9 +87,22 @@ export const isValidPort = (port: number): boolean => {
 };
 
 /**
- * Validate SMTP host
+ * Validate SMTP host (secure version)
  */
 export const isValidHost = (host: string): boolean => {
-  // Simple hostname validation (can be IP or domain)
-  return /^[a-zA-Z0-9.-]+$/.test(host) && host.length > 0;
+  return isValidHostSecure(host);
+};
+
+/**
+ * Validate phone number
+ */
+export const isValidPhoneNumber = (phone: string): boolean => {
+  return isValidPhone(phone);
+};
+
+/**
+ * Sanitize text input
+ */
+export const sanitizeTextInput = (input: string): string => {
+  return sanitizeInput(input);
 };
