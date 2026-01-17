@@ -31,8 +31,8 @@ const NavigationChoice: React.FC = () => {
     // Store navigation preference
     sessionStorage.setItem('navigationLayout', selectedLayout);
 
-    // Navigate to next step (security check or next onboarding step)
-    navigate('/onboarding/security-check');
+    // Navigate to email platform choice
+    navigate('/onboarding/email-platform');
   };
 
   const currentYear = new Date().getFullYear();
