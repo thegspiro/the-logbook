@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import Welcome from './pages/Welcome';
 import OnboardingCheck from './pages/OnboardingCheck';
 import DepartmentInfo from './pages/DepartmentInfo';
+import NavigationChoice from './pages/NavigationChoice';
 
 function App() {
   return (
@@ -20,6 +21,9 @@ function App() {
 
           {/* Onboarding wizard - Department Info */}
           <Route path="/onboarding/start" element={<DepartmentInfo />} />
+
+          {/* Onboarding wizard - Navigation Choice */}
+          <Route path="/onboarding/navigation-choice" element={<NavigationChoice />} />
 
           {/* Placeholder routes for future development */}
           <Route
@@ -42,12 +46,15 @@ function App() {
                     to complete the setup.
                   </p>
                   <div className="text-left bg-slate-900/50 rounded-lg p-6 text-sm font-mono text-slate-300">
-                    <p className="mb-2">Department Info Collected:</p>
+                    <p className="mb-2">Onboarding Info Collected:</p>
                     <p className="mb-1">
-                      • Name: {sessionStorage.getItem('departmentName') || 'Not set'}
+                      • Department: {sessionStorage.getItem('departmentName') || 'Not set'}
                     </p>
                     <p className="mb-1">
                       • Logo: {sessionStorage.getItem('hasLogo') === 'true' ? 'Uploaded ✓' : 'Skipped'}
+                    </p>
+                    <p className="mb-1">
+                      • Navigation: {sessionStorage.getItem('navigationLayout') === 'top' ? 'Top Bar' : sessionStorage.getItem('navigationLayout') === 'left' ? 'Left Sidebar' : 'Not set'}
                     </p>
                     <p className="mt-4 mb-2">Next API Endpoints:</p>
                     <p className="mb-1">

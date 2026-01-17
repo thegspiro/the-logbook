@@ -93,8 +93,8 @@ const DepartmentInfo: React.FC = () => {
       reader.readAsDataURL(logo);
     }
 
-    // Navigate to security check
-    navigate('/onboarding/security-check');
+    // Navigate to navigation choice
+    navigate('/onboarding/navigation-choice');
   };
 
   const handleSkipLogo = () => {
@@ -105,7 +105,7 @@ const DepartmentInfo: React.FC = () => {
 
     sessionStorage.setItem('departmentName', departmentName);
     sessionStorage.setItem('hasLogo', 'false');
-    navigate('/onboarding/security-check');
+    navigate('/onboarding/navigation-choice');
   };
 
   return (
