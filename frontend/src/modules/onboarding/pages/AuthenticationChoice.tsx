@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, CheckCircle, Info, Key } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
 import { useOnboardingStorage } from '../hooks';
-import { saveAuthenticationPlatform } from '../utils/storage';
+import { apiClient } from '../services/api-client';
 
 interface AuthPlatform {
   id: string;
@@ -20,6 +21,7 @@ const AuthenticationChoice: React.FC = () => {
   const navigate = useNavigate();
   const { departmentName, logoPreview, onboardingData } = useOnboardingStorage();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Get email platform to pre-select authentication
   const emailPlatform = onboardingData.emailPlatform || sessionStorage.getItem('emailPlatform');
@@ -116,15 +118,32 @@ const AuthenticationChoice: React.FC = () => {
     },
   ];
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!selectedPlatform) return;
 
-    // Save selection to session storage
-    saveAuthenticationPlatform(selectedPlatform);
+    setIsSaving(true);
 
-    // Route to IT team and backup access setup
-    if (selectedPlatform === 'google' || selectedPlatform === 'microsoft' || selectedPlatform === 'authentik') {
+    try {
+      // SECURITY: Save authentication platform to server
+      const response = await apiClient.saveAuthPlatform(selectedPlatform);
+
+      if (response.error) {
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      // SECURITY: Only store non-sensitive metadata in sessionStorage
+      sessionStorage.setItem('authPlatform', selectedPlatform);
+
+      toast.success('Authentication platform saved');
+
+      // Route to IT team and backup access setup
       navigate('/onboarding/it-team');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to save authentication platform';
+      toast.error(errorMessage);
+      setIsSaving(false);
     }
   };
 
@@ -257,15 +276,15 @@ const AuthenticationChoice: React.FC = () => {
           <div className="max-w-md mx-auto">
             <button
               onClick={handleContinue}
-              disabled={!selectedPlatform}
+              disabled={!selectedPlatform || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                selectedPlatform
+                selectedPlatform && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
-              Continue
+              {isSaving ? 'Saving...' : 'Continue'}
             </button>
 
             {/* Progress Indicator */}

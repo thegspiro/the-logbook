@@ -1,7 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Building2, Image as ImageIcon, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
+import { useOnboardingSession } from '../hooks/useOnboardingSession';
+import { apiClient } from '../services/api-client';
 
 const DepartmentInfo: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
@@ -9,8 +12,21 @@ const DepartmentInfo: React.FC = () => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { initializeSession, hasSession, isLoading: sessionLoading } = useOnboardingSession();
+
+  // Initialize session on mount
+  useEffect(() => {
+    if (!hasSession && !sessionLoading) {
+      initializeSession().catch(err => {
+        console.error('Failed to initialize session:', err);
+        toast.error('Failed to start onboarding session. Please refresh the page.');
+      });
+    }
+  }, [hasSession, sessionLoading, initializeSession]);
 
   const handleLogoChange = (file: File | null) => {
     if (!file) {
@@ -69,38 +85,57 @@ const DepartmentInfo: React.FC = () => {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!departmentName.trim()) {
       setError('Please enter your department name');
       return;
     }
 
-    // Store in sessionStorage to pass to next steps
-    sessionStorage.setItem('departmentName', departmentName);
-    if (logo) {
-      // We'll handle the actual upload later in the onboarding API call
-      sessionStorage.setItem('hasLogo', 'true');
-      // Store the logo file for later upload
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        sessionStorage.setItem('logoData', reader.result as string);
-      };
-      reader.readAsDataURL(logo);
-    }
+    setIsSaving(true);
+    setError(null);
 
-    // Navigate to navigation choice
-    navigate('/onboarding/navigation-choice');
+    try {
+      // Save department info to server-side session
+      const response = await apiClient.saveDepartmentInfo({
+        name: departmentName,
+        logo: logoPreview || undefined, // Base64 logo data (safe to send)
+        navigation_layout: navigationLayout,
+      });
+
+      if (response.error) {
+        setError(response.error);
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      // SECURITY: Only store non-sensitive data in sessionStorage for UI purposes
+      sessionStorage.setItem('departmentName', departmentName);
+      if (logoPreview) {
+        sessionStorage.setItem('logoData', logoPreview);
+      }
+      sessionStorage.setItem('navigationLayout', navigationLayout);
+
+      toast.success('Department information saved');
+
+      // Navigate to navigation choice
+      navigate('/onboarding/navigation-choice');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to save department information';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      setIsSaving(false);
+    }
   };
 
-  const handleSkipLogo = () => {
+  const handleSkipLogo = async () => {
     if (!departmentName.trim()) {
       setError('Please enter your department name before continuing');
       return;
     }
 
-    sessionStorage.setItem('departmentName', departmentName);
-    sessionStorage.setItem('hasLogo', 'false');
-    navigate('/onboarding/navigation-choice');
+    // Same as handleContinue but without logo
+    await handleContinue();
   };
 
   return (
@@ -257,15 +292,15 @@ const DepartmentInfo: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <button
               onClick={handleContinue}
-              disabled={!departmentName.trim()}
+              disabled={!departmentName.trim() || isSaving}
               className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-                departmentName.trim()
+                departmentName.trim() && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
-              Continue
+              {isSaving ? 'Saving...' : 'Continue'}
             </button>
 
             {departmentName.trim() && !logo && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { apiClient } from '../services/api-client';
 
 interface EmailConfig {
   // Gmail/Google Workspace
@@ -37,6 +38,7 @@ const EmailConfiguration: React.FC = () => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
   const [useOAuth, setUseOAuth] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -81,7 +83,7 @@ const EmailConfiguration: React.FC = () => {
     toast.success('Email connection test successful!');
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     // Validate required fields
     if (!config.fromEmail) {
       toast.error('Please enter a from email address');
@@ -100,12 +102,44 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
-    // Store email configuration
-    sessionStorage.setItem('emailConfig', JSON.stringify(config));
-    sessionStorage.setItem('emailConfigMethod', useOAuth ? 'oauth' : 'smtp');
+    setIsSaving(true);
 
-    // Navigate to next step (file storage selection)
-    navigate('/onboarding/file-storage');
+    try {
+      // SECURITY CRITICAL: Send email config to server (NOT sessionStorage!)
+      // Passwords, API keys, and secrets will be encrypted server-side
+      const response = await apiClient.saveEmailConfig({
+        platform,
+        config: {
+          ...config,
+          authMethod: useOAuth ? 'oauth' : 'smtp',
+        },
+      });
+
+      if (response.error) {
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      // SECURITY: Only store non-sensitive metadata in sessionStorage
+      sessionStorage.setItem('emailPlatform', platform);
+      sessionStorage.setItem('emailConfigured', 'true');
+
+      // SECURITY: Clear sensitive data from memory
+      setConfig({
+        smtpEncryption: 'tls',
+        smtpPort: '587',
+      });
+
+      toast.success('Email configuration saved securely');
+
+      // Navigate to next step (file storage selection)
+      navigate('/onboarding/file-storage');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to save email configuration';
+      toast.error(errorMessage);
+      setIsSaving(false);
+    }
   };
 
   const handleSkip = () => {
@@ -542,15 +576,17 @@ const EmailConfiguration: React.FC = () => {
           <div className="mt-8 flex gap-4">
             <button
               onClick={handleSkip}
-              className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all duration-300"
+              disabled={isSaving}
+              className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Skip for Now
             </button>
             <button
               onClick={handleContinue}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+              disabled={isSaving}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              Continue
+              {isSaving ? 'Saving Securely...' : 'Continue'}
             </button>
           </div>
 

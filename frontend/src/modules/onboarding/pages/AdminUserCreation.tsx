@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { apiClient } from '../services/api-client';
 
 const AdminUserCreation: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
@@ -22,6 +24,7 @@ const AdminUserCreation: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     // Get department info from session storage
@@ -130,7 +133,7 @@ const AdminUserCreation: React.FC = () => {
     setErrors((prev) => ({ ...prev, [name]: error }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate all fields
@@ -152,11 +155,55 @@ const AdminUserCreation: React.FC = () => {
       return;
     }
 
-    // Store admin user data in session storage
-    sessionStorage.setItem('adminUser', JSON.stringify(formData));
+    setIsSaving(true);
+    setErrors({});
 
-    // Navigate to next step (security check or module selection)
-    navigate('/onboarding/security-check');
+    try {
+      // SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)
+      // Password will be hashed with Argon2id server-side
+      const response = await apiClient.createAdminUser({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        password_confirm: formData.confirmPassword,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        badge_number: formData.badgeNumber || undefined,
+      });
+
+      if (response.error) {
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      // SECURITY: Clear password from memory immediately (apiClient already does this)
+      setFormData({
+        username: '',
+        email: '',
+        firstName: '',
+        lastName: '',
+        badgeNumber: '',
+        password: '',
+        confirmPassword: '',
+      });
+
+      toast.success('Admin user created successfully!');
+
+      // Navigate to completion
+      navigate('/onboarding/complete');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create admin user';
+      toast.error(errorMessage);
+      setIsSaving(false);
+
+      // SECURITY: Clear passwords on error
+      setFormData(prev => ({
+        ...prev,
+        password: '',
+        confirmPassword: '',
+      }));
+    }
   };
 
   const currentYear = new Date().getFullYear();
@@ -584,15 +631,15 @@ const AdminUserCreation: React.FC = () => {
             <div className="max-w-md mx-auto">
               <button
                 type="submit"
-                disabled={!isFormValid}
+                disabled={!isFormValid || isSaving}
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                  isFormValid
+                  isFormValid && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                     : 'bg-slate-700 text-slate-400 cursor-not-allowed'
                 }`}
                 aria-label="Create admin account and continue"
               >
-                Create Admin Account
+                {isSaving ? 'Creating Account Securely...' : 'Create Admin Account'}
               </button>
 
               {/* Help Text */}

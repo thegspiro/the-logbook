@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HardDrive, Cloud, Database, FolderOpen, CheckCircle, Info } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
 import { useOnboardingStorage } from '../hooks';
-import { saveFileStorage } from '../utils/storage';
+import { apiClient } from '../services/api-client';
 
 interface FileStoragePlatform {
   id: string;
@@ -20,6 +21,7 @@ const FileStorageChoice: React.FC = () => {
   const navigate = useNavigate();
   const { departmentName, logoPreview, onboardingData } = useOnboardingStorage();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Get email platform to pre-select file storage
   const emailPlatform = onboardingData.emailPlatform || sessionStorage.getItem('emailPlatform');
@@ -135,17 +137,40 @@ const FileStorageChoice: React.FC = () => {
     },
   ];
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!selectedPlatform) return;
 
-    // Save selection to session storage
-    saveFileStorage(selectedPlatform);
+    setIsSaving(true);
 
-    // Route based on selection
-    if (selectedPlatform === 'other') {
-      navigate('/onboarding/authentication');
-    } else {
-      navigate('/onboarding/file-storage-config');
+    try {
+      // SECURITY: Save file storage choice to server
+      // If platform requires API keys/secrets, they'll be entered in the config page
+      const response = await apiClient.saveFileStorageConfig({
+        platform: selectedPlatform,
+        config: {}, // Config will be added in next step if needed
+      });
+
+      if (response.error) {
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      // SECURITY: Only store non-sensitive metadata in sessionStorage
+      sessionStorage.setItem('fileStoragePlatform', selectedPlatform);
+
+      toast.success('File storage platform saved');
+
+      // Route based on selection
+      if (selectedPlatform === 'other') {
+        navigate('/onboarding/authentication');
+      } else {
+        navigate('/onboarding/file-storage-config');
+      }
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to save file storage choice';
+      toast.error(errorMessage);
+      setIsSaving(false);
     }
   };
 
@@ -262,15 +287,15 @@ const FileStorageChoice: React.FC = () => {
           <div className="max-w-md mx-auto">
             <button
               onClick={handleContinue}
-              disabled={!selectedPlatform}
+              disabled={!selectedPlatform || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                selectedPlatform
+                selectedPlatform && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
-              Continue
+              {isSaving ? 'Saving...' : 'Continue'}
             </button>
 
             {/* Progress Indicator */}

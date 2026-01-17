@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, Plus, Trash2, CheckCircle, AlertCircle, Phone, Mail, User } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
 import { useOnboardingStorage } from '../hooks';
-import { saveITTeamInfo } from '../utils/storage';
+import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
 
 interface ITTeamMember {
@@ -36,6 +37,7 @@ const ITTeamBackupAccess: React.FC = () => {
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!departmentName) {
@@ -125,28 +127,55 @@ const ITTeamBackupAccess: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
       return;
     }
 
-    // Prepare data to save
-    const itTeamData = {
-      itTeam: itTeam.filter((member) => member.name && member.email && member.phone),
-      backupAccess: {
-        email: backupEmail,
-        phone: backupPhone,
-        secondaryAdminEmail: secondaryAdminEmail || null,
-      },
-    };
+    setIsSaving(true);
+    setErrors({});
 
-    // Save to session storage
-    saveITTeamInfo(itTeamData);
+    try {
+      // Prepare data to save
+      const itTeamData = {
+        it_team: itTeam
+          .filter((member) => member.name && member.email && member.phone)
+          .map((member) => ({
+            name: member.name,
+            email: member.email,
+            phone: member.phone,
+            role: member.role,
+          })),
+        backup_access: {
+          email: backupEmail,
+          phone: backupPhone,
+          secondary_admin_email: secondaryAdminEmail || undefined,
+        },
+      };
 
-    // Navigate to completion/summary
-    navigate('/onboarding/security-check');
+      // SECURITY: Save IT team info to server
+      const response = await apiClient.saveITTeam(itTeamData);
+
+      if (response.error) {
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      // SECURITY: Only store non-sensitive metadata in sessionStorage
+      sessionStorage.setItem('itTeamConfigured', 'true');
+
+      toast.success('IT team and backup access information saved securely');
+
+      // Navigate to admin user creation
+      navigate('/onboarding/admin-user');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to save IT team information';
+      toast.error(errorMessage);
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -414,9 +443,14 @@ const ITTeamBackupAccess: React.FC = () => {
             <div className="max-w-md mx-auto">
               <button
                 type="submit"
-                className="w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
+                disabled={isSaving}
+                className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
+                  isSaving
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                }`}
               >
-                Complete Setup
+                {isSaving ? 'Saving Securely...' : 'Continue to Admin Setup'}
               </button>
 
               {/* Progress Indicator */}
