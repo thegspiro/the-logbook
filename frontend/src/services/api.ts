@@ -618,3 +618,12 @@ export const electionService = {
     return response.data;
   },
 };
+
+  /**
+   * Send ballot notification emails
+   */
+  async sendBallotEmail(electionId: string, emailData: import('../types/election').EmailBallot): Promise<import('../types/election').EmailBallotResponse> {
+    const response = await api.post<import('../types/election').EmailBallotResponse>(`/elections/${electionId}/send-ballot`, emailData);
+    return response.data;
+  },
+};

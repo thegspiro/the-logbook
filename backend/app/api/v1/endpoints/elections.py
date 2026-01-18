@@ -35,6 +35,8 @@ from app.schemas.election import (
     ElectionStats,
     VoterEligibility,
     BulkVoteCreate,
+    EmailBallot,
+    EmailBallotResponse,
 )
 from app.services.election_service import ElectionService
 from app.api.dependencies import get_current_user, require_permission
@@ -653,3 +655,53 @@ async def get_stats(
         )
 
     return stats
+
+
+@router.post("/{election_id}/send-ballot", response_model=EmailBallotResponse)
+async def send_ballot_emails(
+    election_id: UUID,
+    email_data: EmailBallot,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Send ballot notification emails to eligible voters
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    # Verify election exists
+    election_result = await db.execute(
+        select(Election)
+        .where(Election.id == election_id)
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = election_result.scalar_one_or_none()
+
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found"
+        )
+
+    # Build ballot URL
+    base_url = str(request.base_url).rstrip("/")
+    ballot_url = f"{base_url}/elections/{election_id}/vote" if email_data.include_ballot_link else None
+
+    service = ElectionService(db)
+    recipients_count, failed_count = await service.send_ballot_emails(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        recipient_user_ids=email_data.recipient_user_ids,
+        subject=email_data.subject,
+        message=email_data.message,
+        ballot_url=ballot_url,
+    )
+
+    return EmailBallotResponse(
+        success=failed_count == 0,
+        recipients_count=recipients_count,
+        failed_count=failed_count,
+        message=f"Ballot emails sent to {recipients_count} recipient(s)" if failed_count == 0 else f"Sent to {recipients_count} recipients with {failed_count} failures",
+    )

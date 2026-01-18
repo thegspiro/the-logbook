@@ -52,6 +52,21 @@ class Election(Base):
     # Positions being voted on (for multi-position elections)
     positions = Column(JSONB, nullable=True)  # ["Chief", "President", "Secretary"]
 
+    # Ballot items for structured voting with per-item eligibility
+    # Format: [{"id": "item1", "type": "membership_approval", "title": "...",
+    #           "eligible_voter_types": ["operational"], "vote_type": "approval"}]
+    ballot_items = Column(JSONB, nullable=True)
+
+    # Position-specific eligibility rules
+    # Format: {"Chief": {"voter_types": ["operational"]}, "Member": {"voter_types": ["all"]}}
+    position_eligibility = Column(JSONB, nullable=True)
+
+    # Email notification tracking
+    email_sent = Column(Boolean, nullable=False, default=False)
+    email_sent_at = Column(DateTime, nullable=True)
+    email_recipients = Column(JSONB, nullable=True)  # List of user IDs who received email
+    meeting_date = Column(DateTime, nullable=True)  # For meeting-based ballots
+
     # Timing
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)

@@ -4,6 +4,22 @@
 
 export type ElectionStatus = 'draft' | 'open' | 'closed' | 'cancelled';
 
+export interface BallotItem {
+  id: string;
+  type: string; // membership_approval, officer_election, general_vote
+  title: string;
+  description?: string;
+  position?: string;
+  eligible_voter_types: string[]; // ['operational'], ['administrative'], ['all'], or specific role slugs
+  vote_type: string; // approval, candidate_selection
+  required_for_approval?: number;
+}
+
+export interface PositionEligibility {
+  voter_types: string[]; // Role slugs that can vote for this position
+  min_votes_required?: number;
+}
+
 export interface Election {
   id: string;
   organization_id: string;
@@ -11,6 +27,9 @@ export interface Election {
   description?: string;
   election_type: string;
   positions?: string[];
+  ballot_items?: BallotItem[];
+  position_eligibility?: { [position: string]: PositionEligibility };
+  meeting_date?: string;
   start_date: string;
   end_date: string;
   status: ElectionStatus;
@@ -19,6 +38,9 @@ export interface Election {
   max_votes_per_position: number;
   results_visible_immediately: boolean;
   eligible_voters?: string[];
+  email_sent: boolean;
+  email_sent_at?: string;
+  email_recipients?: string[];
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -43,6 +65,9 @@ export interface ElectionCreate {
   description?: string;
   election_type: string;
   positions?: string[];
+  ballot_items?: BallotItem[];
+  position_eligibility?: { [position: string]: PositionEligibility };
+  meeting_date?: string;
   start_date: string;
   end_date: string;
   anonymous_voting?: boolean;
@@ -163,4 +188,18 @@ export interface ElectionStats {
   voter_turnout_percentage: number;
   votes_by_position: { [position: string]: number };
   voting_timeline?: any[];
+}
+
+export interface EmailBallot {
+  recipient_user_ids?: string[];
+  subject?: string;
+  message?: string;
+  include_ballot_link?: boolean;
+}
+
+export interface EmailBallotResponse {
+  success: boolean;
+  recipients_count: number;
+  failed_count: number;
+  message: string;
 }

@@ -5,9 +5,29 @@ Request and response schemas for election-related endpoints.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
+
+
+# Ballot Item Schemas
+
+class BallotItem(BaseModel):
+    """Schema for a ballot item with voter eligibility rules"""
+    id: str = Field(..., description="Unique identifier for this ballot item")
+    type: str = Field(..., description="Type: membership_approval, officer_election, general_vote")
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    position: Optional[str] = Field(None, description="Position name for officer elections")
+    eligible_voter_types: List[str] = Field(default=["all"], description="Role slugs like 'operational', 'administrative', or 'all'")
+    vote_type: str = Field(default="approval", description="approval, candidate_selection")
+    required_for_approval: Optional[int] = Field(None, description="Number of yes votes required")
+
+
+class PositionEligibility(BaseModel):
+    """Schema for position-specific voter eligibility"""
+    voter_types: List[str] = Field(..., description="Role slugs that can vote for this position")
+    min_votes_required: Optional[int] = Field(None, description="Minimum votes needed for approval")
 
 
 # Election Schemas
@@ -18,6 +38,9 @@ class ElectionBase(BaseModel):
     description: Optional[str] = None
     election_type: str = Field(default="general", max_length=50)
     positions: Optional[List[str]] = Field(default=None, description="List of positions to vote for")
+    ballot_items: Optional[List[BallotItem]] = Field(default=None, description="Structured ballot items with per-item eligibility")
+    position_eligibility: Optional[Dict[str, PositionEligibility]] = Field(default=None, description="Eligibility rules per position")
+    meeting_date: Optional[datetime] = Field(default=None, description="Meeting date for ballot")
     start_date: datetime
     end_date: datetime
     anonymous_voting: bool = Field(default=True)
@@ -38,6 +61,9 @@ class ElectionUpdate(BaseModel):
     description: Optional[str] = None
     election_type: Optional[str] = Field(None, max_length=50)
     positions: Optional[List[str]] = None
+    ballot_items: Optional[List[BallotItem]] = None
+    position_eligibility: Optional[Dict[str, PositionEligibility]] = None
+    meeting_date: Optional[datetime] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[str] = None
@@ -56,6 +82,11 @@ class ElectionResponse(ElectionBase):
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
+
+    # Email tracking
+    email_sent: bool = False
+    email_sent_at: Optional[datetime] = None
+    email_recipients: Optional[List[UUID]] = None
 
     # Include vote counts if results are visible
     total_votes: Optional[int] = None
@@ -215,3 +246,19 @@ class BulkVoteCreate(BaseModel):
         ...,
         description="List of {position: candidate_id} mappings"
     )
+
+
+class EmailBallot(BaseModel):
+    """Schema for sending ballot emails"""
+    recipient_user_ids: Optional[List[UUID]] = Field(None, description="Specific users to email, null means all eligible")
+    subject: Optional[str] = Field(None, description="Email subject line")
+    message: Optional[str] = Field(None, description="Additional message to include")
+    include_ballot_link: bool = Field(default=True, description="Include link to voting page")
+
+
+class EmailBallotResponse(BaseModel):
+    """Response after sending ballot emails"""
+    success: bool
+    recipients_count: int
+    failed_count: int
+    message: str

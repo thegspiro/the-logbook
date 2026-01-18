@@ -34,8 +34,42 @@ class ElectionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
+        """
+        Check if a user has any of the specified role types/slugs
+
+        role_types can include:
+        - "all" - everyone is eligible
+        - "operational" - users with operational roles (firefighter, driver, officer roles)
+        - "administrative" - users with administrative roles (secretary, treasurer, etc.)
+        - Specific role slugs like "chief", "president", etc.
+        """
+        if not role_types or "all" in role_types:
+            return True
+
+        user_role_slugs = [role.slug for role in user.roles]
+
+        # Check for direct role slug matches
+        for role_slug in user_role_slugs:
+            if role_slug in role_types:
+                return True
+
+        # Check for role type categories
+        operational_roles = ["chief", "assistant_chief", "captain", "lieutenant", "firefighter", "driver", "emt", "paramedic"]
+        administrative_roles = ["president", "vice_president", "secretary", "assistant_secretary", "treasurer"]
+
+        if "operational" in role_types:
+            if any(slug in operational_roles for slug in user_role_slugs):
+                return True
+
+        if "administrative" in role_types:
+            if any(slug in administrative_roles for slug in user_role_slugs):
+                return True
+
+        return False
+
     async def check_voter_eligibility(
-        self, user_id: UUID, election_id: UUID, organization_id: UUID
+        self, user_id: UUID, election_id: UUID, organization_id: UUID, position: Optional[str] = None
     ) -> VoterEligibility:
         """
         Check if a user is eligible to vote in an election and if they've already voted
@@ -96,6 +130,37 @@ class ElectionService:
                     positions_remaining=[],
                     reason="You are not eligible to vote in this election",
                 )
+
+        # Get user with roles for position-specific eligibility checking
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.roles))
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return VoterEligibility(
+                is_eligible=False,
+                has_voted=False,
+                positions_voted=[],
+                positions_remaining=[],
+                reason="User not found",
+            )
+
+        # Check position-specific eligibility (if checking for a specific position)
+        if position and election.position_eligibility:
+            position_rules = election.position_eligibility.get(position)
+            if position_rules:
+                voter_types = position_rules.get("voter_types", ["all"])
+                if not await self._user_has_role_type(user, voter_types):
+                    return VoterEligibility(
+                        is_eligible=False,
+                        has_voted=False,
+                        positions_voted=[],
+                        positions_remaining=[],
+                        reason=f"You do not have the required role type to vote for {position}",
+                    )
 
         # Check what positions they've already voted for
         vote_result = await self.db.execute(
@@ -490,6 +555,75 @@ class ElectionService:
         await self.db.refresh(election)
 
         return election, None
+
+    async def send_ballot_emails(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        recipient_user_ids: Optional[List[UUID]] = None,
+        subject: Optional[str] = None,
+        message: Optional[str] = None,
+        ballot_url: str = None,
+    ) -> Tuple[int, int]:
+        """
+        Send ballot notification emails to eligible voters
+
+        Returns: (recipients_count, failed_count)
+
+        NOTE: This is a placeholder implementation. In production, you would integrate
+        with an email service like SendGrid, AWS SES, or similar.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+
+        if not election:
+            return 0, 0
+
+        # Determine recipients
+        if recipient_user_ids:
+            # Use specified recipients
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.id.in_(recipient_user_ids))
+                .where(User.organization_id == organization_id)
+            )
+            recipients = users_result.scalars().all()
+        elif election.eligible_voters:
+            # Use election's eligible voters list
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.id.in_([UUID(uid) for uid in election.eligible_voters]))
+                .where(User.organization_id == organization_id)
+            )
+            recipients = users_result.scalars().all()
+        else:
+            # Send to all active users in organization
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.organization_id == organization_id)
+                .where(User.is_active == True)
+            )
+            recipients = users_result.scalars().all()
+
+        # TODO: In production, implement actual email sending here
+        # For now, just track that emails were "sent"
+
+        recipients_count = len(recipients)
+        failed_count = 0
+
+        # Update election with email sent status
+        election.email_sent = True
+        election.email_sent_at = datetime.utcnow()
+        election.email_recipients = [str(user.id) for user in recipients]
+
+        await self.db.commit()
+        await self.db.refresh(election)
+
+        return recipients_count, failed_count
 
     async def has_user_voted(
         self, user_id: UUID, election_id: UUID

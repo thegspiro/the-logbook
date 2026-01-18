@@ -50,6 +50,8 @@ from app.schemas.auth import (
     MFALogin,
 )
 from app.schemas.election import (
+    BallotItem,
+    PositionEligibility,
     ElectionBase,
     ElectionCreate,
     ElectionUpdate,
@@ -68,6 +70,8 @@ from app.schemas.election import (
     ElectionStats,
     VoterEligibility,
     BulkVoteCreate,
+    EmailBallot,
+    EmailBallotResponse,
 )
 
 __all__ = [
@@ -113,6 +117,8 @@ __all__ = [
     "MFAVerify",
     "MFALogin",
     # Election schemas
+    "BallotItem",
+    "PositionEligibility",
     "ElectionBase",
     "ElectionCreate",
     "ElectionUpdate",
@@ -131,4 +137,6 @@ __all__ = [
     "ElectionStats",
     "VoterEligibility",
     "BulkVoteCreate",
+    "EmailBallot",
+    "EmailBallotResponse",
 ]
