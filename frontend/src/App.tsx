@@ -7,6 +7,7 @@ import MembersAdminPage from './pages/MembersAdminPage'
 import RoleManagementPage from './pages/RoleManagementPage'
 import TrainingDashboardPage from './pages/TrainingDashboardPage'
 import AddMemberPage from './pages/AddMemberPage'
+import ElectionsPage from './pages/ElectionsPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -51,6 +52,9 @@ function Navigation() {
   const canAccessTraining = checkPermission('training.manage') ||
                             checkPermission('training.view')
 
+  const canAccessElections = checkPermission('elections.manage') ||
+                              checkPermission('elections.view')
+
   return (
     <nav className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -88,6 +92,14 @@ function Navigation() {
                   className={`${isActive('/training')} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                 >
                   Training
+                </Link>
+              )}
+              {canAccessElections && (
+                <Link
+                  to="/elections"
+                  className={`${isActive('/elections')} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                >
+                  Elections
                 </Link>
               )}
               {canAccessSettings && (
@@ -192,6 +204,14 @@ function App() {
             element={
               <ProtectedRoute requiredPermission="training.view">
                 <TrainingDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/elections"
+            element={
+              <ProtectedRoute requiredPermission="elections.view">
+                <ElectionsPage />
               </ProtectedRoute>
             }
           />

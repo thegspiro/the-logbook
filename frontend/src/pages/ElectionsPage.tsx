@@ -1,0 +1,427 @@
+/**
+ * Elections Page
+ *
+ * Lists all elections and allows creating new ones.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { electionService } from '../services/api';
+import type { ElectionListItem, ElectionCreate } from '../types/election';
+import { useAuthStore } from '../stores/authStore';
+
+export const ElectionsPage: React.FC = () => {
+  const [elections, setElections] = useState<ElectionListItem[]>([]);
+  const [filteredElections, setFilteredElections] = useState<ElectionListItem[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<ElectionCreate>({
+    title: '',
+    description: '',
+    election_type: 'general',
+    positions: [],
+    start_date: '',
+    end_date: '',
+    anonymous_voting: true,
+    allow_write_ins: false,
+    max_votes_per_position: 1,
+    results_visible_immediately: false,
+  });
+  const [positionInput, setPositionInput] = useState('');
+
+  const { checkPermission } = useAuthStore();
+  const canManage = checkPermission('elections.manage');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchElections();
+  }, []);
+
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      setFilteredElections(elections);
+    } else {
+      setFilteredElections(elections.filter(e => e.status === statusFilter));
+    }
+  }, [elections, statusFilter]);
+
+  const fetchElections = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await electionService.getElections();
+      setElections(data);
+    } catch (err) {
+      console.error('Error fetching elections:', err);
+      setError('Failed to load elections. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateElection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+
+    try {
+      await electionService.createElection(formData);
+      setShowCreateModal(false);
+      setFormData({
+        title: '',
+        description: '',
+        election_type: 'general',
+        positions: [],
+        start_date: '',
+        end_date: '',
+        anonymous_voting: true,
+        allow_write_ins: false,
+        max_votes_per_position: 1,
+        results_visible_immediately: false,
+      });
+      setPositionInput('');
+      await fetchElections();
+    } catch (err: any) {
+      console.error('Error creating election:', err);
+      setCreateError(err.response?.data?.detail || 'Failed to create election');
+    }
+  };
+
+  const addPosition = () => {
+    if (positionInput.trim() && !formData.positions?.includes(positionInput.trim())) {
+      setFormData({
+        ...formData,
+        positions: [...(formData.positions || []), positionInput.trim()],
+      });
+      setPositionInput('');
+    }
+  };
+
+  const removePosition = (position: string) => {
+    setFormData({
+      ...formData,
+      positions: formData.positions?.filter(p => p !== position) || [],
+    });
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'open':
+        return 'bg-green-100 text-green-800';
+      case 'closed':
+        return 'bg-gray-100 text-gray-800';
+      case 'draft':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500">Loading elections...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Elections</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Manage elections and view results
+          </p>
+        </div>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <svg className="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Election
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      <div className="mb-4 flex space-x-2">
+        {['all', 'draft', 'open', 'closed'].map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              statusFilter === status
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        {filteredElections.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No elections found</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {filteredElections.map((election) => (
+              <li key={election.id}>
+                <Link
+                  to={`/elections/${election.id}`}
+                  className="block hover:bg-gray-50 transition"
+                >
+                  <div className="px-4 py-4 sm:px-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-lg font-medium text-blue-600 truncate">
+                            {election.title}
+                          </p>
+                          <div className="ml-2 flex-shrink-0 flex">
+                            <p
+                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(
+                                election.status
+                              )}`}
+                            >
+                              {election.status}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center text-sm text-gray-500">
+                          <svg
+                            className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span>
+                            {formatDate(election.start_date)} - {formatDate(election.end_date)}
+                          </span>
+                        </div>
+                        {election.positions && election.positions.length > 0 && (
+                          <div className="mt-2 flex items-center text-sm text-gray-500">
+                            <span className="font-medium mr-2">Positions:</span>
+                            {election.positions.join(', ')}
+                          </div>
+                        )}
+                        {election.total_votes !== undefined && (
+                          <div className="mt-2 text-sm text-gray-500">
+                            {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'} cast
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Create New Election</h3>
+            </div>
+
+            <form onSubmit={handleCreateElection} className="px-6 py-4">
+              {createError && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                  <p className="text-sm text-red-700">{createError}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Start Date *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={formData.start_date}
+                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      End Date *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={formData.end_date}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Positions
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={positionInput}
+                      onChange={(e) => setPositionInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPosition())}
+                      placeholder="e.g., Chief, President"
+                      className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={addPosition}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {formData.positions && formData.positions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {formData.positions.map((position) => (
+                        <span
+                          key={position}
+                          className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                        >
+                          {position}
+                          <button
+                            type="button"
+                            onClick={() => removePosition(position)}
+                            className="ml-2 text-blue-600 hover:text-blue-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.anonymous_voting}
+                      onChange={(e) =>
+                        setFormData({ ...formData, anonymous_voting: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Anonymous Voting</span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.allow_write_ins}
+                      onChange={(e) =>
+                        setFormData({ ...formData, allow_write_ins: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Allow Write-in Candidates</span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.results_visible_immediately}
+                      onChange={(e) =>
+                        setFormData({ ...formData, results_visible_immediately: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Show Results Immediately</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Create Election
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ElectionsPage;

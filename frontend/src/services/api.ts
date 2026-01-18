@@ -496,3 +496,125 @@ export const trainingService = {
     return response.data;
   },
 };
+
+export const electionService = {
+  /**
+   * Get all elections
+   */
+  async getElections(statusFilter?: string): Promise<import('../types/election').ElectionListItem[]> {
+    const response = await api.get<import('../types/election').ElectionListItem[]>('/elections', {
+      params: { status_filter: statusFilter },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get a specific election
+   */
+  async getElection(electionId: string): Promise<import('../types/election').Election> {
+    const response = await api.get<import('../types/election').Election>(`/elections/${electionId}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new election
+   */
+  async createElection(electionData: import('../types/election').ElectionCreate): Promise<import('../types/election').Election> {
+    const response = await api.post<import('../types/election').Election>('/elections', electionData);
+    return response.data;
+  },
+
+  /**
+   * Update an election
+   */
+  async updateElection(electionId: string, electionData: import('../types/election').ElectionUpdate): Promise<import('../types/election').Election> {
+    const response = await api.patch<import('../types/election').Election>(`/elections/${electionId}`, electionData);
+    return response.data;
+  },
+
+  /**
+   * Delete an election
+   */
+  async deleteElection(electionId: string): Promise<void> {
+    await api.delete(`/elections/${electionId}`);
+  },
+
+  /**
+   * Open an election for voting
+   */
+  async openElection(electionId: string): Promise<import('../types/election').Election> {
+    const response = await api.post<import('../types/election').Election>(`/elections/${electionId}/open`);
+    return response.data;
+  },
+
+  /**
+   * Close an election
+   */
+  async closeElection(electionId: string): Promise<import('../types/election').Election> {
+    const response = await api.post<import('../types/election').Election>(`/elections/${electionId}/close`);
+    return response.data;
+  },
+
+  /**
+   * Get candidates for an election
+   */
+  async getCandidates(electionId: string): Promise<import('../types/election').Candidate[]> {
+    const response = await api.get<import('../types/election').Candidate[]>(`/elections/${electionId}/candidates`);
+    return response.data;
+  },
+
+  /**
+   * Add a candidate to an election
+   */
+  async createCandidate(electionId: string, candidateData: import('../types/election').CandidateCreate): Promise<import('../types/election').Candidate> {
+    const response = await api.post<import('../types/election').Candidate>(`/elections/${electionId}/candidates`, candidateData);
+    return response.data;
+  },
+
+  /**
+   * Update a candidate
+   */
+  async updateCandidate(electionId: string, candidateId: string, candidateData: import('../types/election').CandidateUpdate): Promise<import('../types/election').Candidate> {
+    const response = await api.patch<import('../types/election').Candidate>(`/elections/${electionId}/candidates/${candidateId}`, candidateData);
+    return response.data;
+  },
+
+  /**
+   * Delete a candidate
+   */
+  async deleteCandidate(electionId: string, candidateId: string): Promise<void> {
+    await api.delete(`/elections/${electionId}/candidates/${candidateId}`);
+  },
+
+  /**
+   * Check voter eligibility
+   */
+  async checkEligibility(electionId: string): Promise<import('../types/election').VoterEligibility> {
+    const response = await api.get<import('../types/election').VoterEligibility>(`/elections/${electionId}/eligibility`);
+    return response.data;
+  },
+
+  /**
+   * Cast a vote
+   */
+  async castVote(electionId: string, voteData: import('../types/election').VoteCreate): Promise<import('../types/election').Vote> {
+    const response = await api.post<import('../types/election').Vote>(`/elections/${electionId}/vote`, voteData);
+    return response.data;
+  },
+
+  /**
+   * Get election results
+   */
+  async getResults(electionId: string): Promise<import('../types/election').ElectionResults> {
+    const response = await api.get<import('../types/election').ElectionResults>(`/elections/${electionId}/results`);
+    return response.data;
+  },
+
+  /**
+   * Get election statistics
+   */
+  async getStats(electionId: string): Promise<import('../types/election').ElectionStats> {
+    const response = await api.get<import('../types/election').ElectionStats>(`/elections/${electionId}/stats`);
+    return response.data;
+  },
+};

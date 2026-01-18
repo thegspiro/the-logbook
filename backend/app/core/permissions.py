@@ -363,6 +363,8 @@ DEFAULT_ROLES = {
             MEETINGS_MANAGE.name,
             COMPLIANCE_VIEW.name,
             TRAINING_VIEW.name,
+            ELECTIONS_VIEW.name,
+            ELECTIONS_MANAGE.name,
         ],
     },
     "assistant_secretary": {

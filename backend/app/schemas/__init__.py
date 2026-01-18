@@ -49,6 +49,26 @@ from app.schemas.auth import (
     MFAVerify,
     MFALogin,
 )
+from app.schemas.election import (
+    ElectionBase,
+    ElectionCreate,
+    ElectionUpdate,
+    ElectionResponse,
+    ElectionListResponse,
+    CandidateBase,
+    CandidateCreate,
+    CandidateUpdate,
+    CandidateResponse,
+    CandidateAcceptance,
+    VoteCreate,
+    VoteResponse,
+    CandidateResult,
+    PositionResults,
+    ElectionResults,
+    ElectionStats,
+    VoterEligibility,
+    BulkVoteCreate,
+)
 
 __all__ = [
     # User schemas
@@ -92,4 +112,23 @@ __all__ = [
     "MFASetup",
     "MFAVerify",
     "MFALogin",
+    # Election schemas
+    "ElectionBase",
+    "ElectionCreate",
+    "ElectionUpdate",
+    "ElectionResponse",
+    "ElectionListResponse",
+    "CandidateBase",
+    "CandidateCreate",
+    "CandidateUpdate",
+    "CandidateResponse",
+    "CandidateAcceptance",
+    "VoteCreate",
+    "VoteResponse",
+    "CandidateResult",
+    "PositionResults",
+    "ElectionResults",
+    "ElectionStats",
+    "VoterEligibility",
+    "BulkVoteCreate",
 ]
