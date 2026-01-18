@@ -186,26 +186,20 @@ async def assign_user_roles(
     user_id: UUID,
     role_assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
-    # Uncomment when authentication is implemented:
-    # current_user: User = Depends(require_permission("members.assign_roles")),
-    # organization: Organization = Depends(get_user_organization),
+    current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
 ):
     """
     Assign roles to a user (replaces all existing roles)
 
-    Requires `members.assign_roles` permission.
+    Requires `users.update_roles` or `members.assign_roles` permission.
 
-    **Authentication required** (currently not implemented)
+    **Authentication required**
     """
-    # TODO: Use authenticated organization ID
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
-
     # Get user
     result = await db.execute(
         select(User)
         .where(User.id == user_id)
-        .where(User.organization_id == test_org_id)
+        .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -222,7 +216,7 @@ async def assign_user_roles(
         result = await db.execute(
             select(Role)
             .where(Role.id.in_(role_assignment.role_ids))
-            .where(Role.organization_id == test_org_id)
+            .where(Role.organization_id == current_user.organization_id)
         )
         roles = result.scalars().all()
 
