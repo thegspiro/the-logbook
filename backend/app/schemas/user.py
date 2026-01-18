@@ -28,6 +28,21 @@ class UserCreate(UserBase):
     mobile: Optional[str] = Field(None, max_length=20)
 
 
+class AdminUserCreate(BaseModel):
+    """Schema for admin/secretary creating a new member"""
+    username: str = Field(..., min_length=3, max_length=100)
+    email: EmailStr
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    badge_number: Optional[str] = Field(None, max_length=50)
+    phone: Optional[str] = Field(None, max_length=20)
+    mobile: Optional[str] = Field(None, max_length=20)
+    date_of_birth: Optional[date] = None
+    hire_date: Optional[date] = None
+    role_ids: List[UUID] = Field(default_factory=list, description="Initial roles to assign")
+    send_welcome_email: bool = Field(default=True, description="Send welcome email with password setup link")
+
+
 class UserUpdate(BaseModel):
     """Schema for updating a user"""
     first_name: Optional[str] = Field(None, max_length=100)

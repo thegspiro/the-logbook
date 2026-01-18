@@ -169,6 +169,26 @@ export const userService = {
     const response = await api.patch<UserWithRoles>(`/users/${userId}/contact-info`, contactInfo);
     return response.data;
   },
+
+  /**
+   * Create a new member (admin/secretary only)
+   */
+  async createMember(memberData: {
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    badge_number?: string;
+    phone?: string;
+    mobile?: string;
+    date_of_birth?: string;
+    hire_date?: string;
+    role_ids: string[];
+    send_welcome_email: boolean;
+  }): Promise<UserWithRoles> {
+    const response = await api.post<UserWithRoles>('/users', memberData);
+    return response.data;
+  },
 };
 
 export const organizationService = {
@@ -452,6 +472,27 @@ export const trainingService = {
     const response = await api.get<TrainingRecord[]>('/training/certifications/expiring', {
       params: { days_ahead: daysAhead },
     });
+    return response.data;
+  },
+};
+
+  /**
+   * Create a new member (admin/secretary only)
+   */
+  async createMember(memberData: {
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    badge_number?: string;
+    phone?: string;
+    mobile?: string;
+    date_of_birth?: string;
+    hire_date?: string;
+    role_ids: string[];
+    send_welcome_email: boolean;
+  }): Promise<UserWithRoles> {
+    const response = await api.post<UserWithRoles>('/users', memberData);
     return response.data;
   },
 };

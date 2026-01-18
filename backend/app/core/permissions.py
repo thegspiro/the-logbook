@@ -349,9 +349,12 @@ DEFAULT_ROLES = {
         "priority": 75,
         "permissions": [
             USERS_VIEW.name,
+            USERS_CREATE.name,
             USERS_VIEW_CONTACT.name,
+            USERS_UPDATE_ROLES.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_ROLES.name,
             ROLES_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,

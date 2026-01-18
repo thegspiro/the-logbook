@@ -6,6 +6,7 @@ import SettingsPage from './pages/SettingsPage'
 import MembersAdminPage from './pages/MembersAdminPage'
 import RoleManagementPage from './pages/RoleManagementPage'
 import TrainingDashboardPage from './pages/TrainingDashboardPage'
+import AddMemberPage from './pages/AddMemberPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -167,6 +168,14 @@ function App() {
             element={
               <ProtectedRoute requiredPermission="users.view">
                 <MembersAdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/members/add"
+            element={
+              <ProtectedRoute requiredPermission="users.create">
+                <AddMemberPage />
               </ProtectedRoute>
             }
           />

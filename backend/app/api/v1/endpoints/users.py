@@ -17,12 +17,13 @@ from app.schemas.user import (
     UserWithRolesResponse,
     ContactInfoUpdate,
     UserProfileResponse,
+    AdminUserCreate,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
 from app.services.organization_service import OrganizationService
 from app.models.user import User, Role, user_roles
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 # NOTE: Authentication is now implemented
 # from app.api.dependencies import get_current_active_user, get_user_organization
 # from app.models.user import Organization
@@ -72,6 +73,110 @@ async def list_users(
     )
 
     return users
+
+
+@router.post("/", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
+async def create_member(
+    user_data: AdminUserCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create")),
+):
+    """
+    Create a new member (Secretary/Admin only)
+
+    Allows secretaries and admins to create new member accounts with initial roles.
+    A temporary password will be generated and sent via email if send_welcome_email is True.
+
+    Requires `users.create` permission.
+
+    **Authentication required**
+    """
+    from uuid import uuid4
+    from app.core.security import get_password_hash
+    import secrets
+    import string
+
+    # Check if username already exists
+    result = await db.execute(
+        select(User)
+        .where(User.username == user_data.username)
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+
+    # Check if email already exists
+    result = await db.execute(
+        select(User)
+        .where(User.email == user_data.email)
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists"
+        )
+
+    # Generate temporary password
+    temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
+
+    # Create new user
+    new_user = User(
+        id=uuid4(),
+        organization_id=current_user.organization_id,
+        username=user_data.username,
+        email=user_data.email,
+        password_hash=get_password_hash(temp_password),
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        badge_number=user_data.badge_number,
+        phone=user_data.phone,
+        mobile=user_data.mobile,
+        date_of_birth=user_data.date_of_birth,
+        hire_date=user_data.hire_date,
+        is_active=True,
+        email_verified=False,
+        status="active",
+    )
+
+    db.add(new_user)
+    await db.flush()  # Flush to get the user ID
+
+    # Assign initial roles if provided
+    if user_data.role_ids:
+        # Verify all role IDs exist and belong to the organization
+        result = await db.execute(
+            select(Role)
+            .where(Role.id.in_(user_data.role_ids))
+            .where(Role.organization_id == current_user.organization_id)
+        )
+        roles = result.scalars().all()
+
+        if len(roles) != len(user_data.role_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more role IDs are invalid"
+            )
+
+        new_user.roles = roles
+
+    await db.commit()
+    await db.refresh(new_user, ["roles"])
+
+    # TODO: Send welcome email with temporary password if send_welcome_email is True
+    # This should be implemented with an email service
+    # For now, log the temporary password (REMOVE IN PRODUCTION)
+    if user_data.send_welcome_email:
+        from loguru import logger
+        logger.info(f"Temporary password for {user_data.username}: {temp_password}")
+        # In production: send email with password reset link
+
+    return new_user
 
 
 @router.get("/contact-info-enabled")
