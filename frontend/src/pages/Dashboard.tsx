@@ -81,7 +81,11 @@ const Dashboard: React.FC = () => {
                 Dashboard
               </a>
               <a
-                href="#"
+                href="/members"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/members');
+                }}
                 className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
               >
                 Members
@@ -127,7 +131,12 @@ const Dashboard: React.FC = () => {
                   Dashboard
                 </a>
                 <a
-                  href="#"
+                  href="/members"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/members');
+                    setMobileMenuOpen(false);
+                  }}
                   className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
                 >
                   Members
@@ -171,7 +180,10 @@ const Dashboard: React.FC = () => {
 
         {/* Quick Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div
+            onClick={() => navigate('/members')}
+            className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 cursor-pointer hover:bg-white/15 transition-colors"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-slate-400 text-sm font-medium">Total Members</p>
@@ -181,7 +193,7 @@ const Dashboard: React.FC = () => {
                 <Users className="w-6 h-6 text-white" />
               </div>
             </div>
-            <p className="text-slate-300 text-xs mt-2">Admin user created</p>
+            <p className="text-slate-300 text-xs mt-2">Click to manage members →</p>
           </div>
 
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">

@@ -7,6 +7,9 @@ import { OnboardingRoutes } from './modules/onboarding';
 
 // Pages
 import Dashboard from './pages/Dashboard';
+import Members from './pages/Members';
+import AddMember from './pages/AddMember';
+import ImportMembers from './pages/ImportMembers';
 
 /**
  * Main Application Component
@@ -33,6 +36,11 @@ function App() {
 
           {/* Main Dashboard - User lands here after onboarding */}
           <Route path="/dashboard" element={<Dashboard />} />
+
+          {/* Membership Module */}
+          <Route path="/members" element={<Members />} />
+          <Route path="/members/add" element={<AddMember />} />
+          <Route path="/members/import" element={<ImportMembers />} />
 
           {/* Login Page */}
           <Route
