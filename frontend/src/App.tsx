@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import MemberListPage from './pages/MemberListPage'
+import MemberProfilePage from './pages/MemberProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import MembersAdminPage from './pages/MembersAdminPage'
 import RoleManagementPage from './pages/RoleManagementPage'
@@ -138,6 +139,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <MemberListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/members/:userId"
+            element={
+              <ProtectedRoute>
+                <MemberProfilePage />
               </ProtectedRoute>
             }
           />

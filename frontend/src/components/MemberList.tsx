@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { Link } from 'react-router-dom';
 import type { User, ContactInfoSettings } from '../types/user';
 
 interface MemberListProps {
@@ -81,7 +82,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               members.map((member) => (
                 <tr key={member.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                    <Link to={`/members/${member.id}`} className="flex items-center group">
                       {member.photo_url ? (
                         <div className="flex-shrink-0 h-10 w-10">
                           <img
@@ -98,12 +99,12 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                         </div>
                       )}
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600">
                           {member.full_name || member.username}
                         </div>
                         <div className="text-sm text-gray-500">@{member.username}</div>
                       </div>
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {member.badge_number || '-'}

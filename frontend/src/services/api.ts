@@ -107,6 +107,14 @@ export const userService = {
   },
 
   /**
+   * Get a specific user with their assigned roles
+   */
+  async getUserWithRoles(userId: string): Promise<UserWithRoles> {
+    const response = await api.get<UserWithRoles>(`/users/${userId}/with-roles`);
+    return response.data;
+  },
+
+  /**
    * Get roles for a specific user
    */
   async getUserRoles(userId: string): Promise<UserRoleResponse> {
