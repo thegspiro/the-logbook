@@ -22,6 +22,7 @@ from app.core.database import Base
 # Import all models so Alembic can detect them
 from app.models.user import Organization, User, Role, Session
 from app.models.audit import AuditLog
+from app.models.training import TrainingCourse, TrainingRecord, TrainingRequirement
 
 # this is the Alembic Config object
 config = context.config
