@@ -486,7 +486,8 @@ export const MemberProfilePage: React.FC = () => {
                           }`}
                         >
                           {item.condition}
-                        </td>
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {formatDate(item.assigned_date)}
                       </td>

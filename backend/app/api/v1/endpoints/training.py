@@ -35,7 +35,7 @@ from app.schemas.training import (
     RequirementProgress,
 )
 from app.services.training_service import TrainingService
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
 
@@ -70,7 +70,7 @@ async def list_courses(
 async def create_course(
     course: TrainingCourseCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Create a new training course
@@ -78,9 +78,8 @@ async def create_course(
     Requires training officer permissions.
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
-    # TODO: Add permission check for training officer
-
     new_course = TrainingCourse(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -126,7 +125,7 @@ async def update_course(
     course_id: UUID,
     course_update: TrainingCourseUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Update a training course
@@ -134,9 +133,8 @@ async def update_course(
     Requires training officer permissions.
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
-    # TODO: Add permission check for training officer
-
     result = await db.execute(
         select(TrainingCourse)
         .where(TrainingCourse.id == course_id)
@@ -291,7 +289,7 @@ async def list_requirements(
 async def create_requirement(
     requirement: TrainingRequirementCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Create a new training requirement
@@ -299,9 +297,8 @@ async def create_requirement(
     Requires training officer permissions.
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
-    # TODO: Add permission check for training officer
-
     new_requirement = TrainingRequirement(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -320,7 +317,7 @@ async def update_requirement(
     requirement_id: UUID,
     requirement_update: TrainingRequirementUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Update a training requirement
@@ -328,9 +325,8 @@ async def update_requirement(
     Requires training officer permissions.
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
-    # TODO: Add permission check for training officer
-
     result = await db.execute(
         select(TrainingRequirement)
         .where(TrainingRequirement.id == requirement_id)
