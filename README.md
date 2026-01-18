@@ -46,11 +46,33 @@ cd the-logbook
 # Copy environment configuration
 cp .env.example .env
 
-# Start with Docker Compose
+# IMPORTANT: Edit .env and set strong passwords and secret keys
+# Generate secure keys with:
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+
+# Start with Docker Compose (includes MySQL, Redis, Backend, Frontend)
 docker-compose up -d
 
-# Access the platform at http://localhost:3000
+# View logs
+docker-compose logs -f backend
+
+# Access the platform
+# - Frontend: http://localhost:3000
+# - Backend API: http://localhost:3001
+# - API Docs: http://localhost:3001/docs
 ```
+
+### First Time Setup
+
+After starting the containers:
+
+1. Access the API documentation at http://localhost:3001/docs
+2. The system will automatically create database tables on first run
+3. Create your first organization and admin user via the API
+4. Configure security settings and modules
+5. Set up email/SMS notifications (optional)
+
+See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 
 ## 📚 Documentation
 
@@ -65,20 +87,27 @@ docker-compose up -d
 
 - **Backend**: Python 3.11+, FastAPI, SQLAlchemy
 - **Frontend**: React, TypeScript, Tailwind CSS
-- **Database**: PostgreSQL
-- **Cache**: Redis
+- **Database**: MySQL 8.0+
+- **Cache**: Redis 7+
 - **Search**: Elasticsearch (optional)
 - **File Storage**: Local, S3, Azure Blob, Google Cloud Storage
-- **Authentication**: OAuth 2.0, SAML, LDAP
+- **Authentication**: OAuth 2.0, SAML, LDAP, Multi-Factor Authentication (TOTP)
 
 ## 🔒 Security
 
-- AES-256 encryption at rest
-- TLS 1.3 for data in transit
-- Multi-factor authentication (MFA)
-- Rate limiting and brute force protection
-- Regular security audits
-- Automated vulnerability scanning
+- **Password Security**: Argon2id hashing (OWASP recommended)
+- **Encryption**: AES-256 encryption at rest for sensitive data
+- **Transport Security**: TLS 1.3 for data in transit
+- **Multi-Factor Authentication**: TOTP-based 2FA
+- **Tamper-Proof Audit Logs**: Blockchain-inspired hash chain
+- **Session Security**: JWT with automatic timeout
+- **Rate Limiting**: Brute force protection (5 attempts = 30min lockout)
+- **Input Sanitization**: XSS and SQL injection prevention
+- **HIPAA Compliant**: 7-year audit retention, PHI encryption
+- **Section 508 Accessible**: WCAG 2.1 Level AA compliance
+- **Zero Plain Text Passwords**: All passwords securely hashed
+
+See [SECURITY.md](SECURITY.md) for comprehensive security documentation.
 
 ## 📄 License
 
@@ -90,10 +119,21 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## 💬 Support
 
-- Documentation: https://docs.intranet-platform.org
-- Issues: https://github.com/your-org/intranet-platform/issues
-- Discussions: https://github.com/your-org/intranet-platform/discussions
-- Community Forum: https://community.intranet-platform.org
+- **Documentation**: See docs/ directory
+- **Issues**: https://github.com/thegspiro/the-logbook/issues
+- **Discussions**: https://github.com/thegspiro/the-logbook/discussions
+- **Security**: See [SECURITY.md](SECURITY.md)
+
+## 🔐 Security & Compliance
+
+This platform is designed with security and compliance as top priorities:
+
+- **HIPAA Compliance Features**: See [SECURITY.md](SECURITY.md#hipaa-compliance)
+- **Section 508 Accessibility**: See [SECURITY.md](SECURITY.md#section-508-accessibility)
+- **Audit Logging**: Tamper-proof logs with 7-year retention
+- **Regular Security Updates**: Keep your installation up to date
+
+**Important**: While this software provides security features, organizations are responsible for proper configuration, staff training, and ongoing compliance with applicable regulations.
 
 ## 🙏 Acknowledgments
 

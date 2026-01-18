@@ -270,7 +270,7 @@ async def log_event(
 ):
     """
     Convenience function to log an event
-    
+
     Usage:
         await log_event(
             db,
@@ -281,6 +281,28 @@ async def log_event(
             user_id=user.id,
             ip_address=request.client.host,
         )
+    """
+    return await audit_logger.create_log_entry(
+        db=db,
+        event_type=event_type,
+        event_category=event_category,
+        severity=severity,
+        event_data=event_data,
+        **kwargs,
+    )
+
+
+# Alias for consistency with auth service
+async def log_audit_event(
+    db: AsyncSession,
+    event_type: str,
+    event_category: str,
+    severity: str,
+    event_data: Dict[str, Any],
+    **kwargs,
+):
+    """
+    Log an audit event (alias for log_event with different parameter order)
     """
     return await audit_logger.create_log_entry(
         db=db,
