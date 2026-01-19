@@ -9,6 +9,8 @@ import TrainingDashboardPage from './pages/TrainingDashboardPage'
 import AddMemberPage from './pages/AddMemberPage'
 import ElectionsPage from './pages/ElectionsPage'
 import ElectionDetailPage from './pages/ElectionDetailPage'
+import { EventsPage } from './pages/EventsPage'
+import { EventDetailPage } from './pages/EventDetailPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -56,6 +58,9 @@ function Navigation() {
   const canAccessElections = checkPermission('elections.manage') ||
                               checkPermission('elections.view')
 
+  const canAccessEvents = checkPermission('events.manage') ||
+                          checkPermission('events.view')
+
   return (
     <nav className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -101,6 +106,14 @@ function Navigation() {
                   className={`${isActive('/elections')} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                 >
                   Elections
+                </Link>
+              )}
+              {canAccessEvents && (
+                <Link
+                  to="/events"
+                  className={`${isActive('/events')} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                >
+                  Events
                 </Link>
               )}
               {canAccessSettings && (
@@ -221,6 +234,22 @@ function App() {
             element={
               <ProtectedRoute requiredPermission="elections.view">
                 <ElectionDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events"
+            element={
+              <ProtectedRoute>
+                <EventsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events/:eventId"
+            element={
+              <ProtectedRoute>
+                <EventDetailPage />
               </ProtectedRoute>
             }
           />
