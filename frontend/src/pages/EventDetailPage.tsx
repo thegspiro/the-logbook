@@ -20,12 +20,15 @@ export const EventDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showRSVPModal, setShowRSVPModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('going');
   const [guestCount, setGuestCount] = useState(0);
   const [rsvpNotes, setRsvpNotes] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [eligibleMembers, setEligibleMembers] = useState<Array<{ id: string; first_name: string; last_name: string; email: string }>>([]);
+  const [memberSearch, setMemberSearch] = useState('');
 
   const { checkPermission, user } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -76,6 +79,23 @@ export const EventDetailPage: React.FC = () => {
     } catch (err: any) {
       console.error('Error fetching stats:', err);
     }
+  };
+
+  const fetchEligibleMembers = async () => {
+    if (!eventId) return;
+
+    try {
+      const data = await eventService.getEligibleMembers(eventId);
+      setEligibleMembers(data);
+    } catch (err: any) {
+      console.error('Error fetching eligible members:', err);
+    }
+  };
+
+  const openCheckInModal = () => {
+    fetchEligibleMembers();
+    setShowCheckInModal(true);
+    setMemberSearch('');
   };
 
   const handleRSVP = async (e: React.FormEvent) => {
@@ -249,12 +269,23 @@ export const EventDetailPage: React.FC = () => {
                 </button>
               )}
               {canManage && (
-                <button
-                  onClick={() => setShowCancelModal(true)}
-                  className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50"
-                >
-                  Cancel Event
-                </button>
+                <>
+                  <button
+                    onClick={openCheckInModal}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Check In Members
+                  </button>
+                  <button
+                    onClick={() => setShowCancelModal(true)}
+                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50"
+                  >
+                    Cancel Event
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -644,6 +675,144 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Check In Modal */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Check In Members</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckInModal(false)}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <p className="text-sm text-gray-600 mb-4">
+                  Check in members as they arrive at the event. Their attendance will be recorded with a timestamp.
+                </p>
+
+                {/* Search */}
+                <div className="mb-4">
+                  <label htmlFor="member-search" className="block text-sm font-medium text-gray-700 mb-2">
+                    Search Members
+                  </label>
+                  <input
+                    type="text"
+                    id="member-search"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="Search by name or email..."
+                    className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                  />
+                </div>
+
+                {/* Member List */}
+                <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-md">
+                  {eligibleMembers
+                    .filter(
+                      (member) =>
+                        memberSearch === '' ||
+                        `${member.first_name} ${member.last_name}`
+                          .toLowerCase()
+                          .includes(memberSearch.toLowerCase()) ||
+                        member.email.toLowerCase().includes(memberSearch.toLowerCase())
+                    )
+                    .map((member) => {
+                      const rsvp = rsvps.find((r) => r.user_id === member.id);
+                      const isCheckedIn = rsvp?.checked_in || false;
+
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-3 border-b border-gray-200 hover:bg-gray-50"
+                        >
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">
+                              {member.first_name} {member.last_name}
+                            </p>
+                            <p className="text-xs text-gray-500">{member.email}</p>
+                            {rsvp && (
+                              <div className="flex items-center mt-1 space-x-2">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(
+                                    rsvp.status
+                                  )}`}
+                                >
+                                  {getStatusLabel(rsvp.status)}
+                                </span>
+                                {isCheckedIn && (
+                                  <span className="text-xs text-green-600">
+                                    ✓ Checked in at{' '}
+                                    {rsvp.checked_in_at &&
+                                      new Date(rsvp.checked_in_at).toLocaleTimeString('en-US', {
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                      })}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            {isCheckedIn ? (
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                                Checked In
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  handleCheckIn(member.id);
+                                  fetchEligibleMembers();
+                                }}
+                                className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                              >
+                                Check In
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {eligibleMembers.filter(
+                    (member) =>
+                      memberSearch === '' ||
+                      `${member.first_name} ${member.last_name}`
+                        .toLowerCase()
+                        .includes(memberSearch.toLowerCase()) ||
+                      member.email.toLowerCase().includes(memberSearch.toLowerCase())
+                  ).length === 0 && (
+                    <div className="p-4 text-center text-gray-500">
+                      {memberSearch ? 'No members found matching your search.' : 'No members available for check-in.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => setShowCheckInModal(false)}
+                  className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>

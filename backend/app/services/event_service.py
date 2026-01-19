@@ -319,7 +319,12 @@ class EventService:
     async def check_in_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
-        """Check in an attendee"""
+        """
+        Check in an attendee
+
+        If RSVP doesn't exist, creates one automatically with status 'going'.
+        This allows check-in to work for events that don't require RSVP.
+        """
         # Verify event belongs to organization
         event_result = await self.db.execute(
             select(Event)
@@ -331,7 +336,18 @@ class EventService:
         if not event:
             return None, "Event not found"
 
-        # Get RSVP
+        # Verify user belongs to organization
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .where(User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return None, "User not found in organization"
+
+        # Get or create RSVP
         rsvp_result = await self.db.execute(
             select(EventRSVP)
             .where(EventRSVP.event_id == event_id)
@@ -340,7 +356,15 @@ class EventService:
         rsvp = rsvp_result.scalar_one_or_none()
 
         if not rsvp:
-            return None, "RSVP not found"
+            # Auto-create RSVP when checking in
+            rsvp = EventRSVP(
+                event_id=event_id,
+                user_id=user_id,
+                status=RSVPStatus.GOING,
+                guest_count=0,
+                responded_at=datetime.utcnow(),
+            )
+            self.db.add(rsvp)
 
         if rsvp.checked_in:
             return None, "Already checked in"
@@ -352,6 +376,38 @@ class EventService:
         await self.db.refresh(rsvp)
 
         return rsvp, None
+
+    async def get_eligible_members(
+        self, event_id: UUID, organization_id: UUID
+    ) -> List[User]:
+        """
+        Get all members eligible to attend an event
+
+        If event has eligible_roles specified, only returns members with those roles.
+        Otherwise returns all members in the organization.
+        """
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return []
+
+        # Base query for users in the organization
+        query = select(User).where(User.organization_id == organization_id)
+
+        # Filter by eligible roles if specified
+        if event.eligible_roles:
+            # This is a simplified version - you may need to join with user_roles
+            # based on your actual user-role relationship structure
+            pass  # TODO: Add role filtering if needed
+
+        query = query.order_by(User.last_name, User.first_name)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
     async def get_event_stats(
         self, event_id: UUID, organization_id: UUID

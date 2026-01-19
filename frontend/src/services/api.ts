@@ -733,4 +733,12 @@ export const eventService = {
     const response = await api.get<EventStats>(`/events/${eventId}/stats`);
     return response.data;
   },
+
+  /**
+   * Get eligible members for check-in
+   */
+  async getEligibleMembers(eventId: string): Promise<Array<{ id: string; first_name: string; last_name: string; email: string }>> {
+    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(`/events/${eventId}/eligible-members`);
+    return response.data;
+  },
 };

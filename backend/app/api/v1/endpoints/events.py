@@ -524,3 +524,35 @@ async def get_event_stats(
         )
 
     return stats
+
+
+@router.get("/{event_id}/eligible-members")
+async def get_eligible_members(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get all members eligible to attend an event
+
+    This is used for the check-in interface to show which members can be checked in.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    members = await service.get_eligible_members(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    # Return simplified member list
+    return [
+        {
+            "id": str(member.id),
+            "first_name": member.first_name,
+            "last_name": member.last_name,
+            "email": member.email,
+        }
+        for member in members
+    ]
