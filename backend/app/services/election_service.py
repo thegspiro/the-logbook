@@ -18,7 +18,7 @@ from app.models.election import (
     Vote,
     ElectionStatus,
 )
-from app.models.user import User
+from app.models.user import User, Organization
 from app.schemas.election import (
     ElectionResults,
     CandidateResult,
@@ -26,6 +26,7 @@ from app.schemas.election import (
     ElectionStats,
     VoterEligibility,
 )
+from app.services.email_service import EmailService
 
 
 class ElectionService:
@@ -569,19 +570,20 @@ class ElectionService:
         Send ballot notification emails to eligible voters
 
         Returns: (recipients_count, failed_count)
-
-        NOTE: This is a placeholder implementation. In production, you would integrate
-        with an email service like SendGrid, AWS SES, or similar.
         """
+        # Get election with organization
         result = await self.db.execute(
-            select(Election)
+            select(Election, Organization)
+            .join(Organization, Election.organization_id == Organization.id)
             .where(Election.id == election_id)
             .where(Election.organization_id == organization_id)
         )
-        election = result.scalar_one_or_none()
+        row = result.one_or_none()
 
-        if not election:
+        if not row:
             return 0, 0
+
+        election, organization = row
 
         # Determine recipients
         if recipient_user_ids:
@@ -609,11 +611,30 @@ class ElectionService:
             )
             recipients = users_result.scalars().all()
 
-        # TODO: In production, implement actual email sending here
-        # For now, just track that emails were "sent"
+        if not recipients:
+            return 0, 0
 
-        recipients_count = len(recipients)
+        # Initialize email service with organization settings
+        email_service = EmailService(organization)
+
+        # Send individual ballot emails
+        success_count = 0
         failed_count = 0
+
+        for recipient in recipients:
+            sent = await email_service.send_ballot_notification(
+                to_email=recipient.email,
+                recipient_name=recipient.full_name,
+                election_title=election.title,
+                ballot_url=ballot_url,
+                meeting_date=election.meeting_date,
+                custom_message=message,
+            )
+
+            if sent:
+                success_count += 1
+            else:
+                failed_count += 1
 
         # Update election with email sent status
         election.email_sent = True
@@ -623,7 +644,7 @@ class ElectionService:
         await self.db.commit()
         await self.db.refresh(election)
 
-        return recipients_count, failed_count
+        return success_count, failed_count
 
     async def has_user_voted(
         self, user_id: UUID, election_id: UUID

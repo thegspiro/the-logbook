@@ -30,6 +30,21 @@ class ContactInfoSettings(BaseModel):
     )
 
 
+class EmailServiceSettings(BaseModel):
+    """Settings for organization email service configuration"""
+    enabled: bool = Field(
+        default=False,
+        description="Whether to use organization-specific email configuration"
+    )
+    smtp_host: Optional[str] = Field(None, description="SMTP server hostname")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_user: Optional[str] = Field(None, description="SMTP username")
+    smtp_password: Optional[str] = Field(None, description="SMTP password")
+    from_email: Optional[str] = Field(None, description="From email address")
+    from_name: Optional[str] = Field(None, description="From name")
+    use_tls: bool = Field(default=True, description="Use TLS encryption")
+
+
 class OrganizationSettings(BaseModel):
     """
     Organization-wide settings
@@ -39,6 +54,10 @@ class OrganizationSettings(BaseModel):
     contact_info_visibility: ContactInfoSettings = Field(
         default_factory=ContactInfoSettings,
         description="Settings for member contact information visibility"
+    )
+    email_service: EmailServiceSettings = Field(
+        default_factory=EmailServiceSettings,
+        description="Email service configuration"
     )
 
     # Allow additional settings
@@ -69,6 +88,7 @@ class OrganizationUpdate(BaseModel):
 class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
     contact_info_visibility: Optional[ContactInfoSettings] = None
+    email_service: Optional[EmailServiceSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -88,5 +108,6 @@ class OrganizationResponse(OrganizationBase):
 class OrganizationSettingsResponse(BaseModel):
     """Schema for organization settings response"""
     contact_info_visibility: ContactInfoSettings
+    email_service: EmailServiceSettings
 
     model_config = ConfigDict(from_attributes=True, extra='allow')

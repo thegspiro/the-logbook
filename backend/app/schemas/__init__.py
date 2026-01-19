@@ -25,6 +25,7 @@ from app.schemas.organization import (
     OrganizationSettingsUpdate,
     OrganizationSettingsResponse,
     ContactInfoSettings,
+    EmailServiceSettings,
 )
 from app.schemas.role import (
     RoleBase,
@@ -95,6 +96,7 @@ __all__ = [
     "OrganizationSettingsUpdate",
     "OrganizationSettingsResponse",
     "ContactInfoSettings",
+    "EmailServiceSettings",
     # Role schemas
     "RoleBase",
     "RoleCreate",
