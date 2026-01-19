@@ -24,6 +24,7 @@ from app.schemas.event import (
     CheckInRequest,
     EventStats,
     RecordActualTimes,
+    QRCheckInData,
 )
 from app.services.event_service import EventService
 from app.api.dependencies import get_current_user, require_permission
@@ -590,3 +591,88 @@ async def record_actual_times(
         )
 
     return event
+
+
+# ============================================
+# QR Code Self Check-In Endpoints
+# ============================================
+
+@router.get("/{event_id}/qr-check-in-data", response_model=QRCheckInData)
+async def get_qr_check_in_data(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get QR code check-in data for an event
+
+    Returns the check-in URL and validates that the event is within the valid time window
+    (1 hour before start until actual_end_time or scheduled end_datetime).
+
+    This endpoint is accessible to all authenticated members.
+
+    **Authentication required**
+    """
+    service = EventService(db)
+    data, error = await service.get_qr_check_in_data(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return QRCheckInData(**data)
+
+
+@router.post("/{event_id}/self-check-in", response_model=RSVPResponse)
+async def self_check_in(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Allow a user to check themselves in to an event via QR code
+
+    This endpoint validates the time window and checks in the authenticated user.
+    If the user doesn't have an RSVP, one will be created automatically.
+
+    **Authentication required**
+    """
+    service = EventService(db)
+    rsvp, error = await service.self_check_in(
+        event_id=event_id,
+        user_id=current_user.id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    # Get user details
+    from sqlalchemy import select
+    user_result = await db.execute(
+        select(User).where(User.id == rsvp.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+
+    return RSVPResponse(
+        id=rsvp.id,
+        event_id=rsvp.event_id,
+        user_id=rsvp.user_id,
+        status=rsvp.status.value,
+        guest_count=rsvp.guest_count,
+        notes=rsvp.notes,
+        responded_at=rsvp.responded_at,
+        updated_at=rsvp.updated_at,
+        checked_in=rsvp.checked_in,
+        checked_in_at=rsvp.checked_in_at,
+        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_email=user.email if user else None,
+    )

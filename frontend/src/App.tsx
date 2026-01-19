@@ -11,6 +11,8 @@ import ElectionsPage from './pages/ElectionsPage'
 import ElectionDetailPage from './pages/ElectionDetailPage'
 import { EventsPage } from './pages/EventsPage'
 import { EventDetailPage } from './pages/EventDetailPage'
+import EventQRCodePage from './pages/EventQRCodePage'
+import EventSelfCheckInPage from './pages/EventSelfCheckInPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -250,6 +252,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <EventDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events/:id/qr"
+            element={
+              <ProtectedRoute>
+                <EventQRCodePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events/:id/check-in"
+            element={
+              <ProtectedRoute>
+                <EventSelfCheckInPage />
               </ProtectedRoute>
             }
           />

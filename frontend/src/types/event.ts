@@ -150,3 +150,16 @@ export interface EventStats {
   total_guests: number;
   capacity_percentage?: number;
 }
+
+export interface QRCheckInData {
+  event_id: string;
+  event_name: string;
+  event_type?: string;
+  start_datetime: string;
+  end_datetime: string;
+  actual_end_time?: string;
+  check_in_start: string;
+  check_in_end: string;
+  is_valid: boolean;
+  location?: string;
+}

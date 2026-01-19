@@ -151,6 +151,20 @@ class RecordActualTimes(BaseModel):
     actual_end_time: Optional[datetime] = Field(None, description="When the event actually ended")
 
 
+class QRCheckInData(BaseModel):
+    """Schema for QR code check-in data"""
+    event_id: str
+    event_name: str
+    event_type: Optional[str] = None
+    start_datetime: str
+    end_datetime: str
+    actual_end_time: Optional[str] = None
+    check_in_start: str
+    check_in_end: str
+    is_valid: bool
+    location: Optional[str] = None
+
+
 class EventStats(BaseModel):
     """Event statistics"""
     event_id: UUID

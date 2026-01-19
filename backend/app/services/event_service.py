@@ -4,9 +4,9 @@ Event Service
 Business logic for event management.
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -512,3 +512,128 @@ class EventService:
         await self.db.refresh(event)
 
         return event, None
+
+    async def get_qr_check_in_data(
+        self, event_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """
+        Get QR code check-in data for an event
+
+        Returns check-in URL and validates that the event is within the valid time window
+        (1 hour before start until actual_end_time or scheduled end_datetime).
+
+        Returns: (data_dict, error_message)
+        """
+        # Get event
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        if event.is_cancelled:
+            return None, "Event has been cancelled"
+
+        # Check time window
+        now = datetime.utcnow()
+        check_in_start = event.start_datetime - timedelta(hours=1)
+
+        # Use actual_end_time if set (early end), otherwise use scheduled end_datetime
+        check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+
+        is_valid = check_in_start <= now <= check_in_end
+
+        return {
+            "event_id": str(event.id),
+            "event_name": event.title,
+            "event_type": event.event_type.value if event.event_type else None,
+            "start_datetime": event.start_datetime.isoformat(),
+            "end_datetime": event.end_datetime.isoformat(),
+            "actual_end_time": event.actual_end_time.isoformat() if event.actual_end_time else None,
+            "check_in_start": check_in_start.isoformat(),
+            "check_in_end": check_in_end.isoformat(),
+            "is_valid": is_valid,
+            "location": event.location,
+        }, None
+
+    async def self_check_in(
+        self, event_id: UUID, user_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+        """
+        Allow a user to check themselves in via QR code
+
+        Similar to check_in_attendee but with additional time window validation
+        and duplicate handling.
+
+        Returns: (rsvp, error_message)
+        """
+        # Get event
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        if event.is_cancelled:
+            return None, "Event has been cancelled"
+
+        # Verify user belongs to organization
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .where(User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return None, "User not found in organization"
+
+        # Check time window
+        now = datetime.utcnow()
+        check_in_start = event.start_datetime - timedelta(hours=1)
+        check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+
+        if now < check_in_start:
+            return None, "Check-in is not available yet. It opens 1 hour before the event."
+
+        if now > check_in_end:
+            return None, "Check-in is no longer available. The event has ended."
+
+        # Get or create RSVP
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.user_id == user_id)
+        )
+        rsvp = rsvp_result.scalar_one_or_none()
+
+        if not rsvp:
+            # Auto-create RSVP when checking in
+            rsvp = EventRSVP(
+                event_id=event_id,
+                user_id=user_id,
+                status=RSVPStatus.GOING,
+                guest_count=0,
+                responded_at=datetime.utcnow(),
+            )
+            self.db.add(rsvp)
+
+        # Check if already checked in
+        if rsvp.checked_in:
+            return None, "You are already checked in to this event"
+
+        rsvp.checked_in = True
+        rsvp.checked_in_at = datetime.utcnow()
+
+        await self.db.commit()
+        await self.db.refresh(rsvp)
+
+        return rsvp, None

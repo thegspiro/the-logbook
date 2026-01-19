@@ -749,4 +749,20 @@ export const eventService = {
     const response = await api.post<import('../types/event').Event>(`/events/${eventId}/record-times`, times);
     return response.data;
   },
+
+  /**
+   * Get QR code check-in data for an event
+   */
+  async getQRCheckInData(eventId: string): Promise<import('../types/event').QRCheckInData> {
+    const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`);
+    return response.data;
+  },
+
+  /**
+   * Check in to an event (self-check-in via QR code)
+   */
+  async selfCheckIn(eventId: string): Promise<import('../types/event').RSVP> {
+    const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/self-check-in`);
+    return response.data;
+  },
 };
