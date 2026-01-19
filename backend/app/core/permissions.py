@@ -45,6 +45,7 @@ USERS_CREATE = Permission("users.create", "Create new users", PermissionCategory
 USERS_EDIT = Permission("users.edit", "Edit user information", PermissionCategory.USERS)
 USERS_DELETE = Permission("users.delete", "Delete users", PermissionCategory.USERS)
 USERS_VIEW_CONTACT = Permission("users.view_contact", "View user contact information", PermissionCategory.USERS)
+USERS_UPDATE_ROLES = Permission("users.update_roles", "Update user roles", PermissionCategory.USERS)
 
 MEMBERS_VIEW = Permission("members.view", "View member list", PermissionCategory.MEMBERS)
 MEMBERS_MANAGE = Permission("members.manage", "Manage member profiles", PermissionCategory.MEMBERS)
@@ -57,6 +58,7 @@ MEMBERS_ASSIGN_ROLES = Permission("members.assign_roles", "Assign roles to membe
 ROLES_VIEW = Permission("roles.view", "View roles", PermissionCategory.ROLES)
 ROLES_CREATE = Permission("roles.create", "Create new roles", PermissionCategory.ROLES)
 ROLES_EDIT = Permission("roles.edit", "Edit roles", PermissionCategory.ROLES)
+ROLES_UPDATE = Permission("roles.update", "Update roles", PermissionCategory.ROLES)
 ROLES_DELETE = Permission("roles.delete", "Delete roles", PermissionCategory.ROLES)
 ROLES_MANAGE_PERMISSIONS = Permission("roles.manage_permissions", "Manage role permissions", PermissionCategory.ROLES)
 
@@ -66,6 +68,7 @@ ROLES_MANAGE_PERMISSIONS = Permission("roles.manage_permissions", "Manage role p
 
 ORGANIZATION_VIEW = Permission("organization.view", "View organization info", PermissionCategory.ORGANIZATION)
 ORGANIZATION_EDIT = Permission("organization.edit", "Edit organization info", PermissionCategory.ORGANIZATION)
+ORGANIZATION_UPDATE_SETTINGS = Permission("organization.update_settings", "Update organization settings", PermissionCategory.ORGANIZATION)
 
 SETTINGS_VIEW = Permission("settings.view", "View settings", PermissionCategory.SETTINGS)
 SETTINGS_EDIT = Permission("settings.edit", "Edit settings", PermissionCategory.SETTINGS)
@@ -119,6 +122,7 @@ ALL_PERMISSIONS: List[Permission] = [
     USERS_EDIT,
     USERS_DELETE,
     USERS_VIEW_CONTACT,
+    USERS_UPDATE_ROLES,
     MEMBERS_VIEW,
     MEMBERS_MANAGE,
     MEMBERS_ASSIGN_ROLES,
@@ -127,12 +131,14 @@ ALL_PERMISSIONS: List[Permission] = [
     ROLES_VIEW,
     ROLES_CREATE,
     ROLES_EDIT,
+    ROLES_UPDATE,
     ROLES_DELETE,
     ROLES_MANAGE_PERMISSIONS,
 
     # Organization & Settings
     ORGANIZATION_VIEW,
     ORGANIZATION_EDIT,
+    ORGANIZATION_UPDATE_SETTINGS,
     SETTINGS_VIEW,
     SETTINGS_EDIT,
     SETTINGS_MANAGE_CONTACT_VISIBILITY,
@@ -208,15 +214,18 @@ DEFAULT_ROLES = {
             USERS_VIEW.name,
             USERS_EDIT.name,
             USERS_VIEW_CONTACT.name,
+            USERS_UPDATE_ROLES.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_ROLES.name,
             ROLES_VIEW.name,
             ROLES_CREATE.name,
             ROLES_EDIT.name,
+            ROLES_UPDATE.name,
             ROLES_MANAGE_PERMISSIONS.name,
             ORGANIZATION_VIEW.name,
             ORGANIZATION_EDIT.name,
+            ORGANIZATION_UPDATE_SETTINGS.name,
             SETTINGS_VIEW.name,
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
@@ -230,8 +239,6 @@ DEFAULT_ROLES = {
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
-            ELECTIONS_VIEW.name,
-            ELECTIONS_MANAGE.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
@@ -248,6 +255,7 @@ DEFAULT_ROLES = {
             USERS_VIEW.name,
             USERS_EDIT.name,
             USERS_VIEW_CONTACT.name,
+            USERS_UPDATE_ROLES.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_ROLES.name,
@@ -277,15 +285,18 @@ DEFAULT_ROLES = {
             USERS_VIEW.name,
             USERS_EDIT.name,
             USERS_VIEW_CONTACT.name,
+            USERS_UPDATE_ROLES.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
             MEMBERS_ASSIGN_ROLES.name,
             ROLES_VIEW.name,
             ROLES_CREATE.name,
             ROLES_EDIT.name,
+            ROLES_UPDATE.name,
             ROLES_MANAGE_PERMISSIONS.name,
             ORGANIZATION_VIEW.name,
             ORGANIZATION_EDIT.name,
+            ORGANIZATION_UPDATE_SETTINGS.name,
             SETTINGS_VIEW.name,
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
@@ -299,8 +310,6 @@ DEFAULT_ROLES = {
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
-            ELECTIONS_VIEW.name,
-            ELECTIONS_MANAGE.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
@@ -323,7 +332,6 @@ DEFAULT_ROLES = {
             SETTINGS_VIEW.name,
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
-            ELECTIONS_VIEW.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
         ],
@@ -336,9 +344,12 @@ DEFAULT_ROLES = {
         "priority": 75,
         "permissions": [
             USERS_VIEW.name,
+            USERS_CREATE.name,
             USERS_VIEW_CONTACT.name,
+            USERS_UPDATE_ROLES.name,
             MEMBERS_VIEW.name,
             MEMBERS_MANAGE.name,
+            MEMBERS_ASSIGN_ROLES.name,
             ROLES_VIEW.name,
             ORGANIZATION_VIEW.name,
             SETTINGS_VIEW.name,
@@ -347,6 +358,8 @@ DEFAULT_ROLES = {
             MEETINGS_MANAGE.name,
             COMPLIANCE_VIEW.name,
             TRAINING_VIEW.name,
+            ELECTIONS_VIEW.name,
+            ELECTIONS_MANAGE.name,
         ],
     },
     "assistant_secretary": {

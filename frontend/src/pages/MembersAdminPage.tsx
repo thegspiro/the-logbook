@@ -11,12 +11,15 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { userService, roleService } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
+import { useAuthStore } from '../stores/authStore';
 
 type ViewMode = 'by-member' | 'by-role';
 
 export const MembersAdminPage: React.FC = () => {
+  const { checkPermission } = useAuthStore();
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -29,6 +32,8 @@ export const MembersAdminPage: React.FC = () => {
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const canCreateMembers = checkPermission('users.create');
 
   useEffect(() => {
     fetchData();
@@ -221,11 +226,33 @@ export const MembersAdminPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Members Administration</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Manage member roles and permissions
-        </p>
+      <div className="mb-6 flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Members Administration</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Manage member roles and permissions
+          </p>
+        </div>
+        {canCreateMembers && (
+          <Link
+            to="/admin/members/add"
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg
+              className="-ml-1 mr-2 h-5 w-5"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Add Member
+          </Link>
+        )}
       </div>
 
       {error && (

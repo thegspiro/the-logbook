@@ -27,9 +27,7 @@ from app.core.permissions import (
     get_permissions_by_category,
     get_admin_role_slugs,
 )
-# NOTE: Authentication is not yet implemented
-# from app.api.dependencies import get_current_active_user, get_user_organization
-# from app.models.user import User as CurrentUser, Organization
+from app.api.dependencies import get_current_user, require_permission
 
 
 router = APIRouter()
@@ -74,22 +72,19 @@ async def list_permissions_by_category():
 @router.get("/", response_model=List[RoleResponse])
 async def list_roles(
     db: AsyncSession = Depends(get_db),
-    # Uncomment when authentication is implemented:
-    # current_user: CurrentUser = Depends(get_current_active_user),
-    # organization: Organization = Depends(get_user_organization),
+    current_user: User = Depends(require_permission("roles.view")),
 ):
     """
     Get all roles for the organization
 
     Returns all roles including system roles and custom roles.
-    """
-    # TODO: Use authenticated organization ID
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
 
+    Requires `roles.view` permission.
+    **Authentication required**
+    """
     result = await db.execute(
         select(Role)
-        .where(Role.organization_id == test_org_id)
+        .where(Role.organization_id == current_user.organization_id)
         .order_by(Role.priority.desc(), Role.name)
     )
     roles = result.scalars().all()
@@ -101,24 +96,22 @@ async def list_roles(
 async def create_role(
     role_data: RoleCreate,
     db: AsyncSession = Depends(get_db),
-    # Uncomment when authentication is implemented:
-    # current_user: CurrentUser = Depends(require_permission("roles.create")),
-    # organization: Organization = Depends(get_user_organization),
+    current_user: User = Depends(require_permission("roles.create")),
 ):
     """
     Create a new custom role
 
     Requires `roles.create` permission.
     System roles cannot be created through this endpoint.
+
+    **Authentication required**
     """
-    # TODO: Use authenticated organization ID
-    from uuid import UUID as UUIDType, uuid4
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
+    from uuid import uuid4
 
     # Check if slug already exists
     result = await db.execute(
         select(Role).where(
-            Role.organization_id == test_org_id,
+            Role.organization_id == current_user.organization_id,
             Role.slug == role_data.slug
         )
     )
@@ -131,7 +124,7 @@ async def create_role(
     # Create role
     role = Role(
         id=uuid4(),
-        organization_id=test_org_id,
+        organization_id=current_user.organization_id,
         name=role_data.name,
         slug=role_data.slug,
         description=role_data.description,
@@ -151,18 +144,18 @@ async def create_role(
 async def get_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    # Uncomment when authentication is implemented:
-    # organization: Organization = Depends(get_user_organization),
+    current_user: User = Depends(require_permission("roles.view")),
 ):
-    """Get a specific role by ID"""
-    # TODO: Use authenticated organization ID
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
+    """
+    Get a specific role by ID
 
+    Requires `roles.view` permission.
+    **Authentication required**
+    """
     result = await db.execute(
         select(Role).where(
             Role.id == role_id,
-            Role.organization_id == test_org_id
+            Role.organization_id == current_user.organization_id
         )
     )
     role = result.scalar_one_or_none()
@@ -181,24 +174,20 @@ async def update_role(
     role_id: UUID,
     role_update: RoleUpdate,
     db: AsyncSession = Depends(get_db),
-    # Uncomment when authentication is implemented:
-    # current_user: CurrentUser = Depends(require_permission("roles.edit")),
-    # organization: Organization = Depends(get_user_organization),
+    current_user: User = Depends(require_permission("roles.edit", "roles.update")),
 ):
     """
     Update a role
 
-    Requires `roles.edit` permission.
+    Requires `roles.edit` or `roles.update` permission.
     System roles can have their permissions updated, but name/slug cannot be changed.
-    """
-    # TODO: Use authenticated organization ID
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
 
+    **Authentication required**
+    """
     result = await db.execute(
         select(Role).where(
             Role.id == role_id,
-            Role.organization_id == test_org_id
+            Role.organization_id == current_user.organization_id
         )
     )
     role = result.scalar_one_or_none()
@@ -232,24 +221,20 @@ async def update_role(
 async def delete_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
-    # Uncomment when authentication is implemented:
-    # current_user: CurrentUser = Depends(require_permission("roles.delete")),
-    # organization: Organization = Depends(get_user_organization),
+    current_user: User = Depends(require_permission("roles.delete")),
 ):
     """
     Delete a role
 
     Requires `roles.delete` permission.
     System roles cannot be deleted.
-    """
-    # TODO: Use authenticated organization ID
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
 
+    **Authentication required**
+    """
     result = await db.execute(
         select(Role).where(
             Role.id == role_id,
-            Role.organization_id == test_org_id
+            Role.organization_id == current_user.organization_id
         )
     )
     role = result.scalar_one_or_none()

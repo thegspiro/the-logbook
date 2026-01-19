@@ -1,0 +1,645 @@
+/**
+ * Elections Page
+ *
+ * Lists all elections and allows creating new ones.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { electionService } from '../services/api';
+import type { ElectionListItem, ElectionCreate } from '../types/election';
+import { useAuthStore } from '../stores/authStore';
+
+export const ElectionsPage: React.FC = () => {
+  const [elections, setElections] = useState<ElectionListItem[]>([]);
+  const [filteredElections, setFilteredElections] = useState<ElectionListItem[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<ElectionCreate>({
+    title: '',
+    description: '',
+    election_type: 'general',
+    positions: [],
+    start_date: '',
+    end_date: '',
+    anonymous_voting: true,
+    allow_write_ins: false,
+    max_votes_per_position: 1,
+    results_visible_immediately: false,
+    voting_method: 'simple_majority',
+    victory_condition: 'most_votes',
+    enable_runoffs: false,
+    runoff_type: 'top_two',
+    max_runoff_rounds: 3,
+  });
+  const [positionInput, setPositionInput] = useState('');
+
+  const { checkPermission } = useAuthStore();
+  const canManage = checkPermission('elections.manage');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchElections();
+  }, []);
+
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      setFilteredElections(elections);
+    } else {
+      setFilteredElections(elections.filter(e => e.status === statusFilter));
+    }
+  }, [elections, statusFilter]);
+
+  const fetchElections = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await electionService.getElections();
+      setElections(data);
+    } catch (err) {
+      console.error('Error fetching elections:', err);
+      setError('Failed to load elections. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartDateChange = (startDate: string) => {
+    setFormData({ ...formData, start_date: startDate });
+
+    // If no end date is set, default to same day at 11:59 PM
+    if (!formData.end_date && startDate) {
+      const start = new Date(startDate);
+      const end = new Date(start);
+      end.setHours(23, 59, 0, 0);
+      const endDateString = end.toISOString().slice(0, 16);
+      setFormData({ ...formData, start_date: startDate, end_date: endDateString });
+    }
+  };
+
+  const setDuration = (hours: number) => {
+    if (!formData.start_date) {
+      setCreateError('Please set a start date first');
+      return;
+    }
+
+    const start = new Date(formData.start_date);
+    const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
+    const endDateString = end.toISOString().slice(0, 16);
+    setFormData({ ...formData, end_date: endDateString });
+  };
+
+  const setEndOfDay = () => {
+    if (!formData.start_date) {
+      setCreateError('Please set a start date first');
+      return;
+    }
+
+    const start = new Date(formData.start_date);
+    const end = new Date(start);
+    end.setHours(23, 59, 0, 0);
+    const endDateString = end.toISOString().slice(0, 16);
+    setFormData({ ...formData, end_date: endDateString });
+  };
+
+  const handleCreateElection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+
+    try {
+      await electionService.createElection(formData);
+      setShowCreateModal(false);
+      setFormData({
+        title: '',
+        description: '',
+        election_type: 'general',
+        positions: [],
+        start_date: '',
+        end_date: '',
+        anonymous_voting: true,
+        allow_write_ins: false,
+        max_votes_per_position: 1,
+        results_visible_immediately: false,
+        voting_method: 'simple_majority',
+        victory_condition: 'most_votes',
+        enable_runoffs: false,
+        runoff_type: 'top_two',
+        max_runoff_rounds: 3,
+      });
+      setPositionInput('');
+      await fetchElections();
+    } catch (err: any) {
+      console.error('Error creating election:', err);
+      setCreateError(err.response?.data?.detail || 'Failed to create election');
+    }
+  };
+
+  const addPosition = () => {
+    if (positionInput.trim() && !formData.positions?.includes(positionInput.trim())) {
+      setFormData({
+        ...formData,
+        positions: [...(formData.positions || []), positionInput.trim()],
+      });
+      setPositionInput('');
+    }
+  };
+
+  const removePosition = (position: string) => {
+    setFormData({
+      ...formData,
+      positions: formData.positions?.filter(p => p !== position) || [],
+    });
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'open':
+        return 'bg-green-100 text-green-800';
+      case 'closed':
+        return 'bg-gray-100 text-gray-800';
+      case 'draft':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500">Loading elections...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Elections</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Manage elections and view results
+          </p>
+        </div>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <svg className="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Election
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      <div className="mb-4 flex space-x-2">
+        {['all', 'draft', 'open', 'closed'].map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              statusFilter === status
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        {filteredElections.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No elections found</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {filteredElections.map((election) => (
+              <li key={election.id}>
+                <Link
+                  to={`/elections/${election.id}`}
+                  className="block hover:bg-gray-50 transition"
+                >
+                  <div className="px-4 py-4 sm:px-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-lg font-medium text-blue-600 truncate">
+                            {election.title}
+                          </p>
+                          <div className="ml-2 flex-shrink-0 flex">
+                            <p
+                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(
+                                election.status
+                              )}`}
+                            >
+                              {election.status}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center text-sm text-gray-500">
+                          <svg
+                            className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span>
+                            {formatDate(election.start_date)} - {formatDate(election.end_date)}
+                          </span>
+                        </div>
+                        {election.positions && election.positions.length > 0 && (
+                          <div className="mt-2 flex items-center text-sm text-gray-500">
+                            <span className="font-medium mr-2">Positions:</span>
+                            {election.positions.join(', ')}
+                          </div>
+                        )}
+                        {election.total_votes !== undefined && (
+                          <div className="mt-2 text-sm text-gray-500">
+                            {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'} cast
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Create New Election</h3>
+            </div>
+
+            <form onSubmit={handleCreateElection} className="px-6 py-4">
+              {createError && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                  <p className="text-sm text-red-700">{createError}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Start Date & Time *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={formData.start_date}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      End Date & Time *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={formData.end_date}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+
+                    {formData.start_date && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500 mb-2">Quick duration:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDuration(1)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            1 Hour
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDuration(2)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            2 Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDuration(4)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            4 Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEndOfDay()}
+                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                          >
+                            End of Day (Default)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Positions
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={positionInput}
+                      onChange={(e) => setPositionInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPosition())}
+                      placeholder="e.g., Chief, President"
+                      className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={addPosition}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {formData.positions && formData.positions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {formData.positions.map((position) => (
+                        <span
+                          key={position}
+                          className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                        >
+                          {position}
+                          <button
+                            type="button"
+                            onClick={() => removePosition(position)}
+                            className="ml-2 text-blue-600 hover:text-blue-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Voting Method
+                    </label>
+                    <select
+                      value={formData.voting_method}
+                      onChange={(e) => setFormData({ ...formData, voting_method: e.target.value as any })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="simple_majority">Simple Majority</option>
+                      <option value="ranked_choice">Ranked Choice</option>
+                      <option value="approval">Approval Voting</option>
+                      <option value="supermajority">Supermajority</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Victory Condition
+                    </label>
+                    <select
+                      value={formData.victory_condition}
+                      onChange={(e) => setFormData({ ...formData, victory_condition: e.target.value as any })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="most_votes">Most Votes (Plurality)</option>
+                      <option value="majority">Majority (>50%)</option>
+                      <option value="supermajority">Supermajority (2/3)</option>
+                      <option value="threshold">Threshold</option>
+                    </select>
+                  </div>
+                </div>
+
+                {formData.victory_condition === 'threshold' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Numerical Threshold
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={formData.victory_threshold || ''}
+                        onChange={(e) => setFormData({ ...formData, victory_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
+                        placeholder="e.g., 10 votes required"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Minimum votes needed to win</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Percentage Threshold
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={formData.victory_percentage || ''}
+                        onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : undefined })}
+                        placeholder="e.g., 60%"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Percentage of votes needed to win</p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.victory_condition === 'supermajority' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Supermajority Percentage (default: 67%)
+                    </label>
+                    <input
+                      type="number"
+                      min="51"
+                      max="100"
+                      value={formData.victory_percentage || 67}
+                      onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : 67 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Percentage of votes needed (typically 67% for 2/3 majority)</p>
+                  </div>
+                )}
+
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="flex items-center mb-3">
+                    <input
+                      type="checkbox"
+                      checked={formData.enable_runoffs}
+                      onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm font-medium text-gray-700">Enable Automatic Runoffs</span>
+                  </label>
+
+                  {formData.enable_runoffs && (
+                    <div className="ml-6 space-y-3 bg-gray-50 p-3 rounded">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Runoff Type
+                        </label>
+                        <select
+                          value={formData.runoff_type}
+                          onChange={(e) => setFormData({ ...formData, runoff_type: e.target.value })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="top_two">Top Two (top 2 candidates advance)</option>
+                          <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">
+                          How to handle runoffs when no candidate meets victory condition
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Maximum Runoff Rounds
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={formData.max_runoff_rounds}
+                          onChange={(e) => setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Maximum number of runoff rounds before declaring winner</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.anonymous_voting}
+                      onChange={(e) =>
+                        setFormData({ ...formData, anonymous_voting: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Anonymous Voting</span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.allow_write_ins}
+                      onChange={(e) =>
+                        setFormData({ ...formData, allow_write_ins: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Allow Write-in Candidates</span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.results_visible_immediately}
+                      onChange={(e) =>
+                        setFormData({ ...formData, results_visible_immediately: e.target.checked })
+                      }
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Show Results Immediately</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Create Election
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ElectionsPage;

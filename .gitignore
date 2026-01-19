@@ -1,14 +1,3 @@
-# ============================================
-# THE LOGBOOK - GITIGNORE
-# ============================================
-
-# Environment variables and secrets
-.env
-.env.local
-.env.production
-.env.staging
-*.env
-
 # Python
 __pycache__/
 *.py[cod]

@@ -25,6 +25,7 @@ from app.schemas.organization import (
     OrganizationSettingsUpdate,
     OrganizationSettingsResponse,
     ContactInfoSettings,
+    EmailServiceSettings,
 )
 from app.schemas.role import (
     RoleBase,
@@ -49,6 +50,30 @@ from app.schemas.auth import (
     MFAVerify,
     MFALogin,
 )
+from app.schemas.election import (
+    BallotItem,
+    PositionEligibility,
+    ElectionBase,
+    ElectionCreate,
+    ElectionUpdate,
+    ElectionResponse,
+    ElectionListResponse,
+    CandidateBase,
+    CandidateCreate,
+    CandidateUpdate,
+    CandidateResponse,
+    CandidateAcceptance,
+    VoteCreate,
+    VoteResponse,
+    CandidateResult,
+    PositionResults,
+    ElectionResults,
+    ElectionStats,
+    VoterEligibility,
+    BulkVoteCreate,
+    EmailBallot,
+    EmailBallotResponse,
+)
 
 __all__ = [
     # User schemas
@@ -71,6 +96,7 @@ __all__ = [
     "OrganizationSettingsUpdate",
     "OrganizationSettingsResponse",
     "ContactInfoSettings",
+    "EmailServiceSettings",
     # Role schemas
     "RoleBase",
     "RoleCreate",
@@ -92,4 +118,27 @@ __all__ = [
     "MFASetup",
     "MFAVerify",
     "MFALogin",
+    # Election schemas
+    "BallotItem",
+    "PositionEligibility",
+    "ElectionBase",
+    "ElectionCreate",
+    "ElectionUpdate",
+    "ElectionResponse",
+    "ElectionListResponse",
+    "CandidateBase",
+    "CandidateCreate",
+    "CandidateUpdate",
+    "CandidateResponse",
+    "CandidateAcceptance",
+    "VoteCreate",
+    "VoteResponse",
+    "CandidateResult",
+    "PositionResults",
+    "ElectionResults",
+    "ElectionStats",
+    "VoterEligibility",
+    "BulkVoteCreate",
+    "EmailBallot",
+    "EmailBallotResponse",
 ]
