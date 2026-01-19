@@ -1,23 +1,32 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: intranet-postgres
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: intranet-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-intranet_db}
-      POSTGRES_USER: ${DB_USER:-intranet_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
-      PGDATA: /var/lib/postgresql/data/pgdata
+      MYSQL_DATABASE: ${DB_NAME:-intranet_db}
+      MYSQL_USER: ${DB_USER:-intranet_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_in_production}
+      TZ: UTC
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=500
+      --max_allowed_packet=256M
+      --innodb_buffer_pool_size=512M
+      --innodb_log_file_size=128M
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-3306}:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
       - ./database/schemas:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-intranet_user}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-intranet_user}", "-p${DB_PASSWORD:-change_me_in_production}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,10 +62,10 @@ services:
     environment:
       ENVIRONMENT: development
       PORT: ${BACKEND_PORT:-3001}
-      
-      # Database
-      DB_HOST: postgres
-      DB_PORT: 5432
+
+      # Database - MySQL
+      DB_HOST: mysql
+      DB_PORT: 3306
       DB_NAME: ${DB_NAME:-intranet_db}
       DB_USER: ${DB_USER:-intranet_user}
       DB_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
@@ -77,7 +86,7 @@ services:
       - ./backend:/app
       - uploads:/app/uploads
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -177,7 +186,7 @@ services:
       - development
 
 volumes:
-  postgres_data:
+  mysql_data:
     driver: local
   redis_data:
     driver: local

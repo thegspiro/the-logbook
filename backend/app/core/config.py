@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # ============================================
-    # Database
+    # Database - MySQL
     # ============================================
     DB_HOST: str = "localhost"
-    DB_PORT: int = 5432
+    DB_PORT: int = 3306
     DB_NAME: str = "intranet_db"
     DB_USER: str = "intranet_user"
     DB_PASSWORD: str = "change_me_in_production"
@@ -42,16 +42,17 @@ class Settings(BaseSettings):
     DB_POOL_MIN: int = 2
     DB_POOL_MAX: int = 10
     DB_ECHO: bool = False  # SQL logging
-    
+    DB_CHARSET: str = "utf8mb4"  # Use utf8mb4 for full Unicode support
+
     @property
     def DATABASE_URL(self) -> str:
-        """Construct database URL"""
-        return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-    
+        """Construct async MySQL database URL"""
+        return f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
+
     @property
     def SYNC_DATABASE_URL(self) -> str:
-        """Construct synchronous database URL (for Alembic)"""
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        """Construct synchronous MySQL database URL (for Alembic)"""
+        return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset={self.DB_CHARSET}"
     
     # ============================================
     # Redis

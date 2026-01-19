@@ -1,0 +1,74 @@
+MIT License
+
+Copyright (c) 2026 The Logbook Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## HIPAA Compliance Notice
+
+While this software is designed with HIPAA compliance features including
+encryption, audit logging, and access controls, organizations using this
+software for Protected Health Information (PHI) are responsible for:
+
+1. Proper configuration of all security features
+2. Regular security audits and risk assessments
+3. Staff training on HIPAA requirements
+4. Business Associate Agreements (BAAs) where applicable
+5. Incident response and breach notification procedures
+6. Regular backups and disaster recovery planning
+
+The software providers make no warranties regarding HIPAA compliance.
+Each organization must ensure their implementation meets all applicable
+regulatory requirements.
+
+## Section 508 Accessibility
+
+This software aims to meet Section 508 accessibility standards. However,
+organizations are responsible for ensuring their specific implementation
+and customizations maintain accessibility compliance.
+
+## Security Disclaimer
+
+This software includes security features designed to protect sensitive data.
+However, no software can guarantee absolute security. Organizations must:
+
+1. Keep all software components up to date
+2. Follow security best practices
+3. Conduct regular security assessments
+4. Monitor for vulnerabilities
+5. Implement defense-in-depth strategies
+6. Maintain appropriate insurance coverage
+
+## Support and Liability
+
+This software is provided as-is without professional support guarantees.
+For critical infrastructure, consider:
+
+1. Professional implementation services
+2. Paid support contracts
+3. Security consulting
+4. Regular third-party security audits
+5. Compliance certification services
+
+## Contribution Guidelines
+
+By contributing to this project, you agree to license your contributions
+under the same MIT License terms as this project.
