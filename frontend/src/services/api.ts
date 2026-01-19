@@ -556,6 +556,14 @@ export const electionService = {
   },
 
   /**
+   * Rollback an election to previous status
+   */
+  async rollbackElection(electionId: string, reason: string): Promise<{ success: boolean; election: import('../types/election').Election; message: string; notifications_sent: number }> {
+    const response = await api.post(`/elections/${electionId}/rollback`, { reason });
+    return response.data;
+  },
+
+  /**
    * Get candidates for an election
    */
   async getCandidates(electionId: string): Promise<import('../types/election').Candidate[]> {
