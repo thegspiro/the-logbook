@@ -49,6 +49,12 @@ class ElectionBase(BaseModel):
     results_visible_immediately: bool = Field(default=False)
     eligible_voters: Optional[List[UUID]] = Field(default=None, description="List of user IDs eligible to vote, null means all members")
 
+    # Voting method and victory conditions
+    voting_method: str = Field(default="simple_majority", description="Voting method: simple_majority, ranked_choice, approval, supermajority")
+    victory_condition: str = Field(default="most_votes", description="Victory condition: most_votes, majority, supermajority, threshold")
+    victory_threshold: Optional[int] = Field(default=None, description="Numerical threshold for victory (e.g., 10 votes)")
+    victory_percentage: Optional[int] = Field(default=None, ge=1, le=100, description="Percentage threshold for victory (e.g., 60%)")
+
 
 class ElectionCreate(ElectionBase):
     """Schema for creating a new election"""
@@ -72,6 +78,10 @@ class ElectionUpdate(BaseModel):
     max_votes_per_position: Optional[int] = Field(None, ge=1)
     results_visible_immediately: Optional[bool] = None
     eligible_voters: Optional[List[UUID]] = None
+    voting_method: Optional[str] = None
+    victory_condition: Optional[str] = None
+    victory_threshold: Optional[int] = None
+    victory_percentage: Optional[int] = Field(None, ge=1, le=100)
 
 
 class ElectionResponse(ElectionBase):

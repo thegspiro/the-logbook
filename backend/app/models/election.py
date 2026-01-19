@@ -81,6 +81,19 @@ class Election(Base):
     results_visible_immediately = Column(Boolean, nullable=False, default=False)
     eligible_voters = Column(JSONB, nullable=True)  # List of user IDs or role slugs
 
+    # Voting method and victory conditions
+    voting_method = Column(String(50), nullable=False, default="simple_majority")
+    # Voting methods: simple_majority, ranked_choice, approval, supermajority
+
+    victory_condition = Column(String(50), nullable=False, default="most_votes")
+    # Victory conditions: most_votes, majority, supermajority, threshold
+
+    victory_threshold = Column(Integer, nullable=True)
+    # For numerical threshold (e.g., 10 votes required)
+
+    victory_percentage = Column(Integer, nullable=True)
+    # For percentage threshold (e.g., 60% required)
+
     # Metadata
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

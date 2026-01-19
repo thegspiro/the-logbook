@@ -29,6 +29,8 @@ export const ElectionsPage: React.FC = () => {
     allow_write_ins: false,
     max_votes_per_position: 1,
     results_visible_immediately: false,
+    voting_method: 'simple_majority',
+    victory_condition: 'most_votes',
   });
   const [positionInput, setPositionInput] = useState('');
 
@@ -80,6 +82,8 @@ export const ElectionsPage: React.FC = () => {
         allow_write_ins: false,
         max_votes_per_position: 1,
         results_visible_immediately: false,
+        voting_method: 'simple_majority',
+        victory_condition: 'most_votes',
       });
       setPositionInput('');
       await fetchElections();
@@ -361,6 +365,92 @@ export const ElectionsPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Voting Method
+                    </label>
+                    <select
+                      value={formData.voting_method}
+                      onChange={(e) => setFormData({ ...formData, voting_method: e.target.value as any })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="simple_majority">Simple Majority</option>
+                      <option value="ranked_choice">Ranked Choice</option>
+                      <option value="approval">Approval Voting</option>
+                      <option value="supermajority">Supermajority</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Victory Condition
+                    </label>
+                    <select
+                      value={formData.victory_condition}
+                      onChange={(e) => setFormData({ ...formData, victory_condition: e.target.value as any })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="most_votes">Most Votes (Plurality)</option>
+                      <option value="majority">Majority (>50%)</option>
+                      <option value="supermajority">Supermajority (2/3)</option>
+                      <option value="threshold">Threshold</option>
+                    </select>
+                  </div>
+                </div>
+
+                {formData.victory_condition === 'threshold' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Numerical Threshold
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={formData.victory_threshold || ''}
+                        onChange={(e) => setFormData({ ...formData, victory_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
+                        placeholder="e.g., 10 votes required"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Minimum votes needed to win</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Percentage Threshold
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={formData.victory_percentage || ''}
+                        onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : undefined })}
+                        placeholder="e.g., 60%"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Percentage of votes needed to win</p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.victory_condition === 'supermajority' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Supermajority Percentage (default: 67%)
+                    </label>
+                    <input
+                      type="number"
+                      min="51"
+                      max="100"
+                      value={formData.victory_percentage || 67}
+                      onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : 67 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Percentage of votes needed (typically 67% for 2/3 majority)</p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="flex items-center">

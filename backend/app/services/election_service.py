@@ -371,7 +371,7 @@ class ElectionService:
                 position_candidates = [c for c in candidates if c.position == position]
 
                 candidate_results = await self._calculate_candidate_results(
-                    position_candidates, position_votes
+                    position_candidates, position_votes, election, total_eligible
                 )
 
                 results_by_position.append(
@@ -383,7 +383,7 @@ class ElectionService:
                 )
 
         # Overall results (all candidates regardless of position)
-        overall_results = await self._calculate_candidate_results(candidates, all_votes)
+        overall_results = await self._calculate_candidate_results(candidates, all_votes, election, total_eligible)
 
         return ElectionResults(
             election_id=election.id,
@@ -397,9 +397,20 @@ class ElectionService:
         )
 
     async def _calculate_candidate_results(
-        self, candidates: List[Candidate], votes: List[Vote]
+        self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
     ) -> List[CandidateResult]:
-        """Calculate results for a list of candidates"""
+        """
+        Calculate results for a list of candidates based on configured victory conditions
+
+        Args:
+            candidates: List of candidates to calculate results for
+            votes: List of votes cast for these candidates
+            election: Election instance with victory condition configuration
+            total_eligible: Total number of eligible voters
+
+        Returns:
+            List of CandidateResult objects with winner flags set
+        """
         # Count votes per candidate
         vote_counts = {}
         for vote in votes:
@@ -411,7 +422,12 @@ class ElectionService:
         results = []
         for candidate in candidates:
             vote_count = vote_counts.get(candidate.id, 0)
+
+            # Calculate percentage of votes cast
             percentage = (vote_count / total_votes * 100) if total_votes > 0 else 0
+
+            # Calculate percentage of eligible voters (for threshold calculations)
+            percentage_of_eligible = (vote_count / total_eligible * 100) if total_eligible > 0 else 0
 
             results.append(
                 CandidateResult(
@@ -420,19 +436,48 @@ class ElectionService:
                     position=candidate.position,
                     vote_count=vote_count,
                     percentage=round(percentage, 2),
-                    is_winner=False,  # Will be set below
+                    is_winner=False,  # Will be set below based on victory conditions
                 )
             )
 
         # Sort by vote count (descending)
         results.sort(key=lambda x: x.vote_count, reverse=True)
 
-        # Mark winner(s) - could be ties
-        if results:
-            max_votes = results[0].vote_count
+        # Determine winners based on victory_condition
+        if election.victory_condition == "most_votes":
+            # Simple plurality - candidate(s) with most votes wins (handles ties)
+            if results and results[0].vote_count > 0:
+                max_votes = results[0].vote_count
+                for result in results:
+                    if result.vote_count == max_votes:
+                        result.is_winner = True
+
+        elif election.victory_condition == "majority":
+            # Requires >50% of total votes cast
+            required_votes = (total_votes / 2) + 1
             for result in results:
-                if result.vote_count == max_votes and max_votes > 0:
+                if result.vote_count >= required_votes:
                     result.is_winner = True
+
+        elif election.victory_condition == "supermajority":
+            # Requires 2/3 of total votes cast (or custom percentage from victory_percentage)
+            required_percentage = election.victory_percentage or 67
+            for result in results:
+                if result.percentage >= required_percentage:
+                    result.is_winner = True
+
+        elif election.victory_condition == "threshold":
+            # Requires specific number or percentage
+            if election.victory_threshold:
+                # Numerical threshold (e.g., must receive at least 10 votes)
+                for result in results:
+                    if result.vote_count >= election.victory_threshold:
+                        result.is_winner = True
+            elif election.victory_percentage:
+                # Percentage threshold (e.g., must receive at least 60% of votes cast)
+                for result in results:
+                    if result.percentage >= election.victory_percentage:
+                        result.is_winner = True
 
         return results
 

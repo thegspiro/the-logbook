@@ -20,6 +20,9 @@ export interface PositionEligibility {
   min_votes_required?: number;
 }
 
+export type VotingMethod = 'simple_majority' | 'ranked_choice' | 'approval' | 'supermajority';
+export type VictoryCondition = 'most_votes' | 'majority' | 'supermajority' | 'threshold';
+
 export interface Election {
   id: string;
   organization_id: string;
@@ -41,6 +44,10 @@ export interface Election {
   email_sent: boolean;
   email_sent_at?: string;
   email_recipients?: string[];
+  voting_method: VotingMethod;
+  victory_condition: VictoryCondition;
+  victory_threshold?: number;
+  victory_percentage?: number;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -75,6 +82,10 @@ export interface ElectionCreate {
   max_votes_per_position?: number;
   results_visible_immediately?: boolean;
   eligible_voters?: string[];
+  voting_method?: VotingMethod;
+  victory_condition?: VictoryCondition;
+  victory_threshold?: number;
+  victory_percentage?: number;
 }
 
 export interface ElectionUpdate {
@@ -90,6 +101,10 @@ export interface ElectionUpdate {
   max_votes_per_position?: number;
   results_visible_immediately?: boolean;
   eligible_voters?: string[];
+  voting_method?: VotingMethod;
+  victory_condition?: VictoryCondition;
+  victory_threshold?: number;
+  victory_percentage?: number;
 }
 
 export interface Candidate {
