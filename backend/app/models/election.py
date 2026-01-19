@@ -139,6 +139,46 @@ class Candidate(Base):
     )
 
 
+class VotingToken(Base):
+    """
+    Voting token model for secure anonymous ballot access
+
+    Each eligible voter receives a unique hashed token via email to access their ballot.
+    The token ensures anonymous voting while preventing duplicate votes.
+    """
+    __tablename__ = "voting_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    election_id = Column(UUID(as_uuid=True), ForeignKey("elections.id"), nullable=False)
+
+    # Secure token for ballot access (sent via email)
+    token = Column(String(128), nullable=False, unique=True, index=True)
+
+    # Hashed voter identifier (for tracking without revealing identity)
+    voter_hash = Column(String(64), nullable=False)  # SHA256 hash
+
+    # Token metadata
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+
+    # Usage tracking
+    used = Column(Boolean, nullable=False, default=False)
+    used_at = Column(DateTime, nullable=True)
+
+    # Access tracking
+    first_accessed_at = Column(DateTime, nullable=True)
+    access_count = Column(Integer, nullable=False, default=0)
+
+    # Relationships
+    election = relationship("Election", backref="voting_tokens")
+
+    __table_args__ = (
+        Index("ix_voting_tokens_election_id", "election_id"),
+        Index("ix_voting_tokens_token", "token"),
+        Index("ix_voting_tokens_voter_hash", "voter_hash"),
+    )
+
+
 class Vote(Base):
     """
     Vote model for recording votes

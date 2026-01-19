@@ -5,17 +5,19 @@ Business logic for election management including elections, candidates, voting, 
 """
 
 from typing import List, Optional, Dict, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
-from uuid import UUID
+from uuid import UUID, uuid4
 import hashlib
+import secrets
 
 from app.models.election import (
     Election,
     Candidate,
     Vote,
+    VotingToken,
     ElectionStatus,
 )
 from app.models.user import User, Organization
@@ -557,6 +559,43 @@ class ElectionService:
 
         return election, None
 
+    async def _generate_voting_token(
+        self, user_id: UUID, election_id: UUID, election_end_date: datetime
+    ) -> VotingToken:
+        """
+        Generate a secure voting token for a user-election pair
+
+        Args:
+            user_id: User ID (for hashing, not stored directly)
+            election_id: Election ID
+            election_end_date: Election end date (token expires after this)
+
+        Returns:
+            VotingToken instance
+        """
+        # Generate secure random token
+        token = secrets.token_urlsafe(64)
+
+        # Generate voter hash (same method as used in voting)
+        voter_hash = self._generate_voter_hash(user_id, election_id)
+
+        # Token expires when election ends (or 30 days if election is longer)
+        max_expiry = datetime.utcnow() + timedelta(days=30)
+        expires_at = min(election_end_date, max_expiry)
+
+        voting_token = VotingToken(
+            id=uuid4(),
+            election_id=election_id,
+            token=token,
+            voter_hash=voter_hash,
+            created_at=datetime.utcnow(),
+            expires_at=expires_at,
+            used=False,
+        )
+
+        self.db.add(voting_token)
+        return voting_token
+
     async def send_ballot_emails(
         self,
         election_id: UUID,
@@ -564,10 +603,10 @@ class ElectionService:
         recipient_user_ids: Optional[List[UUID]] = None,
         subject: Optional[str] = None,
         message: Optional[str] = None,
-        ballot_url: str = None,
+        base_ballot_url: str = None,
     ) -> Tuple[int, int]:
         """
-        Send ballot notification emails to eligible voters
+        Send ballot notification emails to eligible voters with unique hashed links
 
         Returns: (recipients_count, failed_count)
         """
@@ -617,11 +656,21 @@ class ElectionService:
         # Initialize email service with organization settings
         email_service = EmailService(organization)
 
-        # Send individual ballot emails
+        # Send individual ballot emails with unique tokens
         success_count = 0
         failed_count = 0
 
         for recipient in recipients:
+            # Generate unique voting token for this voter
+            voting_token = await self._generate_voting_token(
+                user_id=recipient.id,
+                election_id=election_id,
+                election_end_date=election.end_date
+            )
+
+            # Build unique ballot URL with token
+            ballot_url = f"{base_ballot_url}?token={voting_token.token}" if base_ballot_url else None
+
             sent = await email_service.send_ballot_notification(
                 to_email=recipient.email,
                 recipient_name=recipient.full_name,
@@ -641,6 +690,7 @@ class ElectionService:
         election.email_sent_at = datetime.utcnow()
         election.email_recipients = [str(user.id) for user in recipients]
 
+        # Commit all voting tokens and election updates
         await self.db.commit()
         await self.db.refresh(election)
 
@@ -657,3 +707,138 @@ class ElectionService:
         )
         vote_count = result.scalar() or 0
         return vote_count > 0
+
+    async def get_ballot_by_token(
+        self, token: str
+    ) -> Tuple[Optional[Election], Optional[VotingToken], Optional[str]]:
+        """
+        Retrieve ballot information using a voting token
+
+        Returns: (Election, VotingToken, error_message)
+        """
+        # Find the voting token
+        result = await self.db.execute(
+            select(VotingToken)
+            .where(VotingToken.token == token)
+        )
+        voting_token = result.scalar_one_or_none()
+
+        if not voting_token:
+            return None, None, "Invalid voting token"
+
+        # Check if token has expired
+        if datetime.utcnow() > voting_token.expires_at:
+            return None, None, "Voting token has expired"
+
+        # Check if token has already been used
+        if voting_token.used:
+            return None, None, "This ballot has already been submitted"
+
+        # Update access tracking
+        if not voting_token.first_accessed_at:
+            voting_token.first_accessed_at = datetime.utcnow()
+        voting_token.access_count += 1
+        await self.db.commit()
+
+        # Get the election
+        election_result = await self.db.execute(
+            select(Election)
+            .where(Election.id == voting_token.election_id)
+        )
+        election = election_result.scalar_one_or_none()
+
+        if not election:
+            return None, None, "Election not found"
+
+        # Check if election is still open
+        now = datetime.utcnow()
+        if election.status != ElectionStatus.OPEN:
+            return None, None, f"Election is {election.status.value}"
+
+        if now < election.start_date:
+            return None, None, "Voting has not started yet"
+
+        if now > election.end_date:
+            return None, None, "Voting has ended"
+
+        return election, voting_token, None
+
+    async def cast_vote_with_token(
+        self,
+        token: str,
+        candidate_id: UUID,
+        position: Optional[str],
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Tuple[Optional[Vote], Optional[str]]:
+        """
+        Cast a vote using a voting token
+
+        Returns: (Vote object, error_message)
+        """
+        # Validate token and get ballot
+        election, voting_token, error = await self.get_ballot_by_token(token)
+
+        if error:
+            return None, error
+
+        # Verify candidate exists and belongs to this election
+        candidate_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.id == candidate_id)
+            .where(Candidate.election_id == election.id)
+        )
+        candidate = candidate_result.scalar_one_or_none()
+
+        if not candidate:
+            return None, "Candidate not found"
+
+        # Verify candidate has accepted nomination (unless write-in)
+        if not candidate.accepted and not candidate.is_write_in:
+            return None, "Candidate has not accepted nomination"
+
+        # Verify position matches if specified
+        if position and candidate.position != position:
+            return None, "Candidate is not running for this position"
+
+        # Check if this token has already voted for this position
+        existing_votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election.id)
+            .where(Vote.voter_hash == voting_token.voter_hash)
+            .where(Vote.position == position if position else True)
+        )
+        existing_votes = existing_votes_result.scalars().all()
+
+        if existing_votes:
+            return None, f"You have already voted for {position}" if position else "You have already voted"
+
+        # Check max votes per position
+        if position:
+            position_votes = [v for v in existing_votes if v.position == position]
+            if len(position_votes) >= election.max_votes_per_position:
+                return None, f"Maximum votes for {position} reached"
+
+        # Create the vote
+        vote = Vote(
+            election_id=election.id,
+            candidate_id=candidate_id,
+            voter_id=None,  # Anonymous - not stored
+            voter_hash=voting_token.voter_hash,
+            position=position,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            voted_at=datetime.utcnow(),
+        )
+
+        self.db.add(vote)
+
+        # Mark token as used if all positions have been voted for
+        # For now, mark as used after any vote (can be enhanced for multi-position)
+        voting_token.used = True
+        voting_token.used_at = datetime.utcnow()
+
+        await self.db.commit()
+        await self.db.refresh(vote)
+
+        return vote, None

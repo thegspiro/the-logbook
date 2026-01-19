@@ -23,7 +23,7 @@ from app.core.database import Base
 from app.models.user import Organization, User, Role, Session
 from app.models.audit import AuditLog
 from app.models.training import TrainingCourse, TrainingRecord, TrainingRequirement
-from app.models.election import Election, Candidate, Vote
+from app.models.election import Election, Candidate, Vote, VotingToken
 
 # this is the Alembic Config object
 config = context.config
