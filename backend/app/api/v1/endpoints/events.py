@@ -23,6 +23,7 @@ from app.schemas.event import (
     RSVPResponse,
     CheckInRequest,
     EventStats,
+    RecordActualTimes,
 )
 from app.services.event_service import EventService
 from app.api.dependencies import get_current_user, require_permission
@@ -556,3 +557,36 @@ async def get_eligible_members(
         }
         for member in members
     ]
+
+
+@router.post("/{event_id}/record-times", response_model=EventResponse)
+async def record_actual_times(
+    event_id: UUID,
+    times_data: RecordActualTimes,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Record actual start and end times for an event
+
+    This allows the secretary to record when the event actually started and ended,
+    so attendance duration can be accurately calculated for all checked-in members.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    event, error = await service.record_actual_times(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+        actual_start_time=times_data.actual_start_time,
+        actual_end_time=times_data.actual_end_time,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return event

@@ -70,6 +70,8 @@ class EventResponse(EventBase):
     """Schema for event response"""
     id: UUID
     organization_id: UUID
+    actual_start_time: Optional[datetime] = None
+    actual_end_time: Optional[datetime] = None
     is_cancelled: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
@@ -132,12 +134,21 @@ class RSVPResponse(RSVPBase):
     user_name: Optional[str] = None
     user_email: Optional[str] = None
 
+    # Attendance duration (populated when event has actual times)
+    attendance_duration_minutes: Optional[float] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class CheckInRequest(BaseModel):
     """Schema for checking in an attendee"""
     user_id: UUID
+
+
+class RecordActualTimes(BaseModel):
+    """Schema for recording actual event start/end times"""
+    actual_start_time: Optional[datetime] = Field(None, description="When the event actually started")
+    actual_end_time: Optional[datetime] = Field(None, description="When the event actually ended")
 
 
 class EventStats(BaseModel):

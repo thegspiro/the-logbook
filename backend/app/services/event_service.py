@@ -471,3 +471,44 @@ class EventService:
             total_guests=total_guests,
             capacity_percentage=capacity_percentage,
         )
+
+    async def record_actual_times(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        actual_start_time: Optional[datetime],
+        actual_end_time: Optional[datetime],
+    ) -> Tuple[Optional[Event], Optional[str]]:
+        """
+        Record actual start and end times for an event
+
+        This allows tracking the actual duration of the event for attendance purposes.
+        """
+        # Get event
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        # Validate times if both are provided
+        if actual_start_time and actual_end_time:
+            if actual_end_time <= actual_start_time:
+                return None, "Actual end time must be after actual start time"
+
+        # Update times
+        if actual_start_time is not None:
+            event.actual_start_time = actual_start_time
+        if actual_end_time is not None:
+            event.actual_end_time = actual_end_time
+
+        event.updated_at = datetime.utcnow()
+
+        await self.db.commit()
+        await self.db.refresh(event)
+
+        return event, None

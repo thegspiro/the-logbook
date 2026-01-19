@@ -741,4 +741,12 @@ export const eventService = {
     const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(`/events/${eventId}/eligible-members`);
     return response.data;
   },
+
+  /**
+   * Record actual start and end times for an event
+   */
+  async recordActualTimes(eventId: string, times: import('../types/event').RecordActualTimes): Promise<import('../types/event').Event> {
+    const response = await api.post<import('../types/event').Event>(`/events/${eventId}/record-times`, times);
+    return response.data;
+  },
 };

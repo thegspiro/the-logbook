@@ -23,6 +23,8 @@ export interface Event {
   location_details?: string;
   start_datetime: string;
   end_datetime: string;
+  actual_start_time?: string;
+  actual_end_time?: string;
   requires_rsvp: boolean;
   rsvp_deadline?: string;
   max_attendees?: number;
@@ -120,6 +122,7 @@ export interface RSVP {
   checked_in_at?: string;
   user_name?: string;
   user_email?: string;
+  attendance_duration_minutes?: number;
 }
 
 export interface RSVPCreate {
@@ -130,6 +133,11 @@ export interface RSVPCreate {
 
 export interface CheckInRequest {
   user_id: string;
+}
+
+export interface RecordActualTimes {
+  actual_start_time?: string;
+  actual_end_time?: string;
 }
 
 export interface EventStats {

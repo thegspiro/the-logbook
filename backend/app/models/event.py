@@ -66,6 +66,8 @@ class Event(Base):
     # Timing
     start_datetime = Column(DateTime, nullable=False)
     end_datetime = Column(DateTime, nullable=False)
+    actual_start_time = Column(DateTime, nullable=True)  # Recorded by secretary when event actually starts
+    actual_end_time = Column(DateTime, nullable=True)  # Recorded by secretary when event actually ends
 
     # RSVP settings
     requires_rsvp = Column(Boolean, nullable=False, default=False)
