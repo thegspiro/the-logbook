@@ -29,6 +29,7 @@ export const EventsPage: React.FC = () => {
     requires_rsvp: false,
     rsvp_deadline: '',
     max_attendees: undefined,
+    allowed_rsvp_statuses: ['going', 'not_going'],
     is_mandatory: false,
     eligible_roles: undefined,
     allow_guests: false,
@@ -121,6 +122,7 @@ export const EventsPage: React.FC = () => {
         requires_rsvp: false,
         rsvp_deadline: '',
         max_attendees: undefined,
+        allowed_rsvp_statuses: ['going', 'not_going'],
         is_mandatory: false,
         eligible_roles: undefined,
         allow_guests: false,
@@ -533,6 +535,71 @@ export const EventsPage: React.FC = () => {
                             <label htmlFor="allow_guests" className="ml-2 block text-sm text-gray-700">
                               Allow guests
                             </label>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              RSVP Status Options
+                            </label>
+                            <div className="space-y-2">
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id="status_going"
+                                  checked={formData.allowed_rsvp_statuses?.includes('going')}
+                                  onChange={(e) => {
+                                    const statuses = formData.allowed_rsvp_statuses || [];
+                                    if (e.target.checked) {
+                                      setFormData({ ...formData, allowed_rsvp_statuses: [...statuses, 'going'] });
+                                    } else {
+                                      setFormData({ ...formData, allowed_rsvp_statuses: statuses.filter(s => s !== 'going') });
+                                    }
+                                  }}
+                                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="status_going" className="ml-2 block text-sm text-gray-700">
+                                  Going
+                                </label>
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id="status_not_going"
+                                  checked={formData.allowed_rsvp_statuses?.includes('not_going')}
+                                  onChange={(e) => {
+                                    const statuses = formData.allowed_rsvp_statuses || [];
+                                    if (e.target.checked) {
+                                      setFormData({ ...formData, allowed_rsvp_statuses: [...statuses, 'not_going'] });
+                                    } else {
+                                      setFormData({ ...formData, allowed_rsvp_statuses: statuses.filter(s => s !== 'not_going') });
+                                    }
+                                  }}
+                                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="status_not_going" className="ml-2 block text-sm text-gray-700">
+                                  Not Going
+                                </label>
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id="status_maybe"
+                                  checked={formData.allowed_rsvp_statuses?.includes('maybe')}
+                                  onChange={(e) => {
+                                    const statuses = formData.allowed_rsvp_statuses || [];
+                                    if (e.target.checked) {
+                                      setFormData({ ...formData, allowed_rsvp_statuses: [...statuses, 'maybe'] });
+                                    } else {
+                                      setFormData({ ...formData, allowed_rsvp_statuses: statuses.filter(s => s !== 'maybe') });
+                                    }
+                                  }}
+                                  className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="status_maybe" className="ml-2 block text-sm text-gray-700">
+                                  Maybe
+                                </label>
+                              </div>
+                            </div>
                           </div>
                         </>
                       )}

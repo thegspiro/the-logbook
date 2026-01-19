@@ -24,6 +24,7 @@ class EventBase(BaseModel):
     requires_rsvp: bool = Field(default=False)
     rsvp_deadline: Optional[datetime] = None
     max_attendees: Optional[int] = Field(default=None, ge=1)
+    allowed_rsvp_statuses: Optional[List[str]] = Field(default=None, description="Allowed RSVP statuses. Defaults to ['going', 'not_going']")
     is_mandatory: bool = Field(default=False)
     eligible_roles: Optional[List[str]] = Field(default=None, description="Role slugs, null means all members")
     allow_guests: bool = Field(default=False)
@@ -50,6 +51,7 @@ class EventUpdate(BaseModel):
     requires_rsvp: Optional[bool] = None
     rsvp_deadline: Optional[datetime] = None
     max_attendees: Optional[int] = Field(None, ge=1)
+    allowed_rsvp_statuses: Optional[List[str]] = None
     is_mandatory: Optional[bool] = None
     eligible_roles: Optional[List[str]] = None
     allow_guests: Optional[bool] = None

@@ -41,11 +41,18 @@ class EventService:
             if event_data.rsvp_deadline >= event_data.start_datetime:
                 raise ValueError("RSVP deadline must be before event start")
 
+        # Prepare event data
+        event_dict = event_data.model_dump()
+
+        # Set default allowed_rsvp_statuses if not provided and RSVP is required
+        if event_data.requires_rsvp and not event_dict.get("allowed_rsvp_statuses"):
+            event_dict["allowed_rsvp_statuses"] = ["going", "not_going"]
+
         # Create event
         event = Event(
             organization_id=organization_id,
             created_by=created_by,
-            **event_data.model_dump()
+            **event_dict
         )
 
         self.db.add(event)
@@ -227,6 +234,11 @@ class EventService:
         # Check RSVP deadline
         if event.rsvp_deadline and datetime.utcnow() > event.rsvp_deadline:
             return None, "RSVP deadline has passed"
+
+        # Validate RSVP status against allowed statuses
+        allowed_statuses = event.allowed_rsvp_statuses or ["going", "not_going"]
+        if rsvp_data.status not in allowed_statuses:
+            return None, f"RSVP status '{rsvp_data.status}' is not allowed for this event. Allowed statuses: {', '.join(allowed_statuses)}"
 
         # Check if RSVP already exists
         existing_result = await self.db.execute(

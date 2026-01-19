@@ -502,7 +502,7 @@ export const EventDetailPage: React.FC = () => {
                         Your Response
                       </label>
                       <div className="space-y-2">
-                        {['going', 'maybe', 'not_going'].map((status) => (
+                        {(event.allowed_rsvp_statuses || ['going', 'not_going']).map((status) => (
                           <label key={status} className="flex items-center">
                             <input
                               type="radio"

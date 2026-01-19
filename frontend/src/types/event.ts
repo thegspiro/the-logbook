@@ -26,6 +26,7 @@ export interface Event {
   requires_rsvp: boolean;
   rsvp_deadline?: string;
   max_attendees?: number;
+  allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory: boolean;
   eligible_roles?: string[];
   allow_guests: boolean;
@@ -71,6 +72,7 @@ export interface EventCreate {
   requires_rsvp?: boolean;
   rsvp_deadline?: string;
   max_attendees?: number;
+  allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory?: boolean;
   eligible_roles?: string[];
   allow_guests?: boolean;
@@ -91,6 +93,7 @@ export interface EventUpdate {
   requires_rsvp?: boolean;
   rsvp_deadline?: string;
   max_attendees?: number;
+  allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory?: boolean;
   eligible_roles?: string[];
   allow_guests?: boolean;

@@ -71,6 +71,7 @@ class Event(Base):
     requires_rsvp = Column(Boolean, nullable=False, default=False)
     rsvp_deadline = Column(DateTime, nullable=True)
     max_attendees = Column(Integer, nullable=True)  # Null means unlimited
+    allowed_rsvp_statuses = Column(JSONB, nullable=True)  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
 
     # Attendance settings
     is_mandatory = Column(Boolean, nullable=False, default=False)
