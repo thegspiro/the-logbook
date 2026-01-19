@@ -8,6 +8,7 @@ import RoleManagementPage from './pages/RoleManagementPage'
 import TrainingDashboardPage from './pages/TrainingDashboardPage'
 import AddMemberPage from './pages/AddMemberPage'
 import ElectionsPage from './pages/ElectionsPage'
+import ElectionDetailPage from './pages/ElectionDetailPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -212,6 +213,14 @@ function App() {
             element={
               <ProtectedRoute requiredPermission="elections.view">
                 <ElectionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/elections/:electionId"
+            element={
+              <ProtectedRoute requiredPermission="elections.view">
+                <ElectionDetailPage />
               </ProtectedRoute>
             }
           />

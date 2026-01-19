@@ -617,7 +617,6 @@ export const electionService = {
     const response = await api.get<import('../types/election').ElectionStats>(`/elections/${electionId}/stats`);
     return response.data;
   },
-};
 
   /**
    * Send ballot notification emails
