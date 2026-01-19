@@ -547,10 +547,136 @@ class ElectionService:
             voting_timeline=None,  # Could be implemented for charts
         )
 
+    async def _check_and_create_runoff(
+        self, election: Election, organization_id: UUID
+    ) -> Optional[Election]:
+        """Check if a runoff is needed and create it if so"""
+        # Get results to check if there's a winner
+        results = await self.get_election_results(
+            election.id, organization_id
+        )
+
+        if not results:
+            return None
+
+        # Check overall results for a winner
+        has_winner = any(candidate.is_winner for candidate in results.overall_results)
+
+        # Also check position results if applicable
+        if not has_winner and results.results_by_position:
+            for position_result in results.results_by_position:
+                if not any(c.is_winner for c in position_result.candidates):
+                    has_winner = False
+                    break
+            else:
+                has_winner = True
+
+        # If there's a winner, no runoff needed
+        if has_winner:
+            return None
+
+        # Get all candidates sorted by vote count
+        candidates_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == election.id)
+            .where(Candidate.accepted == True)
+        )
+        all_candidates = list(candidates_result.scalars().all())
+
+        if len(all_candidates) < 2:
+            return None  # Can't have a runoff with less than 2 candidates
+
+        # Get vote counts for each candidate
+        votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election.id)
+        )
+        all_votes = list(votes_result.scalars().all())
+
+        candidate_vote_counts = {}
+        for vote in all_votes:
+            candidate_vote_counts[vote.candidate_id] = candidate_vote_counts.get(vote.candidate_id, 0) + 1
+
+        # Sort candidates by vote count
+        sorted_candidates = sorted(
+            all_candidates,
+            key=lambda c: candidate_vote_counts.get(c.id, 0),
+            reverse=True
+        )
+
+        # Determine which candidates advance to runoff based on runoff_type
+        if election.runoff_type == "top_two":
+            # Top 2 candidates advance
+            advancing_candidates = sorted_candidates[:2]
+        elif election.runoff_type == "eliminate_lowest":
+            # All except lowest candidate
+            advancing_candidates = sorted_candidates[:-1]
+        else:
+            # Default to top 2
+            advancing_candidates = sorted_candidates[:2]
+
+        # Create runoff election
+        runoff_start = datetime.utcnow() + timedelta(hours=1)  # Start 1 hour from now
+        runoff_end = runoff_start + timedelta(days=1)  # 1 day duration by default
+
+        runoff_election = Election(
+            id=uuid4(),
+            organization_id=organization_id,
+            created_by=election.created_by,
+            status=ElectionStatus.DRAFT,
+            title=f"{election.title} - Runoff Round {election.runoff_round + 1}",
+            description=f"Runoff election for {election.title}. No candidate received the required votes in the previous round.",
+            election_type=election.election_type,
+            positions=election.positions,
+            start_date=runoff_start,
+            end_date=runoff_end,
+            anonymous_voting=election.anonymous_voting,
+            allow_write_ins=False,  # No write-ins in runoffs
+            max_votes_per_position=election.max_votes_per_position,
+            results_visible_immediately=election.results_visible_immediately,
+            eligible_voters=election.eligible_voters,
+            voting_method=election.voting_method,
+            victory_condition=election.victory_condition,
+            victory_threshold=election.victory_threshold,
+            victory_percentage=election.victory_percentage,
+            enable_runoffs=election.enable_runoffs,
+            runoff_type=election.runoff_type,
+            max_runoff_rounds=election.max_runoff_rounds,
+            is_runoff=True,
+            parent_election_id=election.id,
+            runoff_round=election.runoff_round + 1,
+        )
+
+        self.db.add(runoff_election)
+        await self.db.flush()
+
+        # Create candidates for runoff
+        for candidate in advancing_candidates:
+            runoff_candidate = Candidate(
+                id=uuid4(),
+                election_id=runoff_election.id,
+                user_id=candidate.user_id,
+                name=candidate.name,
+                position=candidate.position,
+                statement=candidate.statement,
+                photo_url=candidate.photo_url,
+                nomination_date=datetime.utcnow(),
+                nominated_by=election.created_by,
+                accepted=True,
+                is_write_in=False,
+                display_order=candidate.display_order,
+            )
+            self.db.add(runoff_candidate)
+
+        await self.db.commit()
+        await self.db.refresh(runoff_election)
+
+        return runoff_election
+
     async def close_election(
         self, election_id: UUID, organization_id: UUID
     ) -> Optional[Election]:
-        """Close an election and finalize results"""
+        """Close an election and finalize results, creating runoff if needed"""
         result = await self.db.execute(
             select(Election)
             .where(Election.id == election_id)
@@ -567,6 +693,10 @@ class ElectionService:
         election.status = ElectionStatus.CLOSED
         await self.db.commit()
         await self.db.refresh(election)
+
+        # Check if runoffs are enabled and if we should create one
+        if election.enable_runoffs and election.runoff_round < election.max_runoff_rounds:
+            await self._check_and_create_runoff(election, organization_id)
 
         return election
 

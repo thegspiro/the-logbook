@@ -94,6 +94,25 @@ class Election(Base):
     victory_percentage = Column(Integer, nullable=True)
     # For percentage threshold (e.g., 60% required)
 
+    # Runoff configuration
+    enable_runoffs = Column(Boolean, nullable=False, default=False)
+    # Whether to automatically create runoff elections if no winner
+
+    runoff_type = Column(String(50), nullable=False, default="top_two")
+    # Runoff types: top_two (top 2 candidates advance), eliminate_lowest (remove lowest, re-vote)
+
+    max_runoff_rounds = Column(Integer, nullable=False, default=3)
+    # Maximum number of runoff rounds to prevent infinite loops
+
+    is_runoff = Column(Boolean, nullable=False, default=False)
+    # Indicates this election is a runoff from another election
+
+    parent_election_id = Column(UUID(as_uuid=True), ForeignKey("elections.id"), nullable=True)
+    # Reference to parent election if this is a runoff
+
+    runoff_round = Column(Integer, nullable=False, default=0)
+    # Which round of runoff this is (0 = original election)
+
     # Metadata
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

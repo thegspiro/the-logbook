@@ -31,6 +31,9 @@ export const ElectionsPage: React.FC = () => {
     results_visible_immediately: false,
     voting_method: 'simple_majority',
     victory_condition: 'most_votes',
+    enable_runoffs: false,
+    runoff_type: 'top_two',
+    max_runoff_rounds: 3,
   });
   const [positionInput, setPositionInput] = useState('');
 
@@ -122,6 +125,9 @@ export const ElectionsPage: React.FC = () => {
         results_visible_immediately: false,
         voting_method: 'simple_majority',
         victory_condition: 'most_votes',
+        enable_runoffs: false,
+        runoff_type: 'top_two',
+        max_runoff_rounds: 3,
       });
       setPositionInput('');
       await fetchElections();
@@ -525,6 +531,54 @@ export const ElectionsPage: React.FC = () => {
                     <p className="mt-1 text-xs text-gray-500">Percentage of votes needed (typically 67% for 2/3 majority)</p>
                   </div>
                 )}
+
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="flex items-center mb-3">
+                    <input
+                      type="checkbox"
+                      checked={formData.enable_runoffs}
+                      onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm font-medium text-gray-700">Enable Automatic Runoffs</span>
+                  </label>
+
+                  {formData.enable_runoffs && (
+                    <div className="ml-6 space-y-3 bg-gray-50 p-3 rounded">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Runoff Type
+                        </label>
+                        <select
+                          value={formData.runoff_type}
+                          onChange={(e) => setFormData({ ...formData, runoff_type: e.target.value })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="top_two">Top Two (top 2 candidates advance)</option>
+                          <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">
+                          How to handle runoffs when no candidate meets victory condition
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Maximum Runoff Rounds
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={formData.max_runoff_rounds}
+                          onChange={(e) => setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Maximum number of runoff rounds before declaring winner</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   <label className="flex items-center">

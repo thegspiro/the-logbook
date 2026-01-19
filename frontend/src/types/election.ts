@@ -48,6 +48,12 @@ export interface Election {
   victory_condition: VictoryCondition;
   victory_threshold?: number;
   victory_percentage?: number;
+  enable_runoffs: boolean;
+  runoff_type: string;
+  max_runoff_rounds: number;
+  is_runoff: boolean;
+  parent_election_id?: string;
+  runoff_round: number;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -86,6 +92,9 @@ export interface ElectionCreate {
   victory_condition?: VictoryCondition;
   victory_threshold?: number;
   victory_percentage?: number;
+  enable_runoffs?: boolean;
+  runoff_type?: string;
+  max_runoff_rounds?: number;
 }
 
 export interface ElectionUpdate {

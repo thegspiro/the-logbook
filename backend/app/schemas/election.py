@@ -55,6 +55,11 @@ class ElectionBase(BaseModel):
     victory_threshold: Optional[int] = Field(default=None, description="Numerical threshold for victory (e.g., 10 votes)")
     victory_percentage: Optional[int] = Field(default=None, ge=1, le=100, description="Percentage threshold for victory (e.g., 60%)")
 
+    # Runoff configuration
+    enable_runoffs: bool = Field(default=False, description="Automatically create runoff elections if no winner")
+    runoff_type: str = Field(default="top_two", description="Runoff type: top_two (top 2 advance), eliminate_lowest (remove lowest)")
+    max_runoff_rounds: int = Field(default=3, ge=1, le=10, description="Maximum number of runoff rounds")
+
 
 class ElectionCreate(ElectionBase):
     """Schema for creating a new election"""
@@ -82,6 +87,9 @@ class ElectionUpdate(BaseModel):
     victory_condition: Optional[str] = None
     victory_threshold: Optional[int] = None
     victory_percentage: Optional[int] = Field(None, ge=1, le=100)
+    enable_runoffs: Optional[bool] = None
+    runoff_type: Optional[str] = None
+    max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
 
 
 class ElectionResponse(ElectionBase):
@@ -97,6 +105,11 @@ class ElectionResponse(ElectionBase):
     email_sent: bool = False
     email_sent_at: Optional[datetime] = None
     email_recipients: Optional[List[UUID]] = None
+
+    # Runoff tracking
+    is_runoff: bool = False
+    parent_election_id: Optional[UUID] = None
+    runoff_round: int = 0
 
     # Include vote counts if results are visible
     total_votes: Optional[int] = None

@@ -187,8 +187,23 @@ export const ElectionDetailPage: React.FC = () => {
           </Link>
         </div>
         <div className="flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{election.title}</h2>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-2xl font-bold text-gray-900">{election.title}</h2>
+              {election.is_runoff && (
+                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">
+                  Runoff Round {election.runoff_round}
+                </span>
+              )}
+            </div>
+            {election.is_runoff && election.parent_election_id && (
+              <Link
+                to={`/elections/${election.parent_election_id}`}
+                className="text-sm text-blue-600 hover:text-blue-700"
+              >
+                ← View original election
+              </Link>
+            )}
             {election.description && (
               <p className="mt-2 text-gray-600">{election.description}</p>
             )}
