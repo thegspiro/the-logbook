@@ -19,6 +19,9 @@ export const ElectionDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [newEndDate, setNewEndDate] = useState('');
+  const [extendError, setExtendError] = useState<string | null>(null);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -94,6 +97,37 @@ export const ElectionDetailPage: React.FC = () => {
       console.error('Error closing election:', err);
       alert(err.response?.data?.detail || 'Failed to close election');
     }
+  };
+
+  const handleExtendElection = async () => {
+    if (!electionId || !newEndDate) return;
+
+    try {
+      setExtendError(null);
+      const updated = await electionService.updateElection(electionId, {
+        end_date: newEndDate,
+      });
+      setElection(updated);
+      setShowExtendModal(false);
+      setNewEndDate('');
+    } catch (err: any) {
+      console.error('Error extending election:', err);
+      setExtendError(err.response?.data?.detail || 'Failed to extend election');
+    }
+  };
+
+  const extendByHours = (hours: number) => {
+    if (!election) return;
+    const currentEnd = new Date(election.end_date);
+    const newEnd = new Date(currentEnd.getTime() + hours * 60 * 60 * 1000);
+    setNewEndDate(newEnd.toISOString().slice(0, 16));
+  };
+
+  const extendToEndOfDay = () => {
+    if (!election) return;
+    const currentEnd = new Date(election.end_date);
+    currentEnd.setHours(23, 59, 0, 0);
+    setNewEndDate(currentEnd.toISOString().slice(0, 16));
   };
 
   const formatDate = (dateString: string) => {
@@ -227,12 +261,23 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {election.status === 'open' && (
-                <button
-                  onClick={handleCloseElection}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                >
-                  Close Election
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setNewEndDate(election.end_date);
+                      setShowExtendModal(true);
+                    }}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  >
+                    Extend Time
+                  </button>
+                  <button
+                    onClick={handleCloseElection}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                  >
+                    Close Election
+                  </button>
+                </>
               )}
 
               <button
@@ -301,6 +346,103 @@ export const ElectionDetailPage: React.FC = () => {
             Results will be available when the election is closed
             {canManage && ' or when you enable "Show Results to Voters"'}.
           </p>
+        </div>
+      )}
+
+      {/* Extend Time Modal */}
+      {showExtendModal && election && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Extend Election Time</h3>
+            </div>
+
+            <div className="px-6 py-4">
+              {extendError && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                  <p className="text-sm text-red-700">{extendError}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Current End Time
+                  </label>
+                  <div className="mt-1 text-sm text-gray-900">
+                    {formatDate(election.end_date)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    New End Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newEndDate}
+                    onChange={(e) => setNewEndDate(e.target.value)}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-2">Quick extend:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => extendByHours(1)}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        +1 Hour
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => extendByHours(2)}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        +2 Hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => extendByHours(4)}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        +4 Hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => extendToEndOfDay()}
+                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      >
+                        End of Day
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExtendModal(false);
+                    setNewEndDate('');
+                    setExtendError(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExtendElection}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                >
+                  Extend Election
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

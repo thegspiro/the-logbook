@@ -192,15 +192,66 @@ async def update_election(
             detail="Election not found"
         )
 
-    # Cannot update election that is open or closed
-    if election.status in [ElectionStatus.OPEN, ElectionStatus.CLOSED]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot update election with status {election.status.value}"
-        )
+    # Get update data
+    update_data = election_update.model_dump(exclude_unset=True)
+
+    # Determine what can be updated based on election status
+    if election.status == ElectionStatus.OPEN:
+        # For open elections, only allow updating end_date and results_visible_immediately
+        allowed_fields = {"end_date", "results_visible_immediately"}
+        disallowed_fields = set(update_data.keys()) - allowed_fields
+        if disallowed_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot update {', '.join(disallowed_fields)} for open election. Only end_date and results_visible_immediately can be updated."
+            )
+
+        # If updating end_date, validate it's in the future and after start_date
+        if "end_date" in update_data:
+            new_end_date = update_data["end_date"]
+            if new_end_date <= election.start_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
+            if new_end_date <= datetime.utcnow():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be in the future"
+                )
+
+    elif election.status == ElectionStatus.CLOSED:
+        # For closed elections, only allow updating results_visible_immediately
+        allowed_fields = {"results_visible_immediately"}
+        disallowed_fields = set(update_data.keys()) - allowed_fields
+        if disallowed_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot update {', '.join(disallowed_fields)} for closed election. Only results_visible_immediately can be updated."
+            )
+
+    # For draft elections, validate dates if they're being updated
+    elif election.status == ElectionStatus.DRAFT:
+        if "end_date" in update_data and "start_date" not in update_data:
+            if update_data["end_date"] <= election.start_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
+        elif "start_date" in update_data and "end_date" not in update_data:
+            if election.end_date <= update_data["start_date"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
+        elif "end_date" in update_data and "start_date" in update_data:
+            if update_data["end_date"] <= update_data["start_date"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="End date must be after start date"
+                )
 
     # Update fields
-    update_data = election_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(election, field, value)
 

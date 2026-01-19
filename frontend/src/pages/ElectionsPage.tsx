@@ -64,6 +64,44 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  const handleStartDateChange = (startDate: string) => {
+    setFormData({ ...formData, start_date: startDate });
+
+    // If no end date is set, default to same day at 11:59 PM
+    if (!formData.end_date && startDate) {
+      const start = new Date(startDate);
+      const end = new Date(start);
+      end.setHours(23, 59, 0, 0);
+      const endDateString = end.toISOString().slice(0, 16);
+      setFormData({ ...formData, start_date: startDate, end_date: endDateString });
+    }
+  };
+
+  const setDuration = (hours: number) => {
+    if (!formData.start_date) {
+      setCreateError('Please set a start date first');
+      return;
+    }
+
+    const start = new Date(formData.start_date);
+    const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
+    const endDateString = end.toISOString().slice(0, 16);
+    setFormData({ ...formData, end_date: endDateString });
+  };
+
+  const setEndOfDay = () => {
+    if (!formData.start_date) {
+      setCreateError('Please set a start date first');
+      return;
+    }
+
+    const start = new Date(formData.start_date);
+    const end = new Date(start);
+    end.setHours(23, 59, 0, 0);
+    const endDateString = end.toISOString().slice(0, 16);
+    setFormData({ ...formData, end_date: endDateString });
+  };
+
   const handleCreateElection = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError(null);
@@ -296,23 +334,23 @@ export const ElectionsPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Start Date *
+                      Start Date & Time *
                     </label>
                     <input
                       type="datetime-local"
                       required
                       value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      End Date *
+                      End Date & Time *
                     </label>
                     <input
                       type="datetime-local"
@@ -321,6 +359,42 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
+
+                    {formData.start_date && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500 mb-2">Quick duration:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDuration(1)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            1 Hour
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDuration(2)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            2 Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDuration(4)}
+                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                          >
+                            4 Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEndOfDay()}
+                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                          >
+                            End of Day (Default)
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
