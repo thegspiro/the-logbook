@@ -8,7 +8,7 @@ Official Unraid Community Applications package for The Logbook.
 - 🐳 **[Docker Compose](./docker-compose-unraid.yml)** - Alternative installation method
 - 🚀 **[Community App Submission](./COMMUNITY-APP-SUBMISSION.md)** - For maintainers
 - 💬 **[Support Forum](https://forums.unraid.net/)** - Get help from the community
-- 🐛 **[Report Issues](https://github.com/your-org/the-logbook/issues)** - Bug reports
+- 🐛 **[Report Issues](https://github.com/thegspiro/the-logbook/issues)** - Bug reports
 
 ---
 
@@ -274,7 +274,7 @@ Enable in Community Applications settings for automatic updates.
 
 ```bash
 # From Unraid terminal
-docker pull ghcr.io/your-org/the-logbook:latest
+docker pull ghcr.io/thegspiro/the-logbook:latest
 docker restart TheLogbook
 ```
 
@@ -338,7 +338,7 @@ server {
      - Steps to reproduce issue
 
 4. **Report Bugs**
-   - [GitHub Issues](https://github.com/your-org/the-logbook/issues)
+   - [GitHub Issues](https://github.com/thegspiro/the-logbook/issues)
    - Include diagnostic information
 
 ### Useful Commands
@@ -432,8 +432,8 @@ The Logbook is open source software. See [LICENSE](../LICENSE) for details.
 
 ### External Links
 - [Official Website](#)
-- [GitHub Repository](https://github.com/your-org/the-logbook)
-- [Docker Hub](https://hub.docker.com/r/your-org/the-logbook)
+- [GitHub Repository](https://github.com/thegspiro/the-logbook)
+- [Docker Hub](https://hub.docker.com/r/thegspiro/the-logbook)
 - [Unraid Forums](https://forums.unraid.net/)
 
 ### Quick Reference
@@ -445,7 +445,7 @@ The Logbook is open source software. See [LICENSE](../LICENSE) for details.
 
 ## Stay Connected
 
-- 🌟 Star us on [GitHub](https://github.com/your-org/the-logbook)
+- 🌟 Star us on [GitHub](https://github.com/thegspiro/the-logbook)
 - 💬 Join our [Community Forum](#)
 - 🐦 Follow on [Twitter](#)
 - 📧 Subscribe to [Newsletter](#)

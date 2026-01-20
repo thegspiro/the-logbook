@@ -669,7 +669,7 @@ AZURE_STORAGE_CONTAINER=logbook-backups
 docker stop TheLogbook
 
 # Pull latest image
-docker pull ghcr.io/your-org/the-logbook:latest
+docker pull ghcr.io/thegspiro/the-logbook:latest
 
 # Remove old container
 docker rm TheLogbook
@@ -681,7 +681,7 @@ docker rm TheLogbook
 
 ```bash
 # From Unraid terminal
-docker pull ghcr.io/your-org/the-logbook:latest --no-cache
+docker pull ghcr.io/thegspiro/the-logbook:latest --no-cache
 docker restart TheLogbook
 ```
 
@@ -720,7 +720,7 @@ docker restart TheLogbook
 docker stop TheLogbook
 
 # Pull specific version
-docker pull ghcr.io/your-org/the-logbook:v1.0.0
+docker pull ghcr.io/thegspiro/the-logbook:v1.0.0
 
 # Restart container
 docker start TheLogbook
@@ -778,7 +778,7 @@ docker inspect TheLogbook --format='{{range .State.Health.Log}}{{.Output}}{{end}
 
 2. **Visit Support Forum:**
    - [Unraid Forums - The Logbook Thread](https://forums.unraid.net)
-   - [GitHub Issues](https://github.com/your-org/the-logbook/issues)
+   - [GitHub Issues](https://github.com/thegspiro/the-logbook/issues)
 
 3. **Community Support:**
    - Post in Unraid Community Applications support thread
@@ -850,7 +850,7 @@ Add to Unraid dashboard:
 
 1. Install **Organizr** or **Heimdall** from Community Apps
 2. Add The Logbook as a tile
-3. Icon URL: `https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png`
+3. Icon URL: `https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png`
 
 ### User Scripts
 

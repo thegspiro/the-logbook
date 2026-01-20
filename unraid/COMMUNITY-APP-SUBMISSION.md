@@ -50,7 +50,7 @@ cp the-logbook.xml /boot/config/plugins/dockerMan/templates-user/
 
 **Recommended hosting:**
 ```
-https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png
+https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png
 ```
 
 **Tips:**
@@ -77,7 +77,7 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png
 
 **Example hosting:**
 ```
-https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
+https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
 ├── screenshot-1-dashboard.png
 ├── screenshot-2-events.png
 ├── screenshot-3-mobile.png
@@ -121,11 +121,11 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
 
 3. **Update XML URLs:**
    ```xml
-   <TemplateURL>https://raw.githubusercontent.com/YOUR-ORG/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
-   <Icon>https://raw.githubusercontent.com/YOUR-ORG/the-logbook/main/unraid/icon.png</Icon>
-   <Repository>ghcr.io/YOUR-ORG/the-logbook:latest</Repository>
-   <Support>https://github.com/YOUR-ORG/the-logbook/issues</Support>
-   <Project>https://github.com/YOUR-ORG/the-logbook</Project>
+   <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
+   <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png</Icon>
+   <Repository>ghcr.io/thegspiro/the-logbook:latest</Repository>
+   <Support>https://github.com/thegspiro/the-logbook/issues</Support>
+   <Project>https://github.com/thegspiro/the-logbook</Project>
    ```
 
 ### Step 2: Fork Community Applications Repository
@@ -136,7 +136,7 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
 
 3. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/AppFeed.git
+   git clone https://github.com/thegspiro/AppFeed.git
    cd AppFeed
    ```
 
@@ -146,23 +146,23 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
    ```
    AppFeed/
    └── templates/
-       └── YourOrgName/           # Create if doesn't exist
+       └── thegspiro/           # Create if doesn't exist
            └── the-logbook.xml
    ```
 
 2. **Copy your XML template:**
    ```bash
-   mkdir -p templates/YourOrgName
-   cp /path/to/your/the-logbook.xml templates/YourOrgName/
+   mkdir -p templates/thegspiro
+   cp /path/to/your/the-logbook.xml templates/thegspiro/
    ```
 
 3. **Verify XML is valid:**
    ```bash
    # Check XML syntax
-   xmllint --noout templates/YourOrgName/the-logbook.xml
+   xmllint --noout templates/thegspiro/the-logbook.xml
 
    # Check for common issues
-   grep -E "(localhost|127\.0\.0\.1|192\.168)" templates/YourOrgName/the-logbook.xml
+   grep -E "(localhost|127\.0\.0\.1|192\.168)" templates/thegspiro/the-logbook.xml
    # Should not have hardcoded local IPs
    ```
 
@@ -170,7 +170,7 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
 
 1. **Commit your template:**
    ```bash
-   git add templates/YourOrgName/the-logbook.xml
+   git add templates/thegspiro/the-logbook.xml
    git commit -m "Add The Logbook - Intranet platform for emergency services"
    ```
 
@@ -205,9 +205,9 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
      - [x] Documentation complete
 
      **Links:**
-     - Repository: https://github.com/your-org/the-logbook
-     - Documentation: https://github.com/your-org/the-logbook/tree/main/unraid
-     - Docker Image: ghcr.io/your-org/the-logbook:latest
+     - Repository: https://github.com/thegspiro/the-logbook
+     - Documentation: https://github.com/thegspiro/the-logbook/tree/main/unraid
+     - Docker Image: ghcr.io/thegspiro/the-logbook:latest
      ```
 
 4. **Wait for review:**
@@ -245,9 +245,9 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
    Available in Community Applications - search for "The Logbook"
 
    ## Documentation
-   - [Installation Guide](https://github.com/your-org/the-logbook/blob/main/unraid/UNRAID-INSTALLATION.md)
+   - [Installation Guide](https://github.com/thegspiro/the-logbook/blob/main/unraid/UNRAID-INSTALLATION.md)
    - [Troubleshooting](link)
-   - [GitHub Repository](https://github.com/your-org/the-logbook)
+   - [GitHub Repository](https://github.com/thegspiro/the-logbook)
 
    ## System Requirements
    - Unraid 6.9.0+
@@ -256,7 +256,7 @@ https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/screenshots/
 
    ## Support
    Post questions and issues in this thread. For bugs, please use
-   [GitHub Issues](https://github.com/your-org/the-logbook/issues)
+   [GitHub Issues](https://github.com/thegspiro/the-logbook/issues)
 
    ## Screenshots
    [Post 3-5 screenshots showing main features]
@@ -364,8 +364,8 @@ When you need to update the template:
    cd AppFeed
    git checkout main
    git pull upstream main
-   cp /path/to/updated/the-logbook.xml templates/YourOrgName/
-   git add templates/YourOrgName/the-logbook.xml
+   cp /path/to/updated/the-logbook.xml templates/thegspiro/
+   git add templates/thegspiro/the-logbook.xml
    git commit -m "Update The Logbook template: [describe changes]"
    git push origin main
    # Create PR
@@ -463,7 +463,7 @@ Good examples to reference:
 
 - **Community Apps Issues:** https://github.com/Squidly271/AppFeed/issues
 - **Unraid Forums:** https://forums.unraid.net/
-- **Our Repository:** https://github.com/your-org/the-logbook/issues
+- **Our Repository:** https://github.com/thegspiro/the-logbook/issues
 
 ### Need Help?
 

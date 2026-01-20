@@ -1,19 +1,19 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>TheLogbook</Name>
-  <Repository>ghcr.io/your-org/the-logbook:latest</Repository>
+  <Repository>ghcr.io/thegspiro/the-logbook:latest</Repository>
   <Registry>https://ghcr.io/</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/your-org/the-logbook/issues</Support>
-  <Project>https://github.com/your-org/the-logbook</Project>
+  <Support>https://github.com/thegspiro/the-logbook/issues</Support>
+  <Project>https://github.com/thegspiro/the-logbook</Project>
   <Overview>The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, HIPAA-compliant, and highly customizable.</Overview>
   <Category>Productivity: Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:7880]</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>

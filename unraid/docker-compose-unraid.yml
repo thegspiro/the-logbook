@@ -85,7 +85,7 @@ services:
   # Backend API - FastAPI
   # ============================================
   backend:
-    image: ghcr.io/your-org/the-logbook-backend:latest
+    image: ghcr.io/thegspiro/the-logbook-backend:latest
     container_name: logbook-backend
     restart: unless-stopped
     environment:
@@ -178,14 +178,14 @@ services:
 
     labels:
       - "com.unraid.docker.managed=true"
-      - "com.unraid.docker.icon=https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png"
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png"
       - "com.unraid.docker.webui=http://[IP]:[PORT:7880]"
 
   # ============================================
   # Frontend - React/Vite
   # ============================================
   frontend:
-    image: ghcr.io/your-org/the-logbook-frontend:latest
+    image: ghcr.io/thegspiro/the-logbook-frontend:latest
     container_name: logbook-frontend
     restart: unless-stopped
     environment:
@@ -215,7 +215,7 @@ services:
 
     labels:
       - "com.unraid.docker.managed=true"
-      - "com.unraid.docker.icon=https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png"
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png"
       - "com.unraid.docker.webui=http://[IP]:[PORT:7880]"
 
 # ============================================
