@@ -1,0 +1,55 @@
+ICON REQUIREMENTS FOR UNRAID COMMUNITY APPLICATIONS
+
+File: icon.png
+Location: /unraid/icon.png
+
+Requirements:
+- Format: PNG with transparency
+- Size: 256x256 pixels
+- File size: Under 100KB
+- Background: Transparent (looks good on dark UI)
+- Style: Simple, recognizable design
+- Colors: Should be visible on both light and dark backgrounds
+
+Design Guidelines:
+- Keep it simple - complex designs don't scale well
+- Avoid text unless it's part of your brand
+- Use bold, clear shapes
+- High contrast colors
+- Test on both light and dark backgrounds
+
+Hosting:
+Once created, host at:
+https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png
+
+Update XML template with this URL:
+<Icon>https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png</Icon>
+
+Tools for Creation:
+- Figma (https://figma.com) - Free, web-based
+- GIMP (https://gimp.org) - Free, open source
+- Inkscape (https://inkscape.org) - Free, vector graphics
+- Canva (https://canva.com) - Free templates available
+
+Example Good Icons:
+- LinuxServer.io containers
+- Popular Unraid apps (Plex, Nextcloud, etc.)
+- Simple, recognizable symbols
+
+Color Suggestions:
+- Primary: #2563eb (blue) - Professional, trustworthy
+- Accent: #dc2626 (red) - Emergency services theme
+- Or use your organization's colors
+
+Tips:
+1. Start with a simple concept (badge, logbook, emergency symbol)
+2. Create at 512x512, export at 256x256
+3. Save with transparency
+4. Test on dark background
+5. Optimize file size if needed
+
+Once you have the icon:
+1. Save as icon.png in /unraid/ directory
+2. Push to GitHub
+3. Update XML template URL
+4. Verify it displays correctly in Unraid

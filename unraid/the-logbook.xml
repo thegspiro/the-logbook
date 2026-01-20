@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>TheLogbook</Name>
+  <Repository>ghcr.io/your-org/the-logbook:latest</Repository>
+  <Registry>https://ghcr.io/</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/your-org/the-logbook/issues</Support>
+  <Project>https://github.com/your-org/the-logbook</Project>
+  <Overview>The Logbook is a comprehensive, modular intranet platform designed for fire departments, EMS, and emergency services organizations. Features include member management, training tracking, equipment inventory, scheduling, elections, QR code check-ins, and more. Secure, HIPAA-compliant, and highly customizable.</Overview>
+  <Category>Productivity: Status:Stable</Category>
+  <WebUI>http://[IP]:[PORT:7880]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/the-logbook.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/your-org/the-logbook/main/unraid/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText>Support Development</DonateText>
+  <DonateLink>https://github.com/sponsors/your-org</DonateLink>
+  <Requires>
+    MySQL/MariaDB database (can use existing Unraid MariaDB)
+    Redis (optional but recommended for caching)
+  </Requires>
+  <Config Name="WebUI Port" Target="3000" Default="7880" Mode="tcp" Description="Port for accessing The Logbook web interface" Type="Port" Display="always" Required="true" Mask="false">7880</Config>
+  <Config Name="API Port" Target="3001" Default="7881" Mode="tcp" Description="Port for The Logbook backend API" Type="Port" Display="always" Required="true" Mask="false">7881</Config>
+  <Config Name="App Data" Target="/app/data" Default="/mnt/user/appdata/the-logbook" Mode="rw" Description="Application data directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/the-logbook</Config>
+  <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/the-logbook/uploads" Mode="rw" Description="User uploaded files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/the-logbook/uploads</Config>
+  <Config Name="Backups" Target="/backups" Default="/mnt/user/backups/the-logbook" Mode="rw" Description="Backup files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/backups/the-logbook</Config>
+  <Config Name="Logs" Target="/app/logs" Default="/mnt/user/appdata/the-logbook/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/the-logbook/logs</Config>
+
+  <!-- Environment Variables -->
+  <Config Name="Environment" Target="ENVIRONMENT" Default="production" Mode="" Description="Application environment (production/development)" Type="Variable" Display="advanced" Required="true" Mask="false">production</Config>
+  <Config Name="Debug Mode" Target="DEBUG" Default="false" Mode="" Description="Enable debug mode (MUST be false in production)" Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
+  <Config Name="Timezone" Target="TZ" Default="America/New_York" Mode="" Description="Timezone for the application" Type="Variable" Display="always" Required="true" Mask="false">America/New_York</Config>
+
+  <!-- Database Configuration -->
+  <Config Name="Database Host" Target="DB_HOST" Default="192.168.1.10" Mode="" Description="MySQL/MariaDB host (use Unraid server IP or container name)" Type="Variable" Display="always" Required="true" Mask="false">192.168.1.10</Config>
+  <Config Name="Database Port" Target="DB_PORT" Default="3306" Mode="" Description="MySQL/MariaDB port" Type="Variable" Display="always" Required="true" Mask="false">3306</Config>
+  <Config Name="Database Name" Target="DB_NAME" Default="the_logbook" Mode="" Description="Database name" Type="Variable" Display="always" Required="true" Mask="false">the_logbook</Config>
+  <Config Name="Database User" Target="DB_USER" Default="logbook_user" Mode="" Description="Database username" Type="Variable" Display="always" Required="true" Mask="false">logbook_user</Config>
+  <Config Name="Database Password" Target="DB_PASSWORD" Default="" Mode="" Description="Database password (REQUIRED - set a strong password)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+
+  <!-- Redis Configuration (Optional) -->
+  <Config Name="Redis Host" Target="REDIS_HOST" Default="192.168.1.10" Mode="" Description="Redis host (leave as localhost if using Unraid Redis)" Type="Variable" Display="advanced" Required="false" Mask="false">192.168.1.10</Config>
+  <Config Name="Redis Port" Target="REDIS_PORT" Default="6379" Mode="" Description="Redis port" Type="Variable" Display="advanced" Required="false" Mask="false">6379</Config>
+  <Config Name="Redis Password" Target="REDIS_PASSWORD" Default="" Mode="" Description="Redis password (if required)" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+
+  <!-- Security Keys (AUTO-GENERATED) -->
+  <Config Name="Secret Key" Target="SECRET_KEY" Default="" Mode="" Description="JWT secret key - GENERATE with: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="Encryption Key" Target="ENCRYPTION_KEY" Default="" Mode="" Description="Encryption key - GENERATE with: openssl rand -hex 32" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+
+  <!-- Application Settings -->
+  <Config Name="Allowed Origins" Target="ALLOWED_ORIGINS" Default="http://[IP]:[PORT:7880]" Mode="" Description="CORS allowed origins (comma-separated)" Type="Variable" Display="advanced" Required="true" Mask="false">http://[IP]:[PORT:7880]</Config>
+  <Config Name="Rate Limiting" Target="RATE_LIMIT_ENABLED" Default="true" Mode="" Description="Enable API rate limiting" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+
+  <!-- Email Configuration (Optional) -->
+  <Config Name="Email Enabled" Target="EMAIL_ENABLED" Default="false" Mode="" Description="Enable email notifications" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="SMTP Host" Target="SMTP_HOST" Default="smtp.gmail.com" Mode="" Description="SMTP server host" Type="Variable" Display="advanced" Required="false" Mask="false">smtp.gmail.com</Config>
+  <Config Name="SMTP Port" Target="SMTP_PORT" Default="587" Mode="" Description="SMTP server port" Type="Variable" Display="advanced" Required="false" Mask="false">587</Config>
+  <Config Name="SMTP User" Target="SMTP_USER" Default="" Mode="" Description="SMTP username/email" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="SMTP Password" Target="SMTP_PASSWORD" Default="" Mode="" Description="SMTP password" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="From Email" Target="SMTP_FROM_EMAIL" Default="noreply@yourdomain.com" Mode="" Description="Email from address" Type="Variable" Display="advanced" Required="false" Mask="false">noreply@yourdomain.com</Config>
+
+  <!-- Backup Configuration -->
+  <Config Name="Backup Enabled" Target="BACKUP_ENABLED" Default="true" Mode="" Description="Enable automated backups" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Backup Schedule" Target="BACKUP_SCHEDULE" Default="0 2 * * *" Mode="" Description="Backup schedule (cron format - default: 2 AM daily)" Type="Variable" Display="advanced" Required="false" Mask="false">0 2 * * *</Config>
+  <Config Name="Backup Retention Days" Target="BACKUP_RETENTION_DAYS" Default="30" Mode="" Description="Number of days to keep backups" Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+
+  <!-- Module Configuration -->
+  <Config Name="Training Module" Target="MODULE_TRAINING_ENABLED" Default="true" Mode="" Description="Enable training module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Compliance Module" Target="MODULE_COMPLIANCE_ENABLED" Default="true" Mode="" Description="Enable compliance module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Scheduling Module" Target="MODULE_SCHEDULING_ENABLED" Default="true" Mode="" Description="Enable scheduling module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Elections Module" Target="MODULE_ELECTIONS_ENABLED" Default="true" Mode="" Description="Enable elections module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+
+  <!-- User and Group IDs -->
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+</Container>
