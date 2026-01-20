@@ -765,4 +765,12 @@ export const eventService = {
     const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/self-check-in`);
     return response.data;
   },
+
+  /**
+   * Get real-time check-in monitoring statistics
+   */
+  async getCheckInMonitoring(eventId: string): Promise<any> {
+    const response = await api.get(`/events/${eventId}/check-in-monitoring`);
+    return response.data;
+  },
 };

@@ -175,3 +175,38 @@ class EventStats(BaseModel):
     checked_in_count: int
     total_guests: int
     capacity_percentage: Optional[float] = None  # If max_attendees is set
+
+
+class CheckInActivity(BaseModel):
+    """Recent check-in activity for monitoring"""
+    user_id: UUID
+    user_name: str
+    user_email: str
+    checked_in_at: datetime
+    rsvp_status: str
+    guest_count: int
+
+
+class CheckInMonitoringStats(BaseModel):
+    """Real-time check-in monitoring statistics"""
+    event_id: UUID
+    event_name: str
+    event_type: str
+    start_datetime: datetime
+    end_datetime: datetime
+    is_check_in_active: bool
+    check_in_window_start: datetime
+    check_in_window_end: datetime
+
+    # Counts
+    total_eligible_members: int
+    total_rsvps: int
+    total_checked_in: int
+    check_in_rate: float  # Percentage of eligible members checked in
+
+    # Recent activity
+    recent_check_ins: List[CheckInActivity]
+
+    # Time-based stats
+    avg_check_in_time_minutes: Optional[float] = None  # Average time before event start
+    last_check_in_at: Optional[datetime] = None
