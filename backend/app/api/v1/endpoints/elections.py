@@ -37,6 +37,8 @@ from app.schemas.election import (
     BulkVoteCreate,
     EmailBallot,
     EmailBallotResponse,
+    ElectionRollback,
+    ElectionRollbackResponse,
 )
 from app.services.election_service import ElectionService
 from app.api.dependencies import get_current_user, require_permission
@@ -358,6 +360,44 @@ async def close_election(
         )
 
     return election
+
+
+@router.post("/{election_id}/rollback", response_model=ElectionRollbackResponse)
+async def rollback_election(
+    election_id: UUID,
+    rollback_data: ElectionRollback,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Rollback an election to a previous status
+
+    This is a sensitive operation that should only be used when necessary.
+    Sends email notifications to leadership and logs the action.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election, notifications_sent, error = await service.rollback_election(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+        reason=rollback_data.reason,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return ElectionRollbackResponse(
+        success=True,
+        election=election,
+        message=f"Election rolled back successfully. {notifications_sent} leadership members notified.",
+        notifications_sent=notifications_sent,
+    )
 
 
 # ============================================

@@ -35,6 +35,17 @@ import type {
   TrainingReport,
   RequirementProgress,
 } from '../types/training';
+import type {
+  Event,
+  EventListItem,
+  EventCreate,
+  EventUpdate,
+  EventCancel,
+  RSVP,
+  RSVPCreate,
+  CheckInRequest,
+  EventStats,
+} from '../types/event';
 
 const API_BASE_URL = '/api/v1';
 
@@ -556,6 +567,14 @@ export const electionService = {
   },
 
   /**
+   * Rollback an election to previous status
+   */
+  async rollbackElection(electionId: string, reason: string): Promise<{ success: boolean; election: import('../types/election').Election; message: string; notifications_sent: number }> {
+    const response = await api.post(`/elections/${electionId}/rollback`, { reason });
+    return response.data;
+  },
+
+  /**
    * Get candidates for an election
    */
   async getCandidates(electionId: string): Promise<import('../types/election').Candidate[]> {
@@ -623,6 +642,127 @@ export const electionService = {
    */
   async sendBallotEmail(electionId: string, emailData: import('../types/election').EmailBallot): Promise<import('../types/election').EmailBallotResponse> {
     const response = await api.post<import('../types/election').EmailBallotResponse>(`/elections/${electionId}/send-ballot`, emailData);
+    return response.data;
+  },
+};
+
+export const eventService = {
+  /**
+   * Get all events with optional filtering
+   */
+  async getEvents(params?: {
+    event_type?: string;
+    start_after?: string;
+    start_before?: string;
+    include_cancelled?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<EventListItem[]> {
+    const response = await api.get<EventListItem[]>('/events', { params });
+    return response.data;
+  },
+
+  /**
+   * Create a new event
+   */
+  async createEvent(eventData: EventCreate): Promise<Event> {
+    const response = await api.post<Event>('/events', eventData);
+    return response.data;
+  },
+
+  /**
+   * Get a specific event
+   */
+  async getEvent(eventId: string): Promise<Event> {
+    const response = await api.get<Event>(`/events/${eventId}`);
+    return response.data;
+  },
+
+  /**
+   * Update an event
+   */
+  async updateEvent(eventId: string, eventData: EventUpdate): Promise<Event> {
+    const response = await api.patch<Event>(`/events/${eventId}`, eventData);
+    return response.data;
+  },
+
+  /**
+   * Delete an event
+   */
+  async deleteEvent(eventId: string): Promise<void> {
+    await api.delete(`/events/${eventId}`);
+  },
+
+  /**
+   * Cancel an event
+   */
+  async cancelEvent(eventId: string, cancelData: EventCancel): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/cancel`, cancelData);
+    return response.data;
+  },
+
+  /**
+   * Create or update an RSVP
+   */
+  async createOrUpdateRSVP(eventId: string, rsvpData: RSVPCreate): Promise<RSVP> {
+    const response = await api.post<RSVP>(`/events/${eventId}/rsvp`, rsvpData);
+    return response.data;
+  },
+
+  /**
+   * Get all RSVPs for an event
+   */
+  async getEventRSVPs(eventId: string, status_filter?: string): Promise<RSVP[]> {
+    const params = status_filter ? { status_filter } : undefined;
+    const response = await api.get<RSVP[]>(`/events/${eventId}/rsvps`, { params });
+    return response.data;
+  },
+
+  /**
+   * Check in an attendee
+   */
+  async checkInAttendee(eventId: string, checkInData: CheckInRequest): Promise<RSVP> {
+    const response = await api.post<RSVP>(`/events/${eventId}/check-in`, checkInData);
+    return response.data;
+  },
+
+  /**
+   * Get event statistics
+   */
+  async getEventStats(eventId: string): Promise<EventStats> {
+    const response = await api.get<EventStats>(`/events/${eventId}/stats`);
+    return response.data;
+  },
+
+  /**
+   * Get eligible members for check-in
+   */
+  async getEligibleMembers(eventId: string): Promise<Array<{ id: string; first_name: string; last_name: string; email: string }>> {
+    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(`/events/${eventId}/eligible-members`);
+    return response.data;
+  },
+
+  /**
+   * Record actual start and end times for an event
+   */
+  async recordActualTimes(eventId: string, times: import('../types/event').RecordActualTimes): Promise<import('../types/event').Event> {
+    const response = await api.post<import('../types/event').Event>(`/events/${eventId}/record-times`, times);
+    return response.data;
+  },
+
+  /**
+   * Get QR code check-in data for an event
+   */
+  async getQRCheckInData(eventId: string): Promise<import('../types/event').QRCheckInData> {
+    const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`);
+    return response.data;
+  },
+
+  /**
+   * Check in to an event (self-check-in via QR code)
+   */
+  async selfCheckIn(eventId: string): Promise<import('../types/event').RSVP> {
+    const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/self-check-in`);
     return response.data;
   },
 };

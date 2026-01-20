@@ -113,6 +113,11 @@ class Election(Base):
     runoff_round = Column(Integer, nullable=False, default=0)
     # Which round of runoff this is (0 = original election)
 
+    # Rollback audit trail
+    rollback_history = Column(JSONB, nullable=True)
+    # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",
+    #           "from_status": "closed", "to_status": "open", "reason": "Error in vote count"}]
+
     # Metadata
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

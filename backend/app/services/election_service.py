@@ -734,6 +734,241 @@ class ElectionService:
 
         return election, None
 
+    async def rollback_election(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        performed_by: UUID,
+        reason: str,
+    ) -> Tuple[Optional[Election], int, Optional[str]]:
+        """
+        Rollback an election to a previous status
+
+        Returns: (Election, notifications_sent, error_message)
+        """
+        # Get the election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+
+        if not election:
+            return None, 0, "Election not found"
+
+        # Determine the rollback action based on current status
+        from_status = election.status.value
+        to_status = None
+
+        if election.status == ElectionStatus.CLOSED:
+            # Rollback from closed to open
+            to_status = "open"
+            new_status = ElectionStatus.OPEN
+        elif election.status == ElectionStatus.OPEN:
+            # Rollback from open to draft
+            to_status = "draft"
+            new_status = ElectionStatus.DRAFT
+        else:
+            return None, 0, f"Cannot rollback election with status {from_status}"
+
+        # Create rollback record
+        rollback_record = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "performed_by": str(performed_by),
+            "from_status": from_status,
+            "to_status": to_status,
+            "reason": reason,
+        }
+
+        # Initialize rollback_history if it doesn't exist
+        if election.rollback_history is None:
+            election.rollback_history = []
+
+        # Add to rollback history
+        election.rollback_history.append(rollback_record)
+
+        # Update status
+        election.status = new_status
+        election.updated_at = datetime.utcnow()
+
+        await self.db.commit()
+        await self.db.refresh(election)
+
+        # Send email notifications to leadership
+        notifications_sent = await self._notify_leadership_of_rollback(
+            election=election,
+            performed_by=performed_by,
+            organization_id=organization_id,
+            from_status=from_status,
+            to_status=to_status,
+            reason=reason,
+        )
+
+        return election, notifications_sent, None
+
+    async def _notify_leadership_of_rollback(
+        self,
+        election: Election,
+        performed_by: UUID,
+        organization_id: UUID,
+        from_status: str,
+        to_status: str,
+        reason: str,
+    ) -> int:
+        """
+        Send email notifications to leadership about election rollback
+
+        Returns: Number of notifications sent
+        """
+        from app.services.email_service import EmailService
+
+        # Get leadership users (Chief, President, Vice President, Secretary roles)
+        leadership_roles = ["chief", "president", "vice_president", "secretary"]
+
+        users_result = await self.db.execute(
+            select(User)
+            .join(User.roles)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)
+            .options(selectinload(User.roles))
+        )
+        all_users = users_result.scalars().all()
+
+        # Filter to leadership users
+        leadership_users = [
+            user for user in all_users
+            if any(role.slug in leadership_roles for role in user.roles)
+        ]
+
+        if not leadership_users:
+            return 0
+
+        # Get the user who performed the rollback
+        performer_result = await self.db.execute(
+            select(User)
+            .where(User.id == performed_by)
+        )
+        performer = performer_result.scalar_one_or_none()
+        performer_name = performer.full_name if performer else "Unknown"
+
+        # Get organization for email service
+        org_result = await self.db.execute(
+            select(Organization)
+            .where(Organization.id == organization_id)
+        )
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            return 0
+
+        # Initialize email service
+        email_service = EmailService(organization)
+
+        # Send notifications
+        sent_count = 0
+        for user in leadership_users:
+            # Don't notify the person who performed the rollback
+            if user.id == performed_by:
+                continue
+
+            subject = f"ALERT: Election Rolled Back - {election.title}"
+
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #dc2626; color: white; padding: 20px; text-align: center; }}
+        .alert-badge {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-left: 4px solid #dc2626; margin: 15px 0; }}
+        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚠️ Election Rollback Alert</h1>
+            <div class="alert-badge">REQUIRES ATTENTION</div>
+        </div>
+        <div class="content">
+            <p>Dear {user.first_name},</p>
+
+            <p>This is an important notification regarding an election rollback.</p>
+
+            <div class="details">
+                <h3>Election Details:</h3>
+                <ul>
+                    <li><strong>Title:</strong> {election.title}</li>
+                    <li><strong>Status Changed:</strong> {from_status.upper()} → {to_status.upper()}</li>
+                    <li><strong>Performed By:</strong> {performer_name}</li>
+                    <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
+                </ul>
+            </div>
+
+            <div class="reason">
+                <h3>Reason for Rollback:</h3>
+                <p>{reason}</p>
+            </div>
+
+            <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
+
+            <p>If you have any questions or concerns about this rollback, please contact {performer_name} or review the election at your earliest convenience.</p>
+
+            <p>Best regards,<br>{organization.name} Election System</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from the election management system.</p>
+        </div>
+    </div>
+</body>
+</html>
+            """
+
+            text_body = f"""ALERT: Election Rolled Back
+
+Dear {user.first_name},
+
+This is an important notification regarding an election rollback.
+
+ELECTION DETAILS:
+- Title: {election.title}
+- Status Changed: {from_status.upper()} → {to_status.upper()}
+- Performed By: {performer_name}
+- Date/Time: {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}
+
+REASON FOR ROLLBACK:
+{reason}
+
+This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.
+
+If you have any questions or concerns about this rollback, please contact {performer_name} or review the election at your earliest convenience.
+
+Best regards,
+{organization.name} Election System
+            """
+
+            try:
+                # Send email
+                success_count_user, failure_count_user = await email_service.send_email(
+                    to_emails=[user.email],
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                )
+                if success_count_user > 0:
+                    sent_count += 1
+            except Exception as e:
+                # Log error but continue
+                print(f"Failed to send rollback notification to {user.email}: {str(e)}")
+                continue
+
+        return sent_count
+
     async def _generate_voting_token(
         self, user_id: UUID, election_id: UUID, election_end_date: datetime
     ) -> VotingToken:

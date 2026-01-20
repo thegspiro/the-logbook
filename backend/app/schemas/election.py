@@ -285,3 +285,16 @@ class EmailBallotResponse(BaseModel):
     recipients_count: int
     failed_count: int
     message: str
+
+
+class ElectionRollback(BaseModel):
+    """Schema for rolling back an election"""
+    reason: str = Field(..., min_length=10, max_length=500, description="Reason for rollback (required)")
+
+
+class ElectionRollbackResponse(BaseModel):
+    """Response after rolling back an election"""
+    success: bool
+    election: ElectionResponse
+    message: str
+    notifications_sent: int

@@ -22,6 +22,10 @@ export const ElectionDetailPage: React.FC = () => {
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [newEndDate, setNewEndDate] = useState('');
   const [extendError, setExtendError] = useState<string | null>(null);
+  const [showRollbackModal, setShowRollbackModal] = useState(false);
+  const [rollbackReason, setRollbackReason] = useState('');
+  const [rollbackError, setRollbackError] = useState<string | null>(null);
+  const [isRollingBack, setIsRollingBack] = useState(false);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -128,6 +132,37 @@ export const ElectionDetailPage: React.FC = () => {
     const currentEnd = new Date(election.end_date);
     currentEnd.setHours(23, 59, 0, 0);
     setNewEndDate(currentEnd.toISOString().slice(0, 16));
+  };
+
+  const handleRollbackElection = async () => {
+    if (!electionId || !rollbackReason.trim()) {
+      setRollbackError('Please provide a reason for the rollback');
+      return;
+    }
+
+    if (rollbackReason.trim().length < 10) {
+      setRollbackError('Reason must be at least 10 characters');
+      return;
+    }
+
+    try {
+      setIsRollingBack(true);
+      setRollbackError(null);
+
+      const response = await electionService.rollbackElection(electionId, rollbackReason.trim());
+
+      setElection(response.election);
+      setShowRollbackModal(false);
+      setRollbackReason('');
+
+      // Show success message
+      alert(`Election rolled back successfully. ${response.notifications_sent} leadership members were notified.`);
+    } catch (err: any) {
+      console.error('Error rolling back election:', err);
+      setRollbackError(err.response?.data?.detail || 'Failed to rollback election');
+    } finally {
+      setIsRollingBack(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -295,6 +330,15 @@ export const ElectionDetailPage: React.FC = () => {
                 </>
               )}
 
+              {(election.status === 'open' || election.status === 'closed') && (
+                <button
+                  onClick={() => setShowRollbackModal(true)}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                >
+                  Rollback Election
+                </button>
+              )}
+
               <button
                 onClick={handleToggleResultsVisibility}
                 disabled={updatingVisibility}
@@ -454,6 +498,110 @@ export const ElectionDetailPage: React.FC = () => {
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
                 >
                   Extend Election
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rollback Modal */}
+      {showRollbackModal && election && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">⚠️ Rollback Election</h3>
+            </div>
+
+            <div className="px-6 py-4">
+              {/* Warning Message */}
+              <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-orange-800">
+                      This action requires careful consideration
+                    </h3>
+                    <div className="mt-2 text-sm text-orange-700">
+                      <p>Rolling back this election will:</p>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li>Change the election status from <strong>{election.status.toUpperCase()}</strong> to <strong>{election.status === 'closed' ? 'OPEN' : 'DRAFT'}</strong></li>
+                        <li>Send email notifications to all leadership members</li>
+                        <li>Create an audit trail entry with your reason</li>
+                        {election.status === 'closed' && <li>Allow voting to resume (for closed→open)</li>}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {rollbackError && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                  <p className="text-sm text-red-700">{rollbackError}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Current Status
+                  </label>
+                  <div className="mt-1 text-sm font-semibold text-gray-900">
+                    {election.status.toUpperCase()}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    New Status After Rollback
+                  </label>
+                  <div className="mt-1 text-sm font-semibold text-green-600">
+                    {election.status === 'closed' ? 'OPEN' : 'DRAFT'}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Reason for Rollback * <span className="text-xs text-gray-500">(minimum 10 characters)</span>
+                  </label>
+                  <textarea
+                    value={rollbackReason}
+                    onChange={(e) => setRollbackReason(e.target.value)}
+                    rows={4}
+                    placeholder="Example: Vote counting error discovered, need to recount all ballots..."
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    This reason will be sent to all leadership members and logged in the audit trail.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRollbackModal(false);
+                    setRollbackReason('');
+                    setRollbackError(null);
+                  }}
+                  disabled={isRollingBack}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRollbackElection}
+                  disabled={isRollingBack || rollbackReason.trim().length < 10}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {isRollingBack ? 'Rolling Back...' : 'Confirm Rollback'}
                 </button>
               </div>
             </div>
