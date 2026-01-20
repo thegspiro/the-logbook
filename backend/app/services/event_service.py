@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus
 from app.models.user import User
+from app.models.location import Location
 from app.schemas.event import (
     EventCreate,
     EventUpdate,
@@ -637,3 +638,72 @@ class EventService:
         await self.db.refresh(rsvp)
 
         return rsvp, None
+
+    async def check_location_overlap(
+        self,
+        location_id: UUID,
+        start_datetime: datetime,
+        end_datetime: datetime,
+        organization_id: UUID,
+        exclude_event_id: Optional[UUID] = None,
+    ) -> List[Event]:
+        """
+        Check for events that overlap with the given time range at a specific location
+
+        Returns list of overlapping events
+        """
+        if not location_id:
+            return []
+
+        query = (
+            select(Event)
+            .where(Event.location_id == location_id)
+            .where(Event.organization_id == organization_id)
+            .where(Event.is_cancelled == False)
+            .where(
+                or_(
+                    # New event starts during existing event
+                    and_(
+                        Event.start_datetime <= start_datetime,
+                        Event.end_datetime > start_datetime
+                    ),
+                    # New event ends during existing event
+                    and_(
+                        Event.start_datetime < end_datetime,
+                        Event.end_datetime >= end_datetime
+                    ),
+                    # New event completely contains existing event
+                    and_(
+                        Event.start_datetime >= start_datetime,
+                        Event.end_datetime <= end_datetime
+                    ),
+                )
+            )
+        )
+
+        if exclude_event_id:
+            query = query.where(Event.id != exclude_event_id)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_event_manager_emails(
+        self, event_id: UUID
+    ) -> List[str]:
+        """
+        Get email addresses of the event creator/manager for notification
+
+        Returns list of email addresses
+        """
+        result = await self.db.execute(
+            select(Event, User)
+            .join(User, Event.created_by == User.id)
+            .where(Event.id == event_id)
+        )
+        row = result.first()
+
+        if not row:
+            return []
+
+        event, creator = row
+        return [creator.email] if creator.email else []

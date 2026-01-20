@@ -24,6 +24,10 @@ from app.models.onboarding import (
     OnboardingChecklistItem
 )
 
+from app.models.location import (
+    Location
+)
+
 __all__ = [
     # User models
     "Organization",
@@ -39,4 +43,6 @@ __all__ = [
     # Onboarding models
     "OnboardingStatus",
     "OnboardingChecklistItem",
+    # Location models
+    "Location",
 ]
