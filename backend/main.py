@@ -7,6 +7,7 @@ connects to the database, and configures routes.
 """
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -111,11 +112,103 @@ app.include_router(api_router, prefix="/api/v1")
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """
+    Comprehensive health check endpoint
+
+    Checks:
+    - API status
+    - Database connectivity
+    - Redis connectivity
+    - Configuration validation
+    """
+    health_status = {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {}
+    }
+
+    # Check database
+    try:
+        from app.core.database import database_manager
+        if database_manager.is_connected:
+            health_status["checks"]["database"] = "connected"
+        else:
+            health_status["checks"]["database"] = "disconnected"
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["checks"]["database"] = f"error: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    # Check Redis
+    try:
+        from app.core.cache import cache_manager
+        if cache_manager.redis:
+            await cache_manager.redis.ping()
+            health_status["checks"]["redis"] = "connected"
+        else:
+            health_status["checks"]["redis"] = "disconnected"
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["checks"]["redis"] = f"error: {str(e)}"
+        health_status["status"] = "degraded"  # Redis is not critical
+
+    # Configuration warnings
+    config_warnings = []
+    if settings.ENVIRONMENT == "production":
+        if settings.DEBUG:
+            config_warnings.append("DEBUG mode enabled in production")
+        if settings.SECRET_KEY == "change_me_to_random_64_character_string":
+            config_warnings.append("Default SECRET_KEY detected")
+        if settings.DB_PASSWORD == "change_me_in_production":
+            config_warnings.append("Default DB_PASSWORD detected")
+
+    if config_warnings:
+        health_status["checks"]["configuration"] = "warnings"
+        health_status["warnings"] = config_warnings
+        if health_status["status"] == "healthy":
+            health_status["status"] = "degraded"
+    else:
+        health_status["checks"]["configuration"] = "ok"
+
+    return health_status
+
+
+@app.get("/health/detailed")
+async def health_check_detailed():
+    """
+    Detailed health check with system information
+    Only available in non-production environments for security
+    """
+    if settings.ENVIRONMENT == "production":
+        return {"error": "Detailed health check not available in production"}
+
+    import psutil
+    from datetime import datetime
+
     return {
         "status": "healthy",
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
+        "timestamp": datetime.utcnow().isoformat(),
+        "system": {
+            "cpu_percent": psutil.cpu_percent(interval=1),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage('/').percent,
+        },
+        "configuration": {
+            "debug": settings.DEBUG,
+            "enable_docs": settings.ENABLE_DOCS,
+            "email_enabled": settings.EMAIL_ENABLED,
+            "redis_enabled": bool(settings.REDIS_HOST),
+            "modules": {
+                "training": settings.MODULE_TRAINING_ENABLED,
+                "compliance": settings.MODULE_COMPLIANCE_ENABLED,
+                "scheduling": settings.MODULE_SCHEDULING_ENABLED,
+                "elections": settings.MODULE_ELECTIONS_ENABLED,
+            }
+        }
     }
 
 
