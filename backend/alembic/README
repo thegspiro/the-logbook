@@ -1,0 +1,43 @@
+# Alembic Database Migrations
+
+This directory contains database migration scripts for The Logbook.
+
+## Creating a New Migration
+
+```bash
+# Auto-generate migration from model changes
+alembic revision --autogenerate -m "description of changes"
+
+# Create empty migration
+alembic revision -m "description of changes"
+```
+
+## Applying Migrations
+
+```bash
+# Upgrade to latest version
+alembic upgrade head
+
+# Upgrade one version
+alembic upgrade +1
+
+# Downgrade one version
+alembic downgrade -1
+
+# Show current version
+alembic current
+
+# Show migration history
+alembic history
+```
+
+## Initial Setup
+
+The first migration creates all tables based on the SQLAlchemy models.
+
+## Notes
+
+- Always review auto-generated migrations before applying
+- Test migrations on a development database first
+- Backup production database before applying migrations
+- Migrations are stored in alembic/versions/

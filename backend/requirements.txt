@@ -11,12 +11,13 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # ============================================
-# Database
+# Database - MySQL
 # ============================================
 sqlalchemy==2.0.25
 alembic==1.13.1
-psycopg2-binary==2.9.9
-asyncpg==0.29.0
+pymysql==1.1.0
+aiomysql==0.2.0
+cryptography==42.0.0  # Required by PyMySQL for secure connections
 
 # ============================================
 # Redis & Caching
@@ -41,7 +42,6 @@ pysaml2==7.4.2
 # ============================================
 # Encryption & Security
 # ============================================
-cryptography==42.0.0
 argon2-cffi==23.1.0
 
 # ============================================

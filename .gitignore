@@ -16,20 +16,26 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
-*.manifest
-*.spec
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.cover
+*.log
 
-# Virtual Environment
+# Virtual Environments
 venv/
 ENV/
 env/
 .venv
 
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -37,54 +43,127 @@ env/
 *~
 .DS_Store
 
-# Logs
-*.log
-logs/
-*.log.*
-
 # Database
 *.db
 *.sqlite
 *.sqlite3
+mysql_data/
+postgres_data/
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Uploads and user data
+uploads/
+backups/
+logs/
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+coverage/
+.next/
+out/
+build/
+.cache/
 
 # Testing
 .coverage
 .pytest_cache/
 htmlcov/
-.tox/
-.nox/
 
-# Frontend
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-store/
-dist/
-.cache/
-.parcel-cache/
-.next/
-.nuxt/
-out/
-build/
-
-# Alembic
-*.pyc
-
-# Redis dump
-dump.rdb
-
-# Temporary files
-*.tmp
-*.temp
-.tmp/
+# Jupyter Notebooks
+.ipynb_checkpoints
 
 # OS
-Thumbs.db
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+ssl/
+certificates/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Package manager lock files (uncomment if needed)
+# package-lock.json
+# yarn.lock
+
+# Alembic
+# Keep the migrations but ignore autogenerate temp files
+alembic/versions/__pycache__/
+
+# Redis
+dump.rdb
+
+# Elasticsearch
+data/
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Static files (if generated)
+staticfiles/
+static/
+
+# Media files
+media/
+
+# Backup files
+*.backup
+*.bak
+
+# Editor directories and files
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local configuration
+local_settings.py
+config.local.js
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Custom
+/data/
+/secrets/
