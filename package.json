@@ -12,37 +12,29 @@
     "setup": "npm install && npm run setup:backend && npm run setup:frontend",
     "setup:backend": "cd backend && pip install -r requirements.txt",
     "setup:frontend": "cd frontend && npm install",
-    
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 3001",
     "dev:frontend": "cd frontend && npm run dev",
-    
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "echo 'Python backend does not require build step'",
     "build:frontend": "cd frontend && npm run build",
-    
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "cd backend && pytest",
     "test:frontend": "cd frontend && npm test",
-    
     "lint": "npm run lint:backend && npm run lint:frontend",
     "lint:backend": "cd backend && flake8 app/ && black --check app/",
     "lint:frontend": "cd frontend && npm run lint",
-    
     "format": "npm run format:backend && npm run format:frontend",
     "format:backend": "cd backend && black app/ && isort app/",
     "format:frontend": "cd frontend && prettier --write \"src/**/*.{ts,tsx,css}\"",
-    
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    
     "db:migrate": "cd backend && alembic upgrade head",
     "db:rollback": "cd backend && alembic downgrade -1",
     "db:seed": "cd backend && python scripts/seed_data.py",
     "db:reset": "npm run db:rollback && npm run db:migrate && npm run db:seed",
-    
     "clean": "rm -rf node_modules frontend/node_modules frontend/dist backend/__pycache__ backend/**/__pycache__ backend/.pytest_cache"
   },
   "keywords": [
@@ -65,10 +57,12 @@
   },
   "homepage": "https://github.com/thegspiro/the-logbook#readme",
   "devDependencies": {
+    "@vitest/coverage-v8": "^1.1.1",
     "concurrently": "^8.2.2",
-    "prettier": "^3.1.1",
     "husky": "^8.0.3",
-    "lint-staged": "^15.2.0"
+    "jsdom": "^27.4.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.1.1"
   },
   "engines": {
     "node": ">=18.0.0",

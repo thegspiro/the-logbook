@@ -676,3 +676,30 @@ async def self_check_in(
         user_name=f"{user.first_name} {user.last_name}" if user else None,
         user_email=user.email if user else None,
     )
+
+
+@router.get("/{id}/check-in-monitoring", response_model=None)
+async def get_check_in_monitoring(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get real-time check-in monitoring statistics for an event.
+    
+    Provides event managers with real-time visibility into check-in activity.
+    """
+    service = EventService(db)
+    
+    stats, error = await service.get_check_in_monitoring_stats(
+        event_id=id,
+        organization_id=current_user.organization_id
+    )
+    
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+    
+    return stats
