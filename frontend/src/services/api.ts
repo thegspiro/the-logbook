@@ -487,27 +487,6 @@ export const trainingService = {
   },
 };
 
-  /**
-   * Create a new member (admin/secretary only)
-   */
-  async createMember(memberData: {
-    username: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    badge_number?: string;
-    phone?: string;
-    mobile?: string;
-    date_of_birth?: string;
-    hire_date?: string;
-    role_ids: string[];
-    send_welcome_email: boolean;
-  }): Promise<UserWithRoles> {
-    const response = await api.post<UserWithRoles>('/users', memberData);
-    return response.data;
-  },
-};
-
 export const electionService = {
   /**
    * Get all elections
