@@ -8,13 +8,14 @@ from fastapi import APIRouter
 
 # Import route modules
 from app.api.v1 import onboarding
-from app.api.v1.endpoints import inventory
+from app.api.v1.endpoints import events, locations
 
 api_router = APIRouter()
 
 # Include route modules
 api_router.include_router(onboarding.router)
-api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(events.router, prefix="/events", tags=["events"])
+api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 
 # Future route modules (to be implemented)
 # from app.api.v1.endpoints import auth, users, audit

@@ -23,6 +23,8 @@ class PermissionCategory(str, Enum):
     ELECTIONS = "elections"
     FUNDRAISING = "fundraising"
     AUDIT = "audit"
+    EVENTS = "events"
+    LOCATIONS = "locations"
 
 
 class Permission:
@@ -110,6 +112,20 @@ FUNDRAISING_MANAGE = Permission("fundraising.manage", "Manage fundraising", Perm
 AUDIT_VIEW = Permission("audit.view", "View audit logs", PermissionCategory.AUDIT)
 AUDIT_EXPORT = Permission("audit.export", "Export audit logs", PermissionCategory.AUDIT)
 
+# Events
+EVENTS_VIEW = Permission("events.view", "View events", PermissionCategory.EVENTS)
+EVENTS_CREATE = Permission("events.create", "Create events", PermissionCategory.EVENTS)
+EVENTS_EDIT = Permission("events.edit", "Edit events", PermissionCategory.EVENTS)
+EVENTS_DELETE = Permission("events.delete", "Delete events", PermissionCategory.EVENTS)
+EVENTS_MANAGE = Permission("events.manage", "Manage all events", PermissionCategory.EVENTS)
+
+# Locations
+LOCATIONS_VIEW = Permission("locations.view", "View locations", PermissionCategory.LOCATIONS)
+LOCATIONS_CREATE = Permission("locations.create", "Create locations", PermissionCategory.LOCATIONS)
+LOCATIONS_EDIT = Permission("locations.edit", "Edit locations", PermissionCategory.LOCATIONS)
+LOCATIONS_DELETE = Permission("locations.delete", "Delete locations", PermissionCategory.LOCATIONS)
+LOCATIONS_MANAGE = Permission("locations.manage", "Manage all locations", PermissionCategory.LOCATIONS)
+
 
 # ============================================
 # All Permissions Registry
@@ -160,6 +176,20 @@ ALL_PERMISSIONS: List[Permission] = [
     FUNDRAISING_MANAGE,
     AUDIT_VIEW,
     AUDIT_EXPORT,
+
+    # Events
+    EVENTS_VIEW,
+    EVENTS_CREATE,
+    EVENTS_EDIT,
+    EVENTS_DELETE,
+    EVENTS_MANAGE,
+
+    # Locations
+    LOCATIONS_VIEW,
+    LOCATIONS_CREATE,
+    LOCATIONS_EDIT,
+    LOCATIONS_DELETE,
+    LOCATIONS_MANAGE,
 ]
 
 
@@ -243,6 +273,16 @@ DEFAULT_ROLES = {
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
             AUDIT_EXPORT.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_DELETE.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_DELETE.name,
+            LOCATIONS_MANAGE.name,
         ],
     },
     "assistant_chief": {
@@ -273,6 +313,14 @@ DEFAULT_ROLES = {
             MEETINGS_VIEW.name,
             MEETINGS_MANAGE.name,
             AUDIT_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_MANAGE.name,
         ],
     },
     "president": {
@@ -314,6 +362,16 @@ DEFAULT_ROLES = {
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
             AUDIT_EXPORT.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_DELETE.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_DELETE.name,
+            LOCATIONS_MANAGE.name,
         ],
     },
     "vice_president": {
@@ -378,6 +436,9 @@ DEFAULT_ROLES = {
             TRAINING_VIEW.name,
             ELECTIONS_VIEW.name,
             ELECTIONS_MANAGE.name,
+            EVENTS_VIEW.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
         ],
     },
     "assistant_secretary": {
@@ -412,6 +473,74 @@ DEFAULT_ROLES = {
             COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
             MEETINGS_VIEW.name,
+            EVENTS_VIEW.name,
+        ],
+    },
+    "training_officer": {
+        "name": "Training Officer",
+        "slug": "training_officer",
+        "description": "Manages training programs and events",
+        "is_system": True,
+        "priority": 65,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            TRAINING_VIEW.name,
+            TRAINING_MANAGE.name,
+            COMPLIANCE_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_MANAGE.name,
+        ],
+    },
+    "public_outreach_coordinator": {
+        "name": "Public Outreach Coordinator",
+        "slug": "public_outreach_coordinator",
+        "description": "Manages public education and outreach events",
+        "is_system": True,
+        "priority": 65,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_MANAGE.name,
+        ],
+    },
+    "meeting_hall_coordinator": {
+        "name": "Meeting Hall Coordinator",
+        "slug": "meeting_hall_coordinator",
+        "description": "Manages meeting hall and location bookings",
+        "is_system": True,
+        "priority": 60,
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            LOCATIONS_VIEW.name,
+            LOCATIONS_CREATE.name,
+            LOCATIONS_EDIT.name,
+            LOCATIONS_MANAGE.name,
         ],
     },
 }
