@@ -10,6 +10,13 @@ import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
 import AddMember from './pages/AddMember';
 import ImportMembers from './pages/ImportMembers';
+import EventsPage from './pages/EventsPage';
+import EventDetailPage from './pages/EventDetailPage';
+import EventQRCodePage from './pages/EventQRCodePage';
+import EventSelfCheckInPage from './pages/EventSelfCheckInPage';
+import EventCheckInMonitoringPage from './pages/EventCheckInMonitoringPage';
+import ErrorMonitoringPage from './pages/ErrorMonitoringPage';
+import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage';
 
 /**
  * Main Application Component
@@ -41,6 +48,18 @@ function App() {
           <Route path="/members" element={<Members />} />
           <Route path="/members/add" element={<AddMember />} />
           <Route path="/members/import" element={<ImportMembers />} />
+
+          {/* Events Module */}
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/events/:id" element={<EventDetailPage />} />
+          <Route path="/events/:id/qr-code" element={<EventQRCodePage />} />
+          <Route path="/events/:id/check-in" element={<EventSelfCheckInPage />} />
+          <Route path="/events/:id/monitoring" element={<EventCheckInMonitoringPage />} />
+          <Route path="/events/:id/analytics" element={<AnalyticsDashboardPage />} />
+
+          {/* Admin/Monitoring Routes */}
+          <Route path="/admin/errors" element={<ErrorMonitoringPage />} />
+          <Route path="/admin/analytics" element={<AnalyticsDashboardPage />} />
 
           {/* Login Page */}
           <Route

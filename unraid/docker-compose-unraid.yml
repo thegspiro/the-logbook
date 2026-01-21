@@ -1,0 +1,295 @@
+# ============================================
+# THE LOGBOOK - UNRAID DOCKER COMPOSE
+# ============================================
+# Optimized docker-compose configuration for Unraid
+#
+# This file provides a complete stack including database and Redis
+# Use this if you want a self-contained installation without
+# using Unraid's MariaDB or Redis containers
+#
+# Installation:
+#   1. Copy this file to: /mnt/user/appdata/the-logbook/docker-compose.yml
+#   2. Copy .env.example to .env and configure
+#   3. Run: docker-compose up -d
+#
+# Ports (conflict-free defaults):
+#   - Frontend: 7880
+#   - Backend API: 7881
+#   - Database: 3307 (internal only)
+#   - Redis: 6380 (internal only)
+# ============================================
+
+version: '3.8'
+
+services:
+  # ============================================
+  # Database - MariaDB
+  # ============================================
+  db:
+    image: mariadb:10.11
+    container_name: logbook-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
+      MYSQL_DATABASE: ${DB_NAME:-the_logbook}
+      MYSQL_USER: ${DB_USER:-logbook_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      TZ: ${TZ:-America/New_York}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=200
+      --max_allowed_packet=256M
+      --innodb_buffer_pool_size=512M
+    volumes:
+      - /mnt/user/appdata/the-logbook/mysql:/var/lib/mysql
+    # Internal port only - not exposed to host to avoid conflicts
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-logbook_user}", "-p${DB_PASSWORD:-change_me_strong_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - logbook-internal
+    labels:
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/mariadb-icon.png"
+
+  # ============================================
+  # Cache - Redis
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: logbook-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_strong_password} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - /mnt/user/appdata/the-logbook/redis:/data
+    # Internal port only
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - logbook-internal
+    labels:
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/redis-icon.png"
+
+  # ============================================
+  # Backend API - FastAPI
+  # ============================================
+  backend:
+    image: ghcr.io/thegspiro/the-logbook-backend:latest
+    container_name: logbook-backend
+    restart: unless-stopped
+    environment:
+      # Application
+      APP_NAME: ${APP_NAME:-The Logbook}
+      VERSION: ${VERSION:-1.0.0}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      PORT: 3001
+      DEBUG: ${DEBUG:-false}
+      TZ: ${TZ:-America/New_York}
+
+      # Database (connects to db container)
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-the_logbook}
+      DB_USER: ${DB_USER:-logbook_user}
+      DB_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+
+      # Redis (connects to redis container)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_strong_password}
+
+      # Security - REQUIRED: Generate unique keys!
+      SECRET_KEY: ${SECRET_KEY:-GENERATE_WITH_openssl_rand_hex_32}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-GENERATE_WITH_openssl_rand_hex_32}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 480
+
+      # CORS - Update with your Unraid IP
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://192.168.1.10:7880,http://unraid.local:7880}
+
+      # File Storage
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE: 52428800
+
+      # Email (Optional)
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@example.com}
+
+      # Modules
+      MODULE_TRAINING_ENABLED: ${MODULE_TRAINING_ENABLED:-true}
+      MODULE_COMPLIANCE_ENABLED: ${MODULE_COMPLIANCE_ENABLED:-true}
+      MODULE_SCHEDULING_ENABLED: ${MODULE_SCHEDULING_ENABLED:-true}
+      MODULE_ELECTIONS_ENABLED: ${MODULE_ELECTIONS_ENABLED:-true}
+
+      # Monitoring
+      ENABLE_DOCS: ${ENABLE_DOCS:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
+
+      # Backup
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+
+      # Unraid User/Group IDs
+      PUID: ${PUID:-99}
+      PGID: ${PGID:-100}
+
+    ports:
+      - "${BACKEND_PORT:-7881}:3001"
+
+    volumes:
+      - /mnt/user/appdata/the-logbook/data:/app/data
+      - /mnt/user/appdata/the-logbook/uploads:/app/uploads
+      - /mnt/user/appdata/the-logbook/logs:/app/logs
+      - /mnt/user/backups/the-logbook:/backups
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - logbook-internal
+
+    labels:
+      - "com.unraid.docker.managed=true"
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png"
+      - "com.unraid.docker.webui=http://[IP]:[PORT:7880]"
+
+  # ============================================
+  # Frontend - React/Vite
+  # ============================================
+  frontend:
+    image: ghcr.io/thegspiro/the-logbook-frontend:latest
+    container_name: logbook-frontend
+    restart: unless-stopped
+    environment:
+      # API URL (points to backend container)
+      VITE_API_URL: http://backend:3001/api/v1
+      TZ: ${TZ:-America/New_York}
+
+      # Unraid User/Group IDs
+      PUID: ${PUID:-99}
+      PGID: ${PGID:-100}
+
+    ports:
+      - "${FRONTEND_PORT:-7880}:3000"
+
+    depends_on:
+      - backend
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    networks:
+      - logbook-internal
+
+    labels:
+      - "com.unraid.docker.managed=true"
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png"
+      - "com.unraid.docker.webui=http://[IP]:[PORT:7880]"
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  logbook-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+# ============================================
+# Volumes (Alternative to host paths)
+# ============================================
+# Uncomment if you prefer Docker-managed volumes
+# volumes:
+#   mysql_data:
+#     driver: local
+#   redis_data:
+#     driver: local
+#   app_data:
+#     driver: local
+#   uploads:
+#     driver: local
+#   logs:
+#     driver: local
+
+# ============================================
+# Usage Instructions
+# ============================================
+#
+# 1. Copy this file to /mnt/user/appdata/the-logbook/docker-compose.yml
+#
+# 2. Create .env file in same directory with these REQUIRED variables:
+#
+#    # Generate these with: openssl rand -hex 32
+#    SECRET_KEY=your_generated_secret_key_here
+#    ENCRYPTION_KEY=your_generated_encryption_key_here
+#
+#    # Set strong passwords
+#    MYSQL_ROOT_PASSWORD=strong_password_here
+#    DB_PASSWORD=strong_password_here
+#    REDIS_PASSWORD=strong_password_here
+#
+#    # Your Unraid IP
+#    ALLOWED_ORIGINS=http://192.168.1.10:7880
+#
+# 3. Start the stack:
+#    cd /mnt/user/appdata/the-logbook
+#    docker-compose up -d
+#
+# 4. Check status:
+#    docker-compose ps
+#    docker-compose logs -f
+#
+# 5. Access application:
+#    http://YOUR-UNRAID-IP:7880
+#
+# Management Commands:
+#   docker-compose up -d              # Start all services
+#   docker-compose down               # Stop all services
+#   docker-compose restart            # Restart all services
+#   docker-compose logs -f backend    # View backend logs
+#   docker-compose pull               # Pull latest images
+#   docker-compose exec backend bash  # Access backend shell
+#   docker-compose exec db mysql -u root -p  # Access database
+#
+# Backup:
+#   docker-compose exec backend /app/scripts/backup.sh
+#
+# Update:
+#   docker-compose pull
+#   docker-compose up -d
+#
+# For more help, see: /mnt/user/appdata/the-logbook/UNRAID-INSTALLATION.md
+# ============================================

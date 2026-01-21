@@ -639,71 +639,102 @@ class EventService:
 
         return rsvp, None
 
-    async def check_location_overlap(
-        self,
-        location_id: UUID,
-        start_datetime: datetime,
-        end_datetime: datetime,
-        organization_id: UUID,
-        exclude_event_id: Optional[UUID] = None,
-    ) -> List[Event]:
+    async def get_check_in_monitoring_stats(
+        self, event_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
-        Check for events that overlap with the given time range at a specific location
+        Get real-time check-in monitoring statistics for an event.
 
-        Returns list of overlapping events
+        Returns:
+            Tuple of (stats_dict, error_message)
         """
-        if not location_id:
-            return []
-
-        query = (
-            select(Event)
-            .where(Event.location_id == location_id)
-            .where(Event.organization_id == organization_id)
-            .where(Event.is_cancelled == False)
-            .where(
-                or_(
-                    # New event starts during existing event
-                    and_(
-                        Event.start_datetime <= start_datetime,
-                        Event.end_datetime > start_datetime
-                    ),
-                    # New event ends during existing event
-                    and_(
-                        Event.start_datetime < end_datetime,
-                        Event.end_datetime >= end_datetime
-                    ),
-                    # New event completely contains existing event
-                    and_(
-                        Event.start_datetime >= start_datetime,
-                        Event.end_datetime <= end_datetime
-                    ),
-                )
-            )
-        )
-
-        if exclude_event_id:
-            query = query.where(Event.id != exclude_event_id)
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
-    async def get_event_manager_emails(
-        self, event_id: UUID
-    ) -> List[str]:
-        """
-        Get email addresses of the event creator/manager for notification
-
-        Returns list of email addresses
-        """
+        # Get event
         result = await self.db.execute(
-            select(Event, User)
-            .join(User, Event.created_by == User.id)
-            .where(Event.id == event_id)
+            select(Event).where(Event.id == event_id)
         )
-        row = result.first()
+        event = result.scalar_one_or_none()
 
-        if not row:
-            return []
+        if not event:
+            return None, "Event not found"
 
-        event, creator = row
-        return [creator.email] if creator.email else []
+        if event.organization_id != organization_id:
+            return None, "Event not found in your organization"
+
+        # Calculate check-in window
+        now = datetime.utcnow()
+        check_in_start = event.start_datetime - timedelta(hours=1)
+        check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+        is_check_in_active = check_in_start <= now <= check_in_end
+
+        # Get all RSVPs with user details
+        rsvp_result = await self.db.execute(
+            select(EventRSVP, User)
+            .join(User, EventRSVP.user_id == User.id)
+            .where(EventRSVP.event_id == event_id)
+            .order_by(EventRSVP.checked_in_at.desc().nullslast())
+        )
+        rsvps_with_users = rsvp_result.all()
+
+        # Get total eligible members in organization
+        eligible_members_result = await self.db.execute(
+            select(func.count(User.id))
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)
+        )
+        total_eligible_members = eligible_members_result.scalar() or 0
+
+        # Calculate stats
+        total_rsvps = len(rsvps_with_users)
+        checked_in_rsvps = [r for r, u in rsvps_with_users if r.checked_in]
+        total_checked_in = len(checked_in_rsvps)
+        check_in_rate = (total_checked_in / total_eligible_members * 100) if total_eligible_members > 0 else 0
+
+        # Get recent check-ins (last 10)
+        recent_check_ins = []
+        for rsvp, user in rsvps_with_users:
+            if rsvp.checked_in and rsvp.checked_in_at:
+                recent_check_ins.append({
+                    "user_id": str(user.id),
+                    "user_name": f"{user.first_name} {user.last_name}",
+                    "user_email": user.email,
+                    "checked_in_at": rsvp.checked_in_at,
+                    "rsvp_status": rsvp.status.value,
+                    "guest_count": rsvp.guest_count or 0,
+                })
+                if len(recent_check_ins) >= 10:
+                    break
+
+        # Calculate average check-in time (minutes before event start)
+        avg_check_in_time = None
+        last_check_in_at = None
+        if checked_in_rsvps:
+            check_in_times = []
+            for rsvp in checked_in_rsvps:
+                if rsvp.checked_in_at:
+                    time_diff = (event.start_datetime - rsvp.checked_in_at).total_seconds() / 60
+                    check_in_times.append(time_diff)
+                    if not last_check_in_at or rsvp.checked_in_at > last_check_in_at:
+                        last_check_in_at = rsvp.checked_in_at
+
+            if check_in_times:
+                avg_check_in_time = sum(check_in_times) / len(check_in_times)
+
+        stats = {
+            "event_id": str(event.id),
+            "event_name": event.name,
+            "event_type": event.event_type.value,
+            "start_datetime": event.start_datetime,
+            "end_datetime": event.end_datetime,
+            "is_check_in_active": is_check_in_active,
+            "check_in_window_start": check_in_start,
+            "check_in_window_end": check_in_end,
+            "total_eligible_members": total_eligible_members,
+            "total_rsvps": total_rsvps,
+            "total_checked_in": total_checked_in,
+            "check_in_rate": round(check_in_rate, 2),
+            "recent_check_ins": recent_check_ins,
+            "avg_check_in_time_minutes": round(avg_check_in_time, 2) if avg_check_in_time else None,
+            "last_check_in_at": last_check_in_at,
+        }
+
+        return stats, None
