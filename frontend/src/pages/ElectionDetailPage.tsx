@@ -13,7 +13,7 @@ import { useAuthStore } from '../stores/authStore';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

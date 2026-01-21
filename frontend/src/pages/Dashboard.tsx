@@ -12,7 +12,7 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [userName, setUserName] = useState('Admin User');
+  const [_userName, _setUserName] = useState('Admin User');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {

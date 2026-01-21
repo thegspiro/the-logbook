@@ -318,7 +318,7 @@ class AnalyticsService {
   /**
    * Send to backend (placeholder)
    */
-  private async sendToBackend(event: AnalyticsEvent): Promise<void> {
+  private async sendToBackend(_event: AnalyticsEvent): Promise<void> {
     // TODO: Implement backend analytics storage
     /*
     try {

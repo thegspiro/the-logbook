@@ -4,24 +4,24 @@ import {
   Users,
   UserPlus,
   Upload,
-  Download,
+  Download as _Download,
   Search,
   Filter,
-  MoreVertical,
+  MoreVertical as _MoreVertical,
   Edit,
   Trash2,
   Phone,
   Mail,
-  MapPin,
-  Calendar,
-  Award,
-  AlertCircle,
+  MapPin as _MapPin,
+  Calendar as _Calendar,
+  Award as _Award,
+  AlertCircle as _AlertCircle,
 } from 'lucide-react';
 import { Member, MemberStats } from '../types/member';
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, _setMembers] = useState<Member[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
     active: 0,

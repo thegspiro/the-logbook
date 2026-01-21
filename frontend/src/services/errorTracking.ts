@@ -231,7 +231,7 @@ class ErrorTrackingService {
   /**
    * Send error to backend (placeholder for future implementation)
    */
-  private async sendToBackend(errorLog: ErrorLog): Promise<void> {
+  private async sendToBackend(_errorLog: ErrorLog): Promise<void> {
     // TODO: Implement backend error logging
     // This would send errors to your backend for persistent storage and analysis
     /*

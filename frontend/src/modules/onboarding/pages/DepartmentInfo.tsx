@@ -12,7 +12,6 @@ const DepartmentInfo: React.FC = () => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();

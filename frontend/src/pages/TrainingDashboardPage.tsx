@@ -11,7 +11,7 @@ import type {
   TrainingCourse,
   TrainingRecord,
   TrainingRequirement,
-  RequirementProgress,
+  RequirementProgress as _RequirementProgress,
 } from '../types/training';
 
 export default function TrainingDashboardPage() {
