@@ -33,6 +33,7 @@ async def api_root():
         "endpoints": {
             "docs": "/docs",
             "health": "/health",
-            "onboarding": "/api/v1/onboarding/status"
+            "onboarding": "/api/v1/onboarding/status",
+            "inventory": "/api/v1/inventory"
         }
     }

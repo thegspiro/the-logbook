@@ -394,6 +394,24 @@ DEFAULT_ROLES = {
             FUNDRAISING_MANAGE.name,
         ],
     },
+    "quartermaster": {
+        "name": "Quartermaster",
+        "slug": "quartermaster",
+        "description": "Manages department inventory, equipment, and gear assignments",
+        "is_system": True,
+        "priority": 85,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SETTINGS_VIEW.name,
+            INVENTORY_VIEW.name,
+            INVENTORY_MANAGE.name,
+            COMPLIANCE_VIEW.name,  # To see equipment certifications
+        ],
+    },
     "secretary": {
         "name": "Secretary",
         "slug": "secretary",
@@ -537,6 +555,7 @@ def get_admin_role_slugs() -> List[str]:
         "chief",
         "assistant_chief",
         "president",
+        "quartermaster",
         "vice_president",
         "secretary",
         "assistant_secretary",
