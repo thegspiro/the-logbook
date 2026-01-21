@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Shield, Plus, Trash2, CheckCircle, AlertCircle, Phone, Mail, User } from 'lucide-react';
+import { Users, Shield, Plus, Trash2, AlertCircle, Phone, Mail, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
 import { useOnboardingStorage } from '../hooks';
@@ -13,12 +13,6 @@ interface ITTeamMember {
   email: string;
   phone: string;
   role: string;
-}
-
-interface BackupAccessMethod {
-  type: 'email' | 'phone' | 'secondary_admin';
-  value: string;
-  verified: boolean;
 }
 
 const ITTeamBackupAccess: React.FC = () => {

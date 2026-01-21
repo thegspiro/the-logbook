@@ -4,8 +4,6 @@
  * SECURITY: Handles server-side sessions, CSRF tokens, and rate limiting
  */
 
-import { generateSecureToken } from '../utils/security';
-
 interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -268,8 +266,8 @@ class SecureApiClient {
     first_name: string;
     last_name: string;
     badge_number?: string;
-  }): Promise<ApiResponse<any>> {
-    const response = await this.request('POST', '/onboarding/admin-user', data, true);
+  }): Promise<ApiResponse<{ access_token?: string }>> {
+    const response = await this.request<{ access_token?: string }>('POST', '/onboarding/admin-user', data, true);
 
     // SECURITY: Clear password from memory immediately
     data.password = '';

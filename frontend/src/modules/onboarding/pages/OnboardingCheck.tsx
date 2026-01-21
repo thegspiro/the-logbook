@@ -12,7 +12,6 @@ interface OnboardingStatus {
 }
 
 const OnboardingCheck: React.FC = () => {
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -41,7 +40,6 @@ const OnboardingCheck: React.FC = () => {
       setError(
         'Unable to connect to the server. Please check your connection and try again.'
       );
-      setLoading(false);
     }
   };
 

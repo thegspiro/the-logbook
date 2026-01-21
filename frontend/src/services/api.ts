@@ -11,7 +11,7 @@ import type {
   Permission,
   PermissionCategory,
   UserWithRoles,
-  RoleAssignment,
+  RoleAssignment as _RoleAssignment,
   UserRoleResponse
 } from '../types/role';
 import type {

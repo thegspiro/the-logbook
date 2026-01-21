@@ -166,6 +166,6 @@ export const checkCSP = (): void => {
 export const preventClickjacking = (): void => {
   if (window.top !== window.self && !import.meta.env.DEV) {
     console.error('SECURITY: Possible clickjacking attempt detected');
-    window.top!.location = window.self.location;
+    window.top!.location.href = window.self.location.href;
   }
 };

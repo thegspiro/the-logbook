@@ -39,7 +39,7 @@ export const EventsPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
 
   useEffect(() => {
     fetchEvents();

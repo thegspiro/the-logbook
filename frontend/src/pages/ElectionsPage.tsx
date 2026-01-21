@@ -39,7 +39,7 @@ export const ElectionsPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
 
   useEffect(() => {
     fetchElections();

@@ -5,10 +5,10 @@ import {
   Download,
   FileText,
   CheckCircle,
-  XCircle,
-  AlertTriangle,
+  XCircle as _XCircle,
+  AlertTriangle as _AlertTriangle,
   ArrowRight,
-  X,
+  X as _X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
@@ -125,7 +125,7 @@ const ImportMembers: React.FC = () => {
     try {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
-      const headers = rows[0].map((h) => h.trim().toLowerCase());
+      const _headers = rows[0].map((h) => h.trim().toLowerCase());
 
       // TODO: Replace with actual API call
       // const formData = new FormData();

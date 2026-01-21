@@ -33,7 +33,7 @@ export const EventDetailPage: React.FC = () => {
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
 
-  const { checkPermission, user } = useAuthStore();
+  const { checkPermission, user: _user } = useAuthStore();
   const canManage = checkPermission('events.manage');
 
   useEffect(() => {

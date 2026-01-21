@@ -14,7 +14,7 @@ import type { QRCheckInData, RSVP } from '../types/event';
  */
 const EventSelfCheckInPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
