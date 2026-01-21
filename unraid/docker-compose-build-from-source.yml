@@ -3,8 +3,6 @@
 # For Unraid - Builds images locally instead of pulling from ghcr.io
 # ============================================
 
-version: '3.8'
-
 services:
   # ============================================
   # Database (MariaDB)
