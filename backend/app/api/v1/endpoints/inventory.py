@@ -1,0 +1,656 @@
+"""
+Inventory API Endpoints
+
+Endpoints for inventory management including categories, items, assignments,
+checkouts, maintenance, and reporting.
+"""
+
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
+from datetime import datetime
+
+from app.core.database import get_db
+from app.models.user import User
+from app.models.inventory import ItemStatus, AssignmentType
+from app.schemas.inventory import (
+    # Category schemas
+    InventoryCategoryCreate,
+    InventoryCategoryUpdate,
+    InventoryCategoryResponse,
+    # Item schemas
+    InventoryItemCreate,
+    InventoryItemUpdate,
+    InventoryItemResponse,
+    InventoryItemDetailResponse,
+    ItemsListResponse,
+    ItemRetireRequest,
+    # Assignment schemas
+    ItemAssignmentCreate,
+    ItemAssignmentResponse,
+    UnassignItemRequest,
+    # Checkout schemas
+    CheckOutCreate,
+    CheckOutRecordResponse,
+    CheckInRequest,
+    # Maintenance schemas
+    MaintenanceRecordCreate,
+    MaintenanceRecordUpdate,
+    MaintenanceRecordResponse,
+    MaintenanceDueItem,
+    # Summary schemas
+    InventorySummary,
+    LowStockItem,
+    UserInventoryResponse,
+)
+from app.services.inventory_service import InventoryService
+from app.api.dependencies import get_current_user, require_permission
+
+router = APIRouter()
+
+
+# ============================================
+# Category Endpoints
+# ============================================
+
+@router.get("/categories", response_model=List[InventoryCategoryResponse])
+async def list_categories(
+    item_type: Optional[str] = None,
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List all inventory categories
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    categories = await service.get_categories(
+        organization_id=current_user.organization_id,
+        item_type=item_type,
+        active_only=active_only,
+    )
+    return categories
+
+
+@router.post("/categories", response_model=InventoryCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_category(
+    category: InventoryCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a new inventory category
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    new_category, error = await service.create_category(
+        organization_id=current_user.organization_id,
+        category_data=category.model_dump(),
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return new_category
+
+
+@router.get("/categories/{category_id}", response_model=InventoryCategoryResponse)
+async def get_category(
+    category_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get a specific category by ID
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    category = await service.get_category_by_id(
+        category_id=category_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found",
+        )
+
+    return category
+
+
+# ============================================
+# Item Endpoints
+# ============================================
+
+@router.get("/items", response_model=ItemsListResponse)
+async def list_items(
+    category_id: Optional[UUID] = None,
+    status: Optional[str] = None,
+    assigned_to: Optional[UUID] = None,
+    search: Optional[str] = None,
+    active_only: bool = True,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    List inventory items with filtering and pagination
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+
+    # Convert status string to enum if provided
+    status_enum = None
+    if status:
+        try:
+            status_enum = ItemStatus(status)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status: {status}",
+            )
+
+    items, total = await service.get_items(
+        organization_id=current_user.organization_id,
+        category_id=category_id,
+        status=status_enum,
+        assigned_to=assigned_to,
+        search=search,
+        active_only=active_only,
+        skip=skip,
+        limit=limit,
+    )
+
+    return ItemsListResponse(
+        items=items,
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post("/items", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
+async def create_item(
+    item: InventoryItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a new inventory item
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    new_item, error = await service.create_item(
+        organization_id=current_user.organization_id,
+        item_data=item.model_dump(exclude_unset=True),
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return new_item
+
+
+@router.get("/items/{item_id}", response_model=InventoryItemResponse)
+async def get_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get a specific item by ID with full details
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    item = await service.get_item_by_id(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+        )
+
+    return item
+
+
+@router.patch("/items/{item_id}", response_model=InventoryItemResponse)
+async def update_item(
+    item_id: UUID,
+    update_data: InventoryItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update an inventory item
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    updated_item, error = await service.update_item(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        update_data=update_data.model_dump(exclude_unset=True),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return updated_item
+
+
+@router.post("/items/{item_id}/retire", status_code=status.HTTP_200_OK)
+async def retire_item(
+    item_id: UUID,
+    retire_data: ItemRetireRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Retire an item (soft delete)
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.retire_item(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        notes=retire_data.notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return {"message": "Item retired successfully"}
+
+
+# ============================================
+# Assignment Endpoints
+# ============================================
+
+@router.post("/items/{item_id}/assign", response_model=ItemAssignmentResponse)
+async def assign_item(
+    item_id: UUID,
+    assignment_data: ItemAssignmentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Assign an item to a user
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+
+    # Convert assignment_type string to enum
+    assignment_type = AssignmentType(assignment_data.assignment_type)
+
+    assignment, error = await service.assign_item_to_user(
+        item_id=assignment_data.item_id,
+        user_id=assignment_data.user_id,
+        organization_id=current_user.organization_id,
+        assigned_by=current_user.id,
+        assignment_type=assignment_type,
+        reason=assignment_data.assignment_reason,
+        expected_return_date=assignment_data.expected_return_date,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return assignment
+
+
+@router.post("/items/{item_id}/unassign", status_code=status.HTTP_200_OK)
+async def unassign_item(
+    item_id: UUID,
+    unassign_data: UnassignItemRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Unassign an item from its current user
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+
+    # Convert condition string to enum if provided
+    from app.models.inventory import ItemCondition
+    return_condition = None
+    if unassign_data.return_condition:
+        return_condition = ItemCondition(unassign_data.return_condition)
+
+    success, error = await service.unassign_item(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        returned_by=current_user.id,
+        return_condition=return_condition,
+        return_notes=unassign_data.return_notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return {"message": "Item unassigned successfully"}
+
+
+@router.get("/users/{user_id}/assignments", response_model=List[ItemAssignmentResponse])
+async def get_user_assignments(
+    user_id: UUID,
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get all assignments for a user
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    assignments = await service.get_user_assignments(
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+        active_only=active_only,
+    )
+    return assignments
+
+
+# ============================================
+# Check-Out/Check-In Endpoints
+# ============================================
+
+@router.post("/checkout", response_model=CheckOutRecordResponse, status_code=status.HTTP_201_CREATED)
+async def checkout_item(
+    checkout_data: CheckOutCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Check out an item to a user
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    checkout, error = await service.checkout_item(
+        item_id=checkout_data.item_id,
+        user_id=checkout_data.user_id,
+        organization_id=current_user.organization_id,
+        checked_out_by=current_user.id,
+        expected_return_at=checkout_data.expected_return_at,
+        reason=checkout_data.checkout_reason,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return checkout
+
+
+@router.post("/checkout/{checkout_id}/checkin", status_code=status.HTTP_200_OK)
+async def checkin_item(
+    checkout_id: UUID,
+    checkin_data: CheckInRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Check in an item
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+
+    # Convert condition string to enum
+    from app.models.inventory import ItemCondition
+    return_condition = ItemCondition(checkin_data.return_condition)
+
+    success, error = await service.checkin_item(
+        checkout_id=checkout_id,
+        organization_id=current_user.organization_id,
+        checked_in_by=current_user.id,
+        return_condition=return_condition,
+        damage_notes=checkin_data.damage_notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return {"message": "Item checked in successfully"}
+
+
+@router.get("/checkout/active", response_model=List[CheckOutRecordResponse])
+async def get_active_checkouts(
+    user_id: Optional[UUID] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get all active (not returned) checkouts
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    checkouts = await service.get_active_checkouts(
+        organization_id=current_user.organization_id,
+        user_id=user_id,
+    )
+    return checkouts
+
+
+@router.get("/checkout/overdue", response_model=List[CheckOutRecordResponse])
+async def get_overdue_checkouts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get all overdue checkouts
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    checkouts = await service.get_overdue_checkouts(
+        organization_id=current_user.organization_id
+    )
+    return checkouts
+
+
+# ============================================
+# Maintenance Endpoints
+# ============================================
+
+@router.post("/maintenance", response_model=MaintenanceRecordResponse, status_code=status.HTTP_201_CREATED)
+async def create_maintenance_record(
+    maintenance_data: MaintenanceRecordCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a maintenance record
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    maintenance, error = await service.create_maintenance_record(
+        item_id=maintenance_data.item_id,
+        organization_id=current_user.organization_id,
+        maintenance_data=maintenance_data.model_dump(exclude={"item_id"}, exclude_unset=True),
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return maintenance
+
+
+@router.get("/items/{item_id}/maintenance", response_model=List[MaintenanceRecordResponse])
+async def get_item_maintenance_history(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get maintenance history for an item
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    maintenance_records = await service.get_item_maintenance_history(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+    return maintenance_records
+
+
+@router.get("/maintenance/due", response_model=List[InventoryItemResponse])
+async def get_maintenance_due(
+    days_ahead: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get items with maintenance due within specified days
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    items = await service.get_maintenance_due(
+        organization_id=current_user.organization_id,
+        days_ahead=days_ahead,
+    )
+    return items
+
+
+# ============================================
+# Reporting & Analytics Endpoints
+# ============================================
+
+@router.get("/summary", response_model=InventorySummary)
+async def get_inventory_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get overall inventory summary statistics
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    summary = await service.get_inventory_summary(
+        organization_id=current_user.organization_id
+    )
+    return summary
+
+
+@router.get("/low-stock", response_model=List[LowStockItem])
+async def get_low_stock_alerts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get categories with low stock alerts
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    low_stock = await service.get_low_stock_items(
+        organization_id=current_user.organization_id
+    )
+    return low_stock
+
+
+@router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)
+async def get_user_inventory(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get user's complete inventory (for dashboard)
+
+    Users can view their own inventory.
+    Quartermasters can view any user's inventory.
+
+    **Authentication required**
+    """
+    # Check if user is viewing their own inventory or has inventory.view permission
+    if user_id != current_user.id:
+        # Check if user has inventory.view permission
+        has_permission = any(
+            "inventory.view" in [p.name for p in role.permissions]
+            for role in current_user.roles
+        )
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this user's inventory",
+            )
+
+    service = InventoryService(db)
+    inventory = await service.get_user_inventory(
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+    )
+    return inventory

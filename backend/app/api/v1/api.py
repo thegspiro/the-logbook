@@ -8,11 +8,13 @@ from fastapi import APIRouter
 
 # Import route modules
 from app.api.v1 import onboarding
+from app.api.v1.endpoints import inventory
 
 api_router = APIRouter()
 
 # Include route modules
 api_router.include_router(onboarding.router)
+api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 
 # Future route modules (to be implemented)
 # from app.api.v1.endpoints import auth, users, audit
@@ -30,6 +32,7 @@ async def api_root():
         "endpoints": {
             "docs": "/docs",
             "health": "/health",
-            "onboarding": "/api/v1/onboarding/status"
+            "onboarding": "/api/v1/onboarding/status",
+            "inventory": "/api/v1/inventory"
         }
     }
