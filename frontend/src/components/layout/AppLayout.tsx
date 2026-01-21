@@ -1,0 +1,71 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { TopNavigation } from './TopNavigation';
+import { SideNavigation } from './SideNavigation';
+
+interface AppLayoutProps {
+  children: React.ReactNode;
+}
+
+export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+  const navigate = useNavigate();
+  const [departmentName, setDepartmentName] = useState('Fire Department');
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
+
+  useEffect(() => {
+    // Check if user is authenticated
+    const authToken = localStorage.getItem('auth_token');
+    if (!authToken) {
+      navigate('/login');
+      return;
+    }
+
+    // Load department info and navigation preference
+    const savedDepartmentName = sessionStorage.getItem('departmentName');
+    const savedLogo = sessionStorage.getItem('logoData');
+    const savedLayout = sessionStorage.getItem('navigationLayout') as 'top' | 'left' | null;
+
+    if (savedDepartmentName) {
+      setDepartmentName(savedDepartmentName);
+    }
+    if (savedLogo) {
+      setLogoPreview(savedLogo);
+    }
+    if (savedLayout) {
+      setNavigationLayout(savedLayout);
+    }
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    sessionStorage.clear();
+    navigate('/login');
+  };
+
+  if (navigationLayout === 'left') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+        <SideNavigation
+          departmentName={departmentName}
+          logoPreview={logoPreview}
+          onLogout={handleLogout}
+        />
+        <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+      <TopNavigation
+        departmentName={departmentName}
+        logoPreview={logoPreview}
+        onLogout={handleLogout}
+      />
+      {children}
+    </div>
+  );
+};

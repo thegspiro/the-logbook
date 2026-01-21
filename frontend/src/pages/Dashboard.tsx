@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Users, FileText, Settings } from 'lucide-react';
+import { AppLayout } from '../components/layout';
 import { useNavigate } from 'react-router-dom';
-import { Home, Users, FileText, Settings, LogOut, Menu, X } from 'lucide-react';
 
 /**
  * Main Dashboard Component
@@ -11,161 +12,17 @@ import { Home, Users, FileText, Settings, LogOut, Menu, X } from 'lucide-react';
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [departmentName, setDepartmentName] = useState('Fire Department');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [_userName, _setUserName] = useState('Admin User');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    // Check if user is authenticated
-    const authToken = localStorage.getItem('auth_token');
-    if (!authToken) {
-      // Not authenticated, redirect to login
-      navigate('/login');
-      return;
-    }
-
-    // Load department info (would come from API in real implementation)
+    // Load department name for display
     const savedDepartmentName = sessionStorage.getItem('departmentName');
-    const savedLogo = sessionStorage.getItem('logoData');
-
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
     }
-    if (savedLogo) {
-      setLogoPreview(savedLogo);
-    }
-  }, [navigate]);
-
-  const handleLogout = () => {
-    // Clear authentication
-    localStorage.removeItem('auth_token');
-    sessionStorage.clear();
-
-    // Redirect to login
-    navigate('/login');
-  };
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
-      {/* Header / Navigation */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo and Department Name */}
-            <div className="flex items-center">
-              {logoPreview ? (
-                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center overflow-hidden">
-                  <img
-                    src={logoPreview}
-                    alt={`${departmentName} logo`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
-              ) : (
-                <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
-                  <Home className="w-6 h-6 text-white" />
-                </div>
-              )}
-              <div className="ml-3">
-                <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
-                <p className="text-slate-400 text-xs">Dashboard</p>
-              </div>
-            </div>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-4">
-              <a
-                href="#"
-                className="text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-              >
-                Dashboard
-              </a>
-              <a
-                href="/members"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/members');
-                }}
-                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-              >
-                Members
-              </a>
-              <a
-                href="#"
-                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-              >
-                Reports
-              </a>
-              <a
-                href="#"
-                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-              >
-                Settings
-              </a>
-              <button
-                onClick={handleLogout}
-                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
-            </nav>
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-white p-2 rounded-md hover:bg-white/10 transition-colors"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-
-          {/* Mobile Navigation */}
-          {mobileMenuOpen && (
-            <div className="md:hidden pb-4">
-              <div className="flex flex-col space-y-2">
-                <a
-                  href="#"
-                  className="text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-                >
-                  Dashboard
-                </a>
-                <a
-                  href="/members"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate('/members');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-                >
-                  Members
-                </a>
-                <a
-                  href="#"
-                  className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-                >
-                  Reports
-                </a>
-                <a
-                  href="#"
-                  className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
-                >
-                  Settings
-                </a>
-                <button
-                  onClick={handleLogout}
-                  className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Logout</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
-
+    <AppLayout>
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
@@ -269,7 +126,7 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
       </footer>
-    </div>
+    </AppLayout>
   );
 };
 
