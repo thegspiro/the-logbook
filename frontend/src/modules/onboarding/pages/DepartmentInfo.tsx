@@ -281,6 +281,92 @@ const DepartmentInfo: React.FC = () => {
             </p>
           </div>
 
+          {/* Navigation Layout Selection */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-200 mb-3">
+              Choose Navigation Layout
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Top Navigation Option */}
+              <button
+                type="button"
+                onClick={() => setNavigationLayout('top')}
+                className={`relative p-4 rounded-lg border-2 transition-all text-left ${
+                  navigationLayout === 'top'
+                    ? 'border-red-500 bg-red-500/10'
+                    : 'border-slate-600 hover:border-slate-500 bg-slate-900/30'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-semibold text-white mb-1">Top Navigation</p>
+                    <p className="text-sm text-slate-400">
+                      Horizontal menu bar at the top
+                    </p>
+                  </div>
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      navigationLayout === 'top'
+                        ? 'border-red-500 bg-red-500'
+                        : 'border-slate-500'
+                    }`}
+                  >
+                    {navigationLayout === 'top' && (
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                    )}
+                  </div>
+                </div>
+                {/* Visual Preview */}
+                <div className="bg-slate-800 rounded p-2">
+                  <div className="bg-red-600 h-6 rounded mb-1"></div>
+                  <div className="bg-slate-700 h-16 rounded"></div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Best for wider screens and familiar navigation
+                </p>
+              </button>
+
+              {/* Left Navigation Option */}
+              <button
+                type="button"
+                onClick={() => setNavigationLayout('left')}
+                className={`relative p-4 rounded-lg border-2 transition-all text-left ${
+                  navigationLayout === 'left'
+                    ? 'border-red-500 bg-red-500/10'
+                    : 'border-slate-600 hover:border-slate-500 bg-slate-900/30'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-semibold text-white mb-1">Side Navigation</p>
+                    <p className="text-sm text-slate-400">
+                      Vertical sidebar on the left
+                    </p>
+                  </div>
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      navigationLayout === 'left'
+                        ? 'border-red-500 bg-red-500'
+                        : 'border-slate-500'
+                    }`}
+                  >
+                    {navigationLayout === 'left' && (
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                    )}
+                  </div>
+                </div>
+                {/* Visual Preview */}
+                <div className="bg-slate-800 rounded p-2 flex gap-1">
+                  <div className="bg-red-600 w-6 h-20 rounded"></div>
+                  <div className="bg-slate-700 flex-1 h-20 rounded"></div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Best for more menu options and modern look
+                </p>
+              </button>
+            </div>
+          </div>
+
           {/* Error Message */}
           {error && (
             <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
