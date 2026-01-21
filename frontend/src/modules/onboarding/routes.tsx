@@ -10,7 +10,8 @@ import {
   FileStorageChoice,
   AuthenticationChoice,
   ITTeamBackupAccess,
-  ModuleSelection,
+  ModuleOverview,
+  ModuleConfigTemplate,
   AdminUserCreation,
 } from './pages';
 
@@ -74,8 +75,14 @@ export const OnboardingRoutes: React.FC = () => {
       {/* Onboarding wizard - IT Team & Backup Access */}
       <Route path="/onboarding/it-team" element={<ITTeamBackupAccess />} />
 
-      {/* Onboarding wizard - Module Selection */}
-      <Route path="/onboarding/module-selection" element={<ModuleSelection />} />
+      {/* Onboarding wizard - Module Overview */}
+      <Route path="/onboarding/modules" element={<ModuleOverview />} />
+
+      {/* Module Configuration Pages */}
+      <Route path="/onboarding/modules/:moduleId/config" element={<ModuleConfigTemplate />} />
+
+      {/* Legacy route redirect */}
+      <Route path="/onboarding/module-selection" element={<ModuleOverview />} />
 
       {/* Onboarding wizard - Admin User Creation */}
       <Route path="/onboarding/admin-user" element={<AdminUserCreation />} />
