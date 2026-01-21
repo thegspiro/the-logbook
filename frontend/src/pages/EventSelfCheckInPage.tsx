@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { QRCheckInData, RSVP } from '../types/event';
 
@@ -14,7 +14,6 @@ import type { QRCheckInData, RSVP } from '../types/event';
  */
 const EventSelfCheckInPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
-  const _navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

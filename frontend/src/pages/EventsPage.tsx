@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { EventListItem, EventCreate, EventType } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
@@ -39,7 +39,6 @@ export const EventsPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
-  const _navigate = useNavigate();
 
   useEffect(() => {
     fetchEvents();

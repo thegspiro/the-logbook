@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { electionService } from '../services/api';
 import type { ElectionListItem, ElectionCreate } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
@@ -39,7 +39,6 @@ export const ElectionsPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
-  const _navigate = useNavigate();
 
   useEffect(() => {
     fetchElections();

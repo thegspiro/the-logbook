@@ -125,7 +125,6 @@ const ImportMembers: React.FC = () => {
     try {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
-      const _headers = rows[0].map((h) => h.trim().toLowerCase());
 
       // TODO: Replace with actual API call
       // const formData = new FormData();
