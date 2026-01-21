@@ -205,8 +205,8 @@ const ModuleOverview: React.FC = () => {
 
       toast.success('Module configuration saved!');
 
-      // Navigate to completion
-      navigate('/onboarding/complete');
+      // Navigate to admin user creation
+      navigate('/onboarding/admin-user');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save module configuration');
       setSaving(false);
@@ -453,12 +453,12 @@ const ModuleOverview: React.FC = () => {
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
           <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
             <span>Setup Progress</span>
-            <span>Step 6 of 7</span>
+            <span>Step 9 of 10</span>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-2">
             <div
               className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: '86%' }}
+              style={{ width: '90%' }}
             />
           </div>
         </div>

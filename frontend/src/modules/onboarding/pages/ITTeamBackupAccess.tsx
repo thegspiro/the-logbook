@@ -163,8 +163,8 @@ const ITTeamBackupAccess: React.FC = () => {
 
       toast.success('IT team and backup access information saved securely');
 
-      // Navigate to module selection
-      navigate('/onboarding/module-selection');
+      // Navigate to module overview
+      navigate('/onboarding/modules');
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to save IT team information';
       toast.error(errorMessage);
