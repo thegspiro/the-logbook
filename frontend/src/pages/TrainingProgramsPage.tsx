@@ -8,9 +8,6 @@ import {
   Target,
   Download,
   Search,
-  Filter,
-  Edit,
-  Trash2,
   ChevronRight,
   Award,
   Calendar,
@@ -20,11 +17,8 @@ import { AppLayout } from '../components/layout';
 import { trainingProgramService } from '../services/api';
 import type {
   TrainingProgram,
-  ProgramWithDetails,
   TrainingRequirementEnhanced,
   ProgramStructureType,
-  RequirementType,
-  RequirementSource,
 } from '../types/training';
 
 type TabView = 'programs' | 'requirements' | 'templates';
@@ -499,7 +493,9 @@ const TrainingProgramsPage: React.FC = () => {
                             </div>
                           </div>
                           {!req.is_editable && (
-                            <AlertCircle className="w-5 h-5 text-yellow-500" title="Registry requirement (read-only)" />
+                            <div title="Registry requirement (read-only)">
+                              <AlertCircle className="w-5 h-5 text-yellow-500" />
+                            </div>
                           )}
                         </div>
                       </div>

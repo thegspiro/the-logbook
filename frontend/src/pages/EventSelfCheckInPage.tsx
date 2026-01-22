@@ -21,7 +21,7 @@ const EventSelfCheckInPage: React.FC = () => {
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInData, setCheckInData] = useState<RSVP | null>(null);
-  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
+  const [_alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [showCheckOutPrompt, setShowCheckOutPrompt] = useState(false);
 
   useEffect(() => {
@@ -365,7 +365,7 @@ const EventSelfCheckInPage: React.FC = () => {
             )}
 
             <button
-              onClick={handleCheckIn}
+              onClick={() => handleCheckIn()}
               disabled={checkingIn}
               className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
             >

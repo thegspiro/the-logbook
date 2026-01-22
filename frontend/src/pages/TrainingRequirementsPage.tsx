@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   FileText,
   Plus,
@@ -47,7 +46,6 @@ interface TrainingRequirement {
  * Supports department, state, and national registry requirements.
  */
 const TrainingRequirementsPage: React.FC = () => {
-  const navigate = useNavigate();
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
