@@ -738,10 +738,13 @@ export const eventService = {
   },
 
   /**
-   * Check in to an event (self-check-in via QR code)
+   * Check in to or out of an event (self-check-in/out via QR code)
    */
-  async selfCheckIn(eventId: string): Promise<import('../types/event').RSVP> {
-    const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/self-check-in`);
+  async selfCheckIn(eventId: string, isCheckout: boolean = false): Promise<import('../types/event').RSVP> {
+    const response = await api.post<import('../types/event').RSVP>(
+      `/events/${eventId}/self-check-in`,
+      { is_checkout: isCheckout }
+    );
     return response.data;
   },
 

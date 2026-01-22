@@ -34,6 +34,10 @@ export interface Event {
   allow_guests: boolean;
   send_reminders: boolean;
   reminder_hours_before: number;
+  check_in_window_type?: 'flexible' | 'strict' | 'window';
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
   custom_fields?: { [key: string]: any };
   attachments?: Array<{ [key: string]: string }>;
   is_cancelled: boolean;
@@ -80,6 +84,10 @@ export interface EventCreate {
   allow_guests?: boolean;
   send_reminders?: boolean;
   reminder_hours_before?: number;
+  check_in_window_type?: 'flexible' | 'strict' | 'window';
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
   custom_fields?: { [key: string]: any };
   attachments?: Array<{ [key: string]: string }>;
 }
@@ -120,9 +128,13 @@ export interface RSVP {
   updated_at: string;
   checked_in: boolean;
   checked_in_at?: string;
+  checked_out_at?: string;
+  attendance_duration_minutes?: number;
+  override_check_in_at?: string;
+  override_check_out_at?: string;
+  override_duration_minutes?: number;
   user_name?: string;
   user_email?: string;
-  attendance_duration_minutes?: number;
 }
 
 export interface RSVPCreate {
