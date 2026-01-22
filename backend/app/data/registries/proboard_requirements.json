@@ -1,0 +1,101 @@
+{
+  "registry_name": "Pro Board",
+  "registry_description": "International Fire Service Accreditation Congress - Pro Board",
+  "requirements": [
+    {
+      "name": "Firefighter I Certification Maintenance",
+      "description": "Maintain Pro Board Firefighter I certification",
+      "registry_code": "FF-I",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 24.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["probationary", "firefighter"],
+      "is_editable": true
+    },
+    {
+      "name": "Firefighter II Certification Maintenance",
+      "description": "Maintain Pro Board Firefighter II certification",
+      "registry_code": "FF-II",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 36.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["firefighter", "driver", "officer"],
+      "is_editable": true
+    },
+    {
+      "name": "Driver/Operator Pumper Certification",
+      "description": "Driver/Operator Pumper certification maintenance",
+      "registry_code": "DO-Pumper",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 20.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["driver"],
+      "is_editable": true
+    },
+    {
+      "name": "Driver/Operator Aerial Certification",
+      "description": "Driver/Operator Aerial apparatus certification maintenance",
+      "registry_code": "DO-Aerial",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 24.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["driver"],
+      "is_editable": true
+    },
+    {
+      "name": "Fire Officer I Certification Maintenance",
+      "description": "Maintain Pro Board Fire Officer I certification",
+      "registry_code": "FO-I",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 30.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["officer"],
+      "is_editable": true
+    },
+    {
+      "name": "Fire Officer II Certification Maintenance",
+      "description": "Maintain Pro Board Fire Officer II certification",
+      "registry_code": "FO-II",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 40.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["officer"],
+      "is_editable": true
+    },
+    {
+      "name": "Hazmat Operations Certification",
+      "description": "Hazardous Materials Operations level certification",
+      "registry_code": "HazMat-Ops",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 8.0,
+      "frequency": "annual",
+      "applies_to_all": true,
+      "is_editable": true
+    },
+    {
+      "name": "Fire Instructor I Certification Maintenance",
+      "description": "Maintain Fire Instructor I certification",
+      "registry_code": "Instructor-I",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 16.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["instructor"],
+      "is_editable": true
+    }
+  ]
+}

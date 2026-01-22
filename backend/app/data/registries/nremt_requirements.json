@@ -1,0 +1,104 @@
+{
+  "registry_name": "NREMT",
+  "registry_description": "National Registry of Emergency Medical Technicians",
+  "requirements": [
+    {
+      "name": "EMR Continuing Education",
+      "description": "Emergency Medical Responder recertification continuing education",
+      "registry_code": "EMR",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 40.0,
+      "frequency": "biannual",
+      "applies_to_all": false,
+      "required_positions": ["emr"],
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "EMT Continuing Education",
+      "description": "Emergency Medical Technician recertification continuing education",
+      "registry_code": "EMT",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 50.0,
+      "frequency": "biannual",
+      "applies_to_all": false,
+      "required_positions": ["emt"],
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "AEMT Continuing Education",
+      "description": "Advanced Emergency Medical Technician recertification continuing education",
+      "registry_code": "AEMT",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 75.0,
+      "frequency": "biannual",
+      "applies_to_all": false,
+      "required_positions": ["aemt"],
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "Paramedic Continuing Education",
+      "description": "Paramedic recertification continuing education",
+      "registry_code": "Paramedic",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 100.0,
+      "frequency": "biannual",
+      "applies_to_all": false,
+      "required_positions": ["paramedic"],
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "CPR/BLS Certification",
+      "description": "Cardiopulmonary Resuscitation and Basic Life Support certification",
+      "registry_code": "BLS",
+      "requirement_type": "certification",
+      "training_type": "certification",
+      "frequency": "biannual",
+      "applies_to_all": true,
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "ACLS Certification",
+      "description": "Advanced Cardiac Life Support certification for advanced providers",
+      "registry_code": "ACLS",
+      "requirement_type": "certification",
+      "training_type": "certification",
+      "frequency": "biannual",
+      "applies_to_all": false,
+      "required_positions": ["aemt", "paramedic"],
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "PALS Certification",
+      "description": "Pediatric Advanced Life Support certification",
+      "registry_code": "PALS",
+      "requirement_type": "certification",
+      "training_type": "certification",
+      "frequency": "biannual",
+      "applies_to_all": false,
+      "required_positions": ["aemt", "paramedic"],
+      "time_limit_days": 730,
+      "is_editable": true
+    },
+    {
+      "name": "PHTLS Certification",
+      "description": "Prehospital Trauma Life Support certification",
+      "registry_code": "PHTLS",
+      "requirement_type": "certification",
+      "training_type": "certification",
+      "frequency": "one_time",
+      "applies_to_all": false,
+      "required_positions": ["emt", "aemt", "paramedic"],
+      "is_editable": true
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "registry_name": "NFPA",
+  "registry_description": "National Fire Protection Association Standards",
+  "requirements": [
+    {
+      "name": "NFPA 1001 Firefighter I & II Annual Training",
+      "description": "Annual training requirement for firefighters certified to NFPA 1001 standard",
+      "registry_code": "NFPA 1001",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 36.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["firefighter", "driver", "officer"],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1002 Driver/Operator Continuing Education",
+      "description": "Annual driver/operator training requirement",
+      "registry_code": "NFPA 1002",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 24.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["driver"],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1021 Fire Officer Professional Development",
+      "description": "Annual training requirement for fire officers",
+      "registry_code": "NFPA 1021",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 40.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["officer"],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1041 Fire Service Instructor Annual Training",
+      "description": "Annual training for certified instructors",
+      "registry_code": "NFPA 1041",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 20.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": ["instructor"],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1403 Live Fire Training Compliance",
+      "description": "Annual live fire training requirements and safety protocols",
+      "registry_code": "NFPA 1403",
+      "requirement_type": "courses",
+      "training_type": "skills_practice",
+      "frequency": "annual",
+      "applies_to_all": true,
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1500 Occupational Safety Annual Training",
+      "description": "Annual occupational health and safety training",
+      "registry_code": "NFPA 1500",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 8.0,
+      "frequency": "annual",
+      "applies_to_all": true,
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1582 Medical Fitness Evaluation",
+      "description": "Annual medical evaluation requirement",
+      "registry_code": "NFPA 1582",
+      "requirement_type": "checklist",
+      "frequency": "annual",
+      "applies_to_all": true,
+      "checklist_items": [
+        "Annual medical examination",
+        "Physical fitness assessment",
+        "Vision and hearing test",
+        "Cardiovascular screening",
+        "Respiratory function test"
+      ],
+      "is_editable": true
+    }
+  ]
+}
