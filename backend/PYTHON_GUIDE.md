@@ -13,8 +13,8 @@ The backend has been rebuilt using **Python 3.11+ with FastAPI**:
 - **Redis**: Caching and session storage
 - **Pydantic**: Data validation with type hints
 - **Uvicorn**: ASGI server
-- **Passlib + Argon2**: Secure password hashing
-- **python-jose**: JWT token handling
+- **Argon2**: Secure password hashing (OWASP recommended)
+- **PyJWT**: JWT token handling
 
 ### Why Python?
 
@@ -186,33 +186,34 @@ pytest-watch
 
 ### Web Framework
 ```python
-fastapi==0.109.0        # Web framework
-uvicorn[standard]==0.27.0  # ASGI server
-pydantic==2.5.3         # Data validation
+fastapi==0.115.6        # Web framework
+uvicorn[standard]==0.34.0  # ASGI server
+pydantic==2.10.5        # Data validation
 ```
 
 ### Database
 ```python
-sqlalchemy==2.0.25      # ORM
-alembic==1.13.1         # Migrations
+sqlalchemy==2.0.36      # ORM
+alembic==1.14.0         # Migrations
 aiomysql==0.2.0         # Async MySQL driver
-pymysql==1.1.0          # MySQL driver (sync fallback)
+pymysql==1.1.1          # MySQL driver (sync fallback)
 ```
 
 ### Security
 ```python
-passlib[bcrypt]==1.7.4  # Password hashing
-python-jose[cryptography]==3.3.0  # JWT tokens
-argon2-cffi==23.1.0     # Argon2 hashing
+PyJWT[crypto]==2.10.1   # JWT tokens (replaces python-jose)
+bcrypt==4.2.1           # Password hashing
+argon2-cffi==23.1.0     # Argon2 hashing (OWASP recommended)
 pyotp==2.9.0            # TOTP for MFA
+cryptography==43.0.3    # Encryption & secure connections
 ```
 
 ### Integrations
 ```python
-boto3==1.34.24          # AWS SDK
-msal==1.26.0            # Microsoft authentication
-google-auth==2.26.2     # Google authentication
-twilio==8.11.1          # SMS
+boto3==1.35.95          # AWS SDK
+msal==1.31.1            # Microsoft authentication
+google-auth==2.37.0     # Google authentication
+twilio==9.4.0           # SMS
 ```
 
 ## 🔐 Security Features Implemented
@@ -246,35 +247,63 @@ if not results["verified"]:
 ### Password Hashing
 
 ```python
-from passlib.context import CryptContext
+from argon2 import PasswordHasher
 
-pwd_context = CryptContext(
-    schemes=["argon2"],
-    deprecated="auto"
+# Initialize Argon2 password hasher (OWASP recommended)
+password_hasher = PasswordHasher(
+    time_cost=3,        # Number of iterations
+    memory_cost=65536,  # Memory usage in KB (64 MB)
+    parallelism=4,      # Number of parallel threads
+    hash_len=32,        # Length of the hash in bytes
+    salt_len=16         # Length of the salt in bytes
 )
 
 # Hash password
-hashed = pwd_context.hash("user_password")
+hashed = password_hasher.hash("user_password")
 
 # Verify password
-is_valid = pwd_context.verify("user_password", hashed)
+try:
+    password_hasher.verify(hashed, "user_password")
+    is_valid = True
+
+    # Check if password needs rehashing (if parameters changed)
+    if password_hasher.check_needs_rehash(hashed):
+        # Rehash with new parameters
+        new_hashed = password_hasher.hash("user_password")
+except Exception:
+    is_valid = False
 ```
 
 ### JWT Authentication
 
 ```python
-from jose import jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from datetime import datetime, timedelta
 
 # Create access token
 access_token = jwt.encode(
     {
         "sub": str(user.id),
-        "exp": datetime.utcnow() + timedelta(minutes=480)
+        "exp": datetime.utcnow() + timedelta(minutes=480),
+        "iat": datetime.utcnow(),
+        "type": "access"
     },
     settings.SECRET_KEY,
     algorithm=settings.ALGORITHM
 )
+
+# Decode and verify token
+try:
+    payload = jwt.decode(
+        token,
+        settings.SECRET_KEY,
+        algorithms=[settings.ALGORITHM]
+    )
+    user_id = payload.get("sub")
+except InvalidTokenError:
+    # Handle invalid token (expired, tampered, etc.)
+    raise HTTPException(status_code=401, detail="Invalid token")
 ```
 
 ## 🔧 Configuration

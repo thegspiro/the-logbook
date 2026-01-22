@@ -49,17 +49,22 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 
 ## 🚀 Quick Start
 
+### Option 1: Automated Setup (Recommended)
+
 ```bash
 # Clone the repository
 git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
 
-# Copy environment configuration
-cp .env.example .env
+# Run the interactive setup wizard
+python3 scripts/setup-env.py
 
-# IMPORTANT: Edit .env and set strong passwords and secret keys
-# Generate secure keys with:
-python -c "import secrets; print(secrets.token_urlsafe(64))"
+# The wizard will:
+# - Generate secure secrets automatically
+# - Configure database and Redis
+# - Set up CORS and network settings
+# - Enable/disable modules
+# - Create your .env file
 
 # Start with Docker Compose (includes MySQL, Redis, Backend, Frontend)
 docker-compose up -d
@@ -72,6 +77,48 @@ docker-compose logs -f backend
 # - Backend API: http://localhost:3001
 # - API Docs: http://localhost:3001/docs
 ```
+
+### Option 2: Manual Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+
+# Copy environment configuration
+cp .env.example .env
+
+# Generate secure keys and update .env
+python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))"
+python3 -c "import secrets; print('ENCRYPTION_KEY=' + secrets.token_hex(32))"
+python3 -c "import secrets; print('DB_PASSWORD=' + secrets.token_urlsafe(32))"
+python3 -c "import secrets; print('REDIS_PASSWORD=' + secrets.token_urlsafe(32))"
+
+# Edit .env and replace CHANGE_ME values with generated secrets
+
+# Start with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f backend
+
+# Access the platform
+# - Frontend: http://localhost:3000
+# - Backend API: http://localhost:3001
+# - API Docs: http://localhost:3001/docs
+```
+
+### Unraid Installation
+
+For Unraid users, use the automated wizard:
+
+```bash
+cd /mnt/user/appdata/the-logbook
+python3 scripts/setup-env.py --unraid
+docker-compose up -d
+```
+
+See [unraid/UNRAID-INSTALLATION.md](unraid/UNRAID-INSTALLATION.md) for detailed Unraid instructions.
 
 ### First Time Setup
 
