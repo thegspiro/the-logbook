@@ -76,6 +76,7 @@ Pillow==10.2.0
 # API & Networking
 # ============================================
 httpx==0.26.0
+requests==2.31.0  # For health checks
 aiofiles==23.2.1
 websockets==12.0
 
