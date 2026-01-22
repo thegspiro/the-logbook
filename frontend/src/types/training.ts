@@ -2,6 +2,8 @@
  * Training type definitions
  */
 
+import type { Event, EventCreate } from './event';
+
 export type TrainingType =
   | 'certification'
   | 'continuing_education'
@@ -23,6 +25,88 @@ export type RequirementFrequency =
   | 'quarterly'
   | 'monthly'
   | 'one_time';
+
+/**
+ * Training Session
+ *
+ * Links a training event with a training course.
+ * When created, generates both an Event (for scheduling/RSVP/QR codes)
+ * and a TrainingCourse record.
+ */
+export interface TrainingSession {
+  id: string;
+  event_id: string;  // Links to Event table
+  course_id?: string;  // Links to TrainingCourse if using existing course
+
+  // Training-specific details
+  course_name: string;
+  course_code?: string;
+  training_type: TrainingType;
+  credit_hours: number;
+  instructor?: string;
+  max_participants?: number;
+
+  // Certification details
+  certification_number_prefix?: string;  // Will append member ID
+  issuing_agency?: string;
+  expiration_months?: number;
+
+  // Requirements
+  prerequisites?: string[];
+  materials_required?: string[];
+
+  // Populated from Event
+  event?: Event;
+
+  // Stats
+  registered_count?: number;
+  checked_in_count?: number;
+  completed_count?: number;
+
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface TrainingSessionCreate {
+  // Event details
+  title: string;
+  description?: string;
+  location?: string;
+  location_details?: string;
+  start_datetime: string;
+  end_datetime: string;
+  requires_rsvp?: boolean;
+  rsvp_deadline?: string;
+  max_attendees?: number;
+  is_mandatory?: boolean;
+  eligible_roles?: string[];
+
+  // Use existing course or create new
+  use_existing_course?: boolean;
+  course_id?: string;  // If using existing course
+
+  // Training details (for new course)
+  course_name?: string;
+  course_code?: string;
+  training_type: TrainingType;
+  credit_hours: number;
+  instructor?: string;
+
+  // Certification
+  issues_certification?: boolean;
+  certification_number_prefix?: string;
+  issuing_agency?: string;
+  expiration_months?: number;
+
+  // Requirements
+  prerequisites?: string[];
+  materials_required?: string[];
+
+  // Auto-completion settings
+  auto_create_records?: boolean;  // Create TrainingRecords on check-in
+  require_completion_confirmation?: boolean;  // Instructor must confirm completion
+}
 
 export interface TrainingCourse {
   id: string;

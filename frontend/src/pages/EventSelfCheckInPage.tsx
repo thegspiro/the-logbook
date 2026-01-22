@@ -132,6 +132,15 @@ const EventSelfCheckInPage: React.FC = () => {
               <h3 className="text-2xl font-semibold text-blue-900 mb-4">{qrData?.event_name}</h3>
 
               <div className="space-y-2 text-blue-800">
+                {qrData?.event_type === 'training' && (
+                  <div className="flex items-center mb-3">
+                    <svg className="h-5 w-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    <span className="font-semibold text-purple-900">Training Session</span>
+                  </div>
+                )}
+
                 {qrData?.location && (
                   <p>
                     <span className="font-medium">Location:</span> {qrData.location}
@@ -153,6 +162,20 @@ const EventSelfCheckInPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {qrData?.event_type === 'training' && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
+                <div className="flex items-start">
+                  <svg className="h-5 w-5 text-green-600 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-green-900 mb-1">Training Record Created</p>
+                    <p className="text-sm text-green-800">Your attendance has been logged and a training record will be created for this session.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <Link

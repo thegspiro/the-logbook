@@ -425,6 +425,91 @@ export const EventDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Training Session Details */}
+          {event.event_type === 'training' && event.custom_fields && (
+            <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-600">
+              <div className="flex items-center mb-4">
+                <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <h2 className="text-lg font-medium text-gray-900">Training Session Details</h2>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {event.custom_fields.course_name && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Course Name</p>
+                    <p className="text-sm text-gray-900">{event.custom_fields.course_name}</p>
+                  </div>
+                )}
+
+                {event.custom_fields.course_code && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Course Code</p>
+                    <p className="text-sm text-gray-900">{event.custom_fields.course_code}</p>
+                  </div>
+                )}
+
+                {event.custom_fields.credit_hours && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Credit Hours</p>
+                    <p className="text-sm text-gray-900">{event.custom_fields.credit_hours} hours</p>
+                  </div>
+                )}
+
+                {event.custom_fields.training_type && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Training Type</p>
+                    <p className="text-sm text-gray-900 capitalize">{event.custom_fields.training_type.replace('_', ' ')}</p>
+                  </div>
+                )}
+
+                {event.custom_fields.instructor && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Instructor</p>
+                    <p className="text-sm text-gray-900">{event.custom_fields.instructor}</p>
+                  </div>
+                )}
+
+                {event.custom_fields.issuing_agency && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Issuing Agency</p>
+                    <p className="text-sm text-gray-900">{event.custom_fields.issuing_agency}</p>
+                  </div>
+                )}
+
+                {event.custom_fields.expiration_months && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Certification Valid For</p>
+                    <p className="text-sm text-gray-900">{event.custom_fields.expiration_months} months</p>
+                  </div>
+                )}
+
+                {event.custom_fields.issues_certification && (
+                  <div className="col-span-2">
+                    <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
+                    </div>
+                  </div>
+                )}
+
+                {event.custom_fields.auto_create_records && (
+                  <div className="col-span-2">
+                    <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* User's RSVP Status */}
           {event.user_rsvp_status && (
             <div className="bg-white rounded-lg shadow p-6">
