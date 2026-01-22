@@ -42,6 +42,13 @@ class RSVPStatus(str, Enum):
     MAYBE = "maybe"
 
 
+class CheckInWindowType(str, Enum):
+    """Check-in window type enumeration"""
+    FLEXIBLE = "flexible"  # Anytime before event ends
+    STRICT = "strict"  # Only between actual_start_time and actual_end_time
+    WINDOW = "window"  # Configurable window (X minutes before/after)
+
+
 class Event(Base):
     """
     Event model for managing department events
@@ -83,6 +90,12 @@ class Event(Base):
     allow_guests = Column(Boolean, nullable=False, default=False)
     send_reminders = Column(Boolean, nullable=False, default=True)
     reminder_hours_before = Column(Integer, nullable=False, default=24)  # Hours before event to send reminder
+
+    # Check-in window settings
+    check_in_window_type = Column(SQLEnum(CheckInWindowType), nullable=False, default=CheckInWindowType.FLEXIBLE)
+    check_in_minutes_before = Column(Integer, nullable=True, default=15)  # For WINDOW type
+    check_in_minutes_after = Column(Integer, nullable=True, default=15)  # For WINDOW type
+    require_checkout = Column(Boolean, nullable=False, default=False)  # Require manual check-out
 
     # Custom fields
     custom_fields = Column(JSONB, nullable=True)  # Flexible storage for event-specific data
@@ -132,6 +145,15 @@ class EventRSVP(Base):
     # Actual attendance (filled in after event)
     checked_in = Column(Boolean, nullable=False, default=False)
     checked_in_at = Column(DateTime, nullable=True)
+    checked_out_at = Column(DateTime, nullable=True)
+    attendance_duration_minutes = Column(Integer, nullable=True)  # Calculated duration in minutes
+
+    # Attendance overrides (for managers/training officers)
+    override_check_in_at = Column(DateTime, nullable=True)  # Manual override of check-in time
+    override_check_out_at = Column(DateTime, nullable=True)  # Manual override of check-out time
+    override_duration_minutes = Column(Integer, nullable=True)  # Manual override of duration
+    overridden_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # Who made the override
+    overridden_at = Column(DateTime, nullable=True)  # When the override was made
 
     # Relationships
     event = relationship("Event", back_populates="rsvps")

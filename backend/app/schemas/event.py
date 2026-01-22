@@ -30,6 +30,10 @@ class EventBase(BaseModel):
     allow_guests: bool = Field(default=False)
     send_reminders: bool = Field(default=True)
     reminder_hours_before: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
+    check_in_window_type: Optional[str] = Field(default="flexible", description="Check-in window type: flexible, strict, window")
+    check_in_minutes_before: Optional[int] = Field(default=15, description="For 'window' type: minutes before event start")
+    check_in_minutes_after: Optional[int] = Field(default=15, description="For 'window' type: minutes after event start")
+    require_checkout: bool = Field(default=False, description="Require manual check-out")
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
 
@@ -57,6 +61,10 @@ class EventUpdate(BaseModel):
     allow_guests: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_hours_before: Optional[int] = Field(None, ge=1, le=168)
+    check_in_window_type: Optional[str] = None
+    check_in_minutes_before: Optional[int] = None
+    check_in_minutes_after: Optional[int] = None
+    require_checkout: Optional[bool] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[Dict[str, str]]] = None
 
@@ -129,13 +137,19 @@ class RSVPResponse(RSVPBase):
     updated_at: datetime
     checked_in: bool = False
     checked_in_at: Optional[datetime] = None
+    checked_out_at: Optional[datetime] = None
 
     # User details (populated by service)
     user_name: Optional[str] = None
     user_email: Optional[str] = None
 
     # Attendance duration (populated when event has actual times)
-    attendance_duration_minutes: Optional[float] = None
+    attendance_duration_minutes: Optional[int] = None
+
+    # Override fields (for manager adjustments)
+    override_check_in_at: Optional[datetime] = None
+    override_check_out_at: Optional[datetime] = None
+    override_duration_minutes: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -143,6 +157,11 @@ class RSVPResponse(RSVPBase):
 class CheckInRequest(BaseModel):
     """Schema for checking in an attendee"""
     user_id: UUID
+
+
+class SelfCheckInRequest(BaseModel):
+    """Schema for self check-in/check-out via QR code"""
+    is_checkout: bool = Field(default=False, description="Set to true for check-out")
 
 
 class RecordActualTimes(BaseModel):

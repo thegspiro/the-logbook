@@ -217,3 +217,118 @@ class TrainingRequirement(Base):
 
     def __repr__(self):
         return f"<TrainingRequirement(name={self.name}, year={self.year})>"
+
+
+class TrainingSession(Base):
+    """
+    Training Session model
+
+    Links an Event to a TrainingCourse to create a scheduled training session.
+    When members check in to the event, TrainingRecords are automatically created.
+    """
+
+    __tablename__ = "training_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Links to Event and Course
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    course_id = Column(UUID(as_uuid=True), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True)
+
+    # Training Details (stored here for quick access)
+    course_name = Column(String(255), nullable=False)
+    course_code = Column(String(50))
+    training_type = Column(Enum(TrainingType), nullable=False)
+    credit_hours = Column(Float, nullable=False)
+    instructor = Column(String(255))
+
+    # Certification Details
+    issues_certification = Column(Boolean, default=False)
+    certification_number_prefix = Column(String(50))  # Prefix for auto-generated cert numbers
+    issuing_agency = Column(String(255))
+    expiration_months = Column(Integer)
+
+    # Auto-completion Settings
+    auto_create_records = Column(Boolean, default=True)  # Create TrainingRecord on check-in
+    require_completion_confirmation = Column(Boolean, default=False)  # Instructor must confirm completion
+
+    # Approval Settings
+    approval_required = Column(Boolean, default=True)  # Require training officer approval
+    approval_deadline_days = Column(Integer, default=7)  # Days to approve after event ends
+
+    # Status
+    is_finalized = Column(Boolean, default=False)  # Event ended, approval workflow triggered
+    finalized_at = Column(DateTime(timezone=True))
+    finalized_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+
+    __table_args__ = (
+        Index('idx_training_session_event', 'event_id'),
+        Index('idx_training_session_org', 'organization_id'),
+    )
+
+    def __repr__(self):
+        return f"<TrainingSession(course_name={self.course_name}, event_id={self.event_id})>"
+
+
+class ApprovalStatus(str, enum.Enum):
+    """Training approval status"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    MODIFIED = "modified"
+    REJECTED = "rejected"
+
+
+class TrainingApproval(Base):
+    """
+    Training Approval model
+
+    Tracks pending training time approvals for training officers.
+    Created when a training session is finalized.
+    """
+
+    __tablename__ = "training_approvals"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Links
+    training_session_id = Column(UUID(as_uuid=True), ForeignKey("training_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Approval Token (for email link)
+    approval_token = Column(String(64), unique=True, nullable=False, index=True)  # Random token for secure access
+    token_expires_at = Column(DateTime(timezone=True), nullable=False)  # Token expiration
+
+    # Approval Details
+    status = Column(Enum(ApprovalStatus), default=ApprovalStatus.PENDING, index=True)
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    approved_at = Column(DateTime(timezone=True))
+    approval_notes = Column(Text)
+
+    # Deadline
+    approval_deadline = Column(DateTime(timezone=True), nullable=False)
+    reminder_sent_at = Column(DateTime(timezone=True))  # Track when reminder was sent
+
+    # Attendee Data (JSONB for flexibility)
+    # Format: [{"user_id": "...", "check_in": "...", "check_out": "...", "duration": 120, ...}]
+    attendee_data = Column(JSONB, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_approval_session', 'training_session_id'),
+        Index('idx_approval_status', 'status'),
+        Index('idx_approval_token', 'approval_token'),
+        Index('idx_approval_deadline', 'approval_deadline'),
+    )
+
+    def __repr__(self):
+        return f"<TrainingApproval(session_id={self.training_session_id}, status={self.status})>"

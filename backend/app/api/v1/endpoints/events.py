@@ -22,6 +22,7 @@ from app.schemas.event import (
     RSVPCreate,
     RSVPResponse,
     CheckInRequest,
+    SelfCheckInRequest,
     EventStats,
     RecordActualTimes,
     QRCheckInData,
@@ -631,25 +632,64 @@ async def get_qr_check_in_data(
 @router.post("/{event_id}/self-check-in", response_model=RSVPResponse)
 async def self_check_in(
     event_id: UUID,
+    check_in_data: Optional[SelfCheckInRequest] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Allow a user to check themselves in to an event via QR code
+    Allow a user to check themselves in or out of an event via QR code
 
-    This endpoint validates the time window and checks in the authenticated user.
-    If the user doesn't have an RSVP, one will be created automatically.
+    This endpoint validates the time window and checks in/out the authenticated user.
+    If the user doesn't have an RSVP, one will be created automatically on check-in.
+
+    Set `is_checkout: true` in the request body to check out.
 
     **Authentication required**
     """
     service = EventService(db)
+    is_checkout = check_in_data.is_checkout if check_in_data else False
+
     rsvp, error = await service.self_check_in(
         event_id=event_id,
         user_id=current_user.id,
         organization_id=current_user.organization_id,
+        is_checkout=is_checkout,
     )
 
     if error:
+        # Special case: already checked in - return success with message
+        if error == "ALREADY_CHECKED_IN":
+            # Get user details
+            from sqlalchemy import select
+            user_result = await db.execute(
+                select(User).where(User.id == rsvp.user_id)
+            )
+            user = user_result.scalar_one_or_none()
+
+            response = RSVPResponse(
+                id=rsvp.id,
+                event_id=rsvp.event_id,
+                user_id=rsvp.user_id,
+                status=rsvp.status.value,
+                guest_count=rsvp.guest_count,
+                notes=rsvp.notes,
+                responded_at=rsvp.responded_at,
+                updated_at=rsvp.updated_at,
+                checked_in=rsvp.checked_in,
+                checked_in_at=rsvp.checked_in_at,
+                checked_out_at=rsvp.checked_out_at,
+                attendance_duration_minutes=rsvp.attendance_duration_minutes,
+                user_name=f"{user.first_name} {user.last_name}" if user else None,
+                user_email=user.email if user else None,
+            )
+            # Add custom header to indicate already checked in
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content=response.model_dump(mode='json'),
+                headers={"X-Already-Checked-In": "true"}
+            )
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
@@ -673,6 +713,8 @@ async def self_check_in(
         updated_at=rsvp.updated_at,
         checked_in=rsvp.checked_in,
         checked_in_at=rsvp.checked_in_at,
+        checked_out_at=rsvp.checked_out_at,
+        attendance_duration_minutes=rsvp.attendance_duration_minutes,
         user_name=f"{user.first_name} {user.last_name}" if user else None,
         user_email=user.email if user else None,
     )
