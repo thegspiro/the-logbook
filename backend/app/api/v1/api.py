@@ -17,12 +17,6 @@ api_router.include_router(onboarding.router)
 api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 
-# Future route modules (to be implemented)
-# from app.api.v1.endpoints import auth, users, audit
-# api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
-# api_router.include_router(users.router, prefix="/users", tags=["users"])
-# api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
-
 # Placeholder routes
 @api_router.get("/")
 async def api_root():
@@ -34,6 +28,15 @@ async def api_root():
             "docs": "/docs",
             "health": "/health",
             "onboarding": "/api/v1/onboarding/status",
+            "auth": "/api/v1/auth",
+            "users": "/api/v1/users",
+            "organizations": "/api/v1/organizations",
+            "roles": "/api/v1/roles",
+            "events": "/api/v1/events",
+            "training_courses": "/api/v1/training/courses",
+            "training_sessions": "/api/v1/training/sessions",
+            "training_programs": "/api/v1/training/programs",
+            "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory"
         }
     }

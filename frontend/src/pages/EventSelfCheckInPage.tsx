@@ -21,6 +21,8 @@ const EventSelfCheckInPage: React.FC = () => {
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInData, setCheckInData] = useState<RSVP | null>(null);
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
+  const [showCheckOutPrompt, setShowCheckOutPrompt] = useState(false);
 
   useEffect(() => {
     if (!eventId) return;
@@ -42,21 +44,46 @@ const EventSelfCheckInPage: React.FC = () => {
     }
   };
 
-  const handleCheckIn = async () => {
+  const handleCheckIn = async (isCheckOut: boolean = false) => {
     if (!eventId) return;
 
     try {
       setCheckingIn(true);
       setError(null);
-      const rsvp = await eventService.selfCheckIn(eventId);
-      setCheckInData(rsvp);
-      setCheckedIn(true);
+
+      const rsvp = await eventService.selfCheckIn(eventId, isCheckOut);
+
+      // Check if user was already checked in (from response headers or data)
+      if (!isCheckOut && rsvp.checked_in && !rsvp.checked_out_at) {
+        // User was already checked in, prompt for check-out
+        setAlreadyCheckedIn(true);
+        setCheckInData(rsvp);
+        setShowCheckOutPrompt(true);
+      } else {
+        // Successfully checked in or out
+        setCheckInData(rsvp);
+        setCheckedIn(true);
+        setShowCheckOutPrompt(false);
+      }
     } catch (err: any) {
       console.error('Error checking in:', err);
-      setError(err.response?.data?.detail || 'Failed to check in');
+      const errorMessage = err.response?.data?.detail || 'Failed to check in';
+
+      // Special handling for "already checked in" message
+      if (errorMessage.includes('already checked in')) {
+        setAlreadyCheckedIn(true);
+        setShowCheckOutPrompt(true);
+        setError(null); // Don't show as error, show as prompt
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setCheckingIn(false);
     }
+  };
+
+  const handleCheckOut = async () => {
+    await handleCheckIn(true);
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -113,7 +140,74 @@ const EventSelfCheckInPage: React.FC = () => {
     );
   }
 
+  // Show check-out prompt if already checked in
+  if (showCheckOutPrompt && checkInData && !checkedIn) {
+    return (
+      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-gray-50">
+        <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="text-center">
+            {/* Info Icon */}
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-6">
+              <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Already Checked In</h2>
+            <p className="text-xl text-gray-600 mb-8">You're already checked in to this event</p>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
+              <h3 className="text-2xl font-semibold text-blue-900 mb-4">{qrData?.event_name}</h3>
+
+              <div className="space-y-2 text-blue-800">
+                <p>
+                  <span className="font-medium">Checked In At:</span>{' '}
+                  {checkInData.checked_in_at && formatTime(checkInData.checked_in_at)}
+                </p>
+
+                {qrData?.location && (
+                  <p>
+                    <span className="font-medium">Location:</span> {qrData.location}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-red-800">{error}</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <button
+                onClick={handleCheckOut}
+                disabled={checkingIn}
+                className="w-full px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {checkingIn ? 'Checking Out...' : 'Check Out of This Event'}
+              </button>
+
+              <p className="text-sm text-gray-500 text-center">
+                By checking out, you confirm you are leaving this event
+              </p>
+
+              <Link
+                to={`/events/${eventId}`}
+                className="block w-full px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium text-center"
+              >
+                View Event Details
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (checkedIn && checkInData) {
+    const isCheckOut = checkInData.checked_out_at !== null && checkInData.checked_out_at !== undefined;
+
     return (
       <div className="max-w-2xl mx-auto p-6 min-h-screen bg-gray-50">
         <div className="bg-white rounded-lg shadow-md p-8">
@@ -125,13 +219,26 @@ const EventSelfCheckInPage: React.FC = () => {
               </svg>
             </div>
 
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Successfully Checked In!</h2>
-            <p className="text-xl text-gray-600 mb-8">You've been checked in to:</p>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              {isCheckOut ? 'Successfully Checked Out!' : 'Successfully Checked In!'}
+            </h2>
+            <p className="text-xl text-gray-600 mb-8">
+              {isCheckOut ? "You've been checked out of:" : "You've been checked in to:"}
+            </p>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
               <h3 className="text-2xl font-semibold text-blue-900 mb-4">{qrData?.event_name}</h3>
 
               <div className="space-y-2 text-blue-800">
+                {qrData?.event_type === 'training' && (
+                  <div className="flex items-center mb-3">
+                    <svg className="h-5 w-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    <span className="font-semibold text-purple-900">Training Session</span>
+                  </div>
+                )}
+
                 {qrData?.location && (
                   <p>
                     <span className="font-medium">Location:</span> {qrData.location}
@@ -151,8 +258,36 @@ const EventSelfCheckInPage: React.FC = () => {
                     {formatTime(checkInData.checked_in_at)}
                   </p>
                 )}
+
+                {isCheckOut && checkInData.checked_out_at && (
+                  <p>
+                    <span className="font-medium">Checked Out At:</span>{' '}
+                    {formatTime(checkInData.checked_out_at)}
+                  </p>
+                )}
+
+                {isCheckOut && checkInData.attendance_duration_minutes && (
+                  <p>
+                    <span className="font-medium">Duration:</span>{' '}
+                    {Math.floor(checkInData.attendance_duration_minutes / 60)}h {checkInData.attendance_duration_minutes % 60}m
+                  </p>
+                )}
               </div>
             </div>
+
+            {qrData?.event_type === 'training' && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
+                <div className="flex items-start">
+                  <svg className="h-5 w-5 text-green-600 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-green-900 mb-1">Training Record Created</p>
+                    <p className="text-sm text-green-800">Your attendance has been logged and a training record will be created for this session.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <Link

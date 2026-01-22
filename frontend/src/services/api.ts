@@ -34,6 +34,26 @@ import type {
   UserTrainingStats,
   TrainingReport,
   RequirementProgress,
+  // Training Program types
+  TrainingRequirementEnhanced,
+  TrainingRequirementEnhancedCreate,
+  TrainingProgram,
+  TrainingProgramCreate,
+  ProgramPhase,
+  ProgramPhaseCreate,
+  ProgramRequirement,
+  ProgramRequirementCreate,
+  ProgramMilestone,
+  ProgramMilestoneCreate,
+  ProgramEnrollment,
+  ProgramEnrollmentCreate,
+  RequirementProgressRecord,
+  RequirementProgressUpdate,
+  ProgramWithDetails,
+  MemberProgramProgress,
+  RegistryImportResult,
+  BulkEnrollmentRequest,
+  BulkEnrollmentResponse,
 } from '../types/training';
 import type {
   Event,
@@ -487,6 +507,206 @@ export const trainingService = {
   },
 };
 
+export const trainingProgramService = {
+  // ==================== Training Requirements ====================
+
+  /**
+   * Get enhanced training requirements with filters
+   */
+  async getRequirementsEnhanced(params?: {
+    source?: string;
+    registry_name?: string;
+    requirement_type?: string;
+    position?: string;
+  }): Promise<TrainingRequirementEnhanced[]> {
+    const response = await api.get<TrainingRequirementEnhanced[]>('/training/programs/requirements', { params });
+    return response.data;
+  },
+
+  /**
+   * Get a specific enhanced requirement
+   */
+  async getRequirementEnhanced(requirementId: string): Promise<TrainingRequirementEnhanced> {
+    const response = await api.get<TrainingRequirementEnhanced>(`/training/programs/requirements/${requirementId}`);
+    return response.data;
+  },
+
+  /**
+   * Create an enhanced training requirement
+   */
+  async createRequirementEnhanced(requirement: TrainingRequirementEnhancedCreate): Promise<TrainingRequirementEnhanced> {
+    const response = await api.post<TrainingRequirementEnhanced>('/training/programs/requirements', requirement);
+    return response.data;
+  },
+
+  /**
+   * Update an enhanced training requirement
+   */
+  async updateRequirementEnhanced(requirementId: string, updates: Partial<TrainingRequirementEnhancedCreate>): Promise<TrainingRequirementEnhanced> {
+    const response = await api.patch<TrainingRequirementEnhanced>(`/training/programs/requirements/${requirementId}`, updates);
+    return response.data;
+  },
+
+  // ==================== Training Programs ====================
+
+  /**
+   * Get all training programs
+   */
+  async getPrograms(params?: {
+    target_position?: string;
+    is_template?: boolean;
+  }): Promise<TrainingProgram[]> {
+    const response = await api.get<TrainingProgram[]>('/training/programs/programs', { params });
+    return response.data;
+  },
+
+  /**
+   * Get a program with full details
+   */
+  async getProgram(programId: string): Promise<ProgramWithDetails> {
+    const response = await api.get<ProgramWithDetails>(`/training/programs/programs/${programId}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new training program
+   */
+  async createProgram(program: TrainingProgramCreate): Promise<TrainingProgram> {
+    const response = await api.post<TrainingProgram>('/training/programs/programs', program);
+    return response.data;
+  },
+
+  // ==================== Program Phases ====================
+
+  /**
+   * Get phases for a program
+   */
+  async getProgramPhases(programId: string): Promise<ProgramPhase[]> {
+    const response = await api.get<ProgramPhase[]>(`/training/programs/programs/${programId}/phases`);
+    return response.data;
+  },
+
+  /**
+   * Create a program phase
+   */
+  async createProgramPhase(programId: string, phase: ProgramPhaseCreate): Promise<ProgramPhase> {
+    const response = await api.post<ProgramPhase>(`/training/programs/programs/${programId}/phases`, phase);
+    return response.data;
+  },
+
+  // ==================== Program Requirements ====================
+
+  /**
+   * Get requirements for a program
+   */
+  async getProgramRequirements(programId: string, phaseId?: string): Promise<ProgramRequirement[]> {
+    const response = await api.get<ProgramRequirement[]>(`/training/programs/programs/${programId}/requirements`, {
+      params: { phase_id: phaseId },
+    });
+    return response.data;
+  },
+
+  /**
+   * Add a requirement to a program
+   */
+  async addProgramRequirement(programId: string, requirement: ProgramRequirementCreate): Promise<ProgramRequirement> {
+    const response = await api.post<ProgramRequirement>(`/training/programs/programs/${programId}/requirements`, requirement);
+    return response.data;
+  },
+
+  // ==================== Program Milestones ====================
+
+  /**
+   * Create a program milestone
+   */
+  async createMilestone(programId: string, milestone: ProgramMilestoneCreate): Promise<ProgramMilestone> {
+    const response = await api.post<ProgramMilestone>(`/training/programs/programs/${programId}/milestones`, milestone);
+    return response.data;
+  },
+
+  // ==================== Program Enrollments ====================
+
+  /**
+   * Enroll a member in a program
+   */
+  async enrollMember(enrollment: ProgramEnrollmentCreate): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>('/training/programs/enrollments', enrollment);
+    return response.data;
+  },
+
+  /**
+   * Get current user's enrollments
+   */
+  async getMyEnrollments(status?: string): Promise<ProgramEnrollment[]> {
+    const response = await api.get<ProgramEnrollment[]>('/training/programs/enrollments/me', {
+      params: { status },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get enrollments for a specific user
+   */
+  async getUserEnrollments(userId: string, status?: string): Promise<ProgramEnrollment[]> {
+    const response = await api.get<ProgramEnrollment[]>(`/training/programs/enrollments/user/${userId}`, {
+      params: { status },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get detailed enrollment progress
+   */
+  async getEnrollmentProgress(enrollmentId: string): Promise<MemberProgramProgress> {
+    const response = await api.get<MemberProgramProgress>(`/training/programs/enrollments/${enrollmentId}`);
+    return response.data;
+  },
+
+  // ==================== Progress Tracking ====================
+
+  /**
+   * Update requirement progress
+   */
+  async updateProgress(progressId: string, updates: RequirementProgressUpdate): Promise<RequirementProgressRecord> {
+    const response = await api.patch<RequirementProgressRecord>(`/training/programs/progress/${progressId}`, updates);
+    return response.data;
+  },
+
+  // ==================== Program Duplication ====================
+
+  /**
+   * Duplicate a program with all phases, requirements, and milestones
+   */
+  async duplicateProgram(programId: string, newName: string, incrementVersion: boolean = true): Promise<TrainingProgram> {
+    const response = await api.post<TrainingProgram>(`/training/programs/programs/${programId}/duplicate`, null, {
+      params: { new_name: newName, increment_version: incrementVersion },
+    });
+    return response.data;
+  },
+
+  // ==================== Bulk Enrollment ====================
+
+  /**
+   * Enroll multiple members in a program
+   */
+  async bulkEnrollMembers(programId: string, request: BulkEnrollmentRequest): Promise<BulkEnrollmentResponse> {
+    const response = await api.post<BulkEnrollmentResponse>(`/training/programs/programs/${programId}/bulk-enroll`, request);
+    return response.data;
+  },
+
+  // ==================== Registry Import ====================
+
+  /**
+   * Import requirements from a registry
+   */
+  async importRegistry(registryName: string, skipExisting: boolean = true): Promise<RegistryImportResult> {
+    const response = await api.post<RegistryImportResult>(`/training/programs/requirements/import/${registryName}`, null, {
+      params: { skip_existing: skipExisting },
+    });
+    return response.data;
+  },
+};
+
 export const electionService = {
   /**
    * Get all elections
@@ -738,10 +958,13 @@ export const eventService = {
   },
 
   /**
-   * Check in to an event (self-check-in via QR code)
+   * Check in to or out of an event (self-check-in/out via QR code)
    */
-  async selfCheckIn(eventId: string): Promise<import('../types/event').RSVP> {
-    const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/self-check-in`);
+  async selfCheckIn(eventId: string, isCheckout: boolean = false): Promise<import('../types/event').RSVP> {
+    const response = await api.post<import('../types/event').RSVP>(
+      `/events/${eventId}/self-check-in`,
+      { is_checkout: isCheckout }
+    );
     return response.data;
   },
 

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
-from app.models.event import Event, EventRSVP, EventType, RSVPStatus
+from app.models.event import Event, EventRSVP, EventType, RSVPStatus, CheckInWindowType
 from app.models.user import User
 from app.models.location import Location
 from app.schemas.event import (
@@ -561,14 +561,50 @@ class EventService:
             "location": event.location,
         }, None
 
+    def _validate_check_in_window(self, event: Event, now: datetime) -> Tuple[bool, Optional[str]]:
+        """
+        Validate if check-in is allowed based on event's check-in window settings
+
+        Returns: (is_valid, error_message)
+        """
+        check_in_window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
+
+        if check_in_window_type == CheckInWindowType.FLEXIBLE:
+            # Allow check-in anytime before event ends
+            check_in_start = event.start_datetime - timedelta(hours=24)  # Allow up to 24 hours before
+            check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+
+        elif check_in_window_type == CheckInWindowType.STRICT:
+            # Only between actual start and end times
+            check_in_start = event.actual_start_time if event.actual_start_time else event.start_datetime
+            check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
+
+        else:  # WINDOW type
+            # Configurable window before/after start
+            minutes_before = event.check_in_minutes_before or 15
+            minutes_after = event.check_in_minutes_after or 15
+            check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
+            check_in_end = event.end_datetime + timedelta(minutes=minutes_after)
+
+        if now < check_in_start:
+            return False, f"Check-in is not available yet. Opens at {check_in_start.strftime('%I:%M %p')}."
+
+        if now > check_in_end:
+            return False, "Check-in is no longer available. The event has ended."
+
+        return True, None
+
     async def self_check_in(
-        self, event_id: UUID, user_id: UUID, organization_id: UUID
+        self, event_id: UUID, user_id: UUID, organization_id: UUID, is_checkout: bool = False
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """
-        Allow a user to check themselves in via QR code
+        Allow a user to check themselves in or out via QR code
 
-        Similar to check_in_attendee but with additional time window validation
-        and duplicate handling.
+        Args:
+            event_id: Event ID
+            user_id: User ID
+            organization_id: Organization ID
+            is_checkout: True if this is a check-out request
 
         Returns: (rsvp, error_message)
         """
@@ -597,16 +633,12 @@ class EventService:
         if not user:
             return None, "User not found in organization"
 
-        # Check time window
         now = datetime.utcnow()
-        check_in_start = event.start_datetime - timedelta(hours=1)
-        check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
 
-        if now < check_in_start:
-            return None, "Check-in is not available yet. It opens 1 hour before the event."
-
-        if now > check_in_end:
-            return None, "Check-in is no longer available. The event has ended."
+        # Validate check-in window
+        is_valid, error_msg = self._validate_check_in_window(event, now)
+        if not is_valid:
+            return None, error_msg
 
         # Get or create RSVP
         rsvp_result = await self.db.execute(
@@ -617,6 +649,9 @@ class EventService:
         rsvp = rsvp_result.scalar_one_or_none()
 
         if not rsvp:
+            if is_checkout:
+                return None, "Cannot check out without checking in first"
+
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
                 event_id=event_id,
@@ -627,17 +662,100 @@ class EventService:
             )
             self.db.add(rsvp)
 
-        # Check if already checked in
+        # Handle check-out
+        if is_checkout:
+            if not rsvp.checked_in:
+                return None, "You are not checked in to this event"
+
+            if rsvp.checked_out_at:
+                return None, "You have already checked out of this event"
+
+            rsvp.checked_out_at = now
+
+            # Calculate attendance duration
+            check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
+            check_out_time = now
+            if check_in_time and check_out_time:
+                duration = (check_out_time - check_in_time).total_seconds() / 60
+                rsvp.attendance_duration_minutes = int(duration)
+
+            await self.db.commit()
+            await self.db.refresh(rsvp)
+
+            return rsvp, None
+
+        # Handle check-in
         if rsvp.checked_in:
-            return None, "You are already checked in to this event"
+            # Already checked in - return special message to prompt for checkout
+            return rsvp, "ALREADY_CHECKED_IN"
 
         rsvp.checked_in = True
-        rsvp.checked_in_at = datetime.utcnow()
+        rsvp.checked_in_at = now
 
         await self.db.commit()
         await self.db.refresh(rsvp)
 
+        # Auto-create TrainingRecord if this is a training event
+        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
+
         return rsvp, None
+
+    async def _auto_create_training_record(
+        self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
+    ) -> None:
+        """
+        Auto-create a TrainingRecord if the event is a training session with auto_create_records enabled
+        """
+        if event.event_type != EventType.TRAINING:
+            return
+
+        # Check if this event has a training session
+        session_result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.event_id == event.id)
+        )
+        training_session = session_result.scalar_one_or_none()
+
+        if not training_session:
+            return
+
+        if not training_session.auto_create_records:
+            return
+
+        # Check if training record already exists
+        existing_record_result = await self.db.execute(
+            select(TrainingRecord)
+            .where(TrainingRecord.user_id == user_id)
+            .where(TrainingRecord.course_name == training_session.course_name)
+            .where(TrainingRecord.scheduled_date == event.start_datetime.date())
+        )
+        existing_record = existing_record_result.scalar_one_or_none()
+
+        if existing_record:
+            return  # Record already exists
+
+        # Create training record
+        training_record = TrainingRecord(
+            organization_id=organization_id,
+            user_id=user_id,
+            course_id=training_session.course_id,
+            course_name=training_session.course_name,
+            course_code=training_session.course_code,
+            training_type=training_session.training_type,
+            scheduled_date=event.start_datetime.date(),
+            completion_date=None,  # Will be set when event ends or approved
+            status=TrainingStatus.IN_PROGRESS,
+            hours_completed=0.0,  # Will be calculated from attendance duration
+            credit_hours=training_session.credit_hours,
+            instructor=training_session.instructor,
+            location=event.location,
+            certification_number=None,  # Will be generated upon completion if applicable
+            issuing_agency=training_session.issuing_agency if training_session.issues_certification else None,
+            created_by=user_id,
+        )
+
+        self.db.add(training_record)
+        await self.db.commit()
 
     async def get_check_in_monitoring_stats(
         self, event_id: UUID, organization_id: UUID

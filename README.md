@@ -22,7 +22,13 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 
 ## 🔌 Optional Modules
 
-- Training & Certification Tracking
+- **Training & Certification Tracking** ([Documentation](docs/TRAINING_PROGRAMS.md))
+  - Multi-type requirements (hours, shifts, calls, skills, checklists)
+  - Phase-based program progression
+  - NFPA, NREMT, and Pro Board registry integration
+  - Member progress tracking and dashboard widgets
+  - Template system with duplication
+  - Prerequisite programs and concurrent enrollment controls
 - Compliance Management
 - Scheduling & Shift Management
 - Inventory Management
@@ -80,6 +86,7 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 - [Configuration Guide](docs/configuration/README.md)
 - [Module Documentation](docs/modules/README.md)
 - [API Documentation](docs/api/README.md)
+- [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
 - [Security Guide](docs/security/README.md)
 - [Deployment Guide](docs/deployment/README.md)
 
