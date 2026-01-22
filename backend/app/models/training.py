@@ -408,6 +408,7 @@ class TrainingProgram(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text)
     code = Column(String(50))  # e.g., "PROB-2024", "DRIVER-CERT"
+    version = Column(Integer, default=1)  # Version number for template duplication
 
     # Target Audience
     target_position = Column(String(100))  # probationary, driver_candidate, officer, aic, etc.
@@ -416,9 +417,19 @@ class TrainingProgram(Base):
     # Structure
     structure_type = Column(Enum(ProgramStructureType), nullable=False, default=ProgramStructureType.FLEXIBLE)
 
+    # Prerequisites
+    prerequisite_program_ids = Column(JSONB)  # Programs that must be completed before enrollment
+
+    # Enrollment Settings
+    allows_concurrent_enrollment = Column(Boolean, default=True)  # Can member be in multiple programs
+
     # Time Limits
     time_limit_days = Column(Integer)  # Overall program completion deadline
     warning_days_before = Column(Integer, default=30)  # Send warning X days before deadline
+
+    # Reminder Settings
+    reminder_conditions = Column(JSONB)  # Conditional reminder rules
+    # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -462,6 +473,9 @@ class ProgramPhase(Base):
     # Prerequisites
     prerequisite_phase_ids = Column(JSONB)  # Phases that must be completed first
 
+    # Advancement Settings
+    requires_manual_advancement = Column(Boolean, default=False)  # Officer must approve advancement to next phase
+
     # Time Limits
     time_limit_days = Column(Integer)  # Deadline from phase start
 
@@ -497,8 +511,16 @@ class ProgramRequirement(Base):
     requirement_id = Column(UUID(as_uuid=True), ForeignKey("training_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Requirement Settings
-    is_mandatory = Column(Boolean, default=True)
-    order = Column(Integer)  # For sequential programs
+    is_required = Column(Boolean, default=True)  # Required vs optional
+    is_prerequisite = Column(Boolean, default=False)  # Must complete before other requirements
+    sort_order = Column(Integer, default=0)  # Display order within program/phase
+
+    # Program-Specific Customization
+    program_specific_description = Column(Text)  # Override/supplement the requirement description
+    custom_deadline_days = Column(Integer)  # Override requirement's default time_limit_days
+
+    # Notification Message
+    notification_message = Column(Text)  # Custom message when assigned this requirement
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -535,6 +557,9 @@ class ProgramMilestone(Base):
 
     # Trigger
     completion_percentage_threshold = Column(Float)  # Trigger at X% complete (e.g., 50.0)
+
+    # Notification
+    notification_message = Column(Text)  # Message to display/send when milestone reached
 
     # Verification
     requires_verification = Column(Boolean, default=False)  # Officer must verify

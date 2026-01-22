@@ -398,11 +398,20 @@ export interface TrainingProgram {
   organization_id: string;
   name: string;
   description?: string;
+  code?: string;
+  version: number;
   target_position?: string;
   target_roles?: string[];
   structure_type: ProgramStructureType;
+  prerequisite_program_ids?: string[];
+  allows_concurrent_enrollment: boolean;
   time_limit_days?: number;
   warning_days_before: number;
+  reminder_conditions?: {
+    milestone_threshold?: number;
+    days_before_deadline?: number;
+    send_if_below_percentage?: number;
+  };
   is_template: boolean;
   active: boolean;
   created_at: string;
@@ -413,11 +422,19 @@ export interface TrainingProgram {
 export interface TrainingProgramCreate {
   name: string;
   description?: string;
+  code?: string;
   target_position?: string;
   target_roles?: string[];
   structure_type?: ProgramStructureType;
+  prerequisite_program_ids?: string[];
+  allows_concurrent_enrollment?: boolean;
   time_limit_days?: number;
   warning_days_before?: number;
+  reminder_conditions?: {
+    milestone_threshold?: number;
+    days_before_deadline?: number;
+    send_if_below_percentage?: number;
+  };
   is_template?: boolean;
 }
 
@@ -428,6 +445,7 @@ export interface ProgramPhase {
   name: string;
   description?: string;
   prerequisite_phase_ids?: string[];
+  requires_manual_advancement: boolean;
   time_limit_days?: number;
   created_at: string;
   updated_at: string;
@@ -439,6 +457,7 @@ export interface ProgramPhaseCreate {
   name: string;
   description?: string;
   prerequisite_phase_ids?: string[];
+  requires_manual_advancement?: boolean;
   time_limit_days?: number;
 }
 
@@ -450,6 +469,9 @@ export interface ProgramRequirement {
   is_required: boolean;
   is_prerequisite: boolean;
   sort_order: number;
+  program_specific_description?: string;
+  custom_deadline_days?: number;
+  notification_message?: string;
   created_at: string;
   requirement?: TrainingRequirementEnhanced;
 }
@@ -461,6 +483,9 @@ export interface ProgramRequirementCreate {
   is_required?: boolean;
   is_prerequisite?: boolean;
   sort_order?: number;
+  program_specific_description?: string;
+  custom_deadline_days?: number;
+  notification_message?: string;
 }
 
 export interface ProgramMilestone {
@@ -556,5 +581,17 @@ export interface RegistryImportResult {
   registry_name: string;
   imported_count: number;
   skipped_count: number;
+  errors: string[];
+}
+
+// Bulk Enrollment
+export interface BulkEnrollmentRequest {
+  user_ids: string[];
+  target_completion_date?: string;
+}
+
+export interface BulkEnrollmentResponse {
+  success_count: number;
+  enrolled_users: string[];
   errors: string[];
 }

@@ -5,7 +5,9 @@ Endpoints for managing training programs, enrollments, and member progress track
 """
 
 from typing import Optional, List
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -640,6 +642,88 @@ async def update_requirement_progress(
         )
 
     return progress
+
+
+# ==================== Program Duplication Endpoints ====================
+
+@router.post("/programs/{program_id}/duplicate", response_model=TrainingProgramResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_program(
+    program_id: UUID,
+    new_name: str = Query(..., description="Name for the duplicated program"),
+    increment_version: bool = Query(True, description="Increment version number"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Duplicate a program (template or regular) with all phases, requirements, and milestones
+
+    Creates an independent copy of the program with a new name and optional version increment.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    new_program, error = await service.duplicate_program(
+        source_program_id=program_id,
+        new_name=new_name,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        increment_version=increment_version,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return new_program
+
+
+# ==================== Bulk Enrollment Endpoints ====================
+
+class BulkEnrollmentRequest(BaseModel):
+    """Request schema for bulk enrollment"""
+    user_ids: List[UUID] = Field(..., min_items=1, description="List of user IDs to enroll")
+    target_completion_date: Optional[date] = None
+
+class BulkEnrollmentResponse(BaseModel):
+    """Response schema for bulk enrollment"""
+    success_count: int
+    enrolled_users: List[UUID]
+    errors: List[str]
+
+@router.post("/programs/{program_id}/bulk-enroll", response_model=BulkEnrollmentResponse)
+async def bulk_enroll_members(
+    program_id: UUID,
+    enrollment_request: BulkEnrollmentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Enroll multiple members in a program at once
+
+    Validates prerequisites and concurrent enrollment restrictions before enrolling.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    enrollments, errors = await service.bulk_enroll_members(
+        program_id=program_id,
+        user_ids=enrollment_request.user_ids,
+        organization_id=current_user.organization_id,
+        target_completion_date=enrollment_request.target_completion_date,
+        enrolled_by=current_user.id,
+    )
+
+    return BulkEnrollmentResponse(
+        success_count=len(enrollments),
+        enrolled_users=[e.user_id for e in enrollments],
+        errors=errors,
+    )
 
 
 # ==================== Registry Import Endpoints ====================

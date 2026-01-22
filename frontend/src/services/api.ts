@@ -52,6 +52,8 @@ import type {
   ProgramWithDetails,
   MemberProgramProgress,
   RegistryImportResult,
+  BulkEnrollmentRequest,
+  BulkEnrollmentResponse,
 } from '../types/training';
 import type {
   Event,
@@ -667,6 +669,28 @@ export const trainingProgramService = {
    */
   async updateProgress(progressId: string, updates: RequirementProgressUpdate): Promise<RequirementProgressRecord> {
     const response = await api.patch<RequirementProgressRecord>(`/training/programs/progress/${progressId}`, updates);
+    return response.data;
+  },
+
+  // ==================== Program Duplication ====================
+
+  /**
+   * Duplicate a program with all phases, requirements, and milestones
+   */
+  async duplicateProgram(programId: string, newName: string, incrementVersion: boolean = true): Promise<TrainingProgram> {
+    const response = await api.post<TrainingProgram>(`/training/programs/programs/${programId}/duplicate`, null, {
+      params: { new_name: newName, increment_version: incrementVersion },
+    });
+    return response.data;
+  },
+
+  // ==================== Bulk Enrollment ====================
+
+  /**
+   * Enroll multiple members in a program
+   */
+  async bulkEnrollMembers(programId: string, request: BulkEnrollmentRequest): Promise<BulkEnrollmentResponse> {
+    const response = await api.post<BulkEnrollmentResponse>(`/training/programs/programs/${programId}/bulk-enroll`, request);
     return response.data;
   },
 

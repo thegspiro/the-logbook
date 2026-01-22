@@ -699,6 +699,274 @@ class TrainingProgramService:
 
         await self.db.commit()
 
+    # ==================== Program Duplication Methods ====================
+
+    async def duplicate_program(
+        self,
+        source_program_id: UUID,
+        new_name: str,
+        organization_id: UUID,
+        created_by: UUID,
+        increment_version: bool = True,
+    ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
+        """
+        Duplicate a program (template or regular) with all phases, requirements, and milestones
+
+        Returns: (new_program, error_message)
+        """
+        # Get source program with all relationships
+        source_result = await self.db.execute(
+            select(TrainingProgram)
+            .options(
+                selectinload(TrainingProgram.phases)
+                .selectinload(ProgramPhase.requirements),
+                selectinload(TrainingProgram.phases)
+                .selectinload(ProgramPhase.milestones)
+            )
+            .where(TrainingProgram.id == source_program_id)
+            .where(TrainingProgram.organization_id == organization_id)
+        )
+        source_program = source_result.scalar_one_or_none()
+
+        if not source_program:
+            return None, "Source program not found"
+
+        # Calculate new version
+        new_version = source_program.version + 1 if increment_version else source_program.version
+
+        # Create new program
+        new_program = TrainingProgram(
+            organization_id=organization_id,
+            name=new_name,
+            description=source_program.description,
+            code=source_program.code,
+            version=new_version,
+            target_position=source_program.target_position,
+            target_roles=source_program.target_roles,
+            structure_type=source_program.structure_type,
+            prerequisite_program_ids=source_program.prerequisite_program_ids,
+            allows_concurrent_enrollment=source_program.allows_concurrent_enrollment,
+            time_limit_days=source_program.time_limit_days,
+            warning_days_before=source_program.warning_days_before,
+            reminder_conditions=source_program.reminder_conditions,
+            active=True,
+            is_template=False,  # Duplicates are not templates by default
+            created_by=created_by,
+        )
+
+        self.db.add(new_program)
+        await self.db.flush()
+
+        # Map old phase IDs to new phase IDs
+        phase_id_map = {}
+
+        # Get all phases sorted by phase_number
+        phases = sorted(source_program.phases, key=lambda p: p.phase_number)
+
+        # Duplicate phases
+        for source_phase in phases:
+            new_phase = ProgramPhase(
+                program_id=new_program.id,
+                phase_number=source_phase.phase_number,
+                name=source_phase.name,
+                description=source_phase.description,
+                prerequisite_phase_ids=None,  # Will update after all phases created
+                requires_manual_advancement=source_phase.requires_manual_advancement,
+                time_limit_days=source_phase.time_limit_days,
+            )
+            self.db.add(new_phase)
+            await self.db.flush()
+            phase_id_map[str(source_phase.id)] = new_phase.id
+
+            # Duplicate phase requirements
+            for source_req in source_phase.requirements:
+                new_req = ProgramRequirement(
+                    program_id=new_program.id,
+                    phase_id=new_phase.id,
+                    requirement_id=source_req.requirement_id,
+                    is_required=source_req.is_required,
+                    is_prerequisite=source_req.is_prerequisite,
+                    sort_order=source_req.sort_order,
+                    program_specific_description=source_req.program_specific_description,
+                    custom_deadline_days=source_req.custom_deadline_days,
+                    notification_message=source_req.notification_message,
+                )
+                self.db.add(new_req)
+
+            # Duplicate phase milestones
+            for source_milestone in source_phase.milestones:
+                new_milestone = ProgramMilestone(
+                    program_id=new_program.id,
+                    phase_id=new_phase.id,
+                    name=source_milestone.name,
+                    description=source_milestone.description,
+                    completion_percentage_threshold=source_milestone.completion_percentage_threshold,
+                    notification_message=source_milestone.notification_message,
+                    requires_verification=source_milestone.requires_verification,
+                    verification_notes=source_milestone.verification_notes,
+                )
+                self.db.add(new_milestone)
+
+        # Update prerequisite phase IDs with new phase IDs
+        for source_phase in phases:
+            if source_phase.prerequisite_phase_ids:
+                new_phase_id = phase_id_map[str(source_phase.id)]
+                new_prerequisite_ids = [
+                    str(phase_id_map[str(old_id)])
+                    for old_id in source_phase.prerequisite_phase_ids
+                    if str(old_id) in phase_id_map
+                ]
+                await self.db.execute(
+                    update(ProgramPhase)
+                    .where(ProgramPhase.id == new_phase_id)
+                    .values(prerequisite_phase_ids=new_prerequisite_ids)
+                )
+
+        # Get program-level requirements (not in phases)
+        program_reqs_result = await self.db.execute(
+            select(ProgramRequirement)
+            .where(ProgramRequirement.program_id == source_program_id)
+            .where(ProgramRequirement.phase_id == None)
+        )
+        program_reqs = program_reqs_result.scalars().all()
+
+        # Duplicate program-level requirements
+        for source_req in program_reqs:
+            new_req = ProgramRequirement(
+                program_id=new_program.id,
+                phase_id=None,
+                requirement_id=source_req.requirement_id,
+                is_required=source_req.is_required,
+                is_prerequisite=source_req.is_prerequisite,
+                sort_order=source_req.sort_order,
+                program_specific_description=source_req.program_specific_description,
+                custom_deadline_days=source_req.custom_deadline_days,
+                notification_message=source_req.notification_message,
+            )
+            self.db.add(new_req)
+
+        # Get program-level milestones
+        program_milestones_result = await self.db.execute(
+            select(ProgramMilestone)
+            .where(ProgramMilestone.program_id == source_program_id)
+            .where(ProgramMilestone.phase_id == None)
+        )
+        program_milestones = program_milestones_result.scalars().all()
+
+        # Duplicate program-level milestones
+        for source_milestone in program_milestones:
+            new_milestone = ProgramMilestone(
+                program_id=new_program.id,
+                phase_id=None,
+                name=source_milestone.name,
+                description=source_milestone.description,
+                completion_percentage_threshold=source_milestone.completion_percentage_threshold,
+                notification_message=source_milestone.notification_message,
+                requires_verification=source_milestone.requires_verification,
+                verification_notes=source_milestone.verification_notes,
+            )
+            self.db.add(new_milestone)
+
+        await self.db.commit()
+        await self.db.refresh(new_program)
+
+        return new_program, None
+
+    # ==================== Bulk Enrollment Methods ====================
+
+    async def bulk_enroll_members(
+        self,
+        program_id: UUID,
+        user_ids: List[UUID],
+        organization_id: UUID,
+        target_completion_date: Optional[date] = None,
+        enrolled_by: Optional[UUID] = None,
+    ) -> Tuple[List[ProgramEnrollment], List[str]]:
+        """
+        Enroll multiple members in a program at once
+
+        Returns: (enrollments, errors)
+        """
+        # Verify program exists
+        program = await self.get_program_by_id(program_id, organization_id, include_phases=True)
+        if not program:
+            return [], ["Training program not found"]
+
+        # Check for prerequisite programs
+        prerequisite_errors = []
+        if program.prerequisite_program_ids:
+            for user_id in user_ids:
+                for prereq_id in program.prerequisite_program_ids:
+                    # Check if user has completed prerequisite
+                    prereq_enrollment = await self.db.execute(
+                        select(ProgramEnrollment)
+                        .join(TrainingProgram)
+                        .where(
+                            ProgramEnrollment.user_id == user_id,
+                            TrainingProgram.id == UUID(prereq_id),
+                            TrainingProgram.organization_id == organization_id
+                        )
+                    )
+                    enrollment = prereq_enrollment.scalar_one_or_none()
+
+                    if not enrollment or enrollment.status != EnrollmentStatus.COMPLETED:
+                        user_result = await self.db.execute(
+                            select(User).where(User.id == user_id)
+                        )
+                        user = user_result.scalar_one_or_none()
+                        user_name = f"{user.first_name} {user.last_name}" if user else str(user_id)
+                        prerequisite_errors.append(
+                            f"{user_name} has not completed prerequisite program"
+                        )
+
+        # Check for concurrent enrollment restrictions
+        if not program.allows_concurrent_enrollment:
+            for user_id in user_ids:
+                active_enrollments = await self.db.execute(
+                    select(ProgramEnrollment)
+                    .join(TrainingProgram)
+                    .where(
+                        ProgramEnrollment.user_id == user_id,
+                        ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                        TrainingProgram.organization_id == organization_id
+                    )
+                )
+                if active_enrollments.scalar_one_or_none():
+                    user_result = await self.db.execute(
+                        select(User).where(User.id == user_id)
+                    )
+                    user = user_result.scalar_one_or_none()
+                    user_name = f"{user.first_name} {user.last_name}" if user else str(user_id)
+                    prerequisite_errors.append(
+                        f"{user_name} is already enrolled in another program. This program does not allow concurrent enrollment."
+                    )
+
+        enrollments = []
+        errors = prerequisite_errors.copy()
+
+        for user_id in user_ids:
+            # Skip if user had prerequisite errors
+            if any(str(user_id) in error for error in prerequisite_errors):
+                continue
+
+            # Try to enroll
+            enrollment, error = await self.enroll_member(
+                enrollment_data=ProgramEnrollmentCreate(
+                    user_id=user_id,
+                    program_id=program_id,
+                    target_completion_date=target_completion_date,
+                ),
+                organization_id=organization_id,
+                enrolled_by=enrolled_by,
+            )
+
+            if error:
+                errors.append(f"{user_id}: {error}")
+            elif enrollment:
+                enrollments.append(enrollment)
+
+        return enrollments, errors
+
     # ==================== Registry Import Methods ====================
 
     async def import_registry_requirements(
