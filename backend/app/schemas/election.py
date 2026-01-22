@@ -247,7 +247,7 @@ class ElectionStats(BaseModel):
     total_voters: int  # Unique voters
     voter_turnout_percentage: float
     votes_by_position: Dict[str, int]
-    voting_timeline: Optional[List[Dict[str, any]]] = Field(
+    voting_timeline: Optional[List[Dict[str, Any]]] = Field(
         None,
         description="Votes over time for charts"
     )
