@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus, CheckInWindowType
 from app.models.user import User
-from app.models.training import TrainingSession, TrainingRecord, TrainingStatus, TrainingType
+from app.models.location import Location
 from app.schemas.event import (
     EventCreate,
     EventUpdate,

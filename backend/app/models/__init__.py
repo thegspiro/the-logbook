@@ -24,17 +24,8 @@ from app.models.onboarding import (
     OnboardingChecklistItem
 )
 
-from app.models.inventory import (
-    InventoryCategory,
-    InventoryItem,
-    ItemAssignment,
-    CheckOutRecord,
-    MaintenanceRecord,
-    ItemType,
-    ItemCondition,
-    ItemStatus,
-    MaintenanceType,
-    AssignmentType,
+from app.models.location import (
+    Location
 )
 
 __all__ = [
@@ -52,15 +43,6 @@ __all__ = [
     # Onboarding models
     "OnboardingStatus",
     "OnboardingChecklistItem",
-    # Inventory models
-    "InventoryCategory",
-    "InventoryItem",
-    "ItemAssignment",
-    "CheckOutRecord",
-    "MaintenanceRecord",
-    "ItemType",
-    "ItemCondition",
-    "ItemStatus",
-    "MaintenanceType",
-    "AssignmentType",
+    # Location models
+    "Location",
 ]

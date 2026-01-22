@@ -8,33 +8,14 @@ from fastapi import APIRouter
 
 # Import route modules
 from app.api.v1 import onboarding
-from app.api.v1.endpoints import (
-    auth,
-    users,
-    organizations,
-    roles,
-    events,
-    training,
-    training_sessions,
-    training_programs,
-    elections,
-    inventory,
-)
+from app.api.v1.endpoints import events, locations
 
 api_router = APIRouter()
 
 # Include route modules
 api_router.include_router(onboarding.router)
-api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
-api_router.include_router(users.router, prefix="/users", tags=["users"])
-api_router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
-api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(events.router, prefix="/events", tags=["events"])
-api_router.include_router(training.router, prefix="/training/courses", tags=["training"])
-api_router.include_router(training_sessions.router, prefix="/training/sessions", tags=["training-sessions"])
-api_router.include_router(training_programs.router, prefix="/training/programs", tags=["training-programs"])
-api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
-api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
 
 # Placeholder routes
 @api_router.get("/")

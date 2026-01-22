@@ -66,8 +66,9 @@ class Event(Base):
     description = Column(Text, nullable=True)
     event_type = Column(SQLEnum(EventType), nullable=False, default=EventType.OTHER)
 
-    # Location
-    location = Column(String(300), nullable=True)
+    # Location (new system with location_id FK, or legacy free-text location for "Other")
+    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True)  # FK to Location table
+    location = Column(String(300), nullable=True)  # Free-text location for "Other Location" or legacy events
     location_details = Column(Text, nullable=True)  # Additional directions, room numbers, etc.
 
     # Timing
@@ -113,11 +114,13 @@ class Event(Base):
 
     # Relationships
     rsvps = relationship("EventRSVP", back_populates="event", cascade="all, delete-orphan")
+    location_obj = relationship("Location", foreign_keys=[location_id])
 
     __table_args__ = (
         Index("ix_events_organization_id", "organization_id"),
         Index("ix_events_start_datetime", "start_datetime"),
         Index("ix_events_event_type", "event_type"),
+        Index("ix_events_location_id", "location_id"),
     )
 
 

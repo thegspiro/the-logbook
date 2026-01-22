@@ -17,7 +17,8 @@ class EventBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: str = Field(..., description="Event type: business_meeting, public_education, training, social, fundraiser, ceremony, other")
-    location: Optional[str] = Field(None, max_length=300)
+    location_id: Optional[UUID] = Field(None, description="FK to Location table for predefined locations")
+    location: Optional[str] = Field(None, max_length=300, description="Free-text location for 'Other Location' option")
     location_details: Optional[str] = None
     start_datetime: datetime
     end_datetime: datetime
@@ -48,7 +49,8 @@ class EventUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     event_type: Optional[str] = None
-    location: Optional[str] = Field(None, max_length=300)
+    location_id: Optional[UUID] = Field(None, description="FK to Location table for predefined locations")
+    location: Optional[str] = Field(None, max_length=300, description="Free-text location for 'Other Location' option")
     location_details: Optional[str] = None
     start_datetime: Optional[datetime] = None
     end_datetime: Optional[datetime] = None
@@ -93,6 +95,7 @@ class EventResponse(EventBase):
     not_going_count: Optional[int] = None
     maybe_count: Optional[int] = None
     user_rsvp_status: Optional[str] = None  # Current user's RSVP status
+    location_name: Optional[str] = None  # Name of the location if location_id is set
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,7 +107,9 @@ class EventListItem(BaseModel):
     event_type: str
     start_datetime: datetime
     end_datetime: datetime
+    location_id: Optional[UUID] = None
     location: Optional[str] = None
+    location_name: Optional[str] = None  # Resolved location name if location_id is set
     requires_rsvp: bool
     is_mandatory: bool
     is_cancelled: bool
@@ -175,6 +180,7 @@ class QRCheckInData(BaseModel):
     event_id: str
     event_name: str
     event_type: Optional[str] = None
+    event_description: Optional[str] = None  # Event description for display
     start_datetime: str
     end_datetime: str
     actual_end_time: Optional[str] = None
@@ -182,6 +188,8 @@ class QRCheckInData(BaseModel):
     check_in_end: str
     is_valid: bool
     location: Optional[str] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
 
 
 class EventStats(BaseModel):
