@@ -176,8 +176,8 @@ Once pushed to GitHub, you'll have:
 ### ✅ Modern Tech Stack
 - **Python 3.11+** with FastAPI
 - **React** with TypeScript
-- **PostgreSQL** database
-- **Redis** caching
+- **MySQL 8.0+** database
+- **Redis 7+** caching
 - **Docker** deployment
 
 ### ✅ Modular Architecture

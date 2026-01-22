@@ -9,7 +9,7 @@ The backend has been rebuilt using **Python 3.11+ with FastAPI**:
 - **FastAPI**: Modern, fast web framework with automatic API documentation
 - **SQLAlchemy 2.0**: Async ORM for database operations
 - **Alembic**: Database migration tool
-- **PostgreSQL**: Primary database
+- **MySQL 8.0+**: Primary database
 - **Redis**: Caching and session storage
 - **Pydantic**: Data validation with type hints
 - **Uvicorn**: ASGI server
@@ -93,8 +93,8 @@ backend/
 ### Prerequisites
 
 - Python 3.11 or higher
-- PostgreSQL 14+
-- Redis 6+
+- MySQL 8.0+
+- Redis 7+
 - Docker & Docker Compose (recommended)
 
 ### Option 1: Docker (Recommended)
@@ -195,8 +195,8 @@ pydantic==2.5.3         # Data validation
 ```python
 sqlalchemy==2.0.25      # ORM
 alembic==1.13.1         # Migrations
-psycopg2-binary==2.9.9  # PostgreSQL driver
-asyncpg==0.29.0         # Async PostgreSQL
+aiomysql==0.2.0         # Async MySQL driver
+pymysql==1.1.0          # MySQL driver (sync fallback)
 ```
 
 ### Security

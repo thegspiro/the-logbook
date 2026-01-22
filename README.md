@@ -24,23 +24,28 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 
 - **Training & Certification Tracking** ([Documentation](docs/TRAINING_PROGRAMS.md))
   - Multi-type requirements (hours, shifts, calls, skills, checklists)
-  - Phase-based program progression
+  - Phase-based program progression with manual and automatic advancement
   - NFPA, NREMT, and Pro Board registry integration
   - Member progress tracking and dashboard widgets
-  - Template system with duplication
+  - Template system with duplication and versioning
   - Prerequisite programs and concurrent enrollment controls
+  - Training session creation with approval workflow
+  - Check-in/check-out tracking integrated with events
+  - Milestone system with conditional reminders
 - Compliance Management
 - Scheduling & Shift Management
 - Inventory Management
 - Member Directory & Tracking
 - Meeting Management
-- Elections & Voting
+- **Elections & Voting** - Full election system with ballots and candidate management
 - Incident Reporting
 - Equipment Maintenance
 - Fundraising & Donations
 - Vehicle/Apparatus Management
 - Budget & Finance Tracking
-- Event Management
+- **Event Management** - QR code check-in, self-check-in pages, check-out functionality
+- **Module Configuration** - Priority-based module overview system
+- **Navigation Options** - Configurable top and side navigation layouts
 
 ## 🚀 Quick Start
 
@@ -82,13 +87,19 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 
 ## 📚 Documentation
 
-- [Installation Guide](docs/installation/README.md)
-- [Configuration Guide](docs/configuration/README.md)
-- [Module Documentation](docs/modules/README.md)
-- [API Documentation](docs/api/README.md)
+- [Quick Start Guide](QUICK_START_GITHUB.md) - Get started quickly
+- [GitHub Setup Guide](GITHUB_SETUP.md) - Complete GitHub configuration
+- [Python Backend Guide](backend/PYTHON_GUIDE.md) - Backend development
 - [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
-- [Security Guide](docs/security/README.md)
-- [Deployment Guide](docs/deployment/README.md)
+- [Training Module Backend](backend/app/docs/TRAINING_MODULE.md) - Backend API documentation
+- [Security Guide](SECURITY.md) - Security policy and compliance
+- [Backend Security Guide](backend/SECURITY_GUIDE.md) - Backend security guidelines
+- [Deployment Guide](docs/DEPLOYMENT.md) - Deployment instructions
+- [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) - Docker image management
+- [Onboarding Guide](ONBOARDING.md) - First-time setup wizard
+- [Role System](ROLE_SYSTEM_README.md) - Role-based access control
+- [Python Migration Guide](PYTHON_MIGRATION.md) - Migration from Node.js to Python
+- [Unraid Installation](unraid/README.md) - Unraid-specific deployment
 
 ## 🛠️ Technology Stack
 
