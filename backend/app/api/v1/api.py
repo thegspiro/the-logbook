@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     events,
     training,
     training_sessions,
+    training_programs,
     elections,
     inventory,
 )
@@ -31,6 +32,7 @@ api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(training.router, prefix="/training/courses", tags=["training"])
 api_router.include_router(training_sessions.router, prefix="/training/sessions", tags=["training-sessions"])
+api_router.include_router(training_programs.router, prefix="/training/programs", tags=["training-programs"])
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 
@@ -52,6 +54,7 @@ async def api_root():
             "events": "/api/v1/events",
             "training_courses": "/api/v1/training/courses",
             "training_sessions": "/api/v1/training/sessions",
+            "training_programs": "/api/v1/training/programs",
             "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory"
         }
