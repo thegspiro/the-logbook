@@ -54,9 +54,9 @@ Feature suggestions are welcome! Please:
 
 ### Prerequisites
 
-- Node.js >= 18.0.0
-- PostgreSQL >= 14
-- Redis >= 6
+- Python >= 3.11
+- MySQL >= 8.0
+- Redis >= 7
 - Docker & Docker Compose (optional but recommended)
 
 ### Quick Start

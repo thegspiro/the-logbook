@@ -11,8 +11,8 @@ The backend has been restructured to use **Python with FastAPI** instead of Node
 - **FastAPI** - Modern, fast web framework
 - **SQLAlchemy 2.0** - Async ORM
 - **Alembic** - Database migrations
-- **PostgreSQL** - Database
-- **Redis** - Caching and sessions
+- **MySQL 8.0+** - Database
+- **Redis 7+** - Caching and sessions
 - **Pydantic** - Data validation
 - **Uvicorn** - ASGI server
 

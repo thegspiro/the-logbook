@@ -2,7 +2,7 @@
  * Training type definitions
  */
 
-import type { Event, EventCreate } from './event';
+import type { Event } from './event';
 
 export type TrainingType =
   | 'certification'

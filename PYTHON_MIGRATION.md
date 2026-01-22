@@ -320,12 +320,12 @@ pytest --cov=app --cov-report=html
 
 ## What Stays the Same
 
-✅ **Frontend** - React/TypeScript frontend unchanged  
-✅ **Database** - PostgreSQL schema compatible  
-✅ **Redis** - Cache implementation compatible  
-✅ **Docker** - Development workflow similar  
-✅ **API Design** - RESTful endpoints unchanged  
-✅ **Security Model** - Same authentication flow  
+✅ **Frontend** - React/TypeScript frontend unchanged
+✅ **Database** - MySQL 8.0+ schema compatible
+✅ **Redis** - Cache implementation compatible
+✅ **Docker** - Development workflow similar
+✅ **API Design** - RESTful endpoints unchanged
+✅ **Security Model** - Same authentication flow
 
 ## Next Steps
 

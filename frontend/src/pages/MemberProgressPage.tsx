@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap,
   TrendingUp,
   Target,
   CheckCircle2,
-  Clock,
   AlertTriangle,
   Calendar,
   Award,
   ChevronRight,
   Play,
-  Check,
   Circle,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout';
@@ -262,7 +259,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
             <span>Upcoming Milestones</span>
           </h3>
           <div className="space-y-3">
-            {next_milestones.map((milestone, index) => (
+            {next_milestones.map((milestone, _index) => (
               <div key={milestone.id} className="bg-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-medium text-white">{milestone.name}</h4>

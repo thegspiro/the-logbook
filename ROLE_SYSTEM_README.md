@@ -236,7 +236,7 @@ When adding new modules:
 ## Technical Architecture
 
 - **Backend**: Python/FastAPI with SQLAlchemy
-- **Database**: PostgreSQL with JSONB for flexible permission storage
+- **Database**: MySQL 8.0+ with JSON columns for flexible permission storage
 - **Frontend**: React/TypeScript with Tailwind CSS
 - **Permission Model**: Role-based with additive permissions (union of all assigned roles)
 

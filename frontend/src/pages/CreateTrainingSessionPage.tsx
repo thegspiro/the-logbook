@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
-  Clock,
-  MapPin,
-  Users,
   GraduationCap,
-  Award,
   FileText,
   AlertCircle,
   CheckCircle,
@@ -31,7 +27,9 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
 
   // Available courses for selection
-  const [availableCourses, setAvailableCourses] = useState<TrainingCourse[]>([]);
+  const [availableCourses, _setAvailableCourses] = useState<TrainingCourse[]>([]);
+  // Suppress unused warning - will be used when API is implemented
+  void availableCourses;
 
   // Form data
   const [formData, setFormData] = useState<TrainingSessionCreate>({

@@ -1,7 +1,7 @@
 # Project File Structure
 
 ```
-intranet-platform/
+the-logbook/
 ├── README.md                           # Main project documentation
 ├── LICENSE                             # MIT License
 ├── CONTRIBUTING.md                     # Contribution guidelines
@@ -619,22 +619,22 @@ intranet-platform/
 ## Key Directories Explained
 
 ### `/backend`
-Backend Node.js/TypeScript API server with modular architecture. Each module is self-contained with its own models, services, controllers, and routes.
+Backend Python/FastAPI API server with modular architecture. Each module is self-contained with its own models, services, and API endpoints. Uses SQLAlchemy 2.0 (async) for ORM and Pydantic for data validation.
 
 ### `/frontend`
 React frontend application with TypeScript and Tailwind CSS. Component-based architecture with clear separation of concerns.
 
 ### `/docs`
-Comprehensive documentation for installation, configuration, API, security, and user guides.
+Documentation including deployment guides, training programs, and Docker build instructions.
 
 ### `/infrastructure`
 Infrastructure as Code (IaC) for Docker, Kubernetes, Terraform, and Ansible deployments.
 
-### `/modules`
-Optional feature modules that can be enabled/disabled. Each module is independent and follows the same structure.
+### `/backend/app/models`
+SQLAlchemy database models for all features. Each module has its own model files (e.g., training.py, election.py, event.py).
 
-### `/database`
-Database schemas, migrations, and backup scripts. Uses PostgreSQL with proper migration management.
+### `/backend/alembic`
+Database migrations using Alembic. Uses MySQL 8.0+ with proper migration management.
 
 ### `/scripts`
 Utility scripts for setup, deployment, maintenance, and development tasks.
@@ -642,18 +642,45 @@ Utility scripts for setup, deployment, maintenance, and development tasks.
 ### `/tests`
 Comprehensive test suites for unit, integration, and end-to-end testing.
 
-## Module Structure
+## Backend Module Structure (Python/FastAPI)
 
-Each module follows this structure:
+The backend uses Python with FastAPI. Here's the actual structure:
+
 ```
-module-name/
-├── models/          # Data models
-├── services/        # Business logic
-├── controllers/     # Request handlers
-├── routes/          # API routes
-├── validators/      # Input validation
-├── config/          # Module configuration
-└── index.ts         # Module entry point
+backend/
+├── app/
+│   ├── models/              # SQLAlchemy ORM models
+│   │   ├── training.py      # Training module models
+│   │   ├── election.py      # Election models
+│   │   ├── event.py         # Event models
+│   │   └── ...
+│   ├── schemas/             # Pydantic request/response schemas
+│   │   ├── training.py
+│   │   ├── training_program.py
+│   │   └── ...
+│   ├── services/            # Business logic layer
+│   │   ├── training_program_service.py
+│   │   ├── training_session_service.py
+│   │   └── ...
+│   ├── api/v1/endpoints/    # API route handlers
+│   │   ├── training.py
+│   │   ├── training_programs.py
+│   │   ├── training_sessions.py
+│   │   ├── elections.py
+│   │   ├── events.py
+│   │   └── ...
+│   ├── core/                # Core functionality (config, database, security)
+│   └── data/registries/     # Registry seed data (NFPA, NREMT, Pro Board)
+└── alembic/                 # Database migrations
+    └── versions/            # Migration files
 ```
+
+**Key Technologies:**
+- **FastAPI** - Modern, fast web framework
+- **SQLAlchemy 2.0** - Async ORM
+- **Pydantic** - Data validation
+- **Alembic** - Database migrations
+- **MySQL 8.0+** - Database
+- **Redis 7+** - Caching and sessions
 
 This ensures consistency and makes modules easy to understand, maintain, and extend.
