@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
+import { isValidEmail } from '../utils/validation';
 
 const AdminUserCreation: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
@@ -71,7 +72,7 @@ const AdminUserCreation: React.FC = () => {
 
       case 'email':
         if (!value.trim()) return 'Email is required';
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+        if (!isValidEmail(value))
           return 'Please enter a valid email address';
         return '';
 

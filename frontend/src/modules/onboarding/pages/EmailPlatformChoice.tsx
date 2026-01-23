@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Server, Info } from 'lucide-react';
+import { ProgressIndicator } from '../components';
 
 // Email platform logos (using simple SVG icons)
 const GmailIcon = () => (
@@ -288,23 +289,7 @@ const EmailPlatformChoice: React.FC = () => {
             </p>
 
             {/* Progress Indicator */}
-            <div className="mt-6 pt-6 border-t border-white/10">
-              <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                <span>Setup Progress</span>
-                <span>Step 3 of 9</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: '33%' }}
-                  role="progressbar"
-                  aria-valuenow={33}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Setup progress: 33 percent complete"
-                />
-              </div>
-            </div>
+            <ProgressIndicator currentStep={3} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
           </div>
         </div>
       </main>

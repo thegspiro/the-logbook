@@ -209,6 +209,19 @@ class SecureApiClient {
   }
 
   /**
+   * Test email connection
+   * Tests the email configuration without saving it
+   * Returns success/failure and error details
+   * TODO: Backend endpoint needs to be implemented at /onboarding/test/email
+   */
+  async testEmailConnection(data: {
+    platform: string;
+    config: Record<string, any>;
+  }): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+    return this.request('POST', '/onboarding/test/email', data, true);
+  }
+
+  /**
    * Save file storage configuration
    * SECURITY: API keys and secrets sent to server
    */

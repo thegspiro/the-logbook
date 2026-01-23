@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
 import { apiClient } from '../services/api-client';
+import { ProgressIndicator } from '../components';
 
 const DepartmentInfo: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
@@ -40,6 +41,11 @@ const DepartmentInfo: React.FC = () => {
     if (!validation.valid) {
       setError(validation.error || 'Invalid file');
       return;
+    }
+
+    // Show warning if file is large but still valid
+    if (validation.warning) {
+      toast.warning(validation.warning);
     }
 
     setError(null);
@@ -88,6 +94,16 @@ const DepartmentInfo: React.FC = () => {
   const handleContinue = async () => {
     if (!departmentName.trim()) {
       setError('Please enter your department name');
+      return;
+    }
+
+    if (departmentName.trim().length < 3) {
+      setError('Department name must be at least 3 characters');
+      return;
+    }
+
+    if (departmentName.length > 100) {
+      setError('Department name must be less than 100 characters');
       return;
     }
 
@@ -174,10 +190,15 @@ const DepartmentInfo: React.FC = () => {
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              maxLength={100}
               autoFocus
               aria-required="true"
               aria-invalid={error && !departmentName.trim() ? 'true' : 'false'}
+              aria-describedby="departmentNameHelp"
             />
+            <p id="departmentNameHelp" className="mt-1 text-xs text-slate-400">
+              {departmentName.length}/100 characters
+            </p>
           </div>
 
           {/* Logo Upload */}
@@ -401,23 +422,7 @@ const DepartmentInfo: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <div className="pt-4 border-t border-white/10">
-            <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-              <span>Setup Progress</span>
-              <span>Step 1 of 9</span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: '11%' }}
-                role="progressbar"
-                aria-valuenow={11}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Setup progress: 11 percent complete"
-              />
-            </div>
-          </div>
+          <ProgressIndicator currentStep={1} totalSteps={9} className="pt-4 border-t border-white/10" />
         </div>
 
         {/* Help Text */}

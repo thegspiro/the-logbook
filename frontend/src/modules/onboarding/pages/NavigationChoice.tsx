@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
+import { ProgressIndicator } from '../components';
 
 const NavigationChoice: React.FC = () => {
   const [departmentName, setDepartmentName] = useState('');
@@ -280,12 +281,8 @@ const NavigationChoice: React.FC = () => {
               Don't worry, you can change this later in settings
             </p>
 
-            {/* Progress Indicator */}
-            <div className="mt-6 pt-6 border-t border-white/10">
-              <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                <span>Setup Progress</span>
-                <span>Step 2 of 9</span>
-              </div>
+          {/* Progress Indicator */}
+          <ProgressIndicator currentStep={2} totalSteps={9} className="pt-6 border-t border-white/10" />
               <div className="w-full bg-slate-800 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"

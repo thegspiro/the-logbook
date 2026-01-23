@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
 import { useOnboardingStorage } from '../hooks';
 import { apiClient } from '../services/api-client';
-import { isValidEmail } from '../utils/validation';
+import { isValidEmail, isValidPhoneNumber } from '../utils/validation';
 
 interface ITTeamMember {
   id: string;
@@ -80,6 +80,8 @@ const ITTeamBackupAccess: React.FC = () => {
     }
     if (!primaryContact.phone.trim()) {
       newErrors.primaryPhone = 'Primary contact phone is required';
+    } else if (!isValidPhoneNumber(primaryContact.phone)) {
+      newErrors.primaryPhone = 'Invalid phone number format';
     }
 
     // Validate backup email
@@ -92,6 +94,8 @@ const ITTeamBackupAccess: React.FC = () => {
     // Validate backup phone
     if (!backupPhone.trim()) {
       newErrors.backupPhone = 'Backup phone number is required';
+    } else if (!isValidPhoneNumber(backupPhone)) {
+      newErrors.backupPhone = 'Invalid phone number format';
     }
 
     // Validate secondary admin email (optional but must be valid if provided)
@@ -113,6 +117,8 @@ const ITTeamBackupAccess: React.FC = () => {
         }
         if (!member.phone.trim()) {
           newErrors[`member${index + 1}Phone`] = 'Phone is required';
+        } else if (!isValidPhoneNumber(member.phone)) {
+          newErrors[`member${index + 1}Phone`] = 'Invalid phone number format';
         }
       }
     });

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
-import { isValidPort } from '../utils/validation';
+import { isValidPort, isValidEmail } from '../utils/validation';
+import { ProgressIndicator } from '../components';
 
 interface EmailConfig {
   // Gmail/Google Workspace
@@ -74,20 +75,77 @@ const EmailConfiguration: React.FC = () => {
   };
 
   const handleTestConnection = async () => {
+    // Validate required fields before testing
+    if (!config.fromEmail) {
+      toast.error('Please enter a from email address');
+      return;
+    }
+
+    if (!isValidEmail(config.fromEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (platform === 'selfhosted') {
+      if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
+        toast.error('Please fill in all SMTP configuration fields');
+        return;
+      }
+
+      const portNumber = parseInt(config.smtpPort, 10);
+      if (!isValidPort(portNumber)) {
+        toast.error('Please enter a valid port number (1-65535)');
+        return;
+      }
+    }
+
+    if (platform === 'gmail' && !useOAuth && !config.googleAppPassword) {
+      toast.error('Please enter your Google App Password');
+      return;
+    }
+
     setTestingConnection(true);
+    setConnectionTested(false);
 
-    // Simulate API call to test email connection
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Test email connection with real API call
+      const response = await apiClient.testEmailConnection({
+        platform,
+        config: {
+          ...config,
+          authMethod: useOAuth ? 'oauth' : 'smtp',
+        },
+      });
 
-    setTestingConnection(false);
-    setConnectionTested(true);
-    toast.success('Email connection test successful!');
+      setTestingConnection(false);
+
+      if (response.error) {
+        toast.error(`Connection test failed: ${response.error}`);
+        return;
+      }
+
+      if (response.data?.success) {
+        setConnectionTested(true);
+        toast.success(response.data.message || 'Email connection test successful!');
+      } else {
+        toast.error(response.data?.message || 'Connection test failed');
+      }
+    } catch (err: any) {
+      setTestingConnection(false);
+      const errorMessage = err.message || 'Failed to test email connection';
+      toast.error(errorMessage);
+    }
   };
 
   const handleContinue = async () => {
     // Validate required fields
     if (!config.fromEmail) {
       toast.error('Please enter a from email address');
+      return;
+    }
+
+    if (!isValidEmail(config.fromEmail)) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
@@ -599,23 +657,7 @@ const EmailConfiguration: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-              <span>Setup Progress</span>
-              <span>Step 4 of 9</span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: '44%' }}
-                role="progressbar"
-                aria-valuenow={44}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Setup progress: 44 percent complete"
-              />
-            </div>
-          </div>
+          <ProgressIndicator currentStep={4} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
         </div>
       </main>
 
