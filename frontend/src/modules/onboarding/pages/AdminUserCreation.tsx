@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info } from 'lucide-react';
+import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { useApiRequest } from '../hooks';
+import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
 
 const AdminUserCreation: React.FC = () => {
-  const [departmentName, setDepartmentName] = useState('');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const navigate = useNavigate();
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -25,24 +30,13 @@ const AdminUserCreation: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    // Get department info from session storage
-    const name = sessionStorage.getItem('departmentName');
-    const logoData = sessionStorage.getItem('logoData');
-
-    if (!name) {
-      // If no department name, redirect back to start
+    if (!departmentName) {
       navigate('/onboarding/start');
       return;
     }
-
-    setDepartmentName(name);
-    if (logoData) {
-      setLogoPreview(logoData);
-    }
-  }, [navigate]);
+  }, [navigate, departmentName]);
 
   // Password strength checker
   const checkPasswordStrength = (password: string) => {
@@ -156,10 +150,10 @@ const AdminUserCreation: React.FC = () => {
       return;
     }
 
-    setIsSaving(true);
     setErrors({});
+    clearError();
 
-    try {
+    const success = await execute(async () => {
       // SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)
       // Password will be hashed with Argon2id server-side
       const response = await apiClient.createAdminUser({
@@ -173,9 +167,7 @@ const AdminUserCreation: React.FC = () => {
       });
 
       if (response.error) {
-        toast.error(response.error);
-        setIsSaving(false);
-        return;
+        throw new Error(response.error);
       }
 
       // SECURITY: Clear password from memory immediately (apiClient already does this)
@@ -195,30 +187,16 @@ const AdminUserCreation: React.FC = () => {
       const completeResponse = await apiClient.completeOnboarding();
 
       if (completeResponse.error) {
-        toast.error('Account created but setup incomplete. Please contact support.');
-        setIsSaving(false);
-        return;
+        throw new Error('Account created but setup incomplete. Please contact support.');
       }
-
-      // Clear all onboarding data from sessionStorage
-      sessionStorage.removeItem('departmentName');
-      sessionStorage.removeItem('logoData');
-      sessionStorage.removeItem('navigationLayout');
-      sessionStorage.removeItem('emailPlatform');
-      sessionStorage.removeItem('emailConfigured');
-      sessionStorage.removeItem('fileStoragePlatform');
-      sessionStorage.removeItem('authPlatform');
-      sessionStorage.removeItem('itTeamConfigured');
 
       toast.success('Welcome to your department dashboard!');
 
       // Navigate to main dashboard (user is now authenticated)
       navigate('/dashboard');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to create admin user';
-      toast.error(errorMessage);
-      setIsSaving(false);
+    });
 
+    if (!success) {
       // SECURITY: Clear passwords on error
       setFormData(prev => ({
         ...prev,
@@ -249,7 +227,7 @@ const AdminUserCreation: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Shield className="w-6 h-6 text-white" />
+              <Mail className="w-6 h-6 text-white" />
             </div>
           )}
           <div>
@@ -262,6 +240,8 @@ const AdminUserCreation: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-2xl w-full">
+          <BackButton to="/onboarding/modules" className="mb-6" />
+
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
@@ -651,6 +631,12 @@ const AdminUserCreation: React.FC = () => {
 
             {/* Submit Button */}
             <div className="max-w-md mx-auto">
+              {error && (
+                <div className="mb-6">
+                  <ErrorAlert message={error} canRetry={canRetry} onRetry={handleSubmit} onDismiss={clearError} />
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={!isFormValid || isSaving}
@@ -686,6 +672,7 @@ const AdminUserCreation: React.FC = () => {
                     aria-label="Setup progress: 100 percent complete"
                   />
                 </div>
+                <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
               </div>
             </div>
           </form>
