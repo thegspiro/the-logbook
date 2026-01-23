@@ -17,10 +17,13 @@ import {
   CheckCircle,
   XCircle,
   Clock4,
+  Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
-import { ProgressIndicator } from '../components';
+import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { useApiRequest } from '../hooks';
+import { useOnboardingStore } from '../store';
 
 interface Module {
   id: string;
@@ -35,7 +38,10 @@ interface Module {
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
-  const [saving, setSaving] = useState(false);
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   const modules: Module[] = [
     // Essential Modules
@@ -188,10 +194,9 @@ const ModuleOverview: React.FC = () => {
   };
 
   const handleContinue = async () => {
-    setSaving(true);
+    clearError();
 
-    try {
-      // Save module configuration to server
+    const success = await execute(async () => {
       const response = await apiClient.saveModuleConfig({
         modules: Object.entries(moduleStatuses)
           .filter(([_, status]) => status === 'enabled')
@@ -199,18 +204,15 @@ const ModuleOverview: React.FC = () => {
       });
 
       if (response.error) {
-        toast.error(response.error);
-        setSaving(false);
-        return;
+        throw new Error(response.error);
       }
 
       toast.success('Module configuration saved!');
-
-      // Navigate to admin user creation
       navigate('/onboarding/admin-user');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save module configuration');
-      setSaving(false);
+    });
+
+    if (!success) {
+      return;
     }
   };
 
@@ -239,222 +241,259 @@ const ModuleOverview: React.FC = () => {
   };
 
   const enabledCount = Object.values(moduleStatuses).filter(s => s === 'enabled').length;
+  const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-6xl w-full py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Package className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center">
+          {logoPreview ? (
+            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
+              <img src={logoPreview} alt={`${departmentName} logo`} className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
+              <Mail className="w-6 h-6 text-white" />
+            </div>
+          )}
+          <div>
+            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
+            <p className="text-slate-400 text-sm">Setup in Progress</p>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
-            Choose Your Modules
-          </h1>
-          <p className="text-xl text-slate-300 mb-2">
-            Select which features you want to use
-          </p>
-          <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            Don't worry - you can enable, disable, or reconfigure any module at any time from your dashboard.
-            The platform is designed to be flexible and adapt to your needs as they evolve.
-          </p>
         </div>
+      </header>
 
-        {/* Stats Banner */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="text-white">
-              <span className="text-2xl font-bold">{enabledCount}</span>
-              <span className="text-slate-400 ml-2">modules enabled</span>
+      <main className="flex-1 p-4 py-8">
+        <div className="max-w-6xl w-full mx-auto">
+          <BackButton to="/onboarding/it-team" className="mb-6" />
+
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
+              <Package className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
+              Choose Your Modules
+            </h1>
+            <p className="text-xl text-slate-300 mb-2">
+              Select which features you want to use
+            </p>
+            <p className="text-sm text-slate-400 max-w-2xl mx-auto">
+              Don't worry - you can enable, disable, or reconfigure any module at any time from your dashboard.
+              The platform is designed to be flexible and adapt to your needs as they evolve.
+            </p>
+          </div>
+
+          {/* Stats Banner */}
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6 flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="text-white">
+                <span className="text-2xl font-bold">{enabledCount}</span>
+                <span className="text-slate-400 ml-2">modules enabled</span>
+              </div>
+            </div>
+            <button
+              onClick={handleContinue}
+              disabled={isSaving || enabledCount === 0}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                enabledCount > 0 && !isSaving
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
+                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              {isSaving ? 'Saving...' : 'Continue to Dashboard'}
+            </button>
+          </div>
+
+          {error && (
+            <div className="max-w-md mx-auto mb-6">
+              <ErrorAlert message={error} canRetry={canRetry} onRetry={handleContinue} onDismiss={clearError} />
+            </div>
+          )}
+
+          {/* Essential Modules */}
+          <div className="mb-8">
+            <div className="flex items-center mb-4">
+              <div className="flex-1 h-px bg-red-500/30"></div>
+              <h2 className="px-4 text-lg font-bold text-red-400">ESSENTIAL MODULES</h2>
+              <div className="flex-1 h-px bg-red-500/30"></div>
+            </div>
+            <p className="text-center text-slate-400 text-sm mb-6">
+              These core modules are recommended for all departments and are enabled by default
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {groupedModules.essential.map(module => {
+                const Icon = module.icon;
+                const status = moduleStatuses[module.id];
+                return (
+                  <div
+                    key={module.id}
+                    className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border-2 border-red-500/30 hover:border-red-500/50 transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
+                          <Icon className="w-6 h-6 text-white" />
+                        </div>
+                        {status && getStatusIcon(status)}
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${getPriorityColor(module.priority)}`}>
+                        ESSENTIAL
+                      </span>
+                    </div>
+                    <h3 className="text-white font-bold text-lg mb-2">{module.name}</h3>
+                    <p className="text-slate-300 text-sm mb-4 leading-relaxed">{module.description}</p>
+                    <div className="flex flex-col space-y-2">
+                      <button
+                        onClick={() => handleModuleAction(module.id, 'start')}
+                        className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                      >
+                        Configure Now
+                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleModuleAction(module.id, 'skip')}
+                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-sm transition-colors"
+                        >
+                          Later
+                        </button>
+                        <button
+                          onClick={() => handleModuleAction(module.id, 'ignore')}
+                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg text-sm transition-colors"
+                        >
+                          Disable
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <button
-            onClick={handleContinue}
-            disabled={saving || enabledCount === 0}
-            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-              enabledCount > 0 && !saving
-                ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
-                : 'bg-slate-700 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            {saving ? 'Saving...' : 'Continue to Dashboard'}
-          </button>
-        </div>
 
-        {/* Essential Modules */}
-        <div className="mb-8">
-          <div className="flex items-center mb-4">
-            <div className="flex-1 h-px bg-red-500/30"></div>
-            <h2 className="px-4 text-lg font-bold text-red-400">ESSENTIAL MODULES</h2>
-            <div className="flex-1 h-px bg-red-500/30"></div>
-          </div>
-          <p className="text-center text-slate-400 text-sm mb-6">
-            These core modules are recommended for all departments and are enabled by default
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {groupedModules.essential.map(module => {
-              const Icon = module.icon;
-              const status = moduleStatuses[module.id];
-              return (
-                <div
-                  key={module.id}
-                  className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border-2 border-red-500/30 hover:border-red-500/50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
-                        <Icon className="w-6 h-6 text-white" />
+          {/* Recommended Modules */}
+          <div className="mb-8">
+            <div className="flex items-center mb-4">
+              <div className="flex-1 h-px bg-blue-500/30"></div>
+              <h2 className="px-4 text-lg font-bold text-blue-400">RECOMMENDED MODULES</h2>
+              <div className="flex-1 h-px bg-blue-500/30"></div>
+            </div>
+            <p className="text-center text-slate-400 text-sm mb-6">
+              Popular modules that enhance operations - configure what fits your workflow
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {groupedModules.recommended.map(module => {
+                const Icon = module.icon;
+                const status = moduleStatuses[module.id];
+                return (
+                  <div
+                    key={module.id}
+                    className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 hover:border-blue-500/50 transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                          <Icon className="w-6 h-6 text-white" />
+                        </div>
+                        {status && getStatusIcon(status)}
                       </div>
-                      {status && getStatusIcon(status)}
+                      <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${getPriorityColor(module.priority)}`}>
+                        RECOMMENDED
+                      </span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${getPriorityColor(module.priority)}`}>
-                      ESSENTIAL
-                    </span>
-                  </div>
-                  <h3 className="text-white font-bold text-lg mb-2">{module.name}</h3>
-                  <p className="text-slate-300 text-sm mb-4 leading-relaxed">{module.description}</p>
-                  <div className="flex flex-col space-y-2">
-                    <button
-                      onClick={() => handleModuleAction(module.id, 'start')}
-                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-                    >
-                      Configure Now
-                    </button>
-                    <div className="flex space-x-2">
+                    <h3 className="text-white font-bold text-lg mb-2">{module.name}</h3>
+                    <p className="text-slate-300 text-sm mb-4 leading-relaxed">{module.description}</p>
+                    <div className="flex flex-col space-y-2">
                       <button
-                        onClick={() => handleModuleAction(module.id, 'skip')}
-                        className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-sm transition-colors"
+                        onClick={() => handleModuleAction(module.id, 'start')}
+                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                       >
-                        Later
+                        Start Working
+                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleModuleAction(module.id, 'skip')}
+                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-sm transition-colors"
+                        >
+                          Skip For Now
+                        </button>
+                        <button
+                          onClick={() => handleModuleAction(module.id, 'ignore')}
+                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg text-sm transition-colors"
+                        >
+                          Ignore
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Optional Modules */}
+          <div className="mb-8">
+            <div className="flex items-center mb-4">
+              <div className="flex-1 h-px bg-slate-500/30"></div>
+              <h2 className="px-4 text-lg font-bold text-slate-400">OPTIONAL MODULES</h2>
+              <div className="flex-1 h-px bg-slate-500/30"></div>
+            </div>
+            <p className="text-center text-slate-400 text-sm mb-6">
+              Advanced features you can enable when needed - completely optional
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {groupedModules.optional.map(module => {
+                const Icon = module.icon;
+                const status = moduleStatuses[module.id];
+                return (
+                  <div
+                    key={module.id}
+                    className="bg-white/5 backdrop-blur-sm rounded-lg p-5 border border-white/10 hover:border-slate-400/50 transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center">
+                          <Icon className="w-5 h-5 text-slate-300" />
+                        </div>
+                        {status && getStatusIcon(status)}
+                      </div>
+                    </div>
+                    <h3 className="text-white font-bold text-base mb-2">{module.name}</h3>
+                    <p className="text-slate-400 text-xs mb-4 leading-relaxed">{module.description}</p>
+                    <div className="flex flex-col space-y-2">
+                      <button
+                        onClick={() => handleModuleAction(module.id, 'start')}
+                        className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Enable
                       </button>
                       <button
                         onClick={() => handleModuleAction(module.id, 'ignore')}
-                        className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg text-sm transition-colors"
+                        className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg text-xs transition-colors"
                       >
-                        Disable
+                        Skip
                       </button>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Recommended Modules */}
-        <div className="mb-8">
-          <div className="flex items-center mb-4">
-            <div className="flex-1 h-px bg-blue-500/30"></div>
-            <h2 className="px-4 text-lg font-bold text-blue-400">RECOMMENDED MODULES</h2>
-            <div className="flex-1 h-px bg-blue-500/30"></div>
-          </div>
-          <p className="text-center text-slate-400 text-sm mb-6">
-            Popular modules that enhance operations - configure what fits your workflow
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {groupedModules.recommended.map(module => {
-              const Icon = module.icon;
-              const status = moduleStatuses[module.id];
-              return (
-                <div
-                  key={module.id}
-                  className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 hover:border-blue-500/50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                      {status && getStatusIcon(status)}
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${getPriorityColor(module.priority)}`}>
-                      RECOMMENDED
-                    </span>
-                  </div>
-                  <h3 className="text-white font-bold text-lg mb-2">{module.name}</h3>
-                  <p className="text-slate-300 text-sm mb-4 leading-relaxed">{module.description}</p>
-                  <div className="flex flex-col space-y-2">
-                    <button
-                      onClick={() => handleModuleAction(module.id, 'start')}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                    >
-                      Start Working
-                    </button>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleModuleAction(module.id, 'skip')}
-                        className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-sm transition-colors"
-                      >
-                        Skip For Now
-                      </button>
-                      <button
-                        onClick={() => handleModuleAction(module.id, 'ignore')}
-                        className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg text-sm transition-colors"
-                      >
-                        Ignore
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Progress Indicator */}
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+            <ProgressIndicator currentStep={8} totalSteps={9} />
+            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>
+      </main>
 
-        {/* Optional Modules */}
-        <div className="mb-8">
-          <div className="flex items-center mb-4">
-            <div className="flex-1 h-px bg-slate-500/30"></div>
-            <h2 className="px-4 text-lg font-bold text-slate-400">OPTIONAL MODULES</h2>
-            <div className="flex-1 h-px bg-slate-500/30"></div>
-          </div>
-          <p className="text-center text-slate-400 text-sm mb-6">
-            Advanced features you can enable when needed - completely optional
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {groupedModules.optional.map(module => {
-              const Icon = module.icon;
-              const status = moduleStatuses[module.id];
-              return (
-                <div
-                  key={module.id}
-                  className="bg-white/5 backdrop-blur-sm rounded-lg p-5 border border-white/10 hover:border-slate-400/50 transition-all"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-slate-300" />
-                      </div>
-                      {status && getStatusIcon(status)}
-                    </div>
-                  </div>
-                  <h3 className="text-white font-bold text-base mb-2">{module.name}</h3>
-                  <p className="text-slate-400 text-xs mb-4 leading-relaxed">{module.description}</p>
-                  <div className="flex flex-col space-y-2">
-                    <button
-                      onClick={() => handleModuleAction(module.id, 'start')}
-                      className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Enable
-                    </button>
-                    <button
-                      onClick={() => handleModuleAction(module.id, 'ignore')}
-                      className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg text-xs transition-colors"
-                    >
-                      Skip
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto text-center">
+          <p className="text-slate-300 text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
+          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
         </div>
-
-        {/* Progress Indicator */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-          <ProgressIndicator currentStep={8} totalSteps={9} />
-        </div>
-      </div>
+      </footer>
     </div>
   );
 };
