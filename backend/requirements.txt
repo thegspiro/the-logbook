@@ -23,7 +23,7 @@ cryptography==43.0.3  # Required by PyMySQL for secure connections
 # Redis & Caching
 # ============================================
 redis==5.2.1
-hiredis==3.0.1
+hiredis==3.0.0
 
 # ============================================
 # Authentication & Security
