@@ -18,12 +18,13 @@ import {
 /**
  * Onboarding Module Routes
  *
- * These are the route elements for the onboarding module.
+ * This function returns route elements for the onboarding module.
  * To disable the onboarding module, simply remove or comment out
- * these routes in App.tsx.
+ * the call to this function in App.tsx.
  */
-export const onboardingRoutes = (
-  <>
+export const getOnboardingRoutes = () => {
+  return (
+    <React.Fragment>
     {/* Welcome page - first thing users see */}
     <Route path="/" element={<Welcome />} />
 
@@ -158,5 +159,6 @@ export const onboardingRoutes = (
         </div>
       }
     />
-  </>
-);
+    </React.Fragment>
+  );
+};
