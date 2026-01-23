@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
+import { isValidPort } from '../utils/validation';
 
 interface EmailConfig {
   // Gmail/Google Workspace
@@ -93,6 +94,13 @@ const EmailConfiguration: React.FC = () => {
     if (platform === 'selfhosted') {
       if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
         toast.error('Please fill in all SMTP configuration fields');
+        return;
+      }
+
+      // Validate SMTP port number
+      const portNumber = parseInt(config.smtpPort, 10);
+      if (!isValidPort(portNumber)) {
+        toast.error('Please enter a valid port number (1-65535)');
         return;
       }
     }
