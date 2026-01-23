@@ -44,12 +44,23 @@ export const isValidUsername = (username: string): boolean => {
 
 /**
  * Validate image file
- * SECURITY NOTE: SVG files are NOT allowed as they can contain XSS payloads
+ *
+ * SECURITY NOTES:
+ * - SVG files are NOT allowed as they can contain XSS payloads
+ * - This validation checks MIME type and extension but NOT file magic numbers
+ * - Client-side validation can be bypassed - ALWAYS validate on server
+ * - Backend MUST verify actual file content using magic numbers
+ * - Users can rename malicious files with valid extensions to bypass this check
+ *
+ * RECOMMENDATION: Implement server-side validation using libraries like:
+ * - Python: python-magic, filetype
+ * - Node.js: file-type, mmmagic
  */
-export const isValidImageFile = (file: File): { valid: boolean; error?: string } => {
+export const isValidImageFile = (file: File): { valid: boolean; error?: string; warning?: string } => {
   // SECURITY: Removed SVG from allowed types due to XSS risk
   const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
   const maxSize = 5 * 1024 * 1024; // 5MB
+  const recommendedMaxSize = 2 * 1024 * 1024; // 2MB recommended
 
   if (!validTypes.includes(file.type)) {
     return {
@@ -73,6 +84,14 @@ export const isValidImageFile = (file: File): { valid: boolean; error?: string }
     return {
       valid: false,
       error: 'Invalid file extension',
+    };
+  }
+
+  // Warn about large files (performance impact)
+  if (file.size > recommendedMaxSize) {
+    return {
+      valid: true,
+      warning: 'File size is large. Consider using a smaller image for better performance.',
     };
   }
 

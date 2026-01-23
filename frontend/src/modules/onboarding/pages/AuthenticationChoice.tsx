@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, CheckCircle, Info, Key } from 'lucide-react';
+import { Shield, CheckCircle, Info, Key, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
-import { useOnboardingStorage } from '../hooks';
+import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { useApiRequest } from '../hooks';
+import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 
 interface AuthPlatform {
@@ -19,12 +20,17 @@ interface AuthPlatform {
 
 const AuthenticationChoice: React.FC = () => {
   const navigate = useNavigate();
-  const { departmentName, logoPreview, onboardingData } = useOnboardingStorage();
-  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
-  const [isSaving, setIsSaving] = useState(false);
 
-  // Get email platform to pre-select authentication
-  const emailPlatform = onboardingData.emailPlatform || sessionStorage.getItem('emailPlatform');
+  // Zustand store
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const emailPlatform = useOnboardingStore(state => state.emailPlatform);
+  const authPlatform = useOnboardingStore(state => state.authPlatform);
+  const setAuthPlatform = useOnboardingStore(state => state.setAuthPlatform);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+
+  // API request hook
+  const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   useEffect(() => {
     if (!departmentName) {
@@ -32,15 +38,17 @@ const AuthenticationChoice: React.FC = () => {
       return;
     }
 
-    // Pre-select authentication based on email platform
-    if (emailPlatform === 'gmail') {
-      setSelectedPlatform('google');
-    } else if (emailPlatform === 'microsoft') {
-      setSelectedPlatform('microsoft');
-    } else {
-      setSelectedPlatform('authentik');
+    // Pre-select authentication based on email platform (only if not already selected)
+    if (!authPlatform) {
+      if (emailPlatform === 'gmail') {
+        setAuthPlatform('google');
+      } else if (emailPlatform === 'microsoft') {
+        setAuthPlatform('microsoft');
+      } else {
+        setAuthPlatform('authentik');
+      }
     }
-  }, [navigate, departmentName, emailPlatform]);
+  }, [navigate, departmentName, emailPlatform, authPlatform, setAuthPlatform]);
 
   // Google Icon
   const GoogleIcon = () => (
@@ -118,41 +126,67 @@ const AuthenticationChoice: React.FC = () => {
     },
   ];
 
+  const currentYear = new Date().getFullYear();
+
   const handleContinue = async () => {
-    if (!selectedPlatform) return;
+    if (!authPlatform) return;
 
-    setIsSaving(true);
+    const { data, error } = await execute(
+      async (signal) => {
+        // SECURITY: Save authentication platform to server
+        const response = await apiClient.saveAuthPlatform(authPlatform);
 
-    try {
-      // SECURITY: Save authentication platform to server
-      const response = await apiClient.saveAuthPlatform(selectedPlatform);
+        if (response.error) {
+          throw new Error(response.error);
+        }
 
-      if (response.error) {
-        toast.error(response.error);
-        setIsSaving(false);
-        return;
+        return response;
+      },
+      {
+        step: 'Authentication Choice',
+        action: 'Save authentication platform',
+        userContext: `Platform: ${authPlatform}`,
       }
+    );
 
-      // SECURITY: Only store non-sensitive metadata in sessionStorage
-      sessionStorage.setItem('authPlatform', selectedPlatform);
-
+    if (data) {
       toast.success('Authentication platform saved');
 
       // Route to IT team and backup access setup
       navigate('/onboarding/it-team');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to save authentication platform';
-      toast.error(errorMessage);
-      setIsSaving(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
-      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
+      {/* Header with Logo */}
+      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center">
+          {logoPreview ? (
+            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
+              <img
+                src={logoPreview}
+                alt={`${departmentName} logo`}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
+              <Mail className="w-6 h-6 text-white" />
+            </div>
+          )}
+          <div>
+            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
+            <p className="text-slate-400 text-sm">Setup in Progress</p>
+          </div>
+        </div>
+      </header>
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-5xl w-full">
+          {/* Back Button */}
+          <BackButton to="/onboarding/file-storage" className="mb-6" />
+
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
@@ -209,13 +243,13 @@ const AuthenticationChoice: React.FC = () => {
             {platforms.map((platform) => (
               <button
                 key={platform.id}
-                onClick={() => setSelectedPlatform(platform.id)}
+                onClick={() => setAuthPlatform(platform.id)}
                 className={`relative bg-white/10 backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
-                  selectedPlatform === platform.id
+                  authPlatform === platform.id
                     ? 'border-red-500 shadow-lg shadow-red-500/50'
                     : 'border-white/20 hover:border-white/40'
                 }`}
-                aria-pressed={selectedPlatform === platform.id}
+                aria-pressed={authPlatform === platform.id}
               >
                 {/* Recommended Badge */}
                 {platform.recommended && (
@@ -228,13 +262,13 @@ const AuthenticationChoice: React.FC = () => {
                 )}
 
                 {/* Selected Indicator */}
-                {selectedPlatform === platform.id && (
+                {authPlatform === platform.id && (
                   <div className="absolute top-4 left-4">
                     <CheckCircle className="w-6 h-6 text-red-500" />
                   </div>
                 )}
 
-                <div className={`${selectedPlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-6' : ''}`}>
+                <div className={`${authPlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-6' : ''}`}>
                   {/* Icon */}
                   <div className={`flex-shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br ${platform.color} flex items-center justify-center mb-4`}>
                     {platform.icon}
@@ -272,13 +306,25 @@ const AuthenticationChoice: React.FC = () => {
             ))}
           </div>
 
+          {/* Error Alert */}
+          {error && (
+            <div className="max-w-md mx-auto mb-6">
+              <ErrorAlert
+                message={error}
+                canRetry={canRetry}
+                onRetry={handleContinue}
+                onDismiss={clearError}
+              />
+            </div>
+          )}
+
           {/* Continue Button */}
           <div className="max-w-md mx-auto">
             <button
               onClick={handleContinue}
-              disabled={!selectedPlatform || isSaving}
+              disabled={!authPlatform || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                selectedPlatform && !isSaving
+                authPlatform && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
@@ -288,12 +334,25 @@ const AuthenticationChoice: React.FC = () => {
             </button>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={7} totalSteps={8} className="mt-6 pt-6 border-t border-white/10" />
+            <ProgressIndicator currentStep={6} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
+
+            {/* Auto-Save Notification */}
+            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>
       </main>
 
-      <OnboardingFooter departmentName={departmentName} />
+      {/* Footer */}
+      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto text-center">
+          <p className="text-slate-300 text-sm">
+            © {currentYear} {departmentName}. All rights reserved.
+          </p>
+          <p className="text-slate-500 text-xs mt-1">
+            Powered by The Logbook
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };

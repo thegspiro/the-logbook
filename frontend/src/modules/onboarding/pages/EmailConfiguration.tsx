@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
+import { isValidPort, isValidEmail } from '../utils/validation';
+import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { useApiRequest } from '../hooks';
+import { useOnboardingStore } from '../store';
 
 interface EmailConfig {
   // Gmail/Google Workspace
@@ -28,44 +32,42 @@ interface EmailConfig {
 }
 
 const EmailConfiguration: React.FC = () => {
-  const [departmentName, setDepartmentName] = useState('');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [platform, setPlatform] = useState<string>('');
+  const navigate = useNavigate();
+
+  // Zustand store
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const emailPlatform = useOnboardingStore(state => state.emailPlatform);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+
+  // Local state for email configuration
   const [config, setConfig] = useState<EmailConfig>({
     smtpEncryption: 'tls',
     smtpPort: '587',
+    fromName: departmentName,
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
   const [useOAuth, setUseOAuth] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const navigate = useNavigate();
+
+  // API request hooks - separate instances for test and save
+  const { execute: executeSave, isLoading: isSaving, error: saveError, canRetry: canRetrySave, clearError: clearSaveError } = useApiRequest();
 
   useEffect(() => {
-    // Get data from session storage
-    const name = sessionStorage.getItem('departmentName');
-    const logoData = sessionStorage.getItem('logoData');
-    const emailPlatform = sessionStorage.getItem('emailPlatform');
-
-    if (!name || !emailPlatform || emailPlatform === 'other') {
-      // Redirect if missing data or they chose to skip
+    // Redirect if missing data or they chose to skip
+    if (!departmentName || !emailPlatform || emailPlatform === 'other') {
       navigate('/onboarding/start');
       return;
     }
 
-    setDepartmentName(name);
-    setPlatform(emailPlatform);
-
-    if (logoData) {
-      setLogoPreview(logoData);
+    // Set default from name if not already set
+    if (!config.fromName) {
+      setConfig(prev => ({
+        ...prev,
+        fromName: departmentName,
+      }));
     }
-
-    // Set default from email
-    setConfig(prev => ({
-      ...prev,
-      fromName: name,
-    }));
-  }, [navigate]);
+  }, [departmentName, emailPlatform, navigate, config.fromName]);
 
   const handleInputChange = (field: keyof EmailConfig, value: string) => {
     setConfig(prev => ({ ...prev, [field]: value }));
@@ -73,26 +75,26 @@ const EmailConfiguration: React.FC = () => {
   };
 
   const handleTestConnection = async () => {
-    setTestingConnection(true);
-
-    // Simulate API call to test email connection
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    setTestingConnection(false);
-    setConnectionTested(true);
-    toast.success('Email connection test successful!');
-  };
-
-  const handleContinue = async () => {
-    // Validate required fields
+    // Validate required fields before testing
     if (!config.fromEmail) {
       toast.error('Please enter a from email address');
+      return;
+    }
+
+    if (!isValidEmail(config.fromEmail)) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
     if (platform === 'selfhosted') {
       if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
         toast.error('Please fill in all SMTP configuration fields');
+        return;
+      }
+
+      const portNumber = parseInt(config.smtpPort, 10);
+      if (!isValidPort(portNumber)) {
+        toast.error('Please enter a valid port number (1-65535)');
         return;
       }
     }
@@ -102,12 +104,12 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
-    setIsSaving(true);
+    setTestingConnection(true);
+    setConnectionTested(false);
 
     try {
-      // SECURITY CRITICAL: Send email config to server (NOT sessionStorage!)
-      // Passwords, API keys, and secrets will be encrypted server-side
-      const response = await apiClient.saveEmailConfig({
+      // Test email connection with real API call
+      const response = await apiClient.testEmailConnection({
         platform,
         config: {
           ...config,
@@ -115,16 +117,83 @@ const EmailConfiguration: React.FC = () => {
         },
       });
 
+      setTestingConnection(false);
+
       if (response.error) {
-        toast.error(response.error);
-        setIsSaving(false);
+        toast.error(`Connection test failed: ${response.error}`);
         return;
       }
 
-      // SECURITY: Only store non-sensitive metadata in sessionStorage
-      sessionStorage.setItem('emailPlatform', platform);
-      sessionStorage.setItem('emailConfigured', 'true');
+      if (response.data?.success) {
+        setConnectionTested(true);
+        toast.success(response.data.message || 'Email connection test successful!');
+      } else {
+        toast.error(response.data?.message || 'Connection test failed');
+      }
+    } catch (err: any) {
+      setTestingConnection(false);
+      const errorMessage = err.message || 'Failed to test email connection';
+      toast.error(errorMessage);
+    }
+  };
 
+  const handleContinue = async () => {
+    // Validate required fields
+    if (!config.fromEmail) {
+      toast.error('Please enter a from email address');
+      return;
+    }
+
+    if (!isValidEmail(config.fromEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (emailPlatform === 'selfhosted') {
+      if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
+        toast.error('Please fill in all SMTP configuration fields');
+        return;
+      }
+
+      // Validate SMTP port number
+      const portNumber = parseInt(config.smtpPort, 10);
+      if (!isValidPort(portNumber)) {
+        toast.error('Please enter a valid port number (1-65535)');
+        return;
+      }
+    }
+
+    if (emailPlatform === 'gmail' && !useOAuth && !config.googleAppPassword) {
+      toast.error('Please enter your Google App Password');
+      return;
+    }
+
+    const { data, error } = await executeSave(
+      async (signal) => {
+        // SECURITY CRITICAL: Send email config to server (NOT sessionStorage!)
+        // Passwords, API keys, and secrets will be encrypted server-side
+        const response = await apiClient.saveEmailConfig({
+          platform: emailPlatform,
+          config: {
+            ...config,
+            authMethod: useOAuth ? 'oauth' : 'smtp',
+          },
+        });
+
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        return response;
+      },
+      {
+        step: 'Email Configuration',
+        action: 'Save email configuration',
+        userContext: `Platform: ${emailPlatform}, From: ${config.fromEmail}`,
+      }
+    );
+
+    if (data) {
       // SECURITY: Clear sensitive data from memory
       setConfig({
         smtpEncryption: 'tls',
@@ -135,10 +204,6 @@ const EmailConfiguration: React.FC = () => {
 
       // Navigate to next step (file storage selection)
       navigate('/onboarding/file-storage');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to save email configuration';
-      toast.error(errorMessage);
-      setIsSaving(false);
     }
   };
 
@@ -151,7 +216,7 @@ const EmailConfiguration: React.FC = () => {
 
   // Render different forms based on platform
   const renderPlatformFields = () => {
-    switch (platform) {
+    switch (emailPlatform) {
       case 'gmail':
         return (
           <>
@@ -490,13 +555,16 @@ const EmailConfiguration: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-3xl w-full">
+          {/* Back Button */}
+          <BackButton to="/onboarding/email-platform" className="mb-6" />
+
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
               <Mail className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
-              Configure {platform === 'gmail' ? 'Gmail' : platform === 'microsoft' ? 'Microsoft 365' : 'SMTP'} Email
+              Configure {emailPlatform === 'gmail' ? 'Gmail' : emailPlatform === 'microsoft' ? 'Microsoft 365' : 'SMTP'} Email
             </h2>
             <p className="text-xl text-slate-300">
               Set up email notifications for your department
@@ -572,6 +640,18 @@ const EmailConfiguration: React.FC = () => {
             </div>
           </div>
 
+          {/* Error Alert */}
+          {saveError && (
+            <div className="mt-6">
+              <ErrorAlert
+                message={saveError}
+                canRetry={canRetrySave}
+                onRetry={handleContinue}
+                onDismiss={clearSaveError}
+              />
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="mt-8 flex gap-4">
             <button
@@ -591,23 +671,10 @@ const EmailConfiguration: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-              <span>Setup Progress</span>
-              <span>Step 4 of 7</span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: '57%' }}
-                role="progressbar"
-                aria-valuenow={57}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Setup progress: 57 percent complete"
-              />
-            </div>
-          </div>
+          <ProgressIndicator currentStep={4} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
+
+          {/* Auto-Save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
       </main>
 

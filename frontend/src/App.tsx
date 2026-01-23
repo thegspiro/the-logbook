@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 // Modules
-import { OnboardingRoutes } from './modules/onboarding';
+import { getOnboardingRoutes } from './modules/onboarding';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -33,7 +33,7 @@ function App() {
               ONBOARDING MODULE
               Comment out the line below to disable onboarding
               ============================================ */}
-          <OnboardingRoutes />
+          {getOnboardingRoutes()}
 
           {/* ============================================
               MAIN APPLICATION ROUTES

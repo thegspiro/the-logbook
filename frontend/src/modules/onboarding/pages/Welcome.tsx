@@ -17,17 +17,11 @@ const Welcome: React.FC = () => {
       setShowParagraph(true);
     }, 4000);
 
-    // Auto-redirect to onboarding status check after 8 seconds
-    const redirectTimer = setTimeout(() => {
-      navigate('/onboarding');
-    }, 10000);
-
     return () => {
       clearTimeout(titleTimer);
       clearTimeout(paragraphTimer);
-      clearTimeout(redirectTimer);
     };
-  }, [navigate]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">

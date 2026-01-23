@@ -92,7 +92,7 @@ async def create_member(
     **Authentication required**
     """
     from uuid import uuid4
-    from app.core.security import get_password_hash
+    from app.core.security import hash_password
     import secrets
     import string
 
@@ -131,7 +131,7 @@ async def create_member(
         organization_id=current_user.organization_id,
         username=user_data.username,
         email=user_data.email,
-        password_hash=get_password_hash(temp_password),
+        password_hash=hash_password(temp_password),
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         badge_number=user_data.badge_number,

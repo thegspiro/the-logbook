@@ -191,12 +191,13 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       target: production
+      args:
+        # Use relative URL since nginx proxies /api to backend
+        VITE_API_URL: /api/v1
     image: the-logbook-frontend:local
     container_name: logbook-frontend
     restart: unless-stopped
     environment:
-      # API URL (points to backend container)
-      VITE_API_URL: http://backend:3001/api/v1
       TZ: ${TZ:-America/New_York}
 
       # Unraid User/Group IDs

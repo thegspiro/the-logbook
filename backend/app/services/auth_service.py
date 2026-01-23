@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from app.models.user import User, Session as UserSession, Organization
 from app.core.security import (
     verify_password,
-    get_password_hash,
+    hash_password,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -255,7 +255,7 @@ class AuthService:
             organization_id=organization_id,
             username=username,
             email=email,
-            password_hash=get_password_hash(password),
+            password_hash=hash_password(password),
             first_name=first_name,
             last_name=last_name,
             badge_number=badge_number,
@@ -326,7 +326,7 @@ class AuthService:
             return False, error_msg
 
         # Update password
-        user.password_hash = get_password_hash(new_password)
+        user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.utcnow()
 
         await self.db.commit()

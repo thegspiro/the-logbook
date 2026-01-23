@@ -4,19 +4,31 @@ import { Upload, Building2, Image as ImageIcon, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
+import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';
+import { ProgressIndicator, LoadingOverlay, ErrorAlert, AutoSaveNotification } from '../components';
+import { useOnboardingStore } from '../store';
 
 const DepartmentInfo: React.FC = () => {
-  const [departmentName, setDepartmentName] = useState('');
+  // Local UI state
   const [logo, setLogo] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
-  const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  // Zustand store
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const setDepartmentName = useOnboardingStore(state => state.setDepartmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const setLogoPreview = useOnboardingStore(state => state.setLogoData);
+  const navigationLayout = useOnboardingStore(state => state.navigationLayout);
+  const setNavigationLayout = useOnboardingStore(state => state.setNavigationLayout);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+
+  // Hooks
   const { initializeSession, hasSession, isLoading: sessionLoading } = useOnboardingSession();
+  const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // Initialize session on mount
   useEffect(() => {
@@ -38,17 +50,28 @@ const DepartmentInfo: React.FC = () => {
     // Validate file using secure validation utility
     const validation = isValidImageFile(file);
     if (!validation.valid) {
-      setError(validation.error || 'Invalid file');
+      toast.error(validation.error || 'Invalid file');
       return;
     }
 
-    setError(null);
+    // Show warning if file is large but still valid
+    if (validation.warning) {
+      toast.warning(validation.warning);
+    }
+
+    clearError();
     setLogo(file);
+    setIsProcessingFile(true); // Show loading overlay
 
     // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setLogoPreview(reader.result as string);
+      setIsProcessingFile(false); // Hide loading overlay
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read image file');
+      setIsProcessingFile(false);
     };
     reader.readAsDataURL(file);
   };
@@ -86,30 +109,46 @@ const DepartmentInfo: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    // Validation
     if (!departmentName.trim()) {
-      setError('Please enter your department name');
+      toast.error('Please enter your department name');
       return;
     }
 
-    setIsSaving(true);
-    setError(null);
+    if (departmentName.trim().length < 3) {
+      toast.error('Department name must be at least 3 characters');
+      return;
+    }
 
-    try {
-      // Save department info to server-side session
-      const response = await apiClient.saveDepartmentInfo({
-        name: departmentName,
-        logo: logoPreview || undefined, // Base64 logo data (safe to send)
-        navigation_layout: navigationLayout,
-      });
+    if (departmentName.length > 100) {
+      toast.error('Department name must be less than 100 characters');
+      return;
+    }
 
-      if (response.error) {
-        setError(response.error);
-        toast.error(response.error);
-        setIsSaving(false);
-        return;
+    // Execute API request with protection
+    const { data, error } = await execute(
+      async (signal) => {
+        const response = await apiClient.saveDepartmentInfo({
+          name: departmentName,
+          logo: logoPreview || undefined,
+          navigation_layout: navigationLayout,
+        });
+
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        return response;
+      },
+      {
+        step: 'Department Info',
+        action: 'Save department information',
+        userContext: `Department: ${departmentName}, Has logo: ${!!logoPreview}`,
       }
+    );
 
-      // SECURITY: Only store non-sensitive data in sessionStorage for UI purposes
+    if (data) {
+      // SECURITY: Only store non-sensitive data in sessionStorage for backward compatibility
       sessionStorage.setItem('departmentName', departmentName);
       if (logoPreview) {
         sessionStorage.setItem('logoData', logoPreview);
@@ -117,20 +156,13 @@ const DepartmentInfo: React.FC = () => {
       sessionStorage.setItem('navigationLayout', navigationLayout);
 
       toast.success('Department information saved');
-
-      // Navigate to navigation choice
       navigate('/onboarding/navigation-choice');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to save department information';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      setIsSaving(false);
     }
   };
 
   const handleSkipLogo = async () => {
     if (!departmentName.trim()) {
-      setError('Please enter your department name before continuing');
+      toast.error('Please enter your department name before continuing');
       return;
     }
 
@@ -170,23 +202,31 @@ const DepartmentInfo: React.FC = () => {
               value={departmentName}
               onChange={(e) => {
                 setDepartmentName(e.target.value);
-                setError(null);
+                clearError();
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              maxLength={100}
               autoFocus
               aria-required="true"
-              aria-invalid={error && !departmentName.trim() ? 'true' : 'false'}
+              aria-invalid={error ? 'true' : 'false'}
+              aria-describedby="departmentNameHelp"
             />
+            <p id="departmentNameHelp" className="mt-1 text-xs text-slate-400">
+              {departmentName.length}/100 characters
+            </p>
           </div>
 
           {/* Logo Upload */}
-          <div>
+          <div className="relative">
             <label className="block text-sm font-semibold text-slate-200 mb-2">
               Department Logo <span className="text-slate-400 font-normal">(Optional)</span>
             </label>
 
-            {!logoPreview ? (
+            <div className="relative">
+              <LoadingOverlay isVisible={isProcessingFile} message="Processing image..." />
+
+              {!logoPreview ? (
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -272,6 +312,7 @@ const DepartmentInfo: React.FC = () => {
                 </div>
               </div>
             )}
+            </div>
 
             <p className="mt-2 text-xs text-slate-400 flex items-start">
               <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
@@ -368,10 +409,14 @@ const DepartmentInfo: React.FC = () => {
           </div>
 
           {/* Error Message */}
+          {/* Error Alert */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
+            <ErrorAlert
+              message={error}
+              canRetry={canRetry}
+              onRetry={handleContinue}
+              onDismiss={clearError}
+            />
           )}
 
           {/* Buttons */}
@@ -401,23 +446,10 @@ const DepartmentInfo: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <div className="pt-4 border-t border-white/10">
-            <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-              <span>Setup Progress</span>
-              <span>Step 1 of 7</span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: '14%' }}
-                role="progressbar"
-                aria-valuenow={14}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Setup progress: 14 percent complete"
-              />
-            </div>
-          </div>
+          <ProgressIndicator currentStep={1} totalSteps={9} className="pt-4 border-t border-white/10" />
+
+          {/* Auto-save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
 
         {/* Help Text */}

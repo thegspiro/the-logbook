@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Server, Info } from 'lucide-react';
+import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import { useOnboardingStore } from '../store';
 
 // Email platform logos (using simple SVG icons)
 const GmailIcon = () => (
@@ -26,27 +28,21 @@ interface EmailPlatform {
 }
 
 const EmailPlatformChoice: React.FC = () => {
-  const [departmentName, setDepartmentName] = useState('');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Zustand store
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const emailPlatform = useOnboardingStore(state => state.emailPlatform);
+  const setEmailPlatform = useOnboardingStore(state => state.setEmailPlatform);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+
   useEffect(() => {
-    // Get department info from session storage
-    const name = sessionStorage.getItem('departmentName');
-    const logoData = sessionStorage.getItem('logoData');
-
-    if (!name) {
-      // If no department name, redirect back to start
+    // Redirect to start if no department name
+    if (!departmentName) {
       navigate('/onboarding/start');
-      return;
     }
-
-    setDepartmentName(name);
-    if (logoData) {
-      setLogoPreview(logoData);
-    }
-  }, [navigate]);
+  }, [departmentName, navigate]);
 
   const platforms: EmailPlatform[] = [
     {
@@ -104,13 +100,10 @@ const EmailPlatformChoice: React.FC = () => {
   ];
 
   const handleContinue = () => {
-    if (!selectedPlatform) return;
-
-    // Store email platform preference
-    sessionStorage.setItem('emailPlatform', selectedPlatform);
+    if (!emailPlatform) return;
 
     // Navigate to next step based on selection
-    if (selectedPlatform === 'other') {
+    if (emailPlatform === 'other') {
       // Skip email configuration, go to file storage selection
       navigate('/onboarding/file-storage');
     } else {
@@ -120,7 +113,7 @@ const EmailPlatformChoice: React.FC = () => {
   };
 
   const currentYear = new Date().getFullYear();
-  const selectedPlatformData = platforms.find(p => p.id === selectedPlatform);
+  const selectedPlatformData = platforms.find(p => p.id === emailPlatform);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
@@ -150,6 +143,9 @@ const EmailPlatformChoice: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-5xl w-full">
+          {/* Back Button */}
+          <BackButton to="/onboarding/navigation-choice" className="mb-6" />
+
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
@@ -171,13 +167,13 @@ const EmailPlatformChoice: React.FC = () => {
             {platforms.map((platform) => (
               <button
                 key={platform.id}
-                onClick={() => setSelectedPlatform(platform.id)}
+                onClick={() => setEmailPlatform(platform.id)}
                 className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 text-left ${
-                  selectedPlatform === platform.id
+                  emailPlatform === platform.id
                     ? 'border-red-500 shadow-lg shadow-red-500/50'
                     : 'border-white/20 hover:border-red-400/50'
                 }`}
-                aria-pressed={selectedPlatform === platform.id}
+                aria-pressed={emailPlatform === platform.id}
                 aria-label={`Select ${platform.name}`}
               >
                 <div className="p-6">
@@ -185,7 +181,7 @@ const EmailPlatformChoice: React.FC = () => {
                   <div className="flex items-start space-x-4 mb-4">
                     <div
                       className={`w-16 h-16 rounded-lg flex items-center justify-center transition-all ${
-                        selectedPlatform === platform.id
+                        emailPlatform === platform.id
                           ? `bg-gradient-to-br ${platform.color} text-white`
                           : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'
                       }`}
@@ -226,7 +222,7 @@ const EmailPlatformChoice: React.FC = () => {
                 </div>
 
                 {/* Selected indicator */}
-                {selectedPlatform === platform.id && (
+                {emailPlatform === platform.id && (
                   <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                     <svg
                       className="w-5 h-5 text-white"
@@ -269,9 +265,9 @@ const EmailPlatformChoice: React.FC = () => {
           <div className="max-w-md mx-auto">
             <button
               onClick={handleContinue}
-              disabled={!selectedPlatform}
+              disabled={!emailPlatform}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                selectedPlatform
+                emailPlatform
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
@@ -282,29 +278,16 @@ const EmailPlatformChoice: React.FC = () => {
 
             {/* Help Text */}
             <p className="text-center text-slate-400 text-sm mt-4">
-              {selectedPlatform === 'other'
+              {emailPlatform === 'other'
                 ? 'You can configure email settings later in the admin panel'
                 : 'Your email credentials are encrypted and stored securely'}
             </p>
 
             {/* Progress Indicator */}
-            <div className="mt-6 pt-6 border-t border-white/10">
-              <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                <span>Setup Progress</span>
-                <span>Step 3 of 7</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: '42%' }}
-                  role="progressbar"
-                  aria-valuenow={42}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Setup progress: 42 percent complete"
-                />
-              </div>
-            </div>
+            <ProgressIndicator currentStep={3} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
+
+            {/* Auto-Save Notification */}
+            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>
       </main>
