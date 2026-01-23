@@ -21,9 +21,9 @@ const OnboardingCheck: React.FC = () => {
 
   const checkOnboardingStatus = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
       const response = await axios.get<OnboardingStatus>(
-        `${apiUrl}/api/v1/onboarding/status`
+        `${apiUrl}/onboarding/status`
       );
 
       const status = response.data;
