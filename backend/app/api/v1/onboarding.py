@@ -6,13 +6,20 @@ Handles first-time system setup and configuration.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, validator
 import re
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import asyncio
+from functools import partial
 
 from app.core.database import get_db
 from app.services.onboarding import OnboardingService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
+from app.api.v1.test_email_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
 
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -174,6 +181,26 @@ class ChecklistItemResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EmailTestRequest(BaseModel):
+    """Request model for testing email configuration"""
+    platform: str = Field(..., description="Email platform: gmail, microsoft, selfhosted, other")
+    config: Dict[str, Any] = Field(..., description="Email configuration")
+
+    @validator('platform')
+    def validate_platform(cls, v):
+        valid_platforms = ['gmail', 'microsoft', 'selfhosted', 'other']
+        if v not in valid_platforms:
+            raise ValueError(f'Platform must be one of: {", ".join(valid_platforms)}')
+        return v
+
+
+class EmailTestResponse(BaseModel):
+    """Response model for email test"""
+    success: bool
+    message: str
+    details: Optional[Dict[str, Any]] = None
 
 
 # ============================================
@@ -571,3 +598,70 @@ async def mark_checklist_item_complete(
         "item_id": item_id,
         "title": item.title
     }
+
+
+@router.post("/test/email", response_model=EmailTestResponse)
+async def test_email_configuration(
+    request: EmailTestRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Test email configuration without saving it
+
+    Tests SMTP connection, authentication, and validates email settings.
+    Supports Gmail, Microsoft 365, self-hosted SMTP, and other email platforms.
+
+    Args:
+        request: Email configuration to test
+
+    Returns:
+        EmailTestResponse with success status and details
+
+    Raises:
+        HTTPException: If configuration is invalid
+    """
+    platform = request.platform
+    config = request.config
+
+    # Run SMTP tests in thread pool to avoid blocking async event loop
+    loop = asyncio.get_event_loop()
+
+    try:
+        if platform == 'gmail':
+            # Test Gmail configuration (OAuth or app password)
+            test_func = partial(test_gmail_oauth, config)
+            success, message, details = await loop.run_in_executor(None, test_func)
+
+        elif platform == 'microsoft':
+            # Test Microsoft 365 configuration (OAuth)
+            test_func = partial(test_microsoft_oauth, config)
+            success, message, details = await loop.run_in_executor(None, test_func)
+
+        elif platform == 'selfhosted' or platform == 'other':
+            # Test self-hosted SMTP configuration
+            test_func = partial(test_smtp_connection, config)
+            success, message, details = await loop.run_in_executor(None, test_func)
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported email platform: {platform}"
+            )
+
+        return EmailTestResponse(
+            success=success,
+            message=message,
+            details=details
+        )
+
+    except Exception as e:
+        # Log the error
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error testing email configuration: {e}")
+
+        return EmailTestResponse(
+            success=False,
+            message=f"Failed to test email configuration: {str(e)}",
+            details={"error": str(e)}
+        )
