@@ -23,6 +23,9 @@ CMD ["npm", "run", "dev", "--", "--host"]
 # Build stage
 FROM node:18-alpine as build
 
+# Accept build arguments for environment variables
+ARG VITE_API_URL=/api/v1
+
 WORKDIR /app
 
 # Copy package files
@@ -34,7 +37,8 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the app
+# Build the app with environment variables
+ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
 # Production stage
