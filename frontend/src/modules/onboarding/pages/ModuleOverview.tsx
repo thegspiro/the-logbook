@@ -453,12 +453,12 @@ const ModuleOverview: React.FC = () => {
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
           <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
             <span>Setup Progress</span>
-            <span>Step 9 of 10</span>
+            <span>Step 8 of 9</span>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-2">
             <div
               className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: '90%' }}
+              style={{ width: '89%' }}
             />
           </div>
         </div>

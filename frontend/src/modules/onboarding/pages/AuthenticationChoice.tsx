@@ -288,7 +288,7 @@ const AuthenticationChoice: React.FC = () => {
             </button>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={7} totalSteps={8} className="mt-6 pt-6 border-t border-white/10" />
+            <ProgressIndicator currentStep={6} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
           </div>
         </div>
       </main>

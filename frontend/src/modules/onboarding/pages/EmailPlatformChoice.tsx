@@ -291,17 +291,17 @@ const EmailPlatformChoice: React.FC = () => {
             <div className="mt-6 pt-6 border-t border-white/10">
               <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
                 <span>Setup Progress</span>
-                <span>Step 3 of 7</span>
+                <span>Step 3 of 9</span>
               </div>
               <div className="w-full bg-slate-800 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: '42%' }}
+                  style={{ width: '33%' }}
                   role="progressbar"
-                  aria-valuenow={42}
+                  aria-valuenow={33}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-label="Setup progress: 42 percent complete"
+                  aria-label="Setup progress: 33 percent complete"
                 />
               </div>
             </div>

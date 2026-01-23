@@ -299,7 +299,7 @@ const FileStorageChoice: React.FC = () => {
             </button>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={6} totalSteps={8} className="mt-6 pt-6 border-t border-white/10" />
+            <ProgressIndicator currentStep={5} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
           </div>
         </div>
       </main>
