@@ -2,15 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api-client';
 
-interface OnboardingStatus {
-  needs_onboarding: boolean;
-  is_completed: boolean;
-  current_step: number;
-  total_steps: number;
-  steps_completed: Record<string, any>;
-  organization_name: string | null;
-}
-
 const OnboardingCheck: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
