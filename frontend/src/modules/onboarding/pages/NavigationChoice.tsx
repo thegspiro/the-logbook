@@ -1,36 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
-import { ProgressIndicator } from '../components';
+import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import { useOnboardingStore } from '../store';
 
 const NavigationChoice: React.FC = () => {
-  const [departmentName, setDepartmentName] = useState('');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [selectedLayout, setSelectedLayout] = useState<'top' | 'left' | null>(null);
   const navigate = useNavigate();
 
+  // Zustand store
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const navigationLayout = useOnboardingStore(state => state.navigationLayout);
+  const setNavigationLayout = useOnboardingStore(state => state.setNavigationLayout);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+
   useEffect(() => {
-    // Get department info from session storage
-    const name = sessionStorage.getItem('departmentName');
-    const logoData = sessionStorage.getItem('logoData');
-
-    if (!name) {
-      // If no department name, redirect back to start
+    // Redirect if no department name set
+    if (!departmentName) {
       navigate('/onboarding/start');
-      return;
     }
-
-    setDepartmentName(name);
-    if (logoData) {
-      setLogoPreview(logoData);
-    }
-  }, [navigate]);
+  }, [departmentName, navigate]);
 
   const handleContinue = () => {
-    if (!selectedLayout) return;
+    if (!navigationLayout) return;
 
-    // Store navigation preference
-    sessionStorage.setItem('navigationLayout', selectedLayout);
+    // Store navigation preference (backward compatibility)
+    sessionStorage.setItem('navigationLayout', navigationLayout);
 
     // Navigate to email platform choice
     navigate('/onboarding/email-platform');
@@ -66,6 +61,9 @@ const NavigationChoice: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-4xl w-full">
+          {/* Back Button */}
+          <BackButton to="/onboarding/start" className="mb-6" />
+
           {/* Page Header */}
           <div className="text-center mb-8">
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
@@ -82,25 +80,25 @@ const NavigationChoice: React.FC = () => {
             <button
               onClick={() => setSelectedLayout('top')}
               className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
-                selectedLayout === 'top'
+                navigationLayout === 'top'
                   ? 'border-red-500 shadow-lg shadow-red-500/50'
                   : 'border-white/20 hover:border-red-400/50'
               }`}
-              aria-pressed={selectedLayout === 'top'}
+              aria-pressed={navigationLayout === 'top'}
               aria-label="Top navigation layout"
             >
               <div className="p-6">
                 {/* Icon */}
                 <div
                   className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${
-                    selectedLayout === 'top'
+                    navigationLayout === 'top'
                       ? 'bg-red-600'
                       : 'bg-slate-800 group-hover:bg-red-600/20'
                   }`}
                 >
                   <LayoutDashboard
                     className={`w-8 h-8 transition-colors ${
-                      selectedLayout === 'top' ? 'text-white' : 'text-slate-400'
+                      navigationLayout === 'top' ? 'text-white' : 'text-slate-400'
                     }`}
                   />
                 </div>
@@ -150,7 +148,7 @@ const NavigationChoice: React.FC = () => {
               </div>
 
               {/* Selected indicator */}
-              {selectedLayout === 'top' && (
+              {navigationLayout === 'top' && (
                 <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                   <svg
                     className="w-5 h-5 text-white"
@@ -173,25 +171,25 @@ const NavigationChoice: React.FC = () => {
             <button
               onClick={() => setSelectedLayout('left')}
               className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
-                selectedLayout === 'left'
+                navigationLayout === 'left'
                   ? 'border-red-500 shadow-lg shadow-red-500/50'
                   : 'border-white/20 hover:border-red-400/50'
               }`}
-              aria-pressed={selectedLayout === 'left'}
+              aria-pressed={navigationLayout === 'left'}
               aria-label="Left sidebar navigation layout"
             >
               <div className="p-6">
                 {/* Icon */}
                 <div
                   className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${
-                    selectedLayout === 'left'
+                    navigationLayout === 'left'
                       ? 'bg-red-600'
                       : 'bg-slate-800 group-hover:bg-red-600/20'
                   }`}
                 >
                   <PanelLeft
                     className={`w-8 h-8 transition-colors ${
-                      selectedLayout === 'left' ? 'text-white' : 'text-slate-400'
+                      navigationLayout === 'left' ? 'text-white' : 'text-slate-400'
                     }`}
                   />
                 </div>
@@ -241,7 +239,7 @@ const NavigationChoice: React.FC = () => {
               </div>
 
               {/* Selected indicator */}
-              {selectedLayout === 'left' && (
+              {navigationLayout === 'left' && (
                 <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                   <svg
                     className="w-5 h-5 text-white"
@@ -265,9 +263,9 @@ const NavigationChoice: React.FC = () => {
           <div className="max-w-md mx-auto">
             <button
               onClick={handleContinue}
-              disabled={!selectedLayout}
+              disabled={!navigationLayout}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                selectedLayout
+                navigationLayout
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
@@ -283,17 +281,9 @@ const NavigationChoice: React.FC = () => {
 
           {/* Progress Indicator */}
           <ProgressIndicator currentStep={2} totalSteps={9} className="pt-6 border-t border-white/10" />
-              <div className="w-full bg-slate-800 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: '22%' }}
-                  role="progressbar"
-                  aria-valuenow={22}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label="Setup progress: 22 percent complete"
-                />
-              </div>
+
+          {/* Auto-save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
             </div>
           </div>
         </div>
