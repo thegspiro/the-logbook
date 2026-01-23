@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { apiClient } from '../services/api-client';
 
 interface OnboardingStatus {
   needs_onboarding: boolean;
@@ -21,10 +21,14 @@ const OnboardingCheck: React.FC = () => {
 
   const checkOnboardingStatus = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
-      const response = await axios.get<OnboardingStatus>(
-        `${apiUrl}/onboarding/status`
-      );
+      const response = await apiClient.getStatus();
+
+      if (response.error || !response.data) {
+        setError(
+          response.error || 'Unable to connect to the server. Please check your connection and try again.'
+        );
+        return;
+      }
 
       const status = response.data;
 
