@@ -10,7 +10,7 @@
  */
 
 // Export routes
-export { OnboardingRoutes } from './routes';
+export { onboardingRoutes } from './routes';
 
 // Export pages (if needed for direct use)
 export * from './pages';
