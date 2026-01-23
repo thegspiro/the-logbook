@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, Plus, Trash2, AlertCircle, Phone, Mail, User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
-import { useOnboardingStorage } from '../hooks';
+import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { useApiRequest } from '../hooks';
+import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail, isValidPhoneNumber } from '../utils/validation';
 
@@ -17,7 +18,10 @@ interface ITTeamMember {
 
 const ITTeamBackupAccess: React.FC = () => {
   const navigate = useNavigate();
-  const { departmentName, logoPreview } = useOnboardingStorage();
+  const departmentName = useOnboardingStore(state => state.departmentName);
+  const logoPreview = useOnboardingStore(state => state.logoData);
+  const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // IT Team Members
   const [itTeam, setItTeam] = useState<ITTeamMember[]>([
@@ -31,7 +35,6 @@ const ITTeamBackupAccess: React.FC = () => {
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!departmentName) {
@@ -134,56 +137,67 @@ const ITTeamBackupAccess: React.FC = () => {
       return;
     }
 
-    setIsSaving(true);
     setErrors({});
 
-    try {
-      // Prepare data to save
-      const itTeamData = {
-        it_team: itTeam
-          .filter((member) => member.name && member.email && member.phone)
-          .map((member) => ({
-            name: member.name,
-            email: member.email,
-            phone: member.phone,
-            role: member.role,
-          })),
-        backup_access: {
-          email: backupEmail,
-          phone: backupPhone,
-          secondary_admin_email: secondaryAdminEmail || undefined,
-        },
-      };
+    // Prepare data to save
+    const itTeamData = {
+      it_team: itTeam
+        .filter((member) => member.name && member.email && member.phone)
+        .map((member) => ({
+          name: member.name,
+          email: member.email,
+          phone: member.phone,
+          role: member.role,
+        })),
+      backup_access: {
+        email: backupEmail,
+        phone: backupPhone,
+        secondary_admin_email: secondaryAdminEmail || undefined,
+      },
+    };
 
-      // SECURITY: Save IT team info to server
+    const success = await execute(async () => {
       const response = await apiClient.saveITTeam(itTeamData);
 
       if (response.error) {
-        toast.error(response.error);
-        setIsSaving(false);
-        return;
+        throw new Error(response.error);
       }
 
-      // SECURITY: Only store non-sensitive metadata in sessionStorage
-      sessionStorage.setItem('itTeamConfigured', 'true');
-
       toast.success('IT team and backup access information saved securely');
-
-      // Navigate to module overview
       navigate('/onboarding/modules');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to save IT team information';
-      toast.error(errorMessage);
-      setIsSaving(false);
+    });
+
+    if (!success) {
+      return;
     }
   };
 
+  const currentYear = new Date().getFullYear();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
-      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
+      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center">
+          {logoPreview ? (
+            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
+              <img src={logoPreview} alt={`${departmentName} logo`} className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
+              <Mail className="w-6 h-6 text-white" />
+            </div>
+          )}
+          <div>
+            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
+            <p className="text-slate-400 text-sm">Setup in Progress</p>
+          </div>
+        </div>
+      </header>
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-4xl w-full">
+          <BackButton to="/onboarding/authentication" className="mb-6" />
+
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-cyan-600 rounded-full mb-4">
@@ -441,6 +455,12 @@ const ITTeamBackupAccess: React.FC = () => {
 
             {/* Submit Button */}
             <div className="max-w-md mx-auto">
+              {error && (
+                <div className="mb-6">
+                  <ErrorAlert message={error} canRetry={canRetry} onRetry={handleSubmit} onDismiss={clearError} />
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={isSaving}
@@ -455,12 +475,18 @@ const ITTeamBackupAccess: React.FC = () => {
 
               {/* Progress Indicator */}
               <ProgressIndicator currentStep={7} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
+              <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
             </div>
           </form>
         </div>
       </main>
 
-      <OnboardingFooter departmentName={departmentName} />
+      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+        <div className="max-w-7xl mx-auto text-center">
+          <p className="text-slate-300 text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
+          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+        </div>
+      </footer>
     </div>
   );
 };
