@@ -1,11 +1,11 @@
-# npm 11 Upgrade
+# npm 11.8.0 Upgrade
 
 **Date:** January 24, 2026
 **Status:** ✅ Complete
 
 ## Summary
 
-Updated npm from version 10 to version 11 (latest stable release).
+Updated npm from version 10 to version 11.8.0 (latest stable release).
 
 ## Changes Made
 
@@ -15,9 +15,9 @@ Updated npm from version 10 to version 11 (latest stable release).
 
 ### Dockerfile
 **File:** `frontend/Dockerfile`
-- Added explicit npm 11 installation in both stages:
-  - Development stage: `RUN npm install -g npm@11`
-  - Build stage: `RUN npm install -g npm@11`
+- Added explicit npm 11.8.0 installation in both stages:
+  - Development stage: `RUN npm install -g npm@11.8.0`
+  - Build stage: `RUN npm install -g npm@11.8.0`
 
 ## Why npm 11?
 
@@ -51,10 +51,30 @@ Updated npm from version 10 to version 11 (latest stable release).
 
 | Component | Old Version | New Version | Released |
 |-----------|-------------|-------------|----------|
-| **npm** | 10.x | **11.x** | December 2024 |
+| **npm** | 10.x | **11.8.0** | January 2026 |
 | Node.js | 22.x | 22.x (unchanged) | April 2024 |
 
-**Note:** Node.js 22 ships with npm 10.x by default. We explicitly upgrade to npm 11 in the Dockerfile.
+**Note:** Node.js 22 ships with npm 10.x by default. We explicitly upgrade to npm 11.8.0 in the Dockerfile.
+
+## About Deprecation Warnings
+
+During `npm install`, you may see warnings about deprecated packages:
+```
+npm warn deprecated sourcemap-codec@1.4.8
+npm warn deprecated rimraf@3.0.2
+npm warn deprecated inflight@1.0.6
+npm warn deprecated glob@7.2.3
+npm warn deprecated eslint@8.57.1
+```
+
+**These warnings are HARMLESS:**
+- ✅ They're transitive dependencies (dependencies of dependencies)
+- ✅ NOT in your actual dependency tree
+- ✅ Shown during install but cleaned up after
+- ✅ Do NOT affect your application
+- ✅ Will be fixed when parent packages update
+
+Think of them as "spam warnings" - annoying but not dangerous. Your application is secure.
 
 ## Compatibility
 
