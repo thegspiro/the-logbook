@@ -73,18 +73,24 @@ const ITTeamBackupAccess: React.FC = () => {
 
     // Validate primary IT contact (first member)
     const primaryContact = itTeam[0];
-    if (!primaryContact.name.trim()) {
-      newErrors.primaryName = 'Primary contact name is required';
-    }
-    if (!primaryContact.email.trim()) {
+    if (!primaryContact) {
+      newErrors.primaryName = 'Primary contact is required';
       newErrors.primaryEmail = 'Primary contact email is required';
-    } else if (!isValidEmail(primaryContact.email)) {
-      newErrors.primaryEmail = 'Invalid email address';
-    }
-    if (!primaryContact.phone.trim()) {
       newErrors.primaryPhone = 'Primary contact phone is required';
-    } else if (!isValidPhoneNumber(primaryContact.phone)) {
-      newErrors.primaryPhone = 'Invalid phone number format';
+    } else {
+      if (!primaryContact.name.trim()) {
+        newErrors.primaryName = 'Primary contact name is required';
+      }
+      if (!primaryContact.email.trim()) {
+        newErrors.primaryEmail = 'Primary contact email is required';
+      } else if (!isValidEmail(primaryContact.email)) {
+        newErrors.primaryEmail = 'Invalid email address';
+      }
+      if (!primaryContact.phone.trim()) {
+        newErrors.primaryPhone = 'Primary contact phone is required';
+      } else if (!isValidPhoneNumber(primaryContact.phone)) {
+        newErrors.primaryPhone = 'Invalid phone number format';
+      }
     }
 
     // Validate backup email
@@ -156,18 +162,25 @@ const ITTeamBackupAccess: React.FC = () => {
       },
     };
 
-    const success = await execute(async () => {
-      const response = await apiClient.saveITTeam(itTeamData);
+    const { data: _data, error: apiError } = await execute(
+      async () => {
+        const response = await apiClient.saveITTeam(itTeamData);
 
-      if (response.error) {
-        throw new Error(response.error);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        toast.success('IT team and backup access information saved securely');
+        navigate('/onboarding/modules');
+        return response;
+      },
+      {
+        step: 'IT Team & Backup Access',
+        action: 'Save IT team and backup access info',
       }
+    );
 
-      toast.success('IT team and backup access information saved securely');
-      navigate('/onboarding/modules');
-    });
-
-    if (!success) {
+    if (apiError) {
       return;
     }
   };

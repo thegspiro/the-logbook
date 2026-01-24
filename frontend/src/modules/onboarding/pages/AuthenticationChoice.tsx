@@ -131,8 +131,8 @@ const AuthenticationChoice: React.FC = () => {
   const handleContinue = async () => {
     if (!authPlatform) return;
 
-    const { data, error } = await execute(
-      async (signal) => {
+    const { data, error: _apiError } = await execute(
+      async () => {
         // SECURITY: Save authentication platform to server
         const response = await apiClient.saveAuthPlatform(authPlatform);
 

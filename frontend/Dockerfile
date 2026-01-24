@@ -1,7 +1,7 @@
 # Multi-stage build for React frontend
 
 # Development stage
-FROM node:18-alpine as development
+FROM node:22-alpine as development
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host"]
 
 # Build stage
-FROM node:18-alpine as build
+FROM node:22-alpine as build
 
 # Accept build arguments for environment variables
 ARG VITE_API_URL=/api/v1

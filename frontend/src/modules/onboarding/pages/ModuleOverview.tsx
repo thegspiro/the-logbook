@@ -196,22 +196,29 @@ const ModuleOverview: React.FC = () => {
   const handleContinue = async () => {
     clearError();
 
-    const success = await execute(async () => {
-      const response = await apiClient.saveModuleConfig({
-        modules: Object.entries(moduleStatuses)
-          .filter(([_, status]) => status === 'enabled')
-          .map(([id]) => id),
-      });
+    const { data: _data, error: apiError } = await execute(
+      async () => {
+        const response = await apiClient.saveModuleConfig({
+          modules: Object.entries(moduleStatuses)
+            .filter(([_, status]) => status === 'enabled')
+            .map(([id]) => id),
+        });
 
-      if (response.error) {
-        throw new Error(response.error);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        toast.success('Module configuration saved!');
+        navigate('/onboarding/admin-user');
+        return response;
+      },
+      {
+        step: 'Module Selection',
+        action: 'Save module configuration',
       }
+    );
 
-      toast.success('Module configuration saved!');
-      navigate('/onboarding/admin-user');
-    });
-
-    if (!success) {
+    if (apiError) {
       return;
     }
   };
@@ -301,7 +308,7 @@ const ModuleOverview: React.FC = () => {
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >
-              {isSaving ? 'Saving...' : 'Continue to Dashboard'}
+              {isSaving ? 'Saving...' : 'Continue to Admin Setup'}
             </button>
           </div>
 
@@ -408,7 +415,7 @@ const ModuleOverview: React.FC = () => {
                         onClick={() => handleModuleAction(module.id, 'start')}
                         className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                       >
-                        Start Working
+                        Configure Now
                       </button>
                       <div className="flex space-x-2">
                         <button

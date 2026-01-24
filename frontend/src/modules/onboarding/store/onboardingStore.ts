@@ -130,7 +130,7 @@ const initialState: OnboardingState = {
 const logErrorToConsole = (error: OnboardingError) => {
   console.group(`🚨 ONBOARDING ERROR - ${error.step}`);
   console.error('Action:', error.action);
-  console.error('Message:', error.message);
+  console.error('Message:', error.errorMessage);
   console.error('Timestamp:', error.timestamp);
 
   if (error.errorDetails) {

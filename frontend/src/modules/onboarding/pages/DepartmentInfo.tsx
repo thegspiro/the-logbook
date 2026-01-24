@@ -56,7 +56,7 @@ const DepartmentInfo: React.FC = () => {
 
     // Show warning if file is large but still valid
     if (validation.warning) {
-      toast.warning(validation.warning);
+      toast(validation.warning, { icon: '⚠️' });
     }
 
     clearError();
@@ -126,8 +126,8 @@ const DepartmentInfo: React.FC = () => {
     }
 
     // Execute API request with protection
-    const { data, error } = await execute(
-      async (signal) => {
+    const { data, error: _apiError } = await execute(
+      async () => {
         const response = await apiClient.saveDepartmentInfo({
           name: departmentName,
           logo: logoPreview || undefined,

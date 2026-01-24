@@ -78,7 +78,7 @@ const NavigationChoice: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             {/* Top Navigation Option */}
             <button
-              onClick={() => setSelectedLayout('top')}
+              onClick={() => setNavigationLayout('top')}
               className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'top'
                   ? 'border-red-500 shadow-lg shadow-red-500/50'
@@ -169,7 +169,7 @@ const NavigationChoice: React.FC = () => {
 
             {/* Left Sidebar Option */}
             <button
-              onClick={() => setSelectedLayout('left')}
+              onClick={() => setNavigationLayout('left')}
               className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'left'
                   ? 'border-red-500 shadow-lg shadow-red-500/50'
@@ -284,7 +284,6 @@ const NavigationChoice: React.FC = () => {
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
-            </div>
           </div>
         </div>
       </main>

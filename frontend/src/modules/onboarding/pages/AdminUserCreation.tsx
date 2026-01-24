@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { BackButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -153,50 +153,59 @@ const AdminUserCreation: React.FC = () => {
     setErrors({});
     clearError();
 
-    const success = await execute(async () => {
-      // SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)
-      // Password will be hashed with Argon2id server-side
-      const response = await apiClient.createAdminUser({
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        password_confirm: formData.confirmPassword,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        badge_number: formData.badgeNumber || undefined,
-      });
+    const { data: _data, error: apiError } = await execute(
+      async () => {
+        // SECURITY CRITICAL: Send password to server (NEVER sessionStorage!)
+        // Password will be hashed with Argon2id server-side
+        const response = await apiClient.createAdminUser({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+          password_confirm: formData.confirmPassword,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          badge_number: formData.badgeNumber || undefined,
+        });
 
-      if (response.error) {
-        throw new Error(response.error);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        // SECURITY: Clear password from memory immediately (apiClient already does this)
+        setFormData({
+          username: '',
+          email: '',
+          firstName: '',
+          lastName: '',
+          badgeNumber: '',
+          password: '',
+          confirmPassword: '',
+        });
+
+        toast.success('Admin account created! Setting up your dashboard...');
+
+        // Complete onboarding and finalize setup
+        const completeResponse = await apiClient.completeOnboarding();
+
+        if (completeResponse.error) {
+          throw new Error('Account created but setup incomplete. Please contact support.');
+        }
+
+        toast.success('Welcome to your department dashboard!');
+
+        // Navigate to main dashboard (user is now authenticated)
+        navigate('/dashboard');
+
+        return response;
+      },
+      {
+        step: 'Admin User Creation',
+        action: 'Create admin user and complete onboarding',
+        userContext: `Username: ${formData.username}, Email: ${formData.email}`,
       }
+    );
 
-      // SECURITY: Clear password from memory immediately (apiClient already does this)
-      setFormData({
-        username: '',
-        email: '',
-        firstName: '',
-        lastName: '',
-        badgeNumber: '',
-        password: '',
-        confirmPassword: '',
-      });
-
-      toast.success('Admin account created! Setting up your dashboard...');
-
-      // Complete onboarding and finalize setup
-      const completeResponse = await apiClient.completeOnboarding();
-
-      if (completeResponse.error) {
-        throw new Error('Account created but setup incomplete. Please contact support.');
-      }
-
-      toast.success('Welcome to your department dashboard!');
-
-      // Navigate to main dashboard (user is now authenticated)
-      navigate('/dashboard');
-    });
-
-    if (!success) {
+    if (apiError) {
       // SECURITY: Clear passwords on error
       setFormData(prev => ({
         ...prev,
