@@ -156,18 +156,25 @@ const ITTeamBackupAccess: React.FC = () => {
       },
     };
 
-    const success = await execute(async () => {
-      const response = await apiClient.saveITTeam(itTeamData);
+    const { data: _data, error: apiError } = await execute(
+      async () => {
+        const response = await apiClient.saveITTeam(itTeamData);
 
-      if (response.error) {
-        throw new Error(response.error);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        toast.success('IT team and backup access information saved securely');
+        navigate('/onboarding/modules');
+        return response;
+      },
+      {
+        step: 'IT Team & Backup Access',
+        action: 'Save IT team and backup access info',
       }
+    );
 
-      toast.success('IT team and backup access information saved securely');
-      navigate('/onboarding/modules');
-    });
-
-    if (!success) {
+    if (apiError) {
       return;
     }
   };

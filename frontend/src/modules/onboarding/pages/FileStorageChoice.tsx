@@ -148,8 +148,8 @@ const FileStorageChoice: React.FC = () => {
   const handleContinue = async () => {
     if (!fileStoragePlatform) return;
 
-    const { data, error } = await execute(
-      async (signal) => {
+    const { data, error: _apiError } = await execute(
+      async () => {
         // SECURITY: Save file storage choice to server
         // If platform requires API keys/secrets, they'll be entered in the config page
         const response = await apiClient.saveFileStorageConfig({
@@ -260,7 +260,7 @@ const FileStorageChoice: React.FC = () => {
                     ? 'border-red-500 shadow-lg shadow-red-500/50'
                     : 'border-white/20 hover:border-white/40'
                 }`}
-                aria-pressed={selectedPlatform === platform.id}
+                aria-pressed={fileStoragePlatform === platform.id}
               >
                 {/* Recommended Badge */}
                 {platform.recommended && (
@@ -273,13 +273,13 @@ const FileStorageChoice: React.FC = () => {
                 )}
 
                 {/* Selected Indicator */}
-                {selectedPlatform === platform.id && (
+                {fileStoragePlatform === platform.id && (
                   <div className="absolute top-4 left-4">
                     <CheckCircle className="w-6 h-6 text-red-500" />
                   </div>
                 )}
 
-                <div className={`flex items-start space-x-4 ${selectedPlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-8' : ''}`}>
+                <div className={`flex items-start space-x-4 ${fileStoragePlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-8' : ''}`}>
                   {/* Icon */}
                   <div className={`flex-shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br ${platform.color} flex items-center justify-center`}>
                     {platform.icon}

@@ -196,22 +196,29 @@ const ModuleOverview: React.FC = () => {
   const handleContinue = async () => {
     clearError();
 
-    const success = await execute(async () => {
-      const response = await apiClient.saveModuleConfig({
-        modules: Object.entries(moduleStatuses)
-          .filter(([_, status]) => status === 'enabled')
-          .map(([id]) => id),
-      });
+    const { data: _data, error: apiError } = await execute(
+      async () => {
+        const response = await apiClient.saveModuleConfig({
+          modules: Object.entries(moduleStatuses)
+            .filter(([_, status]) => status === 'enabled')
+            .map(([id]) => id),
+        });
 
-      if (response.error) {
-        throw new Error(response.error);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        toast.success('Module configuration saved!');
+        navigate('/onboarding/admin-user');
+        return response;
+      },
+      {
+        step: 'Module Selection',
+        action: 'Save module configuration',
       }
+    );
 
-      toast.success('Module configuration saved!');
-      navigate('/onboarding/admin-user');
-    });
-
-    if (!success) {
+    if (apiError) {
       return;
     }
   };

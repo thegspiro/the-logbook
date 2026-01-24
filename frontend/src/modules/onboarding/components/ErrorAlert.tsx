@@ -22,7 +22,7 @@ interface ErrorAlertProps {
   /**
    * Retry callback
    */
-  onRetry?: () => void;
+  onRetry?: (() => void) | ((e?: any) => void) | ((e?: any) => Promise<void>);
 
   /**
    * Dismiss callback

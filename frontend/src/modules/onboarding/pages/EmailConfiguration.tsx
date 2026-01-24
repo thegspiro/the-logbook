@@ -86,7 +86,7 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
-    if (platform === 'selfhosted') {
+    if (emailPlatform === 'selfhosted') {
       if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
         toast.error('Please fill in all SMTP configuration fields');
         return;
@@ -99,7 +99,7 @@ const EmailConfiguration: React.FC = () => {
       }
     }
 
-    if (platform === 'gmail' && !useOAuth && !config.googleAppPassword) {
+    if (emailPlatform === 'gmail' && !useOAuth && !config.googleAppPassword) {
       toast.error('Please enter your Google App Password');
       return;
     }
@@ -110,7 +110,7 @@ const EmailConfiguration: React.FC = () => {
     try {
       // Test email connection with real API call
       const response = await apiClient.testEmailConnection({
-        platform,
+        platform: emailPlatform || 'other',
         config: {
           ...config,
           authMethod: useOAuth ? 'oauth' : 'smtp',
@@ -168,12 +168,12 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
-    const { data, error } = await executeSave(
-      async (signal) => {
+    const { data, error: _apiError } = await executeSave(
+      async () => {
         // SECURITY CRITICAL: Send email config to server (NOT sessionStorage!)
         // Passwords, API keys, and secrets will be encrypted server-side
         const response = await apiClient.saveEmailConfig({
-          platform: emailPlatform,
+          platform: emailPlatform || 'other',
           config: {
             ...config,
             authMethod: useOAuth ? 'oauth' : 'smtp',
