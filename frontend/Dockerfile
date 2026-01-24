@@ -3,6 +3,9 @@
 # Development stage
 FROM node:22-alpine as development
 
+# Upgrade to npm 11
+RUN npm install -g npm@11
+
 WORKDIR /app
 
 # Copy package files
@@ -22,6 +25,9 @@ CMD ["npm", "run", "dev", "--", "--host"]
 
 # Build stage
 FROM node:22-alpine as build
+
+# Upgrade to npm 11
+RUN npm install -g npm@11
 
 # Accept build arguments for environment variables
 ARG VITE_API_URL=/api/v1
