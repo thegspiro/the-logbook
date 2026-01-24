@@ -73,18 +73,24 @@ const ITTeamBackupAccess: React.FC = () => {
 
     // Validate primary IT contact (first member)
     const primaryContact = itTeam[0];
-    if (!primaryContact.name.trim()) {
-      newErrors.primaryName = 'Primary contact name is required';
-    }
-    if (!primaryContact.email.trim()) {
+    if (!primaryContact) {
+      newErrors.primaryName = 'Primary contact is required';
       newErrors.primaryEmail = 'Primary contact email is required';
-    } else if (!isValidEmail(primaryContact.email)) {
-      newErrors.primaryEmail = 'Invalid email address';
-    }
-    if (!primaryContact.phone.trim()) {
       newErrors.primaryPhone = 'Primary contact phone is required';
-    } else if (!isValidPhoneNumber(primaryContact.phone)) {
-      newErrors.primaryPhone = 'Invalid phone number format';
+    } else {
+      if (!primaryContact.name.trim()) {
+        newErrors.primaryName = 'Primary contact name is required';
+      }
+      if (!primaryContact.email.trim()) {
+        newErrors.primaryEmail = 'Primary contact email is required';
+      } else if (!isValidEmail(primaryContact.email)) {
+        newErrors.primaryEmail = 'Invalid email address';
+      }
+      if (!primaryContact.phone.trim()) {
+        newErrors.primaryPhone = 'Primary contact phone is required';
+      } else if (!isValidPhoneNumber(primaryContact.phone)) {
+        newErrors.primaryPhone = 'Invalid phone number format';
+      }
     }
 
     // Validate backup email
