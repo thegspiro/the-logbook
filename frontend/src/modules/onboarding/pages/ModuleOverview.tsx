@@ -301,7 +301,7 @@ const ModuleOverview: React.FC = () => {
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >
-              {isSaving ? 'Saving...' : 'Continue to Dashboard'}
+              {isSaving ? 'Saving...' : 'Continue to Admin Setup'}
             </button>
           </div>
 
@@ -408,7 +408,7 @@ const ModuleOverview: React.FC = () => {
                         onClick={() => handleModuleAction(module.id, 'start')}
                         className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                       >
-                        Start Working
+                        Configure Now
                       </button>
                       <div className="flex space-x-2">
                         <button
