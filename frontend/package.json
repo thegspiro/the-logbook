@@ -37,7 +37,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.5.1",
     "@types/luxon": "^3.4.2",
-    "@types/node": "^20.10.6",
+    "@types/node": "^22.19.7",
     "@types/react": "^18.2.47",
     "@types/react-dom": "^18.2.18",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
@@ -61,6 +61,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
   }
 }
