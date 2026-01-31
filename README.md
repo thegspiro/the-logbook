@@ -108,17 +108,24 @@ docker-compose logs -f backend
 # - API Docs: http://localhost:3001/docs
 ```
 
-### Unraid Installation
+### Option 3: Unraid Installation (One Command!)
 
-For Unraid users, use the automated wizard:
+For Unraid users, run this single command:
 
 ```bash
-cd /mnt/user/appdata/the-logbook
-python3 scripts/setup-env.py --unraid
-docker-compose up -d
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
 ```
 
-See [unraid/UNRAID-INSTALLATION.md](unraid/UNRAID-INSTALLATION.md) for detailed Unraid instructions.
+This automated script will:
+- ✅ Clean up any existing containers (fixes conflicts)
+- ✅ Clone repository to `/mnt/user/appdata/the-logbook`
+- ✅ Generate secure passwords automatically
+- ✅ Build and start all services
+- ✅ Verify deployment
+
+**Access:** `http://YOUR-UNRAID-IP:7880`
+
+See [UNRAID-QUICKSTART.md](UNRAID-QUICKSTART.md) or [unraid/QUICK-START-UPDATED.md](unraid/QUICK-START-UPDATED.md) for detailed Unraid instructions.
 
 ### First Time Setup
 
@@ -134,19 +141,30 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 
 ## 📚 Documentation
 
-- [Quick Start Guide](QUICK_START_GITHUB.md) - Get started quickly
-- [GitHub Setup Guide](GITHUB_SETUP.md) - Complete GitHub configuration
-- [Python Backend Guide](backend/PYTHON_GUIDE.md) - Backend development
-- [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
-- [Training Module Backend](backend/app/docs/TRAINING_MODULE.md) - Backend API documentation
-- [Security Guide](SECURITY.md) - Security policy and compliance
-- [Backend Security Guide](backend/SECURITY_GUIDE.md) - Backend security guidelines
-- [Deployment Guide](docs/DEPLOYMENT.md) - Deployment instructions
-- [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) - Docker image management
+### Getting Started
+- [Unraid Quick Start](UNRAID-QUICKSTART.md) - One-command Unraid installation
+- [GitHub Setup Guide](docs/setup/github.md) - Complete GitHub configuration
 - [Onboarding Guide](ONBOARDING.md) - First-time setup wizard
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+
+### Deployment
+- [Unraid Deployment Guide](docs/deployment/unraid.md) - Complete Unraid guide
+- [Unraid Updated Quick Start](unraid/QUICK-START-UPDATED.md) - Latest Unraid instructions
+- [General Deployment Guide](docs/DEPLOYMENT.md) - Deployment instructions
+- [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) - Docker image management
+
+### Backend
+- [Python Backend Guide](docs/backend/python-backend.md) - Backend development
+- [Training Module Backend](backend/app/docs/TRAINING_MODULE.md) - Backend API documentation
+
+### Modules & Features
+- [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
 - [Role System](ROLE_SYSTEM_README.md) - Role-based access control
-- [Python Migration Guide](PYTHON_MIGRATION.md) - Migration from Node.js to Python
-- [Unraid Installation](unraid/README.md) - Unraid-specific deployment
+- [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details
+
+### Security & Troubleshooting
+- [Security Guide](SECURITY.md) - Security policy and compliance
+- [Troubleshooting Guide](docs/troubleshooting/README.md) - Common issues and fixes
 
 ## 🛠️ Technology Stack
 
