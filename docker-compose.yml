@@ -97,22 +97,17 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: development
+      target: production
+      args:
+        VITE_API_URL: /api/v1
     container_name: intranet-frontend
     restart: unless-stopped
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
-      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3001}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
     networks:
       - intranet-network
-    command: npm run dev
 
   # Nginx Reverse Proxy (Optional - for production-like setup)
   nginx:

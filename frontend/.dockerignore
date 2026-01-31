@@ -1,0 +1,36 @@
+# Node modules
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment files (build args should be used instead)
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist
+build
+.vite
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+*.log
