@@ -141,6 +141,20 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 
 ## 📚 Documentation
 
+### 📖 GitHub Wiki (Comprehensive Documentation)
+
+**Visit our complete documentation wiki:** **[The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)**
+
+The wiki includes:
+- 📖 **[Installation Guide](https://github.com/thegspiro/the-logbook/wiki/Installation)** - All installation methods
+- 🚀 **[Unraid Quick Start](https://github.com/thegspiro/the-logbook/wiki/Unraid-Quick-Start)** - One-command setup
+- 🔧 **[Configuration](https://github.com/thegspiro/the-logbook/wiki/Configuration-Environment)** - All settings explained
+- 🛠️ **[Troubleshooting](https://github.com/thegspiro/the-logbook/wiki/Troubleshooting)** - Common issues & solutions
+- 💻 **[Development Guides](https://github.com/thegspiro/the-logbook/wiki/Development-Backend)** - Backend & frontend
+- 🔐 **[Security](https://github.com/thegspiro/the-logbook/wiki/Security-Overview)** - Security & compliance
+- 📦 **[Modules](https://github.com/thegspiro/the-logbook/wiki/Module-Training)** - Feature documentation
+- 📋 **[Quick Reference](https://github.com/thegspiro/the-logbook/wiki/Quick-Reference)** - Common commands
+
 ### Getting Started
 - [Unraid Quick Start](UNRAID-QUICKSTART.md) - One-command Unraid installation
 - [GitHub Setup Guide](docs/setup/github.md) - Complete GitHub configuration
