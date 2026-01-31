@@ -102,11 +102,7 @@ const SecurityCheckPlaceholder: React.FC = () => {
             ← Go Back
           </button>
           <a
-            href={
-              import.meta.env.VITE_API_URL
-                ? `${import.meta.env.VITE_API_URL}/docs`
-                : 'http://localhost:3001/docs'
-            }
+            href="/docs"
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300 text-center"
