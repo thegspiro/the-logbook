@@ -1,0 +1,57 @@
+## The Logbook Wiki
+
+**[🏠 Home](Home)**
+
+---
+
+### 🎯 Getting Started
+- [Installation](Installation)
+- [Unraid Quick Start](Unraid-Quick-Start)
+- [Onboarding](Onboarding)
+- [Quick Reference](Quick-Reference)
+
+### 🚢 Deployment
+- [Unraid](Deployment-Unraid)
+- [Docker](Deployment-Docker)
+- [Production](Deployment-Production)
+
+### 🔧 Configuration
+- [Environment](Configuration-Environment)
+- [Modules](Configuration-Modules)
+- [Security](Configuration-Security)
+
+### 💻 Development
+- [Backend](Development-Backend)
+- [Frontend](Development-Frontend)
+- [Contributing](Contributing)
+
+### 📦 Modules
+- [Training](Module-Training)
+- [Elections](Module-Elections)
+- [Events](Module-Events)
+- [Scheduling](Module-Scheduling)
+- [Compliance](Module-Compliance)
+
+### 🔐 Security
+- [Overview](Security-Overview)
+- [Authentication](Security-Authentication)
+- [Encryption](Security-Encryption)
+- [Audit Logging](Security-Audit-Logging)
+- [HIPAA](Security-HIPAA)
+
+### 🛠️ Troubleshooting
+- [Common Issues](Troubleshooting)
+- [Containers](Troubleshooting-Containers)
+- [Frontend](Troubleshooting-Frontend)
+- [Backend](Troubleshooting-Backend)
+- [Database](Troubleshooting-Database)
+
+### 📖 Reference
+- [API Docs](API-Reference)
+- [Database Schema](Database-Schema)
+- [Role System](Role-System)
+- [Tech Stack](Technology-Stack)
+
+---
+
+**[GitHub Repo](https://github.com/thegspiro/the-logbook)** | **[Issues](https://github.com/thegspiro/the-logbook/issues)**
