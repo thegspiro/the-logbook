@@ -66,7 +66,10 @@ services:
       TZ: ${TZ:-America/New_York}
     volumes:
       - /mnt/user/appdata/the-logbook/redis:/data
-    # Internal port only
+    # Internal port only - not exposed to host (more secure)
+    # Uncomment the next 2 lines if you need external Redis access
+    # ports:
+    #   - "${REDIS_PORT:-6375}:6379"
     expose:
       - "6379"
     healthcheck:
