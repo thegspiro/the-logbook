@@ -5,12 +5,14 @@ This guide covers common issues and their solutions for The Logbook deployment.
 ## Table of Contents
 
 1. [Onboarding Failures](#onboarding-failures)
-2. [Frontend Not Rendering](#frontend-not-rendering)
-3. [Malformed API URLs](#malformed-api-urls)
-4. [Database Issues](#database-issues)
-5. [Build Errors](#build-errors)
-6. [Docker Issues](#docker-issues)
-7. [Network & Connectivity](#network--connectivity)
+2. [Redis Container Unhealthy](#redis-container-unhealthy)
+3. [Frontend Not Rendering](#frontend-not-rendering)
+4. [Malformed API URLs](#malformed-api-urls)
+5. [Database Issues](#database-issues)
+6. [Onboarding Module Issues](#onboarding-module-issues)
+7. [Build Errors](#build-errors)
+8. [Docker Issues](#docker-issues)
+9. [Network & Connectivity](#network--connectivity)
 
 ---
 
@@ -63,6 +65,68 @@ curl http://YOUR-IP:7881/health
 
 # Test nginx proxy (CRITICAL)
 curl http://YOUR-IP:7880/api/v1/onboarding/status
+```
+
+---
+
+## Redis Container Unhealthy
+
+### Problem: Redis container marked as unhealthy, blocking other containers
+**Error:** `dependency failed to start: container intranet-redis is unhealthy`
+
+**Redis Logs Show:**
+```
+WARNING Memory overcommit must be enabled!
+Redis is starting...
+Ready to accept connections tcp
+```
+
+### Root Cause
+The Redis health check command outputs a warning message when using password authentication with the `-a` flag. This warning interferes with the `grep PONG` command, causing Docker to mark the container as unhealthy even though Redis is actually running fine.
+
+### Solution
+
+**1. Update docker-compose.yml Health Check**
+
+The health check should include `--no-auth-warning` to suppress the warning:
+
+```yaml
+redis:
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+```
+
+**2. Apply the Fix**
+
+```bash
+cd /mnt/user/appdata/the-logbook
+git pull
+docker-compose down
+docker-compose up -d
+```
+
+**3. Verify Redis is Healthy**
+
+```bash
+docker ps | grep redis
+# Should show (healthy) status
+
+# Test Redis manually
+docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning ping
+# Should return: PONG
+```
+
+### Note on Memory Overcommit Warning
+The warning about `vm.overcommit_memory` is informational and doesn't prevent Redis from working. To resolve it (optional):
+
+```bash
+# On the host system (not in container)
+echo 'vm.overcommit_memory = 1' | sudo tee -a /etc/sysctl.conf
+sudo sysctl vm.overcommit_memory=1
 ```
 
 ---
@@ -329,6 +393,93 @@ docker compose up -d
 ```
 
 **Note:** If you have existing data, you may need to recreate the database volume for the authentication change to take effect. Back up your data first if needed.
+
+---
+
+## Onboarding Module Issues
+
+### Problem: "Invalid modules" error during onboarding Step 8
+**Error:** `Invalid modules: members, events, documents`
+
+### Root Cause
+The backend's module validation list was outdated and didn't include all the module IDs used by the frontend.
+
+### Solution
+This has been fixed in the codebase. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+The valid module IDs now include:
+- **Essential:** `members`, `events`, `documents`
+- **Operations:** `training`, `inventory`, `scheduling`
+- **Governance:** `elections`, `minutes`, `reports`
+- **Communication:** `notifications`, `mobile`
+- **Advanced:** `forms`, `integrations`
+
+---
+
+### Problem: Module selections not persisting when navigating back
+**Symptom:** After selecting modules and clicking Continue, going back shows default selections again.
+
+### Root Cause
+The frontend was using local React state instead of the persistent Zustand store.
+
+### Solution
+This has been fixed in the codebase. Module configurations now persist in localStorage via the Zustand store. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: IT Team information not persisting when navigating back (Step 7)
+**Symptom:** IT team members, backup email, and phone information disappear when going back.
+
+### Root Cause
+Same issue - using local state instead of persistent store.
+
+### Solution
+Fixed in the codebase. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Need to reset onboarding and start over
+**Symptom:** Want to clear all onboarding progress and start fresh.
+
+### Solution
+A "Reset Progress" button is now available on all onboarding pages (top right, opposite the Back button). Clicking it will:
+
+1. Show a confirmation dialog warning about data deletion
+2. Clear all onboarding database records
+3. Clear local storage
+4. Redirect to the start page
+
+**Manual Reset (if button not available):**
+
+```bash
+# Clear onboarding data from database
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> DELETE FROM onboarding_sessions;
+> DELETE FROM onboarding_status;
+> DELETE FROM organizations;  -- Removes org created during onboarding
+> EXIT;
+
+# Clear browser localStorage
+# In browser console (F12): localStorage.clear()
+```
 
 ---
 
