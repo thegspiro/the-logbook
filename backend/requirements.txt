@@ -98,6 +98,7 @@ stripe==11.4.0
 # ============================================
 loguru==0.7.3
 sentry-sdk==2.20.0
+psutil==6.1.1  # System monitoring for health checks
 
 # ============================================
 # Task Queue

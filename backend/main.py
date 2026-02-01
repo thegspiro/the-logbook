@@ -76,10 +76,13 @@ async def lifespan(app: FastAPI):
     # Run migrations to ensure tables exist
     run_migrations()
     
-    # Connect to Redis
+    # Connect to Redis (graceful degradation if unavailable)
     logger.info("Connecting to Redis...")
     await cache_manager.connect()
-    logger.info("✓ Redis connected")
+    if cache_manager.is_connected:
+        logger.info("✓ Redis connected")
+    else:
+        logger.warning("⚠ Redis unavailable - running in degraded mode (caching disabled)")
     
     logger.info(f"✓ Server started on port {settings.PORT}")
     logger.info(f"📚 API Documentation: http://localhost:{settings.PORT}/docs")
@@ -170,7 +173,7 @@ async def health_check():
     # Check Redis
     try:
         from app.core.cache import cache_manager
-        if cache_manager.redis:
+        if cache_manager.is_connected:
             await cache_manager.redis.ping()
             health_status["checks"]["redis"] = "connected"
         else:

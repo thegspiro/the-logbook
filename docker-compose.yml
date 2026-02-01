@@ -25,10 +25,10 @@ services:
       - ./database/schemas:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-intranet_user}", "-p${DB_PASSWORD:-change_me_in_production}"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 30
-      start_period: 300s
+      retries: 24
+      start_period: 60s
     networks:
       - intranet-network
 
@@ -43,10 +43,11 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - intranet-network
 
