@@ -33,8 +33,8 @@ def upgrade() -> None:
         sa.Column('max_participants', sa.Integer()),
         sa.Column('materials_required', sa.JSON()),
         sa.Column('active', sa.Boolean(), server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_course_org', 'training_courses', ['organization_id'])
@@ -66,8 +66,8 @@ def upgrade() -> None:
         sa.Column('location', sa.String(255)),
         sa.Column('notes', sa.Text()),
         sa.Column('attachments', sa.JSON()),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_record_org', 'training_records', ['organization_id'])
@@ -93,8 +93,8 @@ def upgrade() -> None:
         sa.Column('start_date', sa.Date()),
         sa.Column('due_date', sa.Date()),
         sa.Column('active', sa.Boolean(), server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_requirement_org', 'training_requirements', ['organization_id'])

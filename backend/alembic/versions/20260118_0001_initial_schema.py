@@ -26,8 +26,8 @@ def upgrade() -> None:
         sa.Column('type', sa.String(50), server_default='fire_department'),
         sa.Column('settings', sa.JSON()),
         sa.Column('active', sa.Boolean(), server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
     )
     op.create_index('idx_org_active', 'organizations', ['active'])
 
@@ -49,17 +49,17 @@ def upgrade() -> None:
         sa.Column('hire_date', sa.Date()),
         sa.Column('status', sa.Enum('active', 'inactive', 'suspended', 'probationary', 'retired', name='userstatus'), server_default='active'),
         sa.Column('email_verified', sa.Boolean(), server_default='0'),
-        sa.Column('email_verified_at', sa.DateTime(timezone=True)),
+        sa.Column('email_verified_at', sa.DateTime()),
         sa.Column('mfa_enabled', sa.Boolean(), server_default='0'),
         sa.Column('mfa_secret', sa.String(32)),
         sa.Column('mfa_backup_codes', sa.JSON()),
-        sa.Column('password_changed_at', sa.DateTime(timezone=True)),
+        sa.Column('password_changed_at', sa.DateTime()),
         sa.Column('failed_login_attempts', sa.Integer(), server_default='0'),
-        sa.Column('locked_until', sa.DateTime(timezone=True)),
-        sa.Column('last_login_at', sa.DateTime(timezone=True)),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.Column('deleted_at', sa.DateTime(timezone=True)),
+        sa.Column('locked_until', sa.DateTime()),
+        sa.Column('last_login_at', sa.DateTime()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
+        sa.Column('deleted_at', sa.DateTime()),
     )
     op.create_index('idx_user_org_id', 'users', ['organization_id'])
     op.create_index('idx_user_email', 'users', ['email'])
@@ -78,8 +78,8 @@ def upgrade() -> None:
         sa.Column('permissions', sa.JSON()),
         sa.Column('is_system', sa.Boolean(), server_default='0'),
         sa.Column('priority', sa.Integer(), server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
     )
     op.create_index('idx_role_org_id', 'roles', ['organization_id'])
     op.create_index('idx_role_org_slug', 'roles', ['organization_id', 'slug'], unique=True)
@@ -90,25 +90,26 @@ def upgrade() -> None:
         sa.Column('id', sa.String(36), primary_key=True),
         sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('role_id', sa.String(36), sa.ForeignKey('roles.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('assigned_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('assigned_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('assigned_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_user_role', 'user_roles', ['user_id', 'role_id'], unique=True)
 
     # Create sessions table
+    # Note: token changed from TEXT to VARCHAR(512) for MySQL unique index support
     op.create_table(
         'sessions',
         sa.Column('id', sa.String(36), primary_key=True),
         sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('token', sa.Text(), nullable=False, unique=True),
-        sa.Column('refresh_token', sa.Text()),
+        sa.Column('token', sa.String(512), nullable=False, unique=True),
+        sa.Column('refresh_token', sa.String(512)),
         sa.Column('ip_address', sa.String(45)),
         sa.Column('user_agent', sa.Text()),
         sa.Column('device_info', sa.JSON()),
         sa.Column('geo_location', sa.JSON()),
-        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('last_activity', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
+        sa.Column('expires_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('last_activity', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
     )
     op.create_index('idx_session_user_id', 'sessions', ['user_id'])
     op.create_index('idx_session_token', 'sessions', ['token'], unique=True)
@@ -118,7 +119,7 @@ def upgrade() -> None:
     op.create_table(
         'audit_logs',
         sa.Column('id', sa.BigInteger(), primary_key=True, autoincrement=True),
-        sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('timestamp', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('timestamp_nanos', sa.BigInteger(), nullable=False),
         sa.Column('event_type', sa.String(100), nullable=False),
         sa.Column('event_category', sa.String(50), nullable=False),
@@ -135,7 +136,7 @@ def upgrade() -> None:
         sa.Column('current_hash', sa.String(64), nullable=False),
         sa.Column('server_id', sa.String(100)),
         sa.Column('process_id', sa.Integer()),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
     )
     op.create_index('idx_audit_timestamp', 'audit_logs', ['timestamp'])
     op.create_index('idx_audit_user_id', 'audit_logs', ['user_id'])
@@ -146,17 +147,17 @@ def upgrade() -> None:
     op.create_table(
         'audit_log_checkpoints',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('checkpoint_time', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('checkpoint_time', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('first_log_id', sa.BigInteger(), nullable=False),
         sa.Column('last_log_id', sa.BigInteger(), nullable=False),
         sa.Column('merkle_root', sa.String(64), nullable=False),
         sa.Column('checkpoint_hash', sa.String(64), nullable=False),
         sa.Column('signature', sa.Text()),
         sa.Column('total_entries', sa.Integer(), nullable=False),
-        sa.Column('verified_at', sa.DateTime(timezone=True)),
+        sa.Column('verified_at', sa.DateTime()),
         sa.Column('verification_status', sa.String(20)),
         sa.Column('verification_details', sa.JSON()),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
     )
     op.create_index('idx_checkpoint_time', 'audit_log_checkpoints', ['checkpoint_time'])
 

@@ -42,8 +42,8 @@ def upgrade() -> None:
         sa.Column('cancellation_reason', sa.Text(), nullable=True),
         sa.Column('cancelled_at', sa.DateTime(), nullable=True),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
     )
 
     # Create indexes for events
@@ -60,8 +60,8 @@ def upgrade() -> None:
         sa.Column('status', sa.Enum('going', 'not_going', 'maybe', name='rsvpstatus'), nullable=False, server_default='going'),
         sa.Column('guest_count', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('responded_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+        sa.Column('responded_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('checked_in', sa.Boolean(), nullable=False, server_default='0'),
         sa.Column('checked_in_at', sa.DateTime(), nullable=True),
     )

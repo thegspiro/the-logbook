@@ -31,8 +31,8 @@ def upgrade() -> None:
         sa.Column('low_stock_threshold', sa.Integer(), nullable=True),
         sa.Column('metadata', sa.JSON(), nullable=True),
         sa.Column('active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
     )
 
@@ -74,13 +74,13 @@ def upgrade() -> None:
         sa.Column('next_inspection_due', sa.Date(), nullable=True),
         sa.Column('inspection_interval_days', sa.Integer(), nullable=True),
         sa.Column('assigned_to_user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
-        sa.Column('assigned_date', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('assigned_date', sa.DateTime(), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('custom_fields', sa.JSON(), nullable=True),
         sa.Column('attachments', sa.JSON(), nullable=True),
         sa.Column('active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
     )
 
@@ -105,17 +105,17 @@ def upgrade() -> None:
         sa.Column('item_id', sa.String(36), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
         sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('assignment_type', sa.Enum('permanent', 'temporary', name='assignmenttype'), nullable=False, server_default='permanent'),
-        sa.Column('assigned_date', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('returned_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('expected_return_date', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('assigned_date', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('returned_date', sa.DateTime(), nullable=True),
+        sa.Column('expected_return_date', sa.DateTime(), nullable=True),
         sa.Column('assigned_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('returned_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('assignment_reason', sa.Text(), nullable=True),
         sa.Column('return_condition', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=True),
         sa.Column('return_notes', sa.Text(), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
     )
 
     # Create indexes for item_assignments
@@ -130,9 +130,9 @@ def upgrade() -> None:
         sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('item_id', sa.String(36), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
         sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('checked_out_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('expected_return_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('checked_in_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('checked_out_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('expected_return_at', sa.DateTime(), nullable=True),
+        sa.Column('checked_in_at', sa.DateTime(), nullable=True),
         sa.Column('checked_out_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('checked_in_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('checkout_reason', sa.Text(), nullable=True),
@@ -141,8 +141,8 @@ def upgrade() -> None:
         sa.Column('damage_notes', sa.Text(), nullable=True),
         sa.Column('is_returned', sa.Boolean(), nullable=False, server_default='0'),
         sa.Column('is_overdue', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
     )
 
     # Create indexes for checkout_records
@@ -176,8 +176,8 @@ def upgrade() -> None:
         sa.Column('issues_found', sa.JSON(), nullable=True),
         sa.Column('attachments', sa.JSON(), nullable=True),
         sa.Column('is_completed', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
     )
 
