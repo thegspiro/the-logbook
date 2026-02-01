@@ -19,7 +19,12 @@ class CacheManager:
     
     def __init__(self):
         self.redis_client: Optional[redis.Redis] = None
-    
+
+    @property
+    def redis(self) -> Optional[redis.Redis]:
+        """Get Redis client (alias for redis_client)"""
+        return self.redis_client
+
     async def connect(self):
         """Initialize Redis connection"""
         try:
