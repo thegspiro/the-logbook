@@ -17,12 +17,14 @@ depends_on = None
 
 def upgrade() -> None:
     # Add notification_preferences column to users table
+    # Note: MySQL doesn't support default values for JSON columns
+    # Default should be handled at application level
     op.add_column(
         'users',
         sa.Column(
             'notification_preferences',
             sa.JSON(),
-            server_default='{"email": true, "sms": false, "push": false}'
+            nullable=True
         )
     )
 
