@@ -35,6 +35,29 @@ logger.add(
 )
 
 
+def run_migrations():
+    """
+    Run Alembic migrations to ensure database schema is up to date.
+    This runs synchronously before the async app starts.
+    """
+    from alembic.config import Config
+    from alembic import command
+    import os
+
+    try:
+        # Get the directory where main.py is located
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+
+        logger.info("Running database migrations...")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("✓ Database migrations complete")
+    except Exception as e:
+        logger.warning(f"Migration warning: {e}")
+        # Don't fail startup - tables might already exist
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -44,11 +67,14 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting The Logbook Backend...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Version: {settings.VERSION}")
-    
+
     # Connect to database
     logger.info("Connecting to database...")
     await database_manager.connect()
     logger.info("✓ Database connected")
+
+    # Run migrations to ensure tables exist
+    run_migrations()
     
     # Connect to Redis
     logger.info("Connecting to Redis...")
