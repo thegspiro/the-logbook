@@ -2,8 +2,10 @@
 Database Connection Manager
 
 Uses SQLAlchemy async with connection pooling for MySQL.
+Includes retry logic and connection timeouts for robust startup.
 """
 
+import asyncio
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     create_async_engine,
@@ -36,35 +38,72 @@ class DatabaseManager:
         return self.engine is not None and self.session_factory is not None
 
     async def connect(self):
-        """Initialize database connection"""
-        try:
-            # Create async engine
-            self.engine = create_async_engine(
-                settings.DATABASE_URL,
-                echo=settings.DB_ECHO,
-                pool_size=settings.DB_POOL_MAX,
-                max_overflow=settings.DB_POOL_MAX * 2,
-                pool_pre_ping=True,  # Verify connections before using
-                pool_recycle=3600,  # Recycle connections after 1 hour
-            )
-            
-            # Create session factory
-            self.session_factory = async_sessionmaker(
-                self.engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-            )
-            
-            # Test connection
-            async with self.engine.begin() as conn:
-                from sqlalchemy import text
-                await conn.execute(text("SELECT 1"))
-            
-            logger.info("Database connection established")
-            
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            raise
+        """
+        Initialize database connection with retry logic.
+
+        Uses exponential backoff for retries to handle MySQL startup delays.
+        """
+        last_exception = None
+        retry_delay = settings.DB_CONNECT_RETRY_DELAY
+
+        for attempt in range(1, settings.DB_CONNECT_RETRIES + 1):
+            try:
+                logger.info(f"Database connection attempt {attempt}/{settings.DB_CONNECT_RETRIES}...")
+
+                # Create async engine with connection timeout
+                self.engine = create_async_engine(
+                    settings.DATABASE_URL,
+                    echo=settings.DB_ECHO,
+                    pool_size=settings.DB_POOL_MAX,
+                    max_overflow=settings.DB_POOL_MAX * 2,
+                    pool_pre_ping=True,  # Verify connections before using
+                    pool_recycle=3600,  # Recycle connections after 1 hour
+                    connect_args={
+                        "connect_timeout": settings.DB_CONNECT_TIMEOUT,
+                    },
+                )
+
+                # Create session factory
+                self.session_factory = async_sessionmaker(
+                    self.engine,
+                    class_=AsyncSession,
+                    expire_on_commit=False,
+                )
+
+                # Test connection with timeout
+                async with asyncio.timeout(settings.DB_CONNECT_TIMEOUT):
+                    async with self.engine.begin() as conn:
+                        from sqlalchemy import text
+                        await conn.execute(text("SELECT 1"))
+
+                logger.info("Database connection established")
+                return  # Success - exit the retry loop
+
+            except asyncio.TimeoutError:
+                last_exception = TimeoutError(f"Database connection timed out after {settings.DB_CONNECT_TIMEOUT}s")
+                logger.warning(f"Database connection attempt {attempt} timed out")
+            except Exception as e:
+                last_exception = e
+                logger.warning(f"Database connection attempt {attempt} failed: {e}")
+
+            # Clean up failed engine
+            if self.engine:
+                try:
+                    await self.engine.dispose()
+                except Exception:
+                    pass
+                self.engine = None
+                self.session_factory = None
+
+            # Wait before retrying (exponential backoff)
+            if attempt < settings.DB_CONNECT_RETRIES:
+                logger.info(f"Retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+
+        # All retries exhausted
+        logger.error(f"Database connection failed after {settings.DB_CONNECT_RETRIES} attempts")
+        raise last_exception or ConnectionError("Failed to connect to database")
     
     async def disconnect(self):
         """Close database connection"""

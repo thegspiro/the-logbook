@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     DB_POOL_MAX: int = 10
     DB_ECHO: bool = False  # SQL logging
     DB_CHARSET: str = "utf8mb4"  # Use utf8mb4 for full Unicode support
+    DB_CONNECT_TIMEOUT: int = 10  # Connection timeout in seconds
+    DB_CONNECT_RETRIES: int = 5  # Number of connection retry attempts
+    DB_CONNECT_RETRY_DELAY: int = 2  # Initial delay between retries (exponential backoff)
 
     @property
     def DATABASE_URL(self) -> str:
@@ -63,7 +66,10 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_DB: int = 0
     REDIS_TTL: int = 3600  # Default cache TTL in seconds
-    
+    REDIS_CONNECT_TIMEOUT: int = 5  # Connection timeout in seconds
+    REDIS_CONNECT_RETRIES: int = 3  # Number of connection retry attempts
+    REDIS_REQUIRED: bool = False  # If False, app starts even if Redis fails
+
     @property
     def REDIS_URL(self) -> str:
         """Construct Redis URL"""
