@@ -20,6 +20,19 @@ interface RateLimitError {
   retry_after?: number;
 }
 
+interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  version: string;
+  environment: string;
+  timestamp: string;
+  checks: {
+    database: string;
+    redis: string;
+    configuration: string;
+  };
+  warnings?: string[];
+}
+
 class SecureApiClient {
   private baseUrl: string;
   private sessionId: string | null = null;
@@ -186,6 +199,42 @@ class SecureApiClient {
   }
 
   /**
+   * Check backend health status
+   * Returns status of database, redis, and configuration
+   */
+  async checkHealth(): Promise<ApiResponse<HealthStatus>> {
+    try {
+      // Health endpoint is at root, not under /api/v1
+      const baseUrl = this.baseUrl.replace('/api/v1', '');
+      const url = `${baseUrl}/health`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        return {
+          error: 'Health check failed',
+          statusCode: response.status,
+        };
+      }
+
+      const data = await response.json();
+      return {
+        data: data as HealthStatus,
+        statusCode: response.status,
+      };
+    } catch (error: any) {
+      return {
+        error: 'Unable to connect to backend',
+        statusCode: 0,
+      };
+    }
+  }
+
+  /**
    * Save department info
    * SECURITY: Logo is safe to store (base64 image, no secrets)
    */
@@ -333,4 +382,4 @@ class SecureApiClient {
 export const apiClient = new SecureApiClient();
 
 // Export types
-export type { ApiResponse, OnboardingSession, RateLimitError };
+export type { ApiResponse, OnboardingSession, RateLimitError, HealthStatus };
