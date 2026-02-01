@@ -396,6 +396,20 @@ class SecureApiClient {
   hasSession(): boolean {
     return !!this.sessionId;
   }
+
+  /**
+   * Reset onboarding - clears all database records and resets to initial state
+   * WARNING: This is destructive and cannot be undone
+   */
+  async resetOnboarding(): Promise<ApiResponse<any>> {
+    const response = await this.request('POST', '/onboarding/reset', {}, true);
+
+    if (response.statusCode === 200 || response.statusCode === 201) {
+      this.clearSession();
+    }
+
+    return response;
+  }
 }
 
 // Export singleton instance

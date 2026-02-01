@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Server, Info } from 'lucide-react';
-import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 
 // Email platform logos (using simple SVG icons)
@@ -143,8 +143,11 @@ const EmailPlatformChoice: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-5xl w-full">
-          {/* Back Button */}
-          <BackButton to="/onboarding/navigation-choice" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/navigation-choice" />
+            <ResetProgressButton />
+          </div>
 
           {/* Page Header */}
           <div className="text-center mb-8">

@@ -4,7 +4,7 @@ import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
 import { isValidPort, isValidEmail } from '../utils/validation';
-import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 
@@ -555,8 +555,11 @@ const EmailConfiguration: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-3xl w-full">
-          {/* Back Button */}
-          <BackButton to="/onboarding/email-platform" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/email-platform" />
+            <ResetProgressButton />
+          </div>
 
           {/* Page Header */}
           <div className="text-center mb-8">

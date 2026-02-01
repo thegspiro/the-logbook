@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
-import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 
@@ -272,7 +272,11 @@ const ModuleOverview: React.FC = () => {
 
       <main className="flex-1 p-4 py-8">
         <div className="max-w-6xl w-full mx-auto">
-          <BackButton to="/onboarding/it-team" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/it-team" />
+            <ResetProgressButton />
+          </div>
 
           {/* Header */}
           <div className="text-center mb-8">
