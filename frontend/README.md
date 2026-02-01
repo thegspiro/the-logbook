@@ -37,10 +37,18 @@ The app will be available at http://localhost:3000
 
 ### Environment Variables
 
+**For development (with Vite dev server proxy):**
 ```env
-VITE_API_URL=http://localhost:3001
-VITE_WS_URL=ws://localhost:3001
+VITE_API_URL=/api/v1
+VITE_BACKEND_URL=http://localhost:3001
 ```
+
+**For production (Docker with nginx proxy):**
+```env
+VITE_API_URL=/api/v1
+```
+
+**Note:** The `VITE_BACKEND_URL` is only used by the Vite dev server to proxy API requests. In production, nginx handles the proxying and only `VITE_API_URL=/api/v1` is needed.
 
 ## Development
 
