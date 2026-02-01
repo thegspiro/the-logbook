@@ -1,7 +1,7 @@
 """Add notification preferences to users
 
-Revision ID: 0002
-Revises: 0001
+Revision ID: 20260118_0002
+Revises: 20260118_0001
 Create Date: 2026-01-18
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '0002'
-down_revision = '0001'
+revision = '20260118_0002'
+down_revision = '20260118_0001'
 branch_labels = None
 depends_on = None
 

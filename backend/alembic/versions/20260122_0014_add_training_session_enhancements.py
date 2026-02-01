@@ -1,7 +1,7 @@
 """add training session enhancements
 
 Revision ID: 20260122_0014
-Revises: 20260120_0013
+Revises: 20260120_0013b
 Create Date: 2026-01-22 00:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260122_0014'
-down_revision = '20260120_0013'
+down_revision = '20260120_0013b'
 branch_labels = None
 depends_on = None
 
