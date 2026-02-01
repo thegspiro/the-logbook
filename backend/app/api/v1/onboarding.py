@@ -1122,10 +1122,20 @@ async def save_session_modules(
     # Validate session
     session = await validate_session(request, db)
 
-    # Validate modules
+    # Validate modules - must match module IDs from frontend ModuleOverview.tsx
     available_modules = [
-        "training", "compliance", "scheduling", "inventory",
-        "meetings", "elections", "fundraising", "incidents",
+        # Essential modules
+        "members", "events", "documents",
+        # Operations modules
+        "training", "inventory", "scheduling",
+        # Governance modules
+        "elections", "minutes", "reports",
+        # Communication modules
+        "notifications", "mobile",
+        # Advanced modules
+        "forms", "integrations",
+        # Legacy/additional modules (for backwards compatibility)
+        "compliance", "meetings", "fundraising", "incidents",
         "equipment", "vehicles", "budget"
     ]
     invalid_modules = [m for m in data.modules if m not in available_modules]

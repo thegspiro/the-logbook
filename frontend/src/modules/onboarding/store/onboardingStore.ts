@@ -52,6 +52,7 @@ export interface OnboardingState {
 
   // Module Selection
   selectedModules: string[];
+  moduleStatuses: Record<string, 'enabled' | 'skipped' | 'ignored'>;
 
   // Session
   sessionId: string | null;
@@ -96,6 +97,8 @@ export interface OnboardingActions {
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
   toggleModule: (moduleId: string) => void;
+  setModuleStatus: (moduleId: string, status: 'enabled' | 'skipped' | 'ignored') => void;
+  setModuleStatuses: (statuses: Record<string, 'enabled' | 'skipped' | 'ignored'>) => void;
 
   // Session Actions
   setSessionId: (id: string) => void;
@@ -132,6 +135,7 @@ const initialState: OnboardingState = {
   backupPhone: '',
   secondaryAdminEmail: '',
   selectedModules: [],
+  moduleStatuses: {},
   sessionId: null,
   csrfToken: null,
   currentStep: 1,
@@ -253,6 +257,32 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         get().triggerAutoSave();
       },
 
+      setModuleStatus: (moduleId, status) => {
+        const { moduleStatuses, selectedModules } = get();
+        const newStatuses = { ...moduleStatuses, [moduleId]: status };
+
+        // Update selectedModules based on status
+        let newSelectedModules = [...selectedModules];
+        if (status === 'enabled' && !newSelectedModules.includes(moduleId)) {
+          newSelectedModules.push(moduleId);
+        } else if (status !== 'enabled') {
+          newSelectedModules = newSelectedModules.filter(id => id !== moduleId);
+        }
+
+        set({ moduleStatuses: newStatuses, selectedModules: newSelectedModules });
+        get().triggerAutoSave();
+      },
+
+      setModuleStatuses: (statuses) => {
+        // Update selectedModules based on all statuses
+        const enabledModules = Object.entries(statuses)
+          .filter(([_, status]) => status === 'enabled')
+          .map(([id]) => id);
+
+        set({ moduleStatuses: statuses, selectedModules: enabledModules });
+        get().triggerAutoSave();
+      },
+
       // Session Actions
       setSessionId: (id) => {
         set({ sessionId: id });
@@ -351,6 +381,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         backupPhone: state.backupPhone,
         secondaryAdminEmail: state.secondaryAdminEmail,
         selectedModules: state.selectedModules,
+        moduleStatuses: state.moduleStatuses,
         currentStep: state.currentStep,
         completedSteps: state.completedSteps,
         lastSaved: state.lastSaved,

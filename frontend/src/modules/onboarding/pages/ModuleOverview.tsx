@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -41,6 +41,9 @@ const ModuleOverview: React.FC = () => {
   const departmentName = useOnboardingStore(state => state.departmentName);
   const logoPreview = useOnboardingStore(state => state.logoData);
   const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const moduleStatuses = useOnboardingStore(state => state.moduleStatuses);
+  const setModuleStatus = useOnboardingStore(state => state.setModuleStatus);
+  const setModuleStatuses = useOnboardingStore(state => state.setModuleStatuses);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   const modules: Module[] = [
@@ -170,25 +173,28 @@ const ModuleOverview: React.FC = () => {
     },
   ];
 
-  const [moduleStatuses, setModuleStatuses] = useState<Record<string, 'enabled' | 'skipped' | 'ignored'>>(
-    // Essential modules enabled by default
-    modules
-      .filter(m => m.priority === 'essential')
-      .reduce((acc, m) => ({ ...acc, [m.id]: 'enabled' }), {})
-  );
+  // Initialize essential modules as enabled if store is empty
+  React.useEffect(() => {
+    if (Object.keys(moduleStatuses).length === 0) {
+      const initialStatuses = modules
+        .filter(m => m.priority === 'essential')
+        .reduce((acc, m) => ({ ...acc, [m.id]: 'enabled' as const }), {} as Record<string, 'enabled' | 'skipped' | 'ignored'>);
+      setModuleStatuses(initialStatuses);
+    }
+  }, [modules, moduleStatuses, setModuleStatuses]);
 
   const handleModuleAction = async (moduleId: string, action: 'start' | 'skip' | 'ignore') => {
     const module = modules.find(m => m.id === moduleId);
 
     if (action === 'start' && module?.configRoute) {
       // Save current state and navigate to module config
-      setModuleStatuses(prev => ({ ...prev, [moduleId]: 'enabled' }));
+      setModuleStatus(moduleId, 'enabled');
       navigate(module.configRoute);
     } else if (action === 'skip') {
-      setModuleStatuses(prev => ({ ...prev, [moduleId]: 'skipped' }));
+      setModuleStatus(moduleId, 'skipped');
       toast.success(`${module?.name} marked as "Configure Later"`);
     } else if (action === 'ignore') {
-      setModuleStatuses(prev => ({ ...prev, [moduleId]: 'ignored' }));
+      setModuleStatus(moduleId, 'ignored');
       toast.success(`${module?.name} disabled`);
     }
   };
