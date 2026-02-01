@@ -24,11 +24,11 @@ services:
       - mysql_data:/var/lib/mysql
       - ./database/schemas:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-intranet_user}", "-p${DB_PASSWORD:-change_me_in_production}"]
-      interval: 5s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-change_me_in_production}"]
+      interval: 10s
       timeout: 5s
-      retries: 24
-      start_period: 60s
+      retries: 12
+      start_period: 120s
     networks:
       - intranet-network
 
