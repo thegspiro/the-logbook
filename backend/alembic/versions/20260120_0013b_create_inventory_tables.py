@@ -1,7 +1,7 @@
 """Create inventory tables
 
-Revision ID: 20260120_0013
-Revises: 20260119_0012
+Revision ID: 20260120_0013b
+Revises: 20260120_0013
 Create Date: 2026-01-20 20:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '20260120_0013'
-down_revision = '20260119_0012'
+revision = '20260120_0013b'
+down_revision = '20260120_0013'
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """Add training tables
 
-Revision ID: 0003
-Revises: 0002
+Revision ID: 20260118_0003
+Revises: 20260118_0002
 Create Date: 2026-01-18
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '0003'
-down_revision = '0002'
+revision = '20260118_0003'
+down_revision = '20260118_0002'
 branch_labels = None
 depends_on = None
 
