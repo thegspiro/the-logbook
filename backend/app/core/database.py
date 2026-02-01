@@ -29,7 +29,12 @@ class DatabaseManager:
     def __init__(self):
         self.engine = None
         self.session_factory = None
-    
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if database is connected"""
+        return self.engine is not None and self.session_factory is not None
+
     async def connect(self):
         """Initialize database connection"""
         try:
