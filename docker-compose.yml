@@ -27,8 +27,8 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-intranet_user}", "-p${DB_PASSWORD:-change_me_in_production}"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 60s
+      retries: 30
+      start_period: 300s
     networks:
       - intranet-network
 
