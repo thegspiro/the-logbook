@@ -126,6 +126,22 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class AdminUserResponse(BaseModel):
+    """Response model for admin user creation with access token"""
+    id: str
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    badge_number: Optional[str]
+    status: str
+    access_token: str
+    token_type: str = "bearer"
+
+    class Config:
+        from_attributes = True
+
+
 class ModulesConfig(BaseModel):
     """Request model for module configuration"""
     enabled_modules: List[str] = Field(default_factory=list)
@@ -327,7 +343,8 @@ async def get_or_create_session(
 
 async def validate_session(
     request: Request,
-    db: AsyncSession
+    db: AsyncSession,
+    require_csrf: bool = True
 ) -> OnboardingSessionModel:
     """
     Validate an existing session from X-Session-ID header.
@@ -335,6 +352,7 @@ async def validate_session(
     Args:
         request: FastAPI request object
         db: Database session
+        require_csrf: Whether to validate CSRF token (default True)
 
     Returns:
         OnboardingSessionModel instance
@@ -370,6 +388,17 @@ async def validate_session(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired. Please restart onboarding."
         )
+
+    # Validate CSRF token if required
+    if require_csrf:
+        csrf_token = request.headers.get('X-CSRF-Token')
+        stored_csrf = session.data.get('csrf_token') if session.data else None
+
+        if not csrf_token or csrf_token != stored_csrf:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="CSRF validation failed. Please refresh and try again."
+            )
 
     # Update expiration on activity
     session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
@@ -544,6 +573,7 @@ async def verify_database(
 
 @router.post("/organization", response_model=OrganizationResponse)
 async def create_organization(
+    request: Request,
     org_data: OrganizationCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -553,6 +583,9 @@ async def create_organization(
     This creates the organization and default roles.
     Can only be called during onboarding.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     # Verify onboarding is in progress
@@ -586,8 +619,9 @@ async def create_organization(
         )
 
 
-@router.post("/admin-user", response_model=UserResponse)
+@router.post("/admin-user", response_model=AdminUserResponse)
 async def create_admin_user(
+    request: Request,
     user_data: AdminUserCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -596,7 +630,11 @@ async def create_admin_user(
 
     Creates admin user with Super Admin role.
     Requires organization to be created first.
+    Returns access token for automatic login.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     # Verify onboarding is in progress
@@ -607,18 +645,17 @@ async def create_admin_user(
         )
 
     # Get organization from onboarding status
-    status = await service.get_onboarding_status()
-    if not status or not status.organization_name:
+    onboarding_status = await service.get_onboarding_status()
+    if not onboarding_status or not onboarding_status.organization_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organization must be created first"
         )
 
     # Find organization
-    from sqlalchemy import select
     from app.models.user import Organization
     result = await db.execute(
-        select(Organization).where(Organization.name == status.organization_name)
+        select(Organization).where(Organization.name == onboarding_status.organization_name)
     )
     org = result.scalar_one_or_none()
 
@@ -639,14 +676,26 @@ async def create_admin_user(
             badge_number=user_data.badge_number
         )
 
-        return UserResponse(
+        # Generate access token for automatic login
+        from app.core.security import create_access_token
+        access_token = create_access_token(
+            data={
+                "sub": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "org_id": str(org.id)
+            }
+        )
+
+        return AdminUserResponse(
             id=str(user.id),
             username=user.username,
             email=user.email,
             first_name=user.first_name,
             last_name=user.last_name,
             badge_number=user.badge_number,
-            status=user.status.value
+            status=user.status.value,
+            access_token=access_token
         )
     except ValueError as e:
         raise HTTPException(
@@ -657,6 +706,7 @@ async def create_admin_user(
 
 @router.post("/modules")
 async def configure_modules(
+    request: Request,
     modules: ModulesConfig,
     db: AsyncSession = Depends(get_db)
 ):
@@ -665,6 +715,9 @@ async def configure_modules(
 
     Select which modules to enable for the organization.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     try:
@@ -682,6 +735,7 @@ async def configure_modules(
 
 @router.post("/notifications")
 async def configure_notifications(
+    request: Request,
     config: NotificationsConfig,
     db: AsyncSession = Depends(get_db)
 ):
@@ -691,12 +745,15 @@ async def configure_notifications(
     Sets up email and SMS notifications.
     This step is optional and can be skipped.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
-    status = await service.get_onboarding_status()
-    if status:
-        status.email_configured = config.email_enabled
-        await service._mark_step_completed(status, 6, "notifications")
+    onboarding_status = await service.get_onboarding_status()
+    if onboarding_status:
+        onboarding_status.email_configured = config.email_enabled
+        await service._mark_step_completed(onboarding_status, 6, "notifications")
 
     return {
         "message": "Notifications configured successfully",
@@ -707,6 +764,7 @@ async def configure_notifications(
 
 @router.post("/complete")
 async def complete_onboarding(
+    request: Request,
     request_data: CompleteOnboardingRequest,
     db: AsyncSession = Depends(get_db)
 ):
@@ -715,16 +773,19 @@ async def complete_onboarding(
 
     Marks onboarding as finished and creates post-onboarding checklist.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     try:
-        status = await service.complete_onboarding(notes=request_data.notes)
+        onboarding_status = await service.complete_onboarding(notes=request_data.notes)
 
         return {
             "message": "Onboarding completed successfully!",
-            "organization": status.organization_name,
-            "admin_user": status.admin_username,
-            "completed_at": status.completed_at.isoformat() if status.completed_at else None,
+            "organization": onboarding_status.organization_name,
+            "admin_user": onboarding_status.admin_username,
+            "completed_at": onboarding_status.completed_at.isoformat() if onboarding_status.completed_at else None,
             "next_steps": "Review the post-onboarding checklist for additional configuration"
         }
     except ValueError as e:

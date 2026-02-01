@@ -39,6 +39,16 @@ export interface OnboardingState {
 
   // IT Team
   itTeamConfigured: boolean;
+  itTeamMembers: Array<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+  }>;
+  backupEmail: string;
+  backupPhone: string;
+  secondaryAdminEmail: string;
 
   // Module Selection
   selectedModules: string[];
@@ -78,6 +88,10 @@ export interface OnboardingActions {
 
   // IT Team Actions
   setITTeamConfigured: (configured: boolean) => void;
+  setITTeamMembers: (members: Array<{ id: string; name: string; email: string; phone: string; role: string }>) => void;
+  setBackupEmail: (email: string) => void;
+  setBackupPhone: (phone: string) => void;
+  setSecondaryAdminEmail: (email: string) => void;
 
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
@@ -113,6 +127,10 @@ const initialState: OnboardingState = {
   fileStoragePlatform: null,
   authPlatform: null,
   itTeamConfigured: false,
+  itTeamMembers: [{ id: '1', name: '', email: '', phone: '', role: 'Primary IT Contact' }],
+  backupEmail: '',
+  backupPhone: '',
+  secondaryAdminEmail: '',
   selectedModules: [],
   sessionId: null,
   csrfToken: null,
@@ -196,6 +214,26 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       // IT Team Actions
       setITTeamConfigured: (configured) => {
         set({ itTeamConfigured: configured });
+        get().triggerAutoSave();
+      },
+
+      setITTeamMembers: (members) => {
+        set({ itTeamMembers: members });
+        get().triggerAutoSave();
+      },
+
+      setBackupEmail: (email) => {
+        set({ backupEmail: email });
+        get().triggerAutoSave();
+      },
+
+      setBackupPhone: (phone) => {
+        set({ backupPhone: phone });
+        get().triggerAutoSave();
+      },
+
+      setSecondaryAdminEmail: (email) => {
+        set({ secondaryAdminEmail: email });
         get().triggerAutoSave();
       },
 
@@ -308,6 +346,10 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         fileStoragePlatform: state.fileStoragePlatform,
         authPlatform: state.authPlatform,
         itTeamConfigured: state.itTeamConfigured,
+        itTeamMembers: state.itTeamMembers,
+        backupEmail: state.backupEmail,
+        backupPhone: state.backupPhone,
+        secondaryAdminEmail: state.secondaryAdminEmail,
         selectedModules: state.selectedModules,
         currentStep: state.currentStep,
         completedSteps: state.completedSteps,
