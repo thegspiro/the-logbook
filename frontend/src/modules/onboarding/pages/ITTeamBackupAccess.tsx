@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, Plus, Trash2, AlertCircle, Phone, Mail, User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -209,7 +209,11 @@ const ITTeamBackupAccess: React.FC = () => {
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-4xl w-full">
-          <BackButton to="/onboarding/authentication" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/authentication" />
+            <ResetProgressButton />
+          </div>
 
           {/* Page Header */}
           <div className="text-center mb-8">

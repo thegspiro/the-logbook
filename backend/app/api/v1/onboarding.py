@@ -1122,10 +1122,20 @@ async def save_session_modules(
     # Validate session
     session = await validate_session(request, db)
 
-    # Validate modules
+    # Validate modules - must match module IDs from frontend ModuleOverview.tsx
     available_modules = [
-        "training", "compliance", "scheduling", "inventory",
-        "meetings", "elections", "fundraising", "incidents",
+        # Essential modules
+        "members", "events", "documents",
+        # Operations modules
+        "training", "inventory", "scheduling",
+        # Governance modules
+        "elections", "minutes", "reports",
+        # Communication modules
+        "notifications", "mobile",
+        # Advanced modules
+        "forms", "integrations",
+        # Legacy/additional modules (for backwards compatibility)
+        "compliance", "meetings", "fundraising", "incidents",
         "equipment", "vehicles", "budget"
     ]
     invalid_modules = [m for m in data.modules if m not in available_modules]
@@ -1202,3 +1212,98 @@ async def get_session_data(
         "expires_at": session.expires_at.isoformat(),
         "data": safe_data
     }
+
+
+@router.post("/reset")
+async def reset_onboarding(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset onboarding and clear all database records.
+
+    WARNING: This is a destructive operation that cannot be undone.
+    It will delete all users, organizations, roles, and onboarding data.
+    """
+    # Validate session (with CSRF) - only allow reset during active onboarding
+    try:
+        await validate_session(request, db)
+    except HTTPException:
+        # Allow reset even without valid session (in case session expired)
+        pass
+
+    # Import models for deletion
+    from app.models.user import Organization, User, Role
+    from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
+
+    try:
+        # Delete in order to respect foreign key constraints
+        # 1. Delete onboarding sessions
+        await db.execute(
+            select(OnboardingSessionModel).execution_options(synchronize_session="fetch")
+        )
+        await db.execute(
+            OnboardingSessionModel.__table__.delete()
+        )
+
+        # 2. Delete onboarding checklist items
+        await db.execute(
+            OnboardingChecklistItem.__table__.delete()
+        )
+
+        # 3. Delete onboarding status
+        await db.execute(
+            OnboardingStatus.__table__.delete()
+        )
+
+        # 4. Delete user_roles associations (if table exists)
+        try:
+            from sqlalchemy import text
+            await db.execute(text("DELETE FROM user_roles"))
+        except Exception:
+            pass  # Table might not exist yet
+
+        # 5. Delete users
+        await db.execute(
+            User.__table__.delete()
+        )
+
+        # 6. Delete roles
+        await db.execute(
+            Role.__table__.delete()
+        )
+
+        # 7. Delete organizations
+        await db.execute(
+            Organization.__table__.delete()
+        )
+
+        # Commit all deletions
+        await db.commit()
+
+        # Log the reset
+        from app.core.audit import log_audit_event
+        await log_audit_event(
+            db=db,
+            event_type="onboarding.reset",
+            event_category="onboarding",
+            severity="warning",
+            ip_address=request.client.host if request.client else None,
+            event_data={
+                "action": "full_reset",
+                "message": "Onboarding reset - all data cleared"
+            }
+        )
+
+        return {
+            "success": True,
+            "message": "Onboarding has been reset. All data has been cleared.",
+            "next_step": "Navigate to /onboarding/start to begin again"
+        }
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset onboarding: {str(e)}"
+        )

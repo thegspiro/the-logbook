@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
-import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 
 const NavigationChoice: React.FC = () => {
@@ -61,8 +61,11 @@ const NavigationChoice: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-4xl w-full">
-          {/* Back Button */}
-          <BackButton to="/onboarding/start" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/start" />
+            <ResetProgressButton />
+          </div>
 
           {/* Page Header */}
           <div className="text-center mb-8">
