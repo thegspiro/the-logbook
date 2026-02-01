@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient, HealthStatus } from '../services/api-client';
+import { apiClient } from '../services/api-client';
 
 interface ServiceStatus {
   name: string;
