@@ -17,10 +17,10 @@ depends_on = None
 
 def upgrade() -> None:
     # Add runoff configuration columns
-    op.add_column('elections', sa.Column('enable_runoffs', sa.Boolean(), nullable=False, server_default='false'))
+    op.add_column('elections', sa.Column('enable_runoffs', sa.Boolean(), nullable=False, server_default='0'))
     op.add_column('elections', sa.Column('runoff_type', sa.String(length=50), nullable=False, server_default='top_two'))
     op.add_column('elections', sa.Column('max_runoff_rounds', sa.Integer(), nullable=False, server_default='3'))
-    op.add_column('elections', sa.Column('is_runoff', sa.Boolean(), nullable=False, server_default='false'))
+    op.add_column('elections', sa.Column('is_runoff', sa.Boolean(), nullable=False, server_default='0'))
     op.add_column('elections', sa.Column('parent_election_id', sa.String(36), nullable=True))
     op.add_column('elections', sa.Column('runoff_round', sa.Integer(), nullable=False, server_default='0'))
 

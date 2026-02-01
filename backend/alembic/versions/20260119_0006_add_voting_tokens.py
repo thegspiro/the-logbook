@@ -25,7 +25,7 @@ def upgrade():
         sa.Column('voter_hash', sa.String(64), nullable=False),
         sa.Column('created_at', sa.DateTime, nullable=False),
         sa.Column('expires_at', sa.DateTime, nullable=False),
-        sa.Column('used', sa.Boolean, nullable=False, server_default='false'),
+        sa.Column('used', sa.Boolean, nullable=False, server_default='0'),
         sa.Column('used_at', sa.DateTime, nullable=True),
         sa.Column('first_accessed_at', sa.DateTime, nullable=True),
         sa.Column('access_count', sa.Integer, nullable=False, server_default='0'),
