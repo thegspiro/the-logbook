@@ -19,9 +19,33 @@ from app.core.config import settings
 from app.core.database import Base
 
 # Import all models to ensure they're registered with Base.metadata
+# User & Auth
 from app.models.user import Organization, User, Role, Session, user_roles
 from app.models.audit import AuditLog, AuditLogCheckpoint
-from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
+from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
+
+# Location
+from app.models.location import Location
+
+# Training
+from app.models.training import (
+    TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession,
+    TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement,
+    ProgramMilestone, ProgramEnrollment, RequirementProgress,
+    SkillEvaluation, SkillCheckoff, Shift, ShiftAttendance, ShiftCall
+)
+
+# Events
+from app.models.event import Event, EventRSVP
+
+# Elections
+from app.models.election import Election, Candidate, VotingToken, Vote
+
+# Inventory
+from app.models.inventory import (
+    InventoryCategory, InventoryItem, ItemAssignment,
+    CheckOutRecord, MaintenanceRecord
+)
 
 # This is the Alembic Config object
 config = context.config

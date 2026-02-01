@@ -14,13 +14,14 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install system dependencies (MySQL client for healthchecks, LDAP for auth)
 RUN apt-get update && apt-get install -y \
     gcc \
-    postgresql-client \
-    libpq-dev \
+    default-mysql-client \
+    default-libmysqlclient-dev \
     libldap2-dev \
     libsasl2-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app user
