@@ -118,7 +118,13 @@ class User(Base):
     
     # Relationships
     organization = relationship("Organization", back_populates="users")
-    roles = relationship("Role", secondary="user_roles", back_populates="users")
+    roles = relationship(
+        "Role",
+        secondary="user_roles",
+        back_populates="users",
+        primaryjoin="User.id == user_roles.c.user_id",
+        secondaryjoin="Role.id == user_roles.c.role_id",
+    )
     
     # Indexes and constraints
     __table_args__ = (
@@ -169,7 +175,13 @@ class Role(Base):
     
     # Relationships
     organization = relationship("Organization", back_populates="roles")
-    users = relationship("User", secondary="user_roles", back_populates="roles")
+    users = relationship(
+        "User",
+        secondary="user_roles",
+        back_populates="roles",
+        primaryjoin="Role.id == user_roles.c.role_id",
+        secondaryjoin="User.id == user_roles.c.user_id",
+    )
     
     __table_args__ = (
         Index('idx_role_org_slug', 'organization_id', 'slug', unique=True),
