@@ -23,10 +23,10 @@ def upgrade():
     op.add_column('elections', sa.Column('position_eligibility', sa.JSON(), nullable=True))
 
     # Add email notification tracking fields
-    op.add_column('elections', sa.Column('email_sent', sa.Boolean, nullable=False, server_default='0'))
-    op.add_column('elections', sa.Column('email_sent_at', sa.DateTime, nullable=True))
+    op.add_column('elections', sa.Column('email_sent', sa.Boolean(), nullable=False, server_default='0'))
+    op.add_column('elections', sa.Column('email_sent_at', sa.DateTime(), nullable=True))
     op.add_column('elections', sa.Column('email_recipients', sa.JSON(), nullable=True))
-    op.add_column('elections', sa.Column('meeting_date', sa.DateTime, nullable=True))
+    op.add_column('elections', sa.Column('meeting_date', sa.DateTime(), nullable=True))
 
 
 def downgrade():
