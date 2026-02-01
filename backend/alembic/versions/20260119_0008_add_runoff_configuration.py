@@ -7,7 +7,6 @@ Create Date: 2026-01-19 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260119_0008'
@@ -22,7 +21,7 @@ def upgrade() -> None:
     op.add_column('elections', sa.Column('runoff_type', sa.String(length=50), nullable=False, server_default='top_two'))
     op.add_column('elections', sa.Column('max_runoff_rounds', sa.Integer(), nullable=False, server_default='3'))
     op.add_column('elections', sa.Column('is_runoff', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('elections', sa.Column('parent_election_id', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('elections', sa.Column('parent_election_id', sa.String(36), nullable=True))
     op.add_column('elections', sa.Column('runoff_round', sa.Integer(), nullable=False, server_default='0'))
 
     # Add foreign key constraint for parent_election_id

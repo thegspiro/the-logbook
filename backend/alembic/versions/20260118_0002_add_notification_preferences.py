@@ -7,7 +7,6 @@ Create Date: 2026-01-18
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260118_0002'
@@ -22,7 +21,7 @@ def upgrade() -> None:
         'users',
         sa.Column(
             'notification_preferences',
-            postgresql.JSONB(),
+            sa.JSON(),
             server_default='{"email": true, "sms": false, "push": false}'
         )
     )

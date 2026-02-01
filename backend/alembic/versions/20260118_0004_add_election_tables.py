@@ -7,7 +7,6 @@ Create Date: 2026-01-18 16:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260118_0004'
@@ -17,19 +16,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create election_status enum
-    election_status = postgresql.ENUM('draft', 'open', 'closed', 'cancelled', name='electionstatus')
-    election_status.create(op.get_bind())
-
     # Create elections table
     op.create_table(
         'elections',
-        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('id', sa.String(36), nullable=False),
+        sa.Column('organization_id', sa.String(36), nullable=False),
         sa.Column('title', sa.String(length=200), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('election_type', sa.String(length=50), nullable=False),
-        sa.Column('positions', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('positions', sa.JSON(), nullable=True),
         sa.Column('start_date', sa.DateTime(), nullable=False),
         sa.Column('end_date', sa.DateTime(), nullable=False),
         sa.Column('status', sa.Enum('draft', 'open', 'closed', 'cancelled', name='electionstatus'), nullable=False),
@@ -37,8 +32,8 @@ def upgrade() -> None:
         sa.Column('allow_write_ins', sa.Boolean(), nullable=False),
         sa.Column('max_votes_per_position', sa.Integer(), nullable=False),
         sa.Column('results_visible_immediately', sa.Boolean(), nullable=False),
-        sa.Column('eligible_voters', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('eligible_voters', sa.JSON(), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.Column('updated_at', sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(['organization_id'], ['organizations.id'], ),
@@ -52,15 +47,15 @@ def upgrade() -> None:
     # Create candidates table
     op.create_table(
         'candidates',
-        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('election_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('id', sa.String(36), nullable=False),
+        sa.Column('election_id', sa.String(36), nullable=False),
+        sa.Column('user_id', sa.String(36), nullable=True),
         sa.Column('name', sa.String(length=200), nullable=False),
         sa.Column('position', sa.String(length=100), nullable=True),
         sa.Column('statement', sa.Text(), nullable=True),
         sa.Column('photo_url', sa.String(length=500), nullable=True),
         sa.Column('nomination_date', sa.DateTime(), nullable=False),
-        sa.Column('nominated_by', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('nominated_by', sa.String(36), nullable=True),
         sa.Column('accepted', sa.Boolean(), nullable=False),
         sa.Column('is_write_in', sa.Boolean(), nullable=False),
         sa.Column('display_order', sa.Integer(), nullable=False),
@@ -78,10 +73,10 @@ def upgrade() -> None:
     # Create votes table
     op.create_table(
         'votes',
-        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('election_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('candidate_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('voter_id', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('id', sa.String(36), nullable=False),
+        sa.Column('election_id', sa.String(36), nullable=False),
+        sa.Column('candidate_id', sa.String(36), nullable=False),
+        sa.Column('voter_id', sa.String(36), nullable=True),
         sa.Column('voter_hash', sa.String(length=64), nullable=True),
         sa.Column('position', sa.String(length=100), nullable=True),
         sa.Column('voted_at', sa.DateTime(), nullable=False),
@@ -114,5 +109,3 @@ def downgrade() -> None:
     op.drop_index('ix_elections_status', table_name='elections')
     op.drop_index('ix_elections_organization_id', table_name='elections')
     op.drop_table('elections')
-
-    op.execute('DROP TYPE electionstatus')

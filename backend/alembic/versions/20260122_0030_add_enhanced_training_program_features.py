@@ -7,7 +7,6 @@ Create Date: 2026-01-22 00:30:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260122_0030'
@@ -19,9 +18,9 @@ depends_on = None
 def upgrade():
     # Add new columns to training_programs table
     op.add_column('training_programs', sa.Column('version', sa.Integer(), nullable=True, server_default='1'))
-    op.add_column('training_programs', sa.Column('prerequisite_program_ids', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('training_programs', sa.Column('prerequisite_program_ids', sa.JSON(), nullable=True))
     op.add_column('training_programs', sa.Column('allows_concurrent_enrollment', sa.Boolean(), nullable=True, server_default='true'))
-    op.add_column('training_programs', sa.Column('reminder_conditions', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('training_programs', sa.Column('reminder_conditions', sa.JSON(), nullable=True))
 
     # Add new column to program_phases table
     op.add_column('program_phases', sa.Column('requires_manual_advancement', sa.Boolean(), nullable=True, server_default='false'))

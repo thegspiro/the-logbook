@@ -7,7 +7,6 @@ Create Date: 2026-01-22 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260122_0014'
@@ -17,14 +16,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create CheckInWindowType enum
-    check_in_window_type = postgresql.ENUM('flexible', 'strict', 'window', name='checkinwindowtype')
-    check_in_window_type.create(op.get_bind())
-
-    # Create ApprovalStatus enum
-    approval_status = postgresql.ENUM('pending', 'approved', 'modified', 'rejected', name='approvalstatus')
-    approval_status.create(op.get_bind())
-
     # Add check-in window fields to events table
     op.add_column('events', sa.Column('check_in_window_type', sa.Enum('flexible', 'strict', 'window', name='checkinwindowtype'), nullable=False, server_default='flexible'))
     op.add_column('events', sa.Column('check_in_minutes_before', sa.Integer(), nullable=True, server_default='15'))
@@ -39,7 +30,7 @@ def upgrade() -> None:
     op.add_column('event_rsvps', sa.Column('override_check_in_at', sa.DateTime(), nullable=True))
     op.add_column('event_rsvps', sa.Column('override_check_out_at', sa.DateTime(), nullable=True))
     op.add_column('event_rsvps', sa.Column('override_duration_minutes', sa.Integer(), nullable=True))
-    op.add_column('event_rsvps', sa.Column('overridden_by', postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column('event_rsvps', sa.Column('overridden_by', sa.String(36), nullable=True))
     op.add_column('event_rsvps', sa.Column('overridden_at', sa.DateTime(), nullable=True))
 
     # Add foreign key constraint for overridden_by
@@ -48,10 +39,10 @@ def upgrade() -> None:
     # Create training_sessions table
     op.create_table(
         'training_sessions',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('event_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('course_id', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), nullable=False),
+        sa.Column('event_id', sa.String(36), nullable=False),
+        sa.Column('course_id', sa.String(36), nullable=True),
         sa.Column('course_name', sa.String(255), nullable=False),
         sa.Column('course_code', sa.String(50), nullable=True),
         sa.Column('training_type', sa.Enum('certification', 'continuing_education', 'skills_practice', 'orientation', 'refresher', 'specialty', name='trainingtype'), nullable=False),
@@ -67,10 +58,10 @@ def upgrade() -> None:
         sa.Column('approval_deadline_days', sa.Integer(), nullable=True, server_default='7'),
         sa.Column('is_finalized', sa.Boolean(), nullable=True, server_default='false'),
         sa.Column('finalized_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('finalized_by', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('finalized_by', sa.String(36), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
         sa.ForeignKeyConstraint(['organization_id'], ['organizations.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['event_id'], ['events.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['course_id'], ['training_courses.id'], ondelete='SET NULL'),
@@ -83,19 +74,19 @@ def upgrade() -> None:
     # Create training_approvals table
     op.create_table(
         'training_approvals',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('training_session_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('event_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), nullable=False),
+        sa.Column('training_session_id', sa.String(36), nullable=False),
+        sa.Column('event_id', sa.String(36), nullable=False),
         sa.Column('approval_token', sa.String(64), nullable=False),
         sa.Column('token_expires_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('status', sa.Enum('pending', 'approved', 'modified', 'rejected', name='approvalstatus'), nullable=True, server_default='pending'),
-        sa.Column('approved_by', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('approved_by', sa.String(36), nullable=True),
         sa.Column('approved_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('approval_notes', sa.Text(), nullable=True),
         sa.Column('approval_deadline', sa.DateTime(timezone=True), nullable=False),
         sa.Column('reminder_sent_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('attendee_data', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column('attendee_data', sa.JSON(), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['organization_id'], ['organizations.id'], ondelete='CASCADE'),
@@ -139,10 +130,3 @@ def downgrade() -> None:
     op.drop_column('events', 'check_in_minutes_after')
     op.drop_column('events', 'check_in_minutes_before')
     op.drop_column('events', 'check_in_window_type')
-
-    # Drop enums
-    approval_status = postgresql.ENUM('pending', 'approved', 'modified', 'rejected', name='approvalstatus')
-    approval_status.drop(op.get_bind())
-
-    check_in_window_type = postgresql.ENUM('flexible', 'strict', 'window', name='checkinwindowtype')
-    check_in_window_type.drop(op.get_bind())

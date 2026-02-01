@@ -7,7 +7,6 @@ Create Date: 2026-01-19 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260119_0006'
@@ -20,8 +19,8 @@ def upgrade():
     # Create voting_tokens table
     op.create_table(
         'voting_tokens',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('election_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('elections.id'), nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('election_id', sa.String(36), sa.ForeignKey('elections.id'), nullable=False),
         sa.Column('token', sa.String(128), nullable=False, unique=True),
         sa.Column('voter_hash', sa.String(64), nullable=False),
         sa.Column('created_at', sa.DateTime, nullable=False),
