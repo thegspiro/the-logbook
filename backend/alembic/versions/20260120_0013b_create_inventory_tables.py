@@ -7,7 +7,6 @@ Create Date: 2026-01-20 20:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260120_0013b'
@@ -17,60 +16,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create enums
-    item_type_enum = postgresql.ENUM(
-        'uniform', 'ppe', 'tool', 'equipment', 'vehicle', 'electronics', 'consumable', 'other',
-        name='itemtype',
-        create_type=True
-    )
-    item_type_enum.create(op.get_bind(), checkfirst=True)
-
-    item_condition_enum = postgresql.ENUM(
-        'excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired',
-        name='itemcondition',
-        create_type=True
-    )
-    item_condition_enum.create(op.get_bind(), checkfirst=True)
-
-    item_status_enum = postgresql.ENUM(
-        'available', 'assigned', 'checked_out', 'in_maintenance', 'lost', 'stolen', 'retired',
-        name='itemstatus',
-        create_type=True
-    )
-    item_status_enum.create(op.get_bind(), checkfirst=True)
-
-    maintenance_type_enum = postgresql.ENUM(
-        'inspection', 'repair', 'cleaning', 'testing', 'calibration', 'replacement', 'preventive',
-        name='maintenancetype',
-        create_type=True
-    )
-    maintenance_type_enum.create(op.get_bind(), checkfirst=True)
-
-    assignment_type_enum = postgresql.ENUM(
-        'permanent', 'temporary',
-        name='assignmenttype',
-        create_type=True
-    )
-    assignment_type_enum.create(op.get_bind(), checkfirst=True)
-
     # Create inventory_categories table
     op.create_table(
         'inventory_categories',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('item_type', item_type_enum, nullable=False),
-        sa.Column('parent_category_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('inventory_categories.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('item_type', sa.Enum('uniform', 'ppe', 'tool', 'equipment', 'vehicle', 'electronics', 'consumable', 'other', name='itemtype'), nullable=False),
+        sa.Column('parent_category_id', sa.String(36), sa.ForeignKey('inventory_categories.id', ondelete='SET NULL'), nullable=True),
         sa.Column('requires_assignment', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('requires_serial_number', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('requires_maintenance', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('low_stock_threshold', sa.Integer(), nullable=True),
-        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('metadata', sa.JSON(), nullable=True),
         sa.Column('active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
     )
 
     # Create indexes for inventory_categories
@@ -80,9 +43,9 @@ def upgrade() -> None:
     # Create inventory_items table
     op.create_table(
         'inventory_items',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('category_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('inventory_categories.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('category_id', sa.String(36), sa.ForeignKey('inventory_categories.id', ondelete='SET NULL'), nullable=True),
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('manufacturer', sa.String(length=255), nullable=True),
@@ -102,23 +65,23 @@ def upgrade() -> None:
         sa.Column('weight', sa.Float(), nullable=True),
         sa.Column('storage_location', sa.String(length=255), nullable=True),
         sa.Column('station', sa.String(length=100), nullable=True),
-        sa.Column('condition', item_condition_enum, nullable=False, server_default='good'),
-        sa.Column('status', item_status_enum, nullable=False, server_default='available'),
+        sa.Column('condition', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=False, server_default='good'),
+        sa.Column('status', sa.Enum('available', 'assigned', 'checked_out', 'in_maintenance', 'lost', 'stolen', 'retired', name='itemstatus'), nullable=False, server_default='available'),
         sa.Column('status_notes', sa.Text(), nullable=True),
         sa.Column('quantity', sa.Integer(), nullable=False, server_default='1'),
         sa.Column('unit_of_measure', sa.String(length=50), nullable=True),
         sa.Column('last_inspection_date', sa.Date(), nullable=True),
         sa.Column('next_inspection_due', sa.Date(), nullable=True),
         sa.Column('inspection_interval_days', sa.Integer(), nullable=True),
-        sa.Column('assigned_to_user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
+        sa.Column('assigned_to_user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
         sa.Column('assigned_date', sa.DateTime(timezone=True), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('custom_fields', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('attachments', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('custom_fields', sa.JSON(), nullable=True),
+        sa.Column('attachments', sa.JSON(), nullable=True),
         sa.Column('active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
     )
 
     # Create indexes for inventory_items
@@ -137,18 +100,18 @@ def upgrade() -> None:
     # Create item_assignments table
     op.create_table(
         'item_assignments',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('item_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('assignment_type', assignment_type_enum, nullable=False, server_default='permanent'),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('item_id', sa.String(36), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('assignment_type', sa.Enum('permanent', 'temporary', name='assignmenttype'), nullable=False, server_default='permanent'),
         sa.Column('assigned_date', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('returned_date', sa.DateTime(timezone=True), nullable=True),
         sa.Column('expected_return_date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('assigned_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('returned_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('assigned_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('returned_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('assignment_reason', sa.Text(), nullable=True),
-        sa.Column('return_condition', item_condition_enum, nullable=True),
+        sa.Column('return_condition', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=True),
         sa.Column('return_notes', sa.Text(), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
@@ -163,18 +126,18 @@ def upgrade() -> None:
     # Create checkout_records table
     op.create_table(
         'checkout_records',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('item_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('item_id', sa.String(36), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('checked_out_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('expected_return_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('checked_in_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('checked_out_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('checked_in_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('checked_out_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('checked_in_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('checkout_reason', sa.Text(), nullable=True),
-        sa.Column('checkout_condition', item_condition_enum, nullable=True),
-        sa.Column('return_condition', item_condition_enum, nullable=True),
+        sa.Column('checkout_condition', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=True),
+        sa.Column('return_condition', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=True),
         sa.Column('damage_notes', sa.Text(), nullable=True),
         sa.Column('is_returned', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('is_overdue', sa.Boolean(), nullable=False, server_default='false'),
@@ -192,30 +155,30 @@ def upgrade() -> None:
     # Create maintenance_records table
     op.create_table(
         'maintenance_records',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('item_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('maintenance_type', maintenance_type_enum, nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('item_id', sa.String(36), sa.ForeignKey('inventory_items.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('maintenance_type', sa.Enum('inspection', 'repair', 'cleaning', 'testing', 'calibration', 'replacement', 'preventive', name='maintenancetype'), nullable=False),
         sa.Column('scheduled_date', sa.Date(), nullable=True),
         sa.Column('completed_date', sa.Date(), nullable=True),
         sa.Column('next_due_date', sa.Date(), nullable=True),
-        sa.Column('performed_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('performed_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('vendor_name', sa.String(length=255), nullable=True),
         sa.Column('cost', sa.Numeric(10, 2), nullable=True),
-        sa.Column('condition_before', item_condition_enum, nullable=True),
-        sa.Column('condition_after', item_condition_enum, nullable=True),
+        sa.Column('condition_before', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=True),
+        sa.Column('condition_after', sa.Enum('excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service', 'retired', name='itemcondition'), nullable=True),
         sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('parts_replaced', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('parts_replaced', sa.JSON(), nullable=True),
         sa.Column('parts_cost', sa.Numeric(10, 2), nullable=True),
         sa.Column('labor_hours', sa.Float(), nullable=True),
         sa.Column('passed', sa.Boolean(), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('issues_found', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('attachments', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('issues_found', sa.JSON(), nullable=True),
+        sa.Column('attachments', sa.JSON(), nullable=True),
         sa.Column('is_completed', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True),
     )
 
     # Create indexes for maintenance_records
@@ -261,10 +224,3 @@ def downgrade() -> None:
     op.drop_index('idx_inventory_categories_org_active', table_name='inventory_categories')
     op.drop_index('idx_inventory_categories_org_type', table_name='inventory_categories')
     op.drop_table('inventory_categories')
-
-    # Drop enums
-    sa.Enum(name='assignmenttype').drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name='maintenancetype').drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name='itemstatus').drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name='itemcondition').drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name='itemtype').drop(op.get_bind(), checkfirst=True)

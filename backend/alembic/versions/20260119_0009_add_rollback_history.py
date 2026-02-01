@@ -7,7 +7,6 @@ Create Date: 2026-01-19 14:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260119_0009'
@@ -18,7 +17,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Add rollback_history column
-    op.add_column('elections', sa.Column('rollback_history', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('elections', sa.Column('rollback_history', sa.JSON(), nullable=True))
 
 
 def downgrade() -> None:

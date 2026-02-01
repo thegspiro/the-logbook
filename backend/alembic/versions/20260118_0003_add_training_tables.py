@@ -7,7 +7,6 @@ Create Date: 2026-01-18
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260118_0003'
@@ -20,23 +19,23 @@ def upgrade() -> None:
     # Create training_courses table
     op.create_table(
         'training_courses',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('code', sa.String(50)),
         sa.Column('description', sa.Text()),
         sa.Column('training_type', sa.Enum('certification', 'continuing_education', 'skills_practice', 'orientation', 'refresher', 'specialty', name='trainingtype'), nullable=False),
         sa.Column('duration_hours', sa.Float()),
         sa.Column('credit_hours', sa.Float()),
-        sa.Column('prerequisites', postgresql.JSONB()),
+        sa.Column('prerequisites', sa.JSON()),
         sa.Column('expiration_months', sa.Integer()),
         sa.Column('instructor', sa.String(255)),
         sa.Column('max_participants', sa.Integer()),
-        sa.Column('materials_required', postgresql.JSONB()),
+        sa.Column('materials_required', sa.JSON()),
         sa.Column('active', sa.Boolean(), server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id')),
+        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_course_org', 'training_courses', ['organization_id'])
     op.create_index('idx_course_active', 'training_courses', ['active'])
@@ -45,10 +44,10 @@ def upgrade() -> None:
     # Create training_records table
     op.create_table(
         'training_records',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('course_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('training_courses.id', ondelete='SET NULL')),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('user_id', sa.String(36), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('course_id', sa.String(36), sa.ForeignKey('training_courses.id', ondelete='SET NULL')),
         sa.Column('course_name', sa.String(255), nullable=False),
         sa.Column('course_code', sa.String(50)),
         sa.Column('training_type', sa.Enum('certification', 'continuing_education', 'skills_practice', 'orientation', 'refresher', 'specialty', name='trainingtype'), nullable=False),
@@ -66,10 +65,10 @@ def upgrade() -> None:
         sa.Column('instructor', sa.String(255)),
         sa.Column('location', sa.String(255)),
         sa.Column('notes', sa.Text()),
-        sa.Column('attachments', postgresql.JSONB()),
+        sa.Column('attachments', sa.JSON()),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id')),
+        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_record_org', 'training_records', ['organization_id'])
     op.create_index('idx_record_user', 'training_records', ['user_id'])
@@ -80,23 +79,23 @@ def upgrade() -> None:
     # Create training_requirements table
     op.create_table(
         'training_requirements',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('organization_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
+        sa.Column('id', sa.String(36), primary_key=True),
+        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('description', sa.Text()),
         sa.Column('training_type', sa.Enum('certification', 'continuing_education', 'skills_practice', 'orientation', 'refresher', 'specialty', name='trainingtype')),
         sa.Column('required_hours', sa.Float()),
-        sa.Column('required_courses', postgresql.JSONB()),
+        sa.Column('required_courses', sa.JSON()),
         sa.Column('frequency', sa.Enum('annual', 'biannual', 'quarterly', 'monthly', 'one_time', name='requirementfrequency'), nullable=False),
         sa.Column('year', sa.Integer()),
         sa.Column('applies_to_all', sa.Boolean(), server_default='true'),
-        sa.Column('required_roles', postgresql.JSONB()),
+        sa.Column('required_roles', sa.JSON()),
         sa.Column('start_date', sa.Date()),
         sa.Column('due_date', sa.Date()),
         sa.Column('active', sa.Boolean(), server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id')),
+        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id')),
     )
     op.create_index('idx_requirement_org', 'training_requirements', ['organization_id'])
     op.create_index('idx_requirement_year', 'training_requirements', ['organization_id', 'year'])
@@ -108,6 +107,3 @@ def downgrade() -> None:
     op.drop_table('training_requirements')
     op.drop_table('training_records')
     op.drop_table('training_courses')
-    op.execute('DROP TYPE IF EXISTS trainingstatus')
-    op.execute('DROP TYPE IF EXISTS trainingtype')
-    op.execute('DROP TYPE IF EXISTS requirementfrequency')

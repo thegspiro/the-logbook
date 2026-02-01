@@ -7,7 +7,6 @@ Create Date: 2026-01-18 20:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20260118_0005'
@@ -17,16 +16,16 @@ depends_on = None
 
 
 def upgrade():
-    # Add ballot_items JSONB column for structured ballot items with eligibility
-    op.add_column('elections', sa.Column('ballot_items', postgresql.JSONB, nullable=True))
+    # Add ballot_items JSON column for structured ballot items with eligibility
+    op.add_column('elections', sa.Column('ballot_items', sa.JSON(), nullable=True))
 
-    # Add position_eligibility JSONB column for per-position voter eligibility rules
-    op.add_column('elections', sa.Column('position_eligibility', postgresql.JSONB, nullable=True))
+    # Add position_eligibility JSON column for per-position voter eligibility rules
+    op.add_column('elections', sa.Column('position_eligibility', sa.JSON(), nullable=True))
 
     # Add email notification tracking fields
     op.add_column('elections', sa.Column('email_sent', sa.Boolean, nullable=False, server_default='false'))
     op.add_column('elections', sa.Column('email_sent_at', sa.DateTime, nullable=True))
-    op.add_column('elections', sa.Column('email_recipients', postgresql.JSONB, nullable=True))
+    op.add_column('elections', sa.Column('email_recipients', sa.JSON(), nullable=True))
     op.add_column('elections', sa.Column('meeting_date', sa.DateTime, nullable=True))
 
 
