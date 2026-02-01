@@ -7,9 +7,10 @@ This guide covers common issues and their solutions for The Logbook deployment.
 1. [Onboarding Failures](#onboarding-failures)
 2. [Frontend Not Rendering](#frontend-not-rendering)
 3. [Malformed API URLs](#malformed-api-urls)
-4. [Build Errors](#build-errors)
-5. [Docker Issues](#docker-issues)
-6. [Network & Connectivity](#network--connectivity)
+4. [Database Issues](#database-issues)
+5. [Build Errors](#build-errors)
+6. [Docker Issues](#docker-issues)
+7. [Network & Connectivity](#network--connectivity)
 
 ---
 
@@ -76,16 +77,15 @@ Missing or incorrect frontend `.env` file. Vite needs environment variables at *
 
 ### Solution
 
-**1. Create/Update frontend/.env**
+**1. Create/Update frontend/.env (if needed)**
+
+For Docker deployments with nginx proxy (recommended), use relative URLs:
 
 ```bash
 cd frontend
 cat > .env << 'EOF'
-# API Configuration
-VITE_API_URL=http://YOUR-IP:7881
-
-# WebSocket Configuration
-VITE_WS_URL=ws://YOUR-IP:7881
+# API Configuration - Use relative URL with nginx proxy
+VITE_API_URL=/api/v1
 
 # Environment
 VITE_ENV=production
@@ -99,7 +99,11 @@ VITE_ENABLE_ANALYTICS=false
 EOF
 ```
 
-**Important:** Replace `YOUR-IP` with your actual server IP address.
+**Important:**
+- Use `VITE_API_URL=/api/v1` (relative URL) for Docker deployments
+- The nginx proxy in the frontend container routes `/api` requests to the backend
+- **Do NOT use** `http://localhost:3001` - this causes redirect issues
+- Make sure there are **no leading spaces** before `VITE_API_URL`
 
 **2. Rebuild Frontend**
 
@@ -203,6 +207,99 @@ const url = "/api/v1";  // ✅ Hardcoded into bundle
 **Docker ARG vs ENV:**
 - `ARG`: Used during `docker build` → ✅ Works with Vite
 - `ENV`: Used during `docker run` → ❌ Ignored by Vite
+
+---
+
+## Database Issues
+
+### Problem: "Table doesn't exist" errors
+**Error:** `Table 'the_logbook.onboarding_status' doesn't exist`
+
+### Root Cause
+Database tables haven't been created yet. This happens on fresh installations.
+
+### Solution
+
+**Automatic (Recommended):** The backend now runs Alembic migrations automatically on startup. Simply restart the backend:
+
+```bash
+docker compose restart backend
+```
+
+**Manual:** If automatic migrations fail, run them manually:
+
+```bash
+docker exec intranet-backend alembic upgrade head
+```
+
+**Fresh Start:** If the database is corrupted, reset it completely:
+
+```bash
+docker compose down
+docker volume rm the-logbook_mysql_data
+docker compose up -d
+```
+
+The MySQL container will automatically run the initial schema from `database/schemas/001_initial_schema.sql` on first start.
+
+---
+
+### Problem: MySQL healthcheck fails on first start
+**Error:** `container intranet-mysql is unhealthy`
+
+### Root Cause
+MySQL first-time initialization takes longer than the healthcheck timeout, especially when running schema files.
+
+### Solution
+
+The healthcheck has been configured with:
+- `start_period: 60s` - Allows MySQL time to initialize
+- `retries: 12` - Total ~3 minute timeout
+
+If MySQL still fails, check its logs:
+
+```bash
+docker compose logs mysql --tail 50
+```
+
+Wait for MySQL to fully initialize, then restart other services:
+
+```bash
+docker compose up -d
+```
+
+---
+
+### Problem: SQLAlchemy relationship error
+**Error:** `Could not determine join condition between parent/child tables on relationship User.roles`
+
+### Root Cause
+The `user_roles` table has two foreign keys to the `users` table (`user_id` and `assigned_by`), causing SQLAlchemy to be unable to determine which to use for the relationship.
+
+### Solution
+This has been fixed in the codebase. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: Greenlet library missing
+**Error:** `the greenlet library is required to use this function. No module named 'greenlet'`
+
+### Root Cause
+SQLAlchemy's async operations require the `greenlet` library, which was missing from dependencies.
+
+### Solution
+This has been fixed in the codebase. Pull and rebuild:
+
+```bash
+git pull origin main
+docker compose build backend --no-cache
+docker compose up -d
+```
 
 ---
 
