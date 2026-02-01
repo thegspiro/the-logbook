@@ -303,6 +303,35 @@ docker compose up -d
 
 ---
 
+### Problem: MySQL deprecation warnings in logs
+**Warnings:**
+- `'default_authentication_plugin' is deprecated`
+- `'mysql_native_password' is deprecated`
+- `innodb_log_file_size and/or innodb_log_files_in_group have been used`
+- `'--skip-host-cache' is deprecated`
+
+### Root Cause
+MySQL 8.0.34+ deprecated several configuration options that were commonly used.
+
+### Solution
+This has been fixed in the codebase. The docker-compose.yml now uses:
+- `--innodb_redo_log_capacity` instead of `--innodb_log_file_size`
+- `--host-cache-size=0` instead of `--skip-host-cache`
+- `caching_sha2_password` as the default authentication (MySQL 8.0 native)
+
+Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose down
+docker volume rm the-logbook_mysql_data  # Required for auth change
+docker compose up -d
+```
+
+**Note:** If you have existing data, you may need to recreate the database volume for the authentication change to take effect. Back up your data first if needed.
+
+---
+
 ## Build Errors
 
 ### Problem: TypeScript errors during Docker build
