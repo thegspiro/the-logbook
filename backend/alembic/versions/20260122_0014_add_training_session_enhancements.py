@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.add_column('events', sa.Column('check_in_window_type', sa.Enum('flexible', 'strict', 'window', name='checkinwindowtype'), nullable=False, server_default='flexible'))
     op.add_column('events', sa.Column('check_in_minutes_before', sa.Integer(), nullable=True, server_default='15'))
     op.add_column('events', sa.Column('check_in_minutes_after', sa.Integer(), nullable=True, server_default='15'))
-    op.add_column('events', sa.Column('require_checkout', sa.Boolean(), nullable=False, server_default='false'))
+    op.add_column('events', sa.Column('require_checkout', sa.Boolean(), nullable=False, server_default='0'))
 
     # Add check-out and duration tracking to event_rsvps table
     op.add_column('event_rsvps', sa.Column('checked_out_at', sa.DateTime(), nullable=True))
@@ -48,15 +48,15 @@ def upgrade() -> None:
         sa.Column('training_type', sa.Enum('certification', 'continuing_education', 'skills_practice', 'orientation', 'refresher', 'specialty', name='trainingtype'), nullable=False),
         sa.Column('credit_hours', sa.Float(), nullable=False),
         sa.Column('instructor', sa.String(255), nullable=True),
-        sa.Column('issues_certification', sa.Boolean(), nullable=True, server_default='false'),
+        sa.Column('issues_certification', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('certification_number_prefix', sa.String(50), nullable=True),
         sa.Column('issuing_agency', sa.String(255), nullable=True),
         sa.Column('expiration_months', sa.Integer(), nullable=True),
-        sa.Column('auto_create_records', sa.Boolean(), nullable=True, server_default='true'),
-        sa.Column('require_completion_confirmation', sa.Boolean(), nullable=True, server_default='false'),
-        sa.Column('approval_required', sa.Boolean(), nullable=True, server_default='true'),
+        sa.Column('auto_create_records', sa.Boolean(), nullable=True, server_default='1'),
+        sa.Column('require_completion_confirmation', sa.Boolean(), nullable=True, server_default='0'),
+        sa.Column('approval_required', sa.Boolean(), nullable=True, server_default='1'),
         sa.Column('approval_deadline_days', sa.Integer(), nullable=True, server_default='7'),
-        sa.Column('is_finalized', sa.Boolean(), nullable=True, server_default='false'),
+        sa.Column('is_finalized', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('finalized_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('finalized_by', sa.String(36), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

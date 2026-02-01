@@ -19,11 +19,11 @@ def upgrade():
     # Add new columns to training_programs table
     op.add_column('training_programs', sa.Column('version', sa.Integer(), nullable=True, server_default='1'))
     op.add_column('training_programs', sa.Column('prerequisite_program_ids', sa.JSON(), nullable=True))
-    op.add_column('training_programs', sa.Column('allows_concurrent_enrollment', sa.Boolean(), nullable=True, server_default='true'))
+    op.add_column('training_programs', sa.Column('allows_concurrent_enrollment', sa.Boolean(), nullable=True, server_default='1'))
     op.add_column('training_programs', sa.Column('reminder_conditions', sa.JSON(), nullable=True))
 
     # Add new column to program_phases table
-    op.add_column('program_phases', sa.Column('requires_manual_advancement', sa.Boolean(), nullable=True, server_default='false'))
+    op.add_column('program_phases', sa.Column('requires_manual_advancement', sa.Boolean(), nullable=True, server_default='0'))
 
     # Add new columns to program_requirements table
     op.add_column('program_requirements', sa.Column('program_specific_description', sa.Text(), nullable=True))
@@ -37,7 +37,7 @@ def upgrade():
     op.alter_column('program_requirements', 'order', new_column_name='sort_order')
 
     # Add is_prerequisite column to program_requirements
-    op.add_column('program_requirements', sa.Column('is_prerequisite', sa.Boolean(), nullable=True, server_default='false'))
+    op.add_column('program_requirements', sa.Column('is_prerequisite', sa.Boolean(), nullable=True, server_default='0'))
 
     # Add notification_message to program_milestones
     op.add_column('program_milestones', sa.Column('notification_message', sa.Text(), nullable=True))

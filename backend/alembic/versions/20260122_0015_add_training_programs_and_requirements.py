@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.add_column('training_requirements', sa.Column('source', sa.Enum('department', 'state', 'national', name='requirementsource'), nullable=False, server_default='department'))
     op.add_column('training_requirements', sa.Column('registry_name', sa.String(100), nullable=True))
     op.add_column('training_requirements', sa.Column('registry_code', sa.String(50), nullable=True))
-    op.add_column('training_requirements', sa.Column('is_editable', sa.Boolean(), nullable=True, server_default='true'))
+    op.add_column('training_requirements', sa.Column('is_editable', sa.Boolean(), nullable=True, server_default='1'))
     op.add_column('training_requirements', sa.Column('required_shifts', sa.Integer(), nullable=True))
     op.add_column('training_requirements', sa.Column('required_calls', sa.Integer(), nullable=True))
     op.add_column('training_requirements', sa.Column('required_call_types', sa.JSON(), nullable=True))
@@ -47,8 +47,8 @@ def upgrade() -> None:
         sa.Column('structure_type', sa.Enum('sequential', 'phases', 'flexible', name='programstructuretype'), nullable=False, server_default='flexible'),
         sa.Column('time_limit_days', sa.Integer(), nullable=True),
         sa.Column('warning_days_before', sa.Integer(), nullable=True, server_default='30'),
-        sa.Column('active', sa.Boolean(), nullable=True, server_default='true'),
-        sa.Column('is_template', sa.Boolean(), nullable=True, server_default='false'),
+        sa.Column('active', sa.Boolean(), nullable=True, server_default='1'),
+        sa.Column('is_template', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('created_by', sa.String(36), nullable=True),
@@ -81,7 +81,7 @@ def upgrade() -> None:
         sa.Column('program_id', sa.String(36), nullable=False),
         sa.Column('phase_id', sa.String(36), nullable=True),
         sa.Column('requirement_id', sa.String(36), nullable=False),
-        sa.Column('is_mandatory', sa.Boolean(), nullable=True, server_default='true'),
+        sa.Column('is_mandatory', sa.Boolean(), nullable=True, server_default='1'),
         sa.Column('order', sa.Integer(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['program_id'], ['training_programs.id'], ondelete='CASCADE'),
@@ -100,7 +100,7 @@ def upgrade() -> None:
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('completion_percentage_threshold', sa.Float(), nullable=True),
-        sa.Column('requires_verification', sa.Boolean(), nullable=True, server_default='false'),
+        sa.Column('requires_verification', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('verification_notes', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['program_id'], ['training_programs.id'], ondelete='CASCADE'),
@@ -123,7 +123,7 @@ def upgrade() -> None:
         sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('withdrawn_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('withdrawal_reason', sa.Text(), nullable=True),
-        sa.Column('deadline_warning_sent', sa.Boolean(), nullable=True, server_default='false'),
+        sa.Column('deadline_warning_sent', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('deadline_warning_sent_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -172,7 +172,7 @@ def upgrade() -> None:
         sa.Column('evaluation_criteria', sa.JSON(), nullable=True),
         sa.Column('passing_requirements', sa.Text(), nullable=True),
         sa.Column('required_for_programs', sa.JSON(), nullable=True),
-        sa.Column('active', sa.Boolean(), nullable=True, server_default='true'),
+        sa.Column('active', sa.Boolean(), nullable=True, server_default='1'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('created_by', sa.String(36), nullable=True),
@@ -252,8 +252,8 @@ def upgrade() -> None:
         sa.Column('dispatched_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('on_scene_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('cleared_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('cancelled_en_route', sa.Boolean(), nullable=True, server_default='false'),
-        sa.Column('medical_refusal', sa.Boolean(), nullable=True, server_default='false'),
+        sa.Column('cancelled_en_route', sa.Boolean(), nullable=True, server_default='0'),
+        sa.Column('medical_refusal', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('responding_members', sa.JSON(), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
