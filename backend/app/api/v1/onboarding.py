@@ -860,6 +860,31 @@ async def save_department_info(
                 "has_logo": bool(data.logo)
             }
         }
+
+        # Also update OnboardingStatus for compatibility with admin-user endpoint
+        from app.models.onboarding import OnboardingStatus
+        from sqlalchemy import select
+        result = await db.execute(select(OnboardingStatus).limit(1))
+        onboarding_status = result.scalar_one_or_none()
+
+        if not onboarding_status:
+            # Create new OnboardingStatus
+            from app.models.user import generate_uuid
+            onboarding_status = OnboardingStatus(
+                id=generate_uuid(),
+                organization_name=data.name,
+                organization_type="fire_department",
+                current_step=2,
+                setup_ip_address=request.client.host if request.client else None,
+                setup_user_agent=request.headers.get("user-agent")
+            )
+            db.add(onboarding_status)
+        else:
+            # Update existing
+            onboarding_status.organization_name = data.name
+            onboarding_status.organization_type = "fire_department"
+            onboarding_status.current_step = 2
+
         await db.commit()
 
         return {
