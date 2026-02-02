@@ -6,23 +6,48 @@ interface ServiceStatus {
   name: string;
   status: 'checking' | 'connected' | 'disconnected' | 'error';
   message?: string;
+  optional?: boolean;
 }
 
-const MAX_RETRIES = 30; // Maximum retries (about 3 minutes with delays)
-const INITIAL_DELAY = 2000; // Start with 2 second delay
-const MAX_DELAY = 5000; // Cap at 5 seconds between retries
+const MAX_RETRIES = 20; // Reduced from 30 - about 1.5 minutes with delays
+const INITIAL_DELAY = 2000;
+const MAX_DELAY = 5000;
+const SKIP_AVAILABLE_AFTER = 5; // Show skip option after 5 attempts
 
 const OnboardingCheck: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [services, setServices] = useState<ServiceStatus[]>([
     { name: 'Backend API', status: 'checking' },
     { name: 'Database', status: 'checking' },
-    { name: 'Cache (Redis)', status: 'checking' },
+    { name: 'Cache (Redis)', status: 'checking', optional: true },
   ]);
   const [retryCount, setRetryCount] = useState(0);
   const [isWaiting, setIsWaiting] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting to services...');
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [showSkipOption, setShowSkipOption] = useState(false);
   const navigate = useNavigate();
+
+  // Track elapsed time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedTime(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Show skip option after certain attempts
+  useEffect(() => {
+    if (retryCount >= SKIP_AVAILABLE_AFTER) {
+      setShowSkipOption(true);
+    }
+  }, [retryCount]);
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
 
   const updateServiceStatus = useCallback((serviceName: string, status: ServiceStatus['status'], message?: string) => {
     setServices(prev => prev.map(s =>
@@ -33,12 +58,10 @@ const OnboardingCheck: React.FC = () => {
   const checkServices = useCallback(async (): Promise<boolean> => {
     setIsWaiting(false);
 
-    // First check health endpoint
     const healthResponse = await apiClient.checkHealth();
 
     if (healthResponse.error || !healthResponse.data) {
-      // Backend not responding
-      updateServiceStatus('Backend API', 'disconnected', healthResponse.error);
+      updateServiceStatus('Backend API', 'disconnected', healthResponse.error || 'Not responding');
       updateServiceStatus('Database', 'checking');
       updateServiceStatus('Cache (Redis)', 'checking');
       return false;
@@ -53,24 +76,22 @@ const OnboardingCheck: React.FC = () => {
     if (health.checks.database === 'connected') {
       updateServiceStatus('Database', 'connected');
     } else if (health.checks.database === 'disconnected') {
-      updateServiceStatus('Database', 'disconnected', 'Waiting for database...');
+      updateServiceStatus('Database', 'disconnected', 'Starting up...');
       return false;
     } else {
       updateServiceStatus('Database', 'error', health.checks.database);
       return false;
     }
 
-    // Update Redis status (non-critical, but show status)
+    // Update Redis status (non-critical)
     if (health.checks.redis === 'connected') {
       updateServiceStatus('Cache (Redis)', 'connected');
     } else if (health.checks.redis === 'disconnected') {
-      updateServiceStatus('Cache (Redis)', 'disconnected', 'Optional service');
+      updateServiceStatus('Cache (Redis)', 'disconnected', 'Optional - skipped');
     } else {
-      updateServiceStatus('Cache (Redis)', 'error', health.checks.redis);
+      updateServiceStatus('Cache (Redis)', 'error', 'Optional - failed');
     }
 
-    // Check if system is healthy enough to proceed
-    // We require API and Database, Redis is optional
     return health.status !== 'unhealthy' && health.checks.database === 'connected';
   }, [updateServiceStatus]);
 
@@ -88,10 +109,8 @@ const OnboardingCheck: React.FC = () => {
       const status = response.data;
 
       if (status.needs_onboarding) {
-        // Redirect to onboarding wizard
         navigate('/onboarding/start');
       } else {
-        // Onboarding already complete, redirect to login
         navigate('/login');
       }
     } catch (err) {
@@ -108,15 +127,17 @@ const OnboardingCheck: React.FC = () => {
     const servicesReady = await checkServices();
 
     if (servicesReady) {
-      setStatusMessage('Services ready! Checking onboarding status...');
+      setStatusMessage('Services ready! Redirecting...');
       await checkOnboardingStatus();
     } else {
-      // Services not ready, schedule retry
       if (retryCount < MAX_RETRIES) {
         const delay = Math.min(INITIAL_DELAY + (retryCount * 500), MAX_DELAY);
         setRetryCount(prev => prev + 1);
         setIsWaiting(true);
-        setStatusMessage(`Waiting for services to be ready... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+
+        const remainingAttempts = MAX_RETRIES - retryCount - 1;
+        const estimatedSeconds = Math.round((remainingAttempts * (delay + 1000)) / 1000);
+        setStatusMessage(`Waiting for services... (${retryCount + 1}/${MAX_RETRIES})`);
 
         setTimeout(() => {
           runCheck();
@@ -126,6 +147,24 @@ const OnboardingCheck: React.FC = () => {
       }
     }
   }, [checkServices, checkOnboardingStatus, retryCount]);
+
+  const handleSkip = () => {
+    // Attempt to proceed anyway - useful if only Redis is down
+    checkOnboardingStatus();
+  };
+
+  const handleRetry = () => {
+    setError(null);
+    setRetryCount(0);
+    setElapsedTime(0);
+    setShowSkipOption(false);
+    setServices([
+      { name: 'Backend API', status: 'checking' },
+      { name: 'Database', status: 'checking' },
+      { name: 'Cache (Redis)', status: 'checking', optional: true },
+    ]);
+    runCheck();
+  };
 
   useEffect(() => {
     runCheck();
@@ -160,6 +199,12 @@ const OnboardingCheck: React.FC = () => {
     }
   };
 
+  // Calculate progress percentage
+  const progressPercent = Math.min((retryCount / MAX_RETRIES) * 100, 100);
+  const connectedCount = services.filter(s => s.status === 'connected').length;
+  const requiredServices = services.filter(s => !s.optional);
+  const requiredConnected = requiredServices.filter(s => s.status === 'connected').length;
+
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
@@ -175,7 +220,10 @@ const OnboardingCheck: React.FC = () => {
             <p className="text-sm text-slate-400 mb-3">Service Status:</p>
             {services.map((service) => (
               <div key={service.name} className="flex items-center justify-between py-2 border-b border-white/10 last:border-0">
-                <span className="text-slate-300">{service.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-300">{service.name}</span>
+                  {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
+                </div>
                 <div className="flex items-center gap-2">
                   {service.message && (
                     <span className={`text-xs ${getStatusColor(service.status)}`}>{service.message}</span>
@@ -186,21 +234,22 @@ const OnboardingCheck: React.FC = () => {
             ))}
           </div>
 
-          <button
-            onClick={() => {
-              setError(null);
-              setRetryCount(0);
-              setServices([
-                { name: 'Backend API', status: 'checking' },
-                { name: 'Database', status: 'checking' },
-                { name: 'Cache (Redis)', status: 'checking' },
-              ]);
-              runCheck();
-            }}
-            className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
-          >
-            Try Again
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleRetry}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
+            >
+              Try Again
+            </button>
+            {requiredConnected === requiredServices.length && (
+              <button
+                onClick={handleSkip}
+                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all duration-300"
+              >
+                Continue Anyway
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -213,11 +262,15 @@ const OnboardingCheck: React.FC = () => {
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-4"></div>
           <p className="text-white text-xl mb-2">Initializing The Logbook</p>
           <p className="text-slate-400 text-sm">{statusMessage}</p>
+          <p className="text-slate-500 text-xs mt-2">Time elapsed: {formatTime(elapsedTime)}</p>
         </div>
 
         {/* Service Status Cards */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-          <h3 className="text-white font-semibold mb-4">Service Status</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-white font-semibold">Service Status</h3>
+            <span className="text-sm text-slate-400">{connectedCount}/{services.length} ready</span>
+          </div>
 
           {services.map((service) => (
             <div
@@ -225,7 +278,10 @@ const OnboardingCheck: React.FC = () => {
               className="flex items-center justify-between py-3 border-b border-white/10 last:border-0"
             >
               <div className="flex flex-col">
-                <span className="text-white">{service.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-white">{service.name}</span>
+                  {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
+                </div>
                 {service.message && (
                   <span className={`text-xs ${getStatusColor(service.status)}`}>
                     {service.message}
@@ -246,21 +302,47 @@ const OnboardingCheck: React.FC = () => {
 
           {isWaiting && (
             <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="flex items-center gap-2 text-slate-400 text-sm">
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
-                <span>Auto-retrying... ({retryCount}/{MAX_RETRIES})</span>
+              {/* Progress bar */}
+              <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+                <div
+                  className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                ></div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">
+                  Attempt {retryCount}/{MAX_RETRIES}
+                </span>
+                <span className="text-slate-500">
+                  Auto-retrying...
+                </span>
               </div>
               <p className="text-slate-500 text-xs mt-2">
-                Please wait while services start up. This is normal on first deployment.
+                Services are starting up. This is normal on first deployment.
               </p>
             </div>
           )}
         </div>
 
+        {/* Skip option - shown after several attempts */}
+        {showSkipOption && requiredConnected >= 1 && (
+          <div className="mt-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+            <p className="text-yellow-300 text-sm mb-3">
+              Taking longer than expected? If the Backend API is connected, you can try to continue.
+            </p>
+            <button
+              onClick={handleSkip}
+              className="w-full px-4 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/50 text-yellow-300 font-medium rounded-lg transition-all duration-300 text-sm"
+            >
+              Skip Wait & Continue
+            </button>
+          </div>
+        )}
+
         {/* Help text */}
         <div className="mt-4 text-center">
           <p className="text-slate-500 text-xs">
-            If services don't connect after a few minutes, check your Docker logs.
+            If services don't connect, check your Docker logs with: <code className="text-slate-400">docker compose logs</code>
           </p>
         </div>
       </div>
