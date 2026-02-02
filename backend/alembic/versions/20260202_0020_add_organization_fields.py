@@ -1,7 +1,7 @@
 """Add comprehensive organization fields
 
 Revision ID: 20260202_0020
-Revises: 20260202_0019
+Revises: 20260201_0018
 Create Date: 2026-02-02
 
 Adds organization type, timezone, contact info, addresses, and identifiers
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20260202_0020'
-down_revision = '20260202_0019'
+down_revision = '20260201_0018'
 branch_labels = None
 depends_on = None
 
