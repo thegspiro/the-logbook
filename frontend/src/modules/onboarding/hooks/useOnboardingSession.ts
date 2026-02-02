@@ -8,6 +8,43 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/api-client';
 
+interface OrganizationData {
+  name: string;
+  slug?: string;
+  description?: string;
+  organization_type: 'fire_department' | 'ems_only' | 'fire_ems_combined';
+  timezone: string;
+  phone?: string;
+  fax?: string;
+  email?: string;
+  website?: string;
+  mailing_address: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country?: string;
+  };
+  physical_address_same: boolean;
+  physical_address?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country?: string;
+  };
+  identifier_type: 'fdid' | 'state_id' | 'department_id';
+  fdid?: string;
+  state_id?: string;
+  department_id?: string;
+  county?: string;
+  founded_year?: number;
+  tax_id?: string;
+  logo?: string;
+}
+
 interface UseOnboardingSessionReturn {
   sessionId: string | null;
   isLoading: boolean;
@@ -15,6 +52,7 @@ interface UseOnboardingSessionReturn {
   initializeSession: () => Promise<boolean>;
   clearSession: () => void;
   hasSession: boolean;
+  saveOrganization: (data: OrganizationData) => Promise<void>;
 }
 
 export const useOnboardingSession = (): UseOnboardingSessionReturn => {
@@ -76,6 +114,32 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
     setError(null);
   }, []);
 
+  /**
+   * Save organization data (comprehensive setup)
+   * Creates the organization in the database during Step 1 of onboarding
+   */
+  const saveOrganization = useCallback(async (data: OrganizationData): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.saveOrganization(data);
+
+      if (response.error) {
+        setError(response.error);
+        setIsLoading(false);
+        throw new Error(response.error);
+      }
+
+      setIsLoading(false);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to save organization';
+      setError(errorMessage);
+      setIsLoading(false);
+      throw new Error(errorMessage);
+    }
+  }, []);
+
   return {
     sessionId,
     isLoading,
@@ -83,5 +147,6 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
     initializeSession,
     clearSession,
     hasSession: apiClient.hasSession(),
+    saveOrganization,
   };
 };

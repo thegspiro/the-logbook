@@ -13,7 +13,7 @@ import secrets
 import os
 
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
-from app.models.user import Organization, User, Role, UserStatus
+from app.models.user import Organization, User, Role, UserStatus, OrganizationType, IdentifierType
 from app.services.auth import AuthService
 from app.core.config import settings
 from app.core.audit import log_audit_event
@@ -237,7 +237,38 @@ class OnboardingService:
         slug: str,
         organization_type: str = "fire_department",
         description: Optional[str] = None,
-        settings_dict: Optional[Dict[str, Any]] = None
+        settings_dict: Optional[Dict[str, Any]] = None,
+        # New comprehensive fields
+        timezone: str = "America/New_York",
+        phone: Optional[str] = None,
+        fax: Optional[str] = None,
+        email: Optional[str] = None,
+        website: Optional[str] = None,
+        # Mailing address
+        mailing_address_line1: Optional[str] = None,
+        mailing_address_line2: Optional[str] = None,
+        mailing_city: Optional[str] = None,
+        mailing_state: Optional[str] = None,
+        mailing_zip: Optional[str] = None,
+        mailing_country: str = "USA",
+        # Physical address
+        physical_address_same: bool = True,
+        physical_address_line1: Optional[str] = None,
+        physical_address_line2: Optional[str] = None,
+        physical_city: Optional[str] = None,
+        physical_state: Optional[str] = None,
+        physical_zip: Optional[str] = None,
+        physical_country: str = "USA",
+        # Department identifiers
+        identifier_type: str = "department_id",
+        fdid: Optional[str] = None,
+        state_id: Optional[str] = None,
+        department_id: Optional[str] = None,
+        # Additional info
+        county: Optional[str] = None,
+        founded_year: Optional[int] = None,
+        tax_id: Optional[str] = None,
+        logo: Optional[str] = None,
     ) -> Organization:
         """
         Create the first organization during onboarding
@@ -245,9 +276,25 @@ class OnboardingService:
         Args:
             name: Organization name
             slug: URL-friendly slug
-            organization_type: Type of organization
+            organization_type: Type of organization (fire_department, ems_only, fire_ems_combined)
             description: Optional description
             settings_dict: Optional organization settings
+            timezone: Organization timezone (e.g., America/New_York)
+            phone: Main phone number
+            fax: Fax number
+            email: Main contact email
+            website: Organization website URL
+            mailing_address_*: Mailing address fields
+            physical_address_same: Whether physical address is same as mailing
+            physical_address_*: Physical address fields (if different)
+            identifier_type: Type of identifier (fdid, state_id, department_id)
+            fdid: Fire Department ID (NFIRS)
+            state_id: State license/certification number
+            department_id: Internal department ID
+            county: County/jurisdiction
+            founded_year: Year organization was founded
+            tax_id: EIN for 501(c)(3) organizations
+            logo: Logo as base64 data URL or external URL
 
         Returns:
             Created Organization object
@@ -264,14 +311,61 @@ class OnboardingService:
         if existing:
             raise ValueError(f"Organization with slug '{slug}' already exists")
 
-        # Create organization
+        # Map organization type string to enum
+        org_type_enum = OrganizationType.FIRE_DEPARTMENT
+        if organization_type == "ems_only":
+            org_type_enum = OrganizationType.EMS_ONLY
+        elif organization_type == "fire_ems_combined":
+            org_type_enum = OrganizationType.FIRE_EMS_COMBINED
+
+        # Map identifier type string to enum
+        id_type_enum = IdentifierType.DEPARTMENT_ID
+        if identifier_type == "fdid":
+            id_type_enum = IdentifierType.FDID
+        elif identifier_type == "state_id":
+            id_type_enum = IdentifierType.STATE_ID
+
+        # Create organization with all fields
         org = Organization(
             name=name,
             slug=slug,
-            type=organization_type,
+            organization_type=org_type_enum,
+            type=organization_type,  # Keep legacy field for compatibility
             description=description,
             settings=settings_dict or {},
-            active=True
+            active=True,
+            # Timezone
+            timezone=timezone,
+            # Contact info
+            phone=phone,
+            fax=fax,
+            email=email,
+            website=website,
+            # Mailing address
+            mailing_address_line1=mailing_address_line1,
+            mailing_address_line2=mailing_address_line2,
+            mailing_city=mailing_city,
+            mailing_state=mailing_state,
+            mailing_zip=mailing_zip,
+            mailing_country=mailing_country,
+            # Physical address
+            physical_address_same=physical_address_same,
+            physical_address_line1=physical_address_line1,
+            physical_address_line2=physical_address_line2,
+            physical_city=physical_city,
+            physical_state=physical_state,
+            physical_zip=physical_zip,
+            physical_country=physical_country,
+            # Identifiers
+            identifier_type=id_type_enum,
+            fdid=fdid,
+            state_id=state_id,
+            department_id=department_id,
+            # Additional info
+            county=county,
+            founded_year=founded_year,
+            tax_id=tax_id,
+            logo=logo,
         )
 
         self.db.add(org)
@@ -286,7 +380,7 @@ class OnboardingService:
         if status:
             status.organization_name = name
             status.organization_type = organization_type
-            await self._mark_step_completed(status, 3, "organization")
+            await self._mark_step_completed(status, 1, "organization")  # Now Step 1
 
         return org
 
