@@ -577,12 +577,12 @@ async def verify_security(
     service = OnboardingService(db)
     result = await service.verify_security_configuration()
 
-    # Also mark step as completed if passed
+    # Track security verification status (not a separate onboarding step)
     if result["passed"]:
         status = await service.get_onboarding_status()
         if status and not status.is_completed:
             status.security_keys_verified = True
-            await service._mark_step_completed(status, 2, "security_check")
+            await db.commit()
 
     return result
 

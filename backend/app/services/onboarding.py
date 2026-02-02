@@ -24,49 +24,77 @@ class OnboardingService:
     Manages the onboarding process for first-time system setup
     """
 
-    # Define onboarding steps
+    # Define onboarding steps - aligned with frontend flow
     STEPS = [
         {
             "id": 1,
-            "name": "welcome",
-            "title": "Welcome to The Logbook",
-            "description": "Let's set up your secure intranet platform"
+            "name": "organization",
+            "title": "Organization Setup",
+            "description": "Set up your fire department or emergency services organization",
+            "required": True
         },
         {
             "id": 2,
-            "name": "security_check",
-            "title": "Security Configuration Check",
-            "description": "Verify security keys and encryption settings"
+            "name": "navigation",
+            "title": "Navigation Layout",
+            "description": "Choose your preferred navigation layout",
+            "required": False
         },
         {
             "id": 3,
-            "name": "organization",
-            "title": "Create Your Organization",
-            "description": "Set up your fire department or emergency services organization"
+            "name": "email_platform",
+            "title": "Email Platform",
+            "description": "Select your email service provider",
+            "required": False
         },
         {
             "id": 4,
-            "name": "admin_user",
-            "title": "Create Administrator Account",
-            "description": "Create the first admin user with secure credentials"
+            "name": "email_config",
+            "title": "Email Configuration",
+            "description": "Configure email settings",
+            "required": False
         },
         {
             "id": 5,
-            "name": "modules",
-            "title": "Select Modules",
-            "description": "Choose which modules to enable for your organization"
+            "name": "file_storage",
+            "title": "File Storage",
+            "description": "Choose your file storage solution",
+            "required": False
         },
         {
             "id": 6,
-            "name": "notifications",
-            "title": "Configure Notifications",
-            "description": "Set up email and SMS notifications (optional)"
+            "name": "authentication",
+            "title": "Authentication",
+            "description": "Select authentication method",
+            "required": False
         },
         {
             "id": 7,
-            "name": "review",
-            "title": "Review & Complete",
-            "description": "Review your configuration and complete setup"
+            "name": "it_team",
+            "title": "IT Team & Backup Access",
+            "description": "Configure IT team and backup access",
+            "required": False
+        },
+        {
+            "id": 8,
+            "name": "roles",
+            "title": "Role Setup",
+            "description": "Configure roles and permissions",
+            "required": False
+        },
+        {
+            "id": 9,
+            "name": "modules",
+            "title": "Select Modules",
+            "description": "Choose which modules to enable for your organization",
+            "required": False
+        },
+        {
+            "id": 10,
+            "name": "admin_user",
+            "title": "Create Administrator",
+            "description": "Create the first admin user with secure credentials",
+            "required": True
         }
     ]
 
@@ -519,7 +547,7 @@ class OnboardingService:
         if status:
             status.admin_email = email
             status.admin_username = username
-            await self._mark_step_completed(status, 4, "admin_user")
+            await self._mark_step_completed(status, 10, "admin_user")  # Step 10 in new flow
 
         # Log event
         await log_audit_event(
@@ -550,10 +578,20 @@ class OnboardingService:
         Returns:
             Dictionary of module name to enabled status
         """
-        # Define available modules
+        # Define available modules - must match API endpoint and frontend module registry
         available_modules = [
-            "training", "compliance", "scheduling", "inventory",
-            "meetings", "elections", "fundraising", "incidents",
+            # Essential modules
+            "members", "events", "documents",
+            # Operations modules
+            "training", "inventory", "scheduling",
+            # Governance modules
+            "elections", "minutes", "reports",
+            # Communication modules
+            "notifications", "mobile",
+            # Advanced modules
+            "forms", "integrations",
+            # Legacy/additional modules (for backwards compatibility)
+            "compliance", "meetings", "fundraising", "incidents",
             "equipment", "vehicles", "budget"
         ]
 
@@ -566,7 +604,7 @@ class OnboardingService:
         status = await self.get_onboarding_status()
         if status:
             status.enabled_modules = enabled_modules
-            await self._mark_step_completed(status, 5, "modules")
+            await self._mark_step_completed(status, 9, "modules")  # Step 9 in new flow
 
         return {module: module in enabled_modules for module in available_modules}
 
@@ -626,10 +664,11 @@ class OnboardingService:
         if status.is_completed:
             raise ValueError("Onboarding is already completed")
 
-        # Verify all critical steps are completed
-        required_steps = ["security_check", "organization", "admin_user"]
+        # Verify all critical steps are completed (only organization and admin_user are required)
+        required_steps = ["organization", "admin_user"]
         for step in required_steps:
-            if not status.steps_completed.get(step, False):
+            step_data = status.steps_completed.get(step)
+            if not step_data or not step_data.get("completed", False):
                 raise ValueError(f"Required step '{step}' has not been completed")
 
         # Mark as completed
