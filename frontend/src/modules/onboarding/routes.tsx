@@ -10,6 +10,7 @@ import {
   FileStorageChoice,
   AuthenticationChoice,
   ITTeamBackupAccess,
+  RoleSetup,
   ModuleOverview,
   ModuleConfigTemplate,
   AdminUserCreation,
@@ -127,6 +128,9 @@ export const getOnboardingRoutes = () => {
 
     {/* Onboarding wizard - IT Team & Backup Access */}
     <Route path="/onboarding/it-team" element={<ITTeamBackupAccess />} />
+
+    {/* Onboarding wizard - Role Setup */}
+    <Route path="/onboarding/roles" element={<RoleSetup />} />
 
     {/* Onboarding wizard - Module Overview */}
     <Route path="/onboarding/modules" element={<ModuleOverview />} />
