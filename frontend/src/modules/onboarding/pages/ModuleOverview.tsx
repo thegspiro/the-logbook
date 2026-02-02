@@ -1,19 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users,
-  Calendar,
-  FileText,
-  GraduationCap,
   Package,
-  Clock,
-  Vote,
-  ClipboardList,
-  BarChart3,
-  Bell,
-  Smartphone,
-  FormInput,
-  Plug,
   CheckCircle,
   XCircle,
   Clock4,
@@ -24,17 +12,7 @@ import { apiClient } from '../services/api-client';
 import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
-
-interface Module {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ElementType;
-  priority: 'essential' | 'recommended' | 'optional';
-  category: string;
-  status?: 'enabled' | 'skipped' | 'ignored';
-  configRoute?: string;
-}
+import { getUserFacingModules, type ModuleDefinition } from '../config';
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -46,132 +24,8 @@ const ModuleOverview: React.FC = () => {
   const setModuleStatuses = useOnboardingStore(state => state.setModuleStatuses);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
-  const modules: Module[] = [
-    // Essential Modules
-    {
-      id: 'members',
-      name: 'Member Management',
-      description: 'Manage your department roster, roles, contact information, and member profiles. Core functionality for any organization.',
-      icon: Users,
-      priority: 'essential',
-      category: 'Core',
-      configRoute: '/onboarding/modules/members/config',
-    },
-    {
-      id: 'events',
-      name: 'Events & RSVP',
-      description: 'Create events, track RSVPs, manage attendance, and send event notifications. Perfect for meetings, trainings, and social gatherings.',
-      icon: Calendar,
-      priority: 'essential',
-      category: 'Core',
-      configRoute: '/onboarding/modules/events/config',
-    },
-    {
-      id: 'documents',
-      name: 'Documents & Files',
-      description: 'Centralized document storage for SOPs, policies, forms, and department files. Keep everything organized and accessible.',
-      icon: FileText,
-      priority: 'essential',
-      category: 'Core',
-      configRoute: '/onboarding/modules/documents/config',
-    },
-
-    // Operations Modules
-    {
-      id: 'training',
-      name: 'Training & Certifications',
-      description: 'Track required certifications, training completions, and expiration dates. Ensure compliance and readiness.',
-      icon: GraduationCap,
-      priority: 'recommended',
-      category: 'Operations',
-      configRoute: '/onboarding/modules/training/config',
-    },
-    {
-      id: 'inventory',
-      name: 'Equipment & Inventory',
-      description: 'Manage equipment, track maintenance schedules, and monitor inventory levels. Keep your gear mission-ready.',
-      icon: Package,
-      priority: 'recommended',
-      category: 'Operations',
-      configRoute: '/onboarding/modules/inventory/config',
-    },
-    {
-      id: 'scheduling',
-      name: 'Scheduling & Shifts',
-      description: 'Create shift schedules, manage duty rosters, and handle shift trades. Simplify workforce planning.',
-      icon: Clock,
-      priority: 'recommended',
-      category: 'Operations',
-      configRoute: '/onboarding/modules/scheduling/config',
-    },
-
-    // Governance Modules
-    {
-      id: 'elections',
-      name: 'Elections & Voting',
-      description: 'Run officer elections with secure voting, multiple voting methods, and automatic result tabulation.',
-      icon: Vote,
-      priority: 'recommended',
-      category: 'Governance',
-      configRoute: '/onboarding/modules/elections/config',
-    },
-    {
-      id: 'minutes',
-      name: 'Meeting Minutes',
-      description: 'Record meeting minutes, track action items, and maintain organizational history. Stay compliant and organized.',
-      icon: ClipboardList,
-      priority: 'optional',
-      category: 'Governance',
-      configRoute: '/onboarding/modules/minutes/config',
-    },
-    {
-      id: 'reports',
-      name: 'Reports & Analytics',
-      description: 'Generate custom reports, view analytics dashboards, and export data. Make data-driven decisions.',
-      icon: BarChart3,
-      priority: 'optional',
-      category: 'Governance',
-      configRoute: '/onboarding/modules/reports/config',
-    },
-
-    // Optional/Advanced Modules
-    {
-      id: 'notifications',
-      name: 'Email Notifications',
-      description: 'Automated email notifications for events, reminders, and important updates. Keep everyone informed.',
-      icon: Bell,
-      priority: 'optional',
-      category: 'Communication',
-      configRoute: '/onboarding/modules/notifications/config',
-    },
-    {
-      id: 'mobile',
-      name: 'Mobile App Access',
-      description: 'Progressive web app for mobile access. Members can check in, view schedules, and stay connected on-the-go.',
-      icon: Smartphone,
-      priority: 'optional',
-      category: 'Communication',
-      configRoute: '/onboarding/modules/mobile/config',
-    },
-    {
-      id: 'forms',
-      name: 'Custom Forms',
-      description: 'Create custom forms for incident reports, surveys, feedback, and more. Collect structured data easily.',
-      icon: FormInput,
-      priority: 'optional',
-      category: 'Advanced',
-      configRoute: '/onboarding/modules/forms/config',
-    },
-    {
-      id: 'integrations',
-      name: 'External Integrations',
-      description: 'Connect with external tools like Google Calendar, Slack, and more. Extend platform capabilities.',
-      icon: Plug,
-      priority: 'optional',
-      category: 'Advanced',
-      configRoute: '/onboarding/modules/integrations/config',
-    },
-  ];
+  // Get modules from the central registry (excludes system modules)
+  const modules: ModuleDefinition[] = useMemo(() => getUserFacingModules(), []);
 
   // Initialize essential modules as enabled if store is empty
   React.useEffect(() => {

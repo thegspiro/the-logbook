@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Edit3, Shield, Users, CheckCircle, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getModuleById } from '../config';
 
 /**
  * Module Configuration Template with Two-Tier Permissions
@@ -14,147 +15,8 @@ const ModuleConfigTemplate: React.FC = () => {
   const { moduleId } = useParams<{ moduleId: string }>();
   const [saving, setSaving] = useState(false);
 
-  // Module metadata with permission descriptions
-  const moduleConfig: Record<string, {
-    name: string;
-    viewDescription: string;
-    manageDescription: string;
-    defaultManageRoles: string[];
-    permissions: { view: string[]; manage: string[] };
-  }> = {
-    members: {
-      name: 'Member Management',
-      viewDescription: 'View member directory, contact information, and profiles',
-      manageDescription: 'Add/edit members, assign roles, update member status',
-      defaultManageRoles: ['admin', 'officers'],
-      permissions: {
-        view: ['View member directory', 'See contact information', 'View member profiles'],
-        manage: ['Add new members', 'Edit member information', 'Assign roles', 'Manage member status'],
-      },
-    },
-    events: {
-      name: 'Events & RSVP',
-      viewDescription: 'View upcoming events, RSVP, and check attendance',
-      manageDescription: 'Create events, manage RSVPs, record attendance',
-      defaultManageRoles: ['admin', 'officers', 'secretary'],
-      permissions: {
-        view: ['View all events', 'RSVP to events', 'See who\'s attending', 'Check in to events'],
-        manage: ['Create new events', 'Edit/cancel events', 'Manage RSVPs', 'Override attendance'],
-      },
-    },
-    documents: {
-      name: 'Documents & Files',
-      viewDescription: 'Browse and download department documents and files',
-      manageDescription: 'Upload documents, manage folders, set visibility',
-      defaultManageRoles: ['admin', 'officers'],
-      permissions: {
-        view: ['Browse documents', 'Download files', 'View document history'],
-        manage: ['Upload documents', 'Create folders', 'Edit/delete files', 'Set document visibility'],
-      },
-    },
-    training: {
-      name: 'Training & Certifications',
-      viewDescription: 'View training records, upcoming courses, and certifications',
-      manageDescription: 'Create courses, record completions, manage requirements',
-      defaultManageRoles: ['admin', 'training_officer'],
-      permissions: {
-        view: ['View personal training records', 'See available courses', 'Track certification status'],
-        manage: ['Create training courses', 'Record completions', 'Set requirements', 'Approve certifications'],
-      },
-    },
-    inventory: {
-      name: 'Equipment & Inventory',
-      viewDescription: 'View equipment, check availability, request items',
-      manageDescription: 'Add equipment, track maintenance, manage assignments',
-      defaultManageRoles: ['admin', 'quartermaster', 'officers'],
-      permissions: {
-        view: ['View equipment list', 'Check item status', 'Request equipment'],
-        manage: ['Add/edit equipment', 'Assign items', 'Record maintenance', 'Manage inventory levels'],
-      },
-    },
-    scheduling: {
-      name: 'Scheduling & Shifts',
-      viewDescription: 'View shift schedules, request swaps, see coverage',
-      manageDescription: 'Create schedules, approve swaps, manage coverage',
-      defaultManageRoles: ['admin', 'officers', 'scheduling_officer'],
-      permissions: {
-        view: ['View shift schedules', 'See personal assignments', 'Request shift swaps'],
-        manage: ['Create schedules', 'Assign shifts', 'Approve swap requests', 'Override assignments'],
-      },
-    },
-    elections: {
-      name: 'Elections & Voting',
-      viewDescription: 'View elections, cast votes, see results when published',
-      manageDescription: 'Create elections, manage candidates, certify results',
-      defaultManageRoles: ['admin', 'secretary', 'president'],
-      permissions: {
-        view: ['View active elections', 'Cast votes (if eligible)', 'See published results'],
-        manage: ['Create elections', 'Manage candidates', 'Configure voting rules', 'Certify results'],
-      },
-    },
-    minutes: {
-      name: 'Meeting Minutes',
-      viewDescription: 'Read meeting minutes and organizational history',
-      manageDescription: 'Record minutes, publish drafts, manage archives',
-      defaultManageRoles: ['admin', 'secretary'],
-      permissions: {
-        view: ['Read published minutes', 'Search meeting history', 'View action items'],
-        manage: ['Record minutes', 'Edit drafts', 'Publish minutes', 'Manage archives'],
-      },
-    },
-    reports: {
-      name: 'Reports & Analytics',
-      viewDescription: 'View dashboards and personal reports',
-      manageDescription: 'Create custom reports, export data, configure analytics',
-      defaultManageRoles: ['admin', 'officers'],
-      permissions: {
-        view: ['View dashboards', 'See personal statistics', 'Access standard reports'],
-        manage: ['Create custom reports', 'Export data', 'Configure analytics', 'Share reports'],
-      },
-    },
-    notifications: {
-      name: 'Email Notifications',
-      viewDescription: 'Receive notifications and manage personal preferences',
-      manageDescription: 'Configure notification templates and triggers',
-      defaultManageRoles: ['admin'],
-      permissions: {
-        view: ['Receive notifications', 'Set personal preferences', 'View notification history'],
-        manage: ['Configure templates', 'Set notification triggers', 'Manage global settings'],
-      },
-    },
-    mobile: {
-      name: 'Mobile App Access',
-      viewDescription: 'Access the platform from mobile devices',
-      manageDescription: 'Configure mobile-specific features and settings',
-      defaultManageRoles: ['admin'],
-      permissions: {
-        view: ['Use mobile app', 'Receive push notifications', 'Access mobile features'],
-        manage: ['Configure mobile settings', 'Manage push notifications', 'Set mobile policies'],
-      },
-    },
-    forms: {
-      name: 'Custom Forms',
-      viewDescription: 'Fill out and submit forms',
-      manageDescription: 'Create forms, view submissions, export data',
-      defaultManageRoles: ['admin', 'officers'],
-      permissions: {
-        view: ['View available forms', 'Submit forms', 'See personal submissions'],
-        manage: ['Create form templates', 'View all submissions', 'Export responses', 'Manage form settings'],
-      },
-    },
-    integrations: {
-      name: 'External Integrations',
-      viewDescription: 'Use integrated features (calendar sync, etc.)',
-      manageDescription: 'Configure and manage external service connections',
-      defaultManageRoles: ['admin'],
-      permissions: {
-        view: ['Use integrated features', 'Connect personal accounts'],
-        manage: ['Configure integrations', 'Manage API connections', 'Set sync settings'],
-      },
-    },
-  };
-
-  const config = moduleId ? moduleConfig[moduleId] : null;
+  // Get module config from the central registry
+  const config = useMemo(() => (moduleId ? getModuleById(moduleId) : undefined), [moduleId]);
   const moduleName = config?.name || 'Module';
 
   // Available roles for selection
@@ -172,7 +34,7 @@ const ModuleConfigTemplate: React.FC = () => {
 
   // State for selected manage roles
   const [manageRoles, setManageRoles] = useState<string[]>(
-    config?.defaultManageRoles || ['admin', 'officers']
+    config?.permissions.defaultManageRoles || ['admin', 'officers']
   );
 
   const toggleRole = (roleId: string) => {
@@ -243,7 +105,7 @@ const ModuleConfigTemplate: React.FC = () => {
                 <p className="text-green-400 text-sm">All Members</p>
               </div>
             </div>
-            <p className="text-slate-300 text-sm mb-4">{config?.viewDescription}</p>
+            <p className="text-slate-300 text-sm mb-4">{config?.permissions.viewDescription}</p>
             <div className="bg-slate-900/50 rounded-lg p-4">
               <p className="text-slate-400 text-xs font-semibold mb-2 uppercase">What members can do:</p>
               <ul className="space-y-2">
@@ -272,7 +134,7 @@ const ModuleConfigTemplate: React.FC = () => {
                 <p className="text-orange-400 text-sm">Selected Roles Only</p>
               </div>
             </div>
-            <p className="text-slate-300 text-sm mb-4">{config?.manageDescription}</p>
+            <p className="text-slate-300 text-sm mb-4">{config?.permissions.manageDescription}</p>
             <div className="bg-slate-900/50 rounded-lg p-4">
               <p className="text-slate-400 text-xs font-semibold mb-2 uppercase">What managers can do:</p>
               <ul className="space-y-2">
