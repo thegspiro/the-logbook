@@ -21,7 +21,7 @@ export interface OnboardingData {
   fileStorageConfig?: FileStorageConfig;
 
   // Authentication Configuration
-  authenticationPlatform: 'google' | 'microsoft' | 'authentik' | null;
+  authenticationPlatform: 'google' | 'microsoft' | 'authentik' | 'local' | null;
   authenticationConfig?: AuthenticationConfig;
 
   // IT Team and Backup Access
@@ -93,6 +93,10 @@ export interface AuthenticationConfig {
   authentikUrl?: string;
   authentikClientId?: string;
   authentikClientSecret?: string;
+
+  // Local Passwords (no external secrets - passwords are hashed server-side with Argon2id)
+  // Password policy is configured in backend settings
+  localPasswordEnabled?: boolean;
 }
 
 export interface ITTeamMember {

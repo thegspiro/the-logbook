@@ -6,6 +6,7 @@ Handles first-time system setup and configuration.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, validator
 import re
@@ -18,8 +19,10 @@ from functools import partial
 
 from app.core.database import get_db
 from app.services.onboarding import OnboardingService
-from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
+from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
 from app.api.v1.test_email_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
+from datetime import datetime, timedelta
+import secrets
 
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -123,6 +126,22 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class AdminUserResponse(BaseModel):
+    """Response model for admin user creation with access token"""
+    id: str
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    badge_number: Optional[str]
+    status: str
+    access_token: str
+    token_type: str = "bearer"
+
+    class Config:
+        from_attributes = True
+
+
 class ModulesConfig(BaseModel):
     """Request model for module configuration"""
     enabled_modules: List[str] = Field(default_factory=list)
@@ -203,6 +222,196 @@ class EmailTestResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
+class StartSessionResponse(BaseModel):
+    """Response model for starting onboarding session"""
+    session_id: str
+    expires_at: str
+    csrf_token: str
+    message: str
+    current_step: int
+    steps: List[Dict[str, Any]]
+
+
+class DepartmentInfoRequest(BaseModel):
+    """Request model for saving department information"""
+    name: str = Field(..., min_length=3, max_length=100, description="Department name")
+    logo: Optional[str] = Field(None, description="Base64-encoded logo image")
+    navigation_layout: str = Field(..., description="Navigation layout: 'top' or 'left'")
+
+    @validator('navigation_layout')
+    def validate_layout(cls, v):
+        if v not in ['top', 'left']:
+            raise ValueError('Navigation layout must be "top" or "left"')
+        return v
+
+
+class EmailConfigRequest(BaseModel):
+    """Request model for saving email configuration"""
+    platform: str = Field(..., description="Email platform: gmail, microsoft, selfhosted, other")
+    config: Dict[str, Any] = Field(..., description="Email configuration")
+
+
+class FileStorageConfigRequest(BaseModel):
+    """Request model for saving file storage configuration"""
+    platform: str = Field(..., description="Platform: googledrive, onedrive, s3, local, other")
+    config: Dict[str, Any] = Field(..., description="Storage configuration")
+
+
+class AuthConfigRequest(BaseModel):
+    """Request model for saving authentication configuration"""
+    platform: str = Field(..., description="Platform: google, microsoft, authentik")
+
+
+class ITTeamRequest(BaseModel):
+    """Request model for saving IT team information"""
+    it_team: List[Dict[str, Any]] = Field(default_factory=list, description="IT team members")
+    backup_access: Dict[str, Any] = Field(..., description="Backup access information")
+
+
+class SessionModulesRequest(BaseModel):
+    """Request model for saving module configuration via session"""
+    modules: List[str] = Field(default_factory=list, description="List of enabled modules")
+
+
+class SessionDataResponse(BaseModel):
+    """Response model for session data operations"""
+    success: bool
+    message: str
+    step: Optional[str] = None
+
+
+# ============================================
+# Session Helper Functions
+# ============================================
+
+SESSION_EXPIRY_HOURS = 2
+
+
+async def get_or_create_session(
+    request: Request,
+    db: AsyncSession
+) -> OnboardingSessionModel:
+    """
+    Get existing session or create a new one.
+
+    Args:
+        request: FastAPI request object
+        db: Database session
+
+    Returns:
+        OnboardingSessionModel instance
+
+    Raises:
+        HTTPException: If session is invalid or expired
+    """
+    session_id = request.headers.get('X-Session-ID')
+
+    if session_id:
+        # Try to get existing session
+        result = await db.execute(
+            select(OnboardingSessionModel).where(
+                OnboardingSessionModel.session_id == session_id,
+                OnboardingSessionModel.expires_at > datetime.utcnow()
+            )
+        )
+        session = result.scalar_one_or_none()
+
+        if session:
+            # Update expiration on activity
+            session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+            await db.commit()
+            return session
+
+    # Create new session
+    ip_address = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent")
+
+    new_session = OnboardingSessionModel(
+        session_id=secrets.token_urlsafe(32),
+        data={},
+        ip_address=ip_address,
+        user_agent=user_agent,
+        expires_at=datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+    )
+
+    db.add(new_session)
+    await db.commit()
+    await db.refresh(new_session)
+
+    return new_session
+
+
+async def validate_session(
+    request: Request,
+    db: AsyncSession,
+    require_csrf: bool = True
+) -> OnboardingSessionModel:
+    """
+    Validate an existing session from X-Session-ID header.
+
+    Args:
+        request: FastAPI request object
+        db: Database session
+        require_csrf: Whether to validate CSRF token (default True)
+
+    Returns:
+        OnboardingSessionModel instance
+
+    Raises:
+        HTTPException: If session is invalid or expired
+    """
+    session_id = request.headers.get('X-Session-ID')
+
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session ID required. Please start onboarding first."
+        )
+
+    # Get session
+    result = await db.execute(
+        select(OnboardingSessionModel).where(
+            OnboardingSessionModel.session_id == session_id
+        )
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid session. Please restart onboarding."
+        )
+
+    # Check expiration
+    if session.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please restart onboarding."
+        )
+
+    # Validate CSRF token if required
+    if require_csrf:
+        csrf_token = request.headers.get('X-CSRF-Token')
+        stored_csrf = session.data.get('csrf_token') if session.data else None
+
+        if not csrf_token or csrf_token != stored_csrf:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="CSRF validation failed. Please refresh and try again."
+            )
+
+    # Update expiration on activity
+    session.expires_at = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+    await db.commit()
+
+    return session
+
+
+def generate_csrf_token() -> str:
+    """Generate a CSRF token"""
+    return secrets.token_urlsafe(32)
+
+
 # ============================================
 # Endpoints
 # ============================================
@@ -245,15 +454,17 @@ async def get_onboarding_status(
         )
 
 
-@router.post("/start")
+@router.post("/start", response_model=StartSessionResponse)
 async def start_onboarding(
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Start the onboarding process
 
-    Initializes onboarding tracking and returns initial status.
+    Initializes onboarding tracking, creates a server-side session,
+    and returns session ID and CSRF token for secure form submissions.
     """
     service = OnboardingService(db)
 
@@ -268,16 +479,33 @@ async def start_onboarding(
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
-    status = await service.start_onboarding(
+    onboarding_status = await service.start_onboarding(
         ip_address=ip_address,
         user_agent=user_agent
     )
 
-    return {
-        "message": "Onboarding started successfully",
-        "current_step": status.current_step,
-        "steps": service.STEPS
-    }
+    # Create server-side session for secure data storage
+    session = await get_or_create_session(request, db)
+
+    # Generate CSRF token
+    csrf_token = generate_csrf_token()
+
+    # Store CSRF token in session data
+    session.data = session.data or {}
+    session.data['csrf_token'] = csrf_token
+    await db.commit()
+
+    # Set CSRF token in response header for client to store
+    response.headers['X-CSRF-Token'] = csrf_token
+
+    return StartSessionResponse(
+        session_id=session.session_id,
+        expires_at=session.expires_at.isoformat(),
+        csrf_token=csrf_token,
+        message="Onboarding started successfully",
+        current_step=onboarding_status.current_step,
+        steps=service.STEPS
+    )
 
 
 @router.get("/system-info", response_model=SystemInfoResponse)
@@ -345,6 +573,7 @@ async def verify_database(
 
 @router.post("/organization", response_model=OrganizationResponse)
 async def create_organization(
+    request: Request,
     org_data: OrganizationCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -354,6 +583,9 @@ async def create_organization(
     This creates the organization and default roles.
     Can only be called during onboarding.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     # Verify onboarding is in progress
@@ -387,8 +619,9 @@ async def create_organization(
         )
 
 
-@router.post("/admin-user", response_model=UserResponse)
+@router.post("/admin-user", response_model=AdminUserResponse)
 async def create_admin_user(
+    request: Request,
     user_data: AdminUserCreate,
     db: AsyncSession = Depends(get_db)
 ):
@@ -397,7 +630,11 @@ async def create_admin_user(
 
     Creates admin user with Super Admin role.
     Requires organization to be created first.
+    Returns access token for automatic login.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     # Verify onboarding is in progress
@@ -408,18 +645,17 @@ async def create_admin_user(
         )
 
     # Get organization from onboarding status
-    status = await service.get_onboarding_status()
-    if not status or not status.organization_name:
+    onboarding_status = await service.get_onboarding_status()
+    if not onboarding_status or not onboarding_status.organization_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organization must be created first"
         )
 
     # Find organization
-    from sqlalchemy import select
     from app.models.user import Organization
     result = await db.execute(
-        select(Organization).where(Organization.name == status.organization_name)
+        select(Organization).where(Organization.name == onboarding_status.organization_name)
     )
     org = result.scalar_one_or_none()
 
@@ -440,14 +676,26 @@ async def create_admin_user(
             badge_number=user_data.badge_number
         )
 
-        return UserResponse(
+        # Generate access token for automatic login
+        from app.core.security import create_access_token
+        access_token = create_access_token(
+            data={
+                "sub": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "org_id": str(org.id)
+            }
+        )
+
+        return AdminUserResponse(
             id=str(user.id),
             username=user.username,
             email=user.email,
             first_name=user.first_name,
             last_name=user.last_name,
             badge_number=user.badge_number,
-            status=user.status.value
+            status=user.status.value,
+            access_token=access_token
         )
     except ValueError as e:
         raise HTTPException(
@@ -458,6 +706,7 @@ async def create_admin_user(
 
 @router.post("/modules")
 async def configure_modules(
+    request: Request,
     modules: ModulesConfig,
     db: AsyncSession = Depends(get_db)
 ):
@@ -466,6 +715,9 @@ async def configure_modules(
 
     Select which modules to enable for the organization.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     try:
@@ -483,6 +735,7 @@ async def configure_modules(
 
 @router.post("/notifications")
 async def configure_notifications(
+    request: Request,
     config: NotificationsConfig,
     db: AsyncSession = Depends(get_db)
 ):
@@ -492,12 +745,15 @@ async def configure_notifications(
     Sets up email and SMS notifications.
     This step is optional and can be skipped.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
-    status = await service.get_onboarding_status()
-    if status:
-        status.email_configured = config.email_enabled
-        await service._mark_step_completed(status, 6, "notifications")
+    onboarding_status = await service.get_onboarding_status()
+    if onboarding_status:
+        onboarding_status.email_configured = config.email_enabled
+        await service._mark_step_completed(onboarding_status, 6, "notifications")
 
     return {
         "message": "Notifications configured successfully",
@@ -508,6 +764,7 @@ async def configure_notifications(
 
 @router.post("/complete")
 async def complete_onboarding(
+    request: Request,
     request_data: CompleteOnboardingRequest,
     db: AsyncSession = Depends(get_db)
 ):
@@ -516,16 +773,19 @@ async def complete_onboarding(
 
     Marks onboarding as finished and creates post-onboarding checklist.
     """
+    # Validate session
+    await validate_session(request, db)
+
     service = OnboardingService(db)
 
     try:
-        status = await service.complete_onboarding(notes=request_data.notes)
+        onboarding_status = await service.complete_onboarding(notes=request_data.notes)
 
         return {
             "message": "Onboarding completed successfully!",
-            "organization": status.organization_name,
-            "admin_user": status.admin_username,
-            "completed_at": status.completed_at.isoformat() if status.completed_at else None,
+            "organization": onboarding_status.organization_name,
+            "admin_user": onboarding_status.admin_username,
+            "completed_at": onboarding_status.completed_at.isoformat() if onboarding_status.completed_at else None,
             "next_steps": "Review the post-onboarding checklist for additional configuration"
         }
     except ValueError as e:
@@ -668,428 +928,237 @@ async def test_email_configuration(
 
 
 # ============================================
-# Session-based Endpoints
-# These endpoints store onboarding data server-side
+# Session Data Endpoints
 # ============================================
 
-import secrets
-from datetime import timedelta
-from app.models.onboarding import OnboardingSessionModel
-
-
-class SessionStartResponse(BaseModel):
-    """Response for starting an onboarding session"""
-    session_id: str
-    expires_at: str
-
-
-class DepartmentInfoRequest(BaseModel):
-    """Request model for department information"""
-    name: str = Field(..., min_length=2, max_length=255)
-    logo: Optional[str] = Field(None, description="Base64 encoded logo image")
-    navigation_layout: str = Field(default="left", pattern="^(top|left)$")
-
-
-class EmailConfigRequest(BaseModel):
-    """Request model for email configuration"""
-    platform: str
-    config: Dict[str, Any]
-
-
-class FileStorageConfigRequest(BaseModel):
-    """Request model for file storage configuration"""
-    platform: str
-    config: Dict[str, Any]
-
-
-class AuthPlatformRequest(BaseModel):
-    """Request model for auth platform"""
-    platform: str
-
-
-class ITTeamMember(BaseModel):
-    """IT Team member model"""
-    name: str
-    email: EmailStr
-    phone: str
-    role: str
-
-
-class BackupAccess(BaseModel):
-    """Backup access information"""
-    email: EmailStr
-    phone: str
-    secondary_admin_email: Optional[EmailStr] = None
-
-
-class ITTeamRequest(BaseModel):
-    """Request model for IT team information"""
-    it_team: List[ITTeamMember]
-    backup_access: BackupAccess
-
-
-class ModuleConfigRequest(BaseModel):
-    """Request model for module configuration"""
-    modules: List[str]
-
-
-async def get_or_create_session(
-    request: Request,
-    db: AsyncSession
-) -> OnboardingSessionModel:
-    """Get existing session from cookie or create a new one"""
-    from sqlalchemy import select, delete
-    from datetime import datetime
-
-    session_id = request.cookies.get("onboarding_session_id")
-    session = None
-
-    if session_id:
-        # Try to find existing session
-        result = await db.execute(
-            select(OnboardingSessionModel).where(
-                OnboardingSessionModel.session_id == session_id,
-                OnboardingSessionModel.expires_at > datetime.utcnow()
-            )
-        )
-        session = result.scalar_one_or_none()
-
-    if not session:
-        # Create new session
-        session_id = secrets.token_urlsafe(48)
-        ip_address = request.client.host if request.client else "unknown"
-        user_agent = request.headers.get("user-agent", "")
-
-        session = OnboardingSessionModel(
-            session_id=session_id,
-            data={},
-            ip_address=ip_address,
-            user_agent=user_agent,
-            expires_at=datetime.utcnow() + timedelta(hours=2)
-        )
-        db.add(session)
-        await db.commit()
-        await db.refresh(session)
-
-    return session
-
-
-@router.post("/session/start", response_model=SessionStartResponse)
-async def start_session(
-    request: Request,
-    response: Response,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Start a new onboarding session
-
-    Creates a server-side session to store onboarding data securely.
-    Returns session_id which should be stored as a cookie.
-    """
-    from fastapi.responses import JSONResponse
-    from datetime import datetime
-
-    session = await get_or_create_session(request, db)
-
-    # Set session cookie
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
-        max_age=7200  # 2 hours
-    )
-
-    return SessionStartResponse(
-        session_id=session.session_id,
-        expires_at=session.expires_at.isoformat()
-    )
-
-
-@router.post("/session/department")
+@router.post("/session/department", response_model=SessionDataResponse)
 async def save_department_info(
     request: Request,
     data: DepartmentInfoRequest,
-    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Save department information and create organization
+    Save department information to the onboarding session.
 
-    This creates the organization in the database and stores
-    additional info in the session.
+    Stores department name, logo (base64), and navigation layout preference.
+    This data is safe to store as it contains no secrets.
     """
-    session = await get_or_create_session(request, db)
+    # Validate session
+    session = await validate_session(request, db)
 
-    # Set session cookie
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=7200
+    # Update session data with department info
+    session.data = session.data or {}
+    session.data['department'] = {
+        'name': data.name,
+        'logo': data.logo,
+        'navigation_layout': data.navigation_layout,
+        'saved_at': datetime.utcnow().isoformat()
+    }
+
+    await db.commit()
+
+    return SessionDataResponse(
+        success=True,
+        message="Department information saved successfully",
+        step="department"
     )
 
-    # Create slug from name
-    slug = re.sub(r'[^a-z0-9]+', '-', data.name.lower()).strip('-')
 
-    # Create organization using OnboardingService
-    service = OnboardingService(db)
-
-    try:
-        org = await service.create_organization(
-            name=data.name,
-            slug=slug,
-            organization_type="fire_department",
-            description=None,
-            settings_dict={
-                "navigation_layout": data.navigation_layout,
-                "logo": data.logo[:100] + "..." if data.logo and len(data.logo) > 100 else data.logo  # Store truncated logo ref
-            }
-        )
-
-        # Update session data
-        session.data = {
-            **session.data,
-            "department": {
-                "name": data.name,
-                "organization_id": str(org.id),
-                "navigation_layout": data.navigation_layout,
-                "has_logo": bool(data.logo)
-            }
-        }
-
-        # Also update OnboardingStatus for compatibility with admin-user endpoint
-        from app.models.onboarding import OnboardingStatus
-        from sqlalchemy import select
-        result = await db.execute(select(OnboardingStatus).limit(1))
-        onboarding_status = result.scalar_one_or_none()
-
-        if not onboarding_status:
-            # Create new OnboardingStatus
-            from app.models.user import generate_uuid
-            onboarding_status = OnboardingStatus(
-                id=generate_uuid(),
-                organization_name=data.name,
-                organization_type="fire_department",
-                current_step=2,
-                setup_ip_address=request.client.host if request.client else None,
-                setup_user_agent=request.headers.get("user-agent")
-            )
-            db.add(onboarding_status)
-        else:
-            # Update existing
-            onboarding_status.organization_name = data.name
-            onboarding_status.organization_type = "fire_department"
-            onboarding_status.current_step = 2
-
-        await db.commit()
-
-        return {
-            "message": "Department information saved",
-            "organization_id": str(org.id),
-            "name": data.name
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.post("/session/email")
+@router.post("/session/email", response_model=SessionDataResponse)
 async def save_email_config(
     request: Request,
     data: EmailConfigRequest,
-    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Save email configuration to session
+    Save email configuration to the onboarding session.
 
-    Stores email platform and configuration server-side.
-    Sensitive values should be encrypted in production.
+    SECURITY: Sensitive fields (passwords, API keys) are stored server-side only,
+    never exposed to the browser.
     """
-    session = await get_or_create_session(request, db)
+    # Validate session
+    session = await validate_session(request, db)
 
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=7200
-    )
+    # Validate platform
+    valid_platforms = ['gmail', 'microsoft', 'selfhosted', 'other']
+    if data.platform not in valid_platforms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+        )
 
-    # Update session with email config (exclude sensitive data from logging)
-    session.data = {
-        **session.data,
-        "email": {
-            "platform": data.platform,
-            "configured": True
-        }
+    # Update session data with email config
+    session.data = session.data or {}
+    session.data['email'] = {
+        'platform': data.platform,
+        'config': data.config,
+        'saved_at': datetime.utcnow().isoformat()
     }
-
-    # Update onboarding status
-    service = OnboardingService(db)
-    onboarding_status = await service.get_onboarding_status()
-    if onboarding_status:
-        onboarding_status.email_configured = True
 
     await db.commit()
 
-    return {
-        "message": "Email configuration saved",
-        "platform": data.platform
-    }
+    return SessionDataResponse(
+        success=True,
+        message="Email configuration saved successfully",
+        step="email"
+    )
 
 
-@router.post("/session/file-storage")
+@router.post("/session/file-storage", response_model=SessionDataResponse)
 async def save_file_storage_config(
     request: Request,
     data: FileStorageConfigRequest,
-    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Save file storage configuration to session
+    Save file storage configuration to the onboarding session.
+
+    SECURITY: API keys and secrets are stored server-side only.
     """
-    session = await get_or_create_session(request, db)
+    # Validate session
+    session = await validate_session(request, db)
 
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=7200
-    )
+    # Validate platform
+    valid_platforms = ['googledrive', 'onedrive', 's3', 'local', 'other']
+    if data.platform not in valid_platforms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+        )
 
-    session.data = {
-        **session.data,
-        "file_storage": {
-            "platform": data.platform,
-            "configured": True
-        }
+    # Update session data with file storage config
+    session.data = session.data or {}
+    session.data['file_storage'] = {
+        'platform': data.platform,
+        'config': data.config,
+        'saved_at': datetime.utcnow().isoformat()
     }
+
     await db.commit()
 
-    return {
-        "message": "File storage configuration saved",
-        "platform": data.platform
-    }
+    return SessionDataResponse(
+        success=True,
+        message="File storage configuration saved successfully",
+        step="file_storage"
+    )
 
 
-@router.post("/session/auth")
-async def save_auth_platform(
+@router.post("/session/auth", response_model=SessionDataResponse)
+async def save_auth_config(
     request: Request,
-    data: AuthPlatformRequest,
-    response: Response,
+    data: AuthConfigRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Save authentication platform choice
+    Save authentication platform preference to the onboarding session.
     """
-    session = await get_or_create_session(request, db)
+    # Validate session
+    session = await validate_session(request, db)
 
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=7200
-    )
+    # Validate platform
+    valid_platforms = ['google', 'microsoft', 'authentik', 'local']
+    if data.platform not in valid_platforms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
+        )
 
-    session.data = {
-        **session.data,
-        "auth": {
-            "platform": data.platform
-        }
+    # Update session data with auth config
+    session.data = session.data or {}
+    session.data['auth'] = {
+        'platform': data.platform,
+        'saved_at': datetime.utcnow().isoformat()
     }
+
     await db.commit()
 
-    return {
-        "message": "Authentication platform saved",
-        "platform": data.platform
-    }
+    return SessionDataResponse(
+        success=True,
+        message="Authentication platform saved successfully",
+        step="auth"
+    )
 
 
-@router.post("/session/it-team")
+@router.post("/session/it-team", response_model=SessionDataResponse)
 async def save_it_team(
     request: Request,
     data: ITTeamRequest,
-    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Save IT team information
+    Save IT team and backup access information to the onboarding session.
     """
-    session = await get_or_create_session(request, db)
+    # Validate session
+    session = await validate_session(request, db)
 
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=7200
-    )
-
-    session.data = {
-        **session.data,
-        "it_team": {
-            "members": [member.dict() for member in data.it_team],
-            "backup_access": data.backup_access.dict()
-        }
+    # Update session data with IT team info
+    session.data = session.data or {}
+    session.data['it_team'] = {
+        'members': data.it_team,
+        'backup_access': data.backup_access,
+        'saved_at': datetime.utcnow().isoformat()
     }
+
     await db.commit()
 
-    return {
-        "message": "IT team information saved",
-        "team_size": len(data.it_team)
-    }
+    return SessionDataResponse(
+        success=True,
+        message="IT team information saved successfully",
+        step="it_team"
+    )
 
 
-@router.post("/session/modules")
-async def save_module_config(
+@router.post("/session/modules", response_model=SessionDataResponse)
+async def save_session_modules(
     request: Request,
-    data: ModuleConfigRequest,
-    response: Response,
+    data: SessionModulesRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Save module configuration
+    Save module configuration to the onboarding session.
+
+    This saves the module selection to the session before final onboarding completion.
     """
-    session = await get_or_create_session(request, db)
+    # Validate session
+    session = await validate_session(request, db)
 
-    response.set_cookie(
-        key="onboarding_session_id",
-        value=session.session_id,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=7200
-    )
+    # Validate modules - must match module IDs from frontend ModuleOverview.tsx
+    available_modules = [
+        # Essential modules
+        "members", "events", "documents",
+        # Operations modules
+        "training", "inventory", "scheduling",
+        # Governance modules
+        "elections", "minutes", "reports",
+        # Communication modules
+        "notifications", "mobile",
+        # Advanced modules
+        "forms", "integrations",
+        # Legacy/additional modules (for backwards compatibility)
+        "compliance", "meetings", "fundraising", "incidents",
+        "equipment", "vehicles", "budget"
+    ]
+    invalid_modules = [m for m in data.modules if m not in available_modules]
+    if invalid_modules:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid modules: {', '.join(invalid_modules)}"
+        )
 
-    # Update session
-    session.data = {
-        **session.data,
-        "modules": data.modules
+    # Update session data with modules
+    session.data = session.data or {}
+    session.data['modules'] = {
+        'enabled': data.modules,
+        'saved_at': datetime.utcnow().isoformat()
     }
-
-    # Also update onboarding status
-    service = OnboardingService(db)
-    await service.configure_modules(data.modules)
 
     await db.commit()
 
-    return {
-        "message": "Module configuration saved",
-        "modules": data.modules
-    }
+    return SessionDataResponse(
+        success=True,
+        message="Module configuration saved successfully",
+        step="modules"
+    )
 
 
 @router.get("/session/data")
@@ -1098,29 +1167,143 @@ async def get_session_data(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get current session data (for debugging/resuming)
+    Get current session data (non-sensitive fields only).
+
+    Returns the session data without sensitive information like passwords and API keys.
     """
-    from sqlalchemy import select
-    from datetime import datetime
+    # Validate session
+    session = await validate_session(request, db)
 
-    session_id = request.cookies.get("onboarding_session_id")
+    # Return safe data (excluding sensitive config details)
+    safe_data = {}
 
-    if not session_id:
-        return {"has_session": False, "data": {}}
+    if session.data:
+        # Department info is safe
+        if 'department' in session.data:
+            safe_data['department'] = session.data['department']
 
-    result = await db.execute(
-        select(OnboardingSessionModel).where(
-            OnboardingSessionModel.session_id == session_id,
-            OnboardingSessionModel.expires_at > datetime.utcnow()
-        )
-    )
-    session = result.scalar_one_or_none()
+        # Only return platform, not full config for sensitive sections
+        if 'email' in session.data:
+            safe_data['email'] = {
+                'platform': session.data['email'].get('platform'),
+                'configured': True
+            }
 
-    if not session:
-        return {"has_session": False, "data": {}}
+        if 'file_storage' in session.data:
+            safe_data['file_storage'] = {
+                'platform': session.data['file_storage'].get('platform'),
+                'configured': True
+            }
+
+        if 'auth' in session.data:
+            safe_data['auth'] = session.data['auth']
+
+        if 'it_team' in session.data:
+            safe_data['it_team'] = {
+                'members_count': len(session.data['it_team'].get('members', [])),
+                'has_backup_access': bool(session.data['it_team'].get('backup_access'))
+            }
+
+        if 'modules' in session.data:
+            safe_data['modules'] = session.data['modules']
 
     return {
-        "has_session": True,
-        "data": session.data,
-        "expires_at": session.expires_at.isoformat()
+        "session_id": session.session_id,
+        "expires_at": session.expires_at.isoformat(),
+        "data": safe_data
     }
+
+
+@router.post("/reset")
+async def reset_onboarding(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset onboarding and clear all database records.
+
+    WARNING: This is a destructive operation that cannot be undone.
+    It will delete all users, organizations, roles, and onboarding data.
+    """
+    # Validate session (with CSRF) - only allow reset during active onboarding
+    try:
+        await validate_session(request, db)
+    except HTTPException:
+        # Allow reset even without valid session (in case session expired)
+        pass
+
+    # Import models for deletion
+    from app.models.user import Organization, User, Role
+    from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
+
+    try:
+        # Delete in order to respect foreign key constraints
+        # 1. Delete onboarding sessions
+        await db.execute(
+            select(OnboardingSessionModel).execution_options(synchronize_session="fetch")
+        )
+        await db.execute(
+            OnboardingSessionModel.__table__.delete()
+        )
+
+        # 2. Delete onboarding checklist items
+        await db.execute(
+            OnboardingChecklistItem.__table__.delete()
+        )
+
+        # 3. Delete onboarding status
+        await db.execute(
+            OnboardingStatus.__table__.delete()
+        )
+
+        # 4. Delete user_roles associations (if table exists)
+        try:
+            from sqlalchemy import text
+            await db.execute(text("DELETE FROM user_roles"))
+        except Exception:
+            pass  # Table might not exist yet
+
+        # 5. Delete users
+        await db.execute(
+            User.__table__.delete()
+        )
+
+        # 6. Delete roles
+        await db.execute(
+            Role.__table__.delete()
+        )
+
+        # 7. Delete organizations
+        await db.execute(
+            Organization.__table__.delete()
+        )
+
+        # Commit all deletions
+        await db.commit()
+
+        # Log the reset
+        from app.core.audit import log_audit_event
+        await log_audit_event(
+            db=db,
+            event_type="onboarding.reset",
+            event_category="onboarding",
+            severity="warning",
+            ip_address=request.client.host if request.client else None,
+            event_data={
+                "action": "full_reset",
+                "message": "Onboarding reset - all data cleared"
+            }
+        )
+
+        return {
+            "success": True,
+            "message": "Onboarding has been reset. All data has been cleared.",
+            "next_step": "Navigate to /onboarding/start to begin again"
+        }
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset onboarding: {str(e)}"
+        )

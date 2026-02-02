@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, CheckCircle, Info, Key, Mail } from 'lucide-react';
+import { Shield, CheckCircle, Info, Key, Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -124,6 +124,21 @@ const AuthenticationChoice: React.FC = () => {
       setupInfo: 'You\'ll need to deploy Authentik on your infrastructure and configure an OAuth2/OIDC provider.',
       recommended: emailPlatform === 'selfhosted' || emailPlatform === 'other',
     },
+    {
+      id: 'local',
+      name: 'Local Passwords',
+      description: 'Secure password-based authentication',
+      icon: <Lock className="w-10 h-10 text-white" />,
+      color: 'from-slate-600 to-slate-800',
+      features: [
+        'Passwords hashed with Argon2id (military-grade)',
+        'Never stored in plain text',
+        'Built-in password policies enforced',
+        'No external services required'
+      ],
+      setupInfo: 'Passwords are securely hashed and stored internally. Admins manage user accounts directly in the system.',
+      recommended: false,
+    },
   ];
 
   const currentYear = new Date().getFullYear();
@@ -184,8 +199,11 @@ const AuthenticationChoice: React.FC = () => {
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-5xl w-full">
-          {/* Back Button */}
-          <BackButton to="/onboarding/file-storage" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/file-storage" />
+            <ResetProgressButton />
+          </div>
 
           {/* Page Header */}
           <div className="text-center mb-8">
@@ -239,7 +257,7 @@ const AuthenticationChoice: React.FC = () => {
           </div>
 
           {/* Platform Cards */}
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {platforms.map((platform) => (
               <button
                 key={platform.id}
