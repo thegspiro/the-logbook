@@ -22,57 +22,75 @@ The system automatically detects if onboarding is needed by checking:
 
 ### 2. Onboarding Steps
 
-The onboarding process consists of 7 steps:
+The onboarding process consists of 9 steps:
 
 #### Step 1: Welcome
 - Introduction to The Logbook
 - System information display
 - Security feature overview
 
-#### Step 2: Security Check
-- Verifies `SECRET_KEY` is not default value
-- Verifies `ENCRYPTION_KEY` is not default value
-- Checks database password security
-- Validates other security settings
-- **CRITICAL**: Must pass before proceeding
+#### Step 2: Department Information
+- Set your department/organization name
+- Upload logo (optional)
+- Choose navigation layout (top or left)
 
-#### Step 3: Organization Setup
-- Create your fire department or organization
-- Set organization name and slug
-- Choose organization type (fire department, EMS, hospital, etc.)
-- Configure timezone
+#### Step 3: Email Platform
+- Select email platform for notifications:
+  - Gmail / Google Workspace
+  - Microsoft 365 / Outlook
+  - Self-hosted email server
+  - Other providers
+- Configure SMTP settings
 
-#### Step 4: Admin User Creation
-- Create first administrator account
-- Enforces strong password requirements (12+ characters)
-- Automatically assigns Super Admin role
-- Enables all administrative permissions
+#### Step 4: File Storage
+- Choose file storage solution:
+  - Local storage
+  - Amazon S3
+  - MinIO (S3-compatible)
+  - Azure Blob Storage
+  - Google Cloud Storage
 
-#### Step 5: Module Selection
+#### Step 5: File Storage Configuration
+- Configure storage credentials and settings
+- Test connection
+
+#### Step 6: Authentication Platform
+- Choose how users will authenticate:
+  - **Google OAuth** - Sign in with Google accounts (recommended for Google Workspace users)
+  - **Microsoft Azure AD** - Sign in with Microsoft accounts (recommended for Microsoft 365 users)
+  - **Authentik SSO** - Self-hosted authentication platform (for complete control)
+  - **Local Passwords** - Secure password-based authentication with Argon2id hashing (no external services required)
+
+#### Step 7: IT Team & Backup Access
+- Add IT team contact information
+- Configure backup access email and phone
+- Set secondary admin email for emergencies
+
+#### Step 8: Module Selection
 - Choose which modules to enable:
-  - Training & Certification
-  - Compliance Management
-  - Scheduling & Shifts
-  - Inventory Management
-  - Meeting Management
-  - Elections & Voting
-  - Incident Reporting
-  - Equipment Maintenance
-  - Fundraising & Donations
-  - Vehicle Management
-  - Budget & Finance
+  - **Essential:** Member Management, Events & RSVP, Documents & Files
+  - **Operations:** Training & Certifications, Equipment & Inventory, Scheduling & Shifts
+  - **Governance:** Elections & Voting, Meeting Minutes, Reports & Analytics
+  - **Communication:** Email Notifications, Mobile App Access
+  - **Advanced:** Custom Forms, External Integrations
 
-#### Step 6: Notifications (Optional)
-- Configure email notifications (SMTP)
-- Set up SMS notifications (Twilio)
-- Can be skipped and configured later
-
-#### Step 7: Review & Complete
+#### Step 9: Admin User Creation & Review
+- Create first administrator account
 - Review all configuration
 - Complete onboarding
 - Generate post-onboarding checklist
 
-### 3. Post-Onboarding Checklist
+### 3. Reset Progress
+
+A "Reset Progress" button is available on every onboarding page (top right corner). This allows you to:
+
+1. Clear all onboarding database records
+2. Delete saved configuration
+3. Start fresh from the beginning
+
+**Warning:** This action cannot be undone and will delete all onboarding progress including any organizations or users created during the process.
+
+### 4. Post-Onboarding Checklist
 
 After completing onboarding, a checklist is automatically created with critical tasks:
 

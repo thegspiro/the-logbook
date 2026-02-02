@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column('requires_serial_number', sa.Boolean(), nullable=False, server_default='0'),
         sa.Column('requires_maintenance', sa.Boolean(), nullable=False, server_default='0'),
         sa.Column('low_stock_threshold', sa.Integer(), nullable=True),
-        sa.Column('metadata', sa.JSON(), nullable=True),
+        sa.Column('extra_data', sa.JSON(), nullable=True),
         sa.Column('active', sa.Boolean(), nullable=False, server_default='1'),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),

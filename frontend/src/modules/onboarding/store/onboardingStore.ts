@@ -39,9 +39,20 @@ export interface OnboardingState {
 
   // IT Team
   itTeamConfigured: boolean;
+  itTeamMembers: Array<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+  }>;
+  backupEmail: string;
+  backupPhone: string;
+  secondaryAdminEmail: string;
 
   // Module Selection
   selectedModules: string[];
+  moduleStatuses: Record<string, 'enabled' | 'skipped' | 'ignored'>;
 
   // Session
   sessionId: string | null;
@@ -78,10 +89,16 @@ export interface OnboardingActions {
 
   // IT Team Actions
   setITTeamConfigured: (configured: boolean) => void;
+  setITTeamMembers: (members: Array<{ id: string; name: string; email: string; phone: string; role: string }>) => void;
+  setBackupEmail: (email: string) => void;
+  setBackupPhone: (phone: string) => void;
+  setSecondaryAdminEmail: (email: string) => void;
 
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
   toggleModule: (moduleId: string) => void;
+  setModuleStatus: (moduleId: string, status: 'enabled' | 'skipped' | 'ignored') => void;
+  setModuleStatuses: (statuses: Record<string, 'enabled' | 'skipped' | 'ignored'>) => void;
 
   // Session Actions
   setSessionId: (id: string) => void;
@@ -113,7 +130,12 @@ const initialState: OnboardingState = {
   fileStoragePlatform: null,
   authPlatform: null,
   itTeamConfigured: false,
+  itTeamMembers: [{ id: '1', name: '', email: '', phone: '', role: 'Primary IT Contact' }],
+  backupEmail: '',
+  backupPhone: '',
+  secondaryAdminEmail: '',
   selectedModules: [],
+  moduleStatuses: {},
   sessionId: null,
   csrfToken: null,
   currentStep: 1,
@@ -199,6 +221,26 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         get().triggerAutoSave();
       },
 
+      setITTeamMembers: (members) => {
+        set({ itTeamMembers: members });
+        get().triggerAutoSave();
+      },
+
+      setBackupEmail: (email) => {
+        set({ backupEmail: email });
+        get().triggerAutoSave();
+      },
+
+      setBackupPhone: (phone) => {
+        set({ backupPhone: phone });
+        get().triggerAutoSave();
+      },
+
+      setSecondaryAdminEmail: (email) => {
+        set({ secondaryAdminEmail: email });
+        get().triggerAutoSave();
+      },
+
       // Module Actions
       setSelectedModules: (modules) => {
         set({ selectedModules: modules });
@@ -212,6 +254,32 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
           : [...selectedModules, moduleId];
 
         set({ selectedModules: newModules });
+        get().triggerAutoSave();
+      },
+
+      setModuleStatus: (moduleId, status) => {
+        const { moduleStatuses, selectedModules } = get();
+        const newStatuses = { ...moduleStatuses, [moduleId]: status };
+
+        // Update selectedModules based on status
+        let newSelectedModules = [...selectedModules];
+        if (status === 'enabled' && !newSelectedModules.includes(moduleId)) {
+          newSelectedModules.push(moduleId);
+        } else if (status !== 'enabled') {
+          newSelectedModules = newSelectedModules.filter(id => id !== moduleId);
+        }
+
+        set({ moduleStatuses: newStatuses, selectedModules: newSelectedModules });
+        get().triggerAutoSave();
+      },
+
+      setModuleStatuses: (statuses) => {
+        // Update selectedModules based on all statuses
+        const enabledModules = Object.entries(statuses)
+          .filter(([_, status]) => status === 'enabled')
+          .map(([id]) => id);
+
+        set({ moduleStatuses: statuses, selectedModules: enabledModules });
         get().triggerAutoSave();
       },
 
@@ -308,7 +376,12 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         fileStoragePlatform: state.fileStoragePlatform,
         authPlatform: state.authPlatform,
         itTeamConfigured: state.itTeamConfigured,
+        itTeamMembers: state.itTeamMembers,
+        backupEmail: state.backupEmail,
+        backupPhone: state.backupPhone,
+        secondaryAdminEmail: state.secondaryAdminEmail,
         selectedModules: state.selectedModules,
+        moduleStatuses: state.moduleStatuses,
         currentStep: state.currentStep,
         completedSteps: state.completedSteps,
         lastSaved: state.lastSaved,
