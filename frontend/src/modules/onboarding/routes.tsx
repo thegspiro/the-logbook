@@ -1,9 +1,10 @@
 import React from 'react';
-import { Route, useNavigate } from 'react-router-dom';
+import { Route, useNavigate, Navigate } from 'react-router-dom';
 import {
   Welcome,
   OnboardingCheck,
   DepartmentInfo,
+  OrganizationSetup,
   NavigationChoice,
   EmailPlatformChoice,
   EmailConfiguration,
@@ -105,10 +106,13 @@ export const getOnboardingRoutes = () => {
     {/* Onboarding flow */}
     <Route path="/onboarding" element={<OnboardingCheck />} />
 
-    {/* Onboarding wizard - Department Info */}
-    <Route path="/onboarding/start" element={<DepartmentInfo />} />
+    {/* Onboarding wizard - Step 1: Organization Setup (comprehensive) */}
+    <Route path="/onboarding/start" element={<OrganizationSetup />} />
 
-    {/* Onboarding wizard - Navigation Choice */}
+    {/* Legacy route redirect for DepartmentInfo */}
+    <Route path="/onboarding/department" element={<Navigate to="/onboarding/start" replace />} />
+
+    {/* Onboarding wizard - Step 2: Navigation Choice */}
     <Route path="/onboarding/navigation-choice" element={<NavigationChoice />} />
 
     {/* Onboarding wizard - Email Platform */}

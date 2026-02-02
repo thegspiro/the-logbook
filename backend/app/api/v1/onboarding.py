@@ -21,6 +21,7 @@ from app.core.database import get_db
 from app.services.onboarding import OnboardingService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
 from app.api.v1.test_email_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
+from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from datetime import datetime, timedelta
 import secrets
 
@@ -576,12 +577,12 @@ async def verify_security(
     service = OnboardingService(db)
     result = await service.verify_security_configuration()
 
-    # Also mark step as completed if passed
+    # Track security verification status (not a separate onboarding step)
     if result["passed"]:
         status = await service.get_onboarding_status()
         if status and not status.is_completed:
             status.security_keys_verified = True
-            await service._mark_step_completed(status, 2, "security_check")
+            await db.commit()
 
     return result
 
@@ -1196,6 +1197,114 @@ async def save_session_modules(
         message="Module configuration saved successfully",
         step="modules"
     )
+
+
+@router.post("/session/organization", response_model=OrganizationSetupResponse)
+async def save_session_organization(
+    request: Request,
+    data: OrganizationSetupCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create and save organization during onboarding (Step 1).
+
+    This endpoint collects comprehensive organization information and commits
+    it to the database immediately. This includes:
+    - Basic info: name, slug, description, organization type
+    - Contact info: phone, fax, email, website
+    - Mailing address
+    - Physical address (if different from mailing)
+    - Department identifiers: FDID, State ID, or Department ID
+    - Additional info: county, founded year, tax ID, logo
+
+    The organization is committed to the database at this step so that
+    subsequent steps can reference it (e.g., role setup, admin user creation).
+    """
+    # Validate session
+    session = await validate_session(request, db)
+
+    service = OnboardingService(db)
+
+    # Verify onboarding is in progress
+    if not await service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed"
+        )
+
+    # Generate slug if not provided
+    slug = data.slug
+    if not slug:
+        slug = data.name.lower().replace(" ", "-")
+        slug = re.sub(r'[^a-z0-9-]', '', slug)
+
+    try:
+        # Extract address fields
+        mailing = data.mailing_address
+        physical = data.physical_address if not data.physical_address_same else None
+
+        org = await service.create_organization(
+            name=data.name,
+            slug=slug,
+            organization_type=data.organization_type.value,
+            description=data.description,
+            timezone=data.timezone,
+            # Contact info
+            phone=data.phone,
+            fax=data.fax,
+            email=data.email,
+            website=data.website,
+            # Mailing address
+            mailing_address_line1=mailing.line1,
+            mailing_address_line2=mailing.line2,
+            mailing_city=mailing.city,
+            mailing_state=mailing.state,
+            mailing_zip=mailing.zip_code,
+            mailing_country=mailing.country,
+            # Physical address
+            physical_address_same=data.physical_address_same,
+            physical_address_line1=physical.line1 if physical else None,
+            physical_address_line2=physical.line2 if physical else None,
+            physical_city=physical.city if physical else None,
+            physical_state=physical.state if physical else None,
+            physical_zip=physical.zip_code if physical else None,
+            physical_country=physical.country if physical else None,
+            # Identifiers
+            identifier_type=data.identifier_type.value,
+            fdid=data.fdid,
+            state_id=data.state_id,
+            department_id=data.department_id,
+            # Additional info
+            county=data.county,
+            founded_year=data.founded_year,
+            tax_id=data.tax_id,
+            logo=data.logo,
+        )
+
+        # Store organization ID in session for subsequent steps
+        session.data = session.data or {}
+        session.data['department'] = {
+            'name': data.name,
+            'organization_id': str(org.id),
+            'logo': data.logo,
+            'saved_at': datetime.utcnow().isoformat()
+        }
+        await db.commit()
+
+        return OrganizationSetupResponse(
+            id=org.id,
+            name=org.name,
+            slug=org.slug,
+            organization_type=org.organization_type.value if org.organization_type else org.type,
+            timezone=org.timezone,
+            active=org.active,
+            created_at=org.created_at
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.post("/session/roles", response_model=RolesSetupResponse)

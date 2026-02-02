@@ -398,7 +398,7 @@ docker compose up -d
 
 ## Onboarding Module Issues
 
-### Problem: "Invalid modules" error during onboarding Step 8
+### Problem: "Invalid modules" error during onboarding
 **Error:** `Invalid modules: members, events, documents`
 
 ### Root Cause
@@ -418,6 +418,65 @@ The valid module IDs now include:
 - **Governance:** `elections`, `minutes`, `reports`
 - **Communication:** `notifications`, `mobile`
 - **Advanced:** `forms`, `integrations`
+- **Legacy:** `compliance`, `meetings`, `fundraising`, `incidents`, `equipment`, `vehicles`, `budget`
+
+---
+
+### Problem: Organization setup fails at Step 1
+**Error:** `Invalid ZIP/postal code format` or `Organization name contains invalid characters`
+
+### Root Cause
+The new comprehensive organization setup has strict validation:
+- ZIP codes must be 5 digits (12345) or 9 digits with dash (12345-6789)
+- Organization names cannot contain special characters like `<`, `>`, `;`, `--`
+
+### Solution
+Ensure you're entering valid data:
+- Use proper US ZIP code format
+- Avoid SQL injection-like characters in organization name
+- All required fields (name, mailing address) must be filled
+
+---
+
+### Problem: Database migration conflicts
+**Error:** `Target database is not up to date` or `Can't locate revision`
+
+### Root Cause
+Multiple migration files may have conflicting revision IDs or missing parent revisions.
+
+### Solution
+1. Check migration chain:
+```bash
+cd backend/alembic/versions
+grep -E "^(revision|down_revision)" *.py
+```
+
+2. Verify single linear chain (no duplicate revision IDs)
+
+3. If conflicts exist, contact support or check for duplicate migration files
+
+4. Run migrations:
+```bash
+docker exec intranet-backend alembic upgrade head
+```
+
+---
+
+### Problem: Organization type or identifier type enum errors
+**Error:** `Invalid enum value` for organization_type or identifier_type
+
+### Root Cause
+The database enum types don't match the API values.
+
+### Solution
+Valid values are:
+- **organization_type:** `fire_department`, `ems_only`, `fire_ems_combined`
+- **identifier_type:** `fdid`, `state_id`, `department_id`
+
+If database was created before enum migration, run:
+```bash
+docker exec intranet-backend alembic upgrade head
+```
 
 ---
 

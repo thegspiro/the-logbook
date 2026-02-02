@@ -339,7 +339,7 @@ class SecureApiClient {
   }
 
   /**
-   * Create organization
+   * Create organization (legacy simple method)
    * Creates the first organization during onboarding with default roles
    */
   async createOrganization(data: {
@@ -356,6 +356,57 @@ class SecureApiClient {
       description: data.description,
       timezone: data.timezone || 'America/New_York'
     }, true);
+  }
+
+  /**
+   * Save organization with comprehensive details (Step 1)
+   * Creates the organization during onboarding and commits to database immediately
+   */
+  async saveOrganization(data: {
+    name: string;
+    slug?: string;
+    description?: string;
+    organization_type: 'fire_department' | 'ems_only' | 'fire_ems_combined';
+    timezone: string;
+    phone?: string;
+    fax?: string;
+    email?: string;
+    website?: string;
+    mailing_address: {
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      zip_code: string;
+      country?: string;
+    };
+    physical_address_same: boolean;
+    physical_address?: {
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      zip_code: string;
+      country?: string;
+    };
+    identifier_type: 'fdid' | 'state_id' | 'department_id';
+    fdid?: string;
+    state_id?: string;
+    department_id?: string;
+    county?: string;
+    founded_year?: number;
+    tax_id?: string;
+    logo?: string;
+  }): Promise<ApiResponse<{
+    id: string;
+    name: string;
+    slug: string;
+    organization_type: string;
+    timezone: string;
+    active: boolean;
+    created_at: string;
+  }>> {
+    return this.request('POST', '/onboarding/session/organization', data, true);
   }
 
   /**

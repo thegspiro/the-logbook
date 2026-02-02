@@ -6,10 +6,48 @@ This document describes the comprehensive Role-Based Access Control system imple
 
 The RBAC system allows fine-grained control over what users can see and do within the platform. It includes:
 
+- **Two-Tier Permission Model**: View (read-only) and Manage (full CRUD) access levels
 - **Default System Roles**: Pre-configured roles for fire department leadership
 - **Custom Roles**: Create organization-specific roles with custom permissions
 - **Permission System**: Granular permissions organized by category
 - **Member Administration**: Assign roles to members through an intuitive UI
+- **Module Registry**: Central source of truth for modules and their permissions
+- **Post-Onboarding Management**: Settings pages to manage roles after initial setup
+
+## Two-Tier Permission Model
+
+The system uses a simplified two-tier permission model for each module:
+
+### View Access
+- Read-only access to module data
+- Typically granted to all members by default
+- Allows viewing lists, details, and reports
+- Example: View member directory, see training records
+
+### Manage Access
+- Full CRUD (Create, Read, Update, Delete) operations
+- Granted to specific roles based on responsibility
+- Includes all View permissions plus modification rights
+- Example: Add new members, edit training records, delete events
+
+This model simplifies permission management while maintaining security:
+```
+┌─────────────────────────────────────────────────────┐
+│ Module: Training                                     │
+├─────────────────────────────────────────────────────┤
+│ VIEW ACCESS (All Members)                           │
+│ ✓ View training schedules                           │
+│ ✓ See your training records                         │
+│ ✓ View certification status                         │
+├─────────────────────────────────────────────────────┤
+│ MANAGE ACCESS (Training Officer, Chief, Admin)      │
+│ ✓ All view permissions                              │
+│ ✓ Create training sessions                          │
+│ ✓ Record attendance                                 │
+│ ✓ Issue/revoke certifications                       │
+│ ✓ Generate compliance reports                       │
+└─────────────────────────────────────────────────────┘
+```
 
 ## Default System Roles
 
@@ -94,31 +132,72 @@ Permissions are organized into the following categories:
 
 ### Modules
 Each module has view and manage permissions:
+
+**Essential Modules:**
+- Members (`members.view`, `members.manage`)
+- Events (`events.view`, `events.manage`)
+- Documents (`documents.view`, `documents.manage`)
+
+**Operations Modules:**
 - Training (`training.view`, `training.manage`)
-- Compliance (`compliance.view`, `compliance.manage`)
-- Scheduling (`scheduling.view`, `scheduling.manage`)
 - Inventory (`inventory.view`, `inventory.manage`)
-- Meetings (`meetings.view`, `meetings.manage`)
+- Scheduling (`scheduling.view`, `scheduling.manage`)
+
+**Governance Modules:**
 - Elections (`elections.view`, `elections.manage`)
+- Minutes (`minutes.view`, `minutes.manage`)
+- Reports (`reports.view`, `reports.manage`)
+- Compliance (`compliance.view`, `compliance.manage`)
+
+**Communication Modules:**
+- Notifications (`notifications.view`, `notifications.manage`)
+- Mobile (`mobile.view`, `mobile.manage`)
+
+**Advanced Modules:**
+- Forms (`forms.view`, `forms.manage`)
+- Integrations (`integrations.view`, `integrations.manage`)
+
+**Legacy/Additional Modules:**
+- Meetings (`meetings.view`, `meetings.manage`)
 - Fundraising (`fundraising.view`, `fundraising.manage`)
+- Incidents (`incidents.view`, `incidents.manage`)
+- Equipment (`equipment.view`, `equipment.manage`)
+- Vehicles (`vehicles.view`, `vehicles.manage`)
+- Budget (`budget.view`, `budget.manage`)
 - Audit (`audit.view`, `audit.export`)
 
 ## Using the System
 
+### Settings Navigation
+
+After onboarding, role management is accessible from the main application's Settings menu:
+
+```
+Settings (expandable menu)
+├── Organization      → /settings         (Organization settings)
+├── Role Management   → /settings/roles   (Create/edit/delete roles)
+└── Member Admin      → /admin/members    (Assign roles to users)
+```
+
 ### Accessing Admin Pages
 
-The following pages are automatically visible to users with admin roles:
+The following pages are available from the Settings navigation:
+
+- **Organization Settings** (`/settings`)
+  - Configure organization-wide settings
+  - Manage contact information visibility
+  - Accessible to: Admins, Secretary
+
+- **Role Management** (`/settings/roles`)
+  - Create custom roles
+  - Edit role permissions using two-tier model
+  - Delete custom roles (system roles cannot be deleted)
+  - Accessible to: IT Admin, Chief, President (roles with `roles.create` permission)
 
 - **Members Admin** (`/admin/members`)
   - Assign roles to members
   - View all members with their current roles
   - Accessible to: IT Admin, Chief, Assistant Chief, President, Vice President, Secretary, Assistant Secretary
-
-- **Role Management** (`/admin/roles`)
-  - Create custom roles
-  - Edit role permissions
-  - Delete custom roles (system roles cannot be deleted)
-  - Accessible to: IT Admin, Chief, President (roles with `roles.create` permission)
 
 ### Creating Custom Roles
 

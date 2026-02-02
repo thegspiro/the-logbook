@@ -21,12 +21,13 @@ from app.services.auth_service import AuthService
 from app.api.dependencies import get_current_user, get_current_active_user
 from app.models.user import User
 from app.core.config import settings
+from app.core.security_middleware import check_rate_limit
 
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(check_rate_limit)])
 async def register(
     user_data: UserRegister,
     request: Request,
@@ -37,6 +38,8 @@ async def register(
 
     Creates a new user with the provided information and returns
     authentication tokens.
+
+    Rate limited to 5 requests per minute per IP address to prevent abuse.
 
     **Note**: Currently uses hardcoded organization ID. When multi-org
     support is added, organization_id should come from registration context.
@@ -80,7 +83,7 @@ async def register(
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(check_rate_limit)])
 async def login(
     credentials: UserLogin,
     request: Request,
@@ -90,6 +93,8 @@ async def login(
     Authenticate a user and return tokens
 
     Accepts username/email and password, returns access and refresh tokens.
+
+    Rate limited to 5 requests per minute per IP address to prevent brute force attacks.
     """
     auth_service = AuthService(db)
 
