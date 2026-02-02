@@ -316,6 +316,26 @@ class SecureApiClient {
   }
 
   /**
+   * Create organization
+   * Creates the first organization during onboarding with default roles
+   */
+  async createOrganization(data: {
+    name: string;
+    slug: string;
+    organization_type?: string;
+    description?: string;
+    timezone?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.request('POST', '/onboarding/organization', {
+      name: data.name,
+      slug: data.slug,
+      organization_type: data.organization_type || 'fire_department',
+      description: data.description,
+      timezone: data.timezone || 'America/New_York'
+    }, true);
+  }
+
+  /**
    * Create admin user
    * SECURITY CRITICAL: Password sent once via HTTPS, never stored client-side
    * Returns authentication token to log user in automatically
@@ -375,6 +395,20 @@ class SecureApiClient {
    */
   hasSession(): boolean {
     return !!this.sessionId;
+  }
+
+  /**
+   * Reset onboarding - clears all database records and resets to initial state
+   * WARNING: This is destructive and cannot be undone
+   */
+  async resetOnboarding(): Promise<ApiResponse<any>> {
+    const response = await this.request('POST', '/onboarding/reset', {}, true);
+
+    if (response.statusCode === 200 || response.statusCode === 201) {
+      this.clearSession();
+    }
+
+    return response;
   }
 }
 

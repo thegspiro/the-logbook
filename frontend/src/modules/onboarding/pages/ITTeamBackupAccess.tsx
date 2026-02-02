@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, Plus, Trash2, AlertCircle, Phone, Mail, User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, ErrorAlert, AutoSaveNotification } from '../components';
+import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -23,17 +23,17 @@ const ITTeamBackupAccess: React.FC = () => {
   const lastSaved = useOnboardingStore(state => state.lastSaved);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
-  // IT Team Members
-  const [itTeam, setItTeam] = useState<ITTeamMember[]>([
-    { id: '1', name: '', email: '', phone: '', role: 'Primary IT Contact' },
-  ]);
+  // Use Zustand store for persisted IT Team data
+  const itTeam = useOnboardingStore(state => state.itTeamMembers);
+  const setItTeam = useOnboardingStore(state => state.setITTeamMembers);
+  const backupEmail = useOnboardingStore(state => state.backupEmail);
+  const setBackupEmail = useOnboardingStore(state => state.setBackupEmail);
+  const backupPhone = useOnboardingStore(state => state.backupPhone);
+  const setBackupPhone = useOnboardingStore(state => state.setBackupPhone);
+  const secondaryAdminEmail = useOnboardingStore(state => state.secondaryAdminEmail);
+  const setSecondaryAdminEmail = useOnboardingStore(state => state.setSecondaryAdminEmail);
 
-  // Backup Access Methods
-  const [backupEmail, setBackupEmail] = useState('');
-  const [backupPhone, setBackupPhone] = useState('');
-  const [secondaryAdminEmail, setSecondaryAdminEmail] = useState('');
-
-  // Validation errors
+  // Validation errors (local state - no need to persist)
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -209,7 +209,11 @@ const ITTeamBackupAccess: React.FC = () => {
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-4xl w-full">
-          <BackButton to="/onboarding/authentication" className="mb-6" />
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <BackButton to="/onboarding/authentication" />
+            <ResetProgressButton />
+          </div>
 
           {/* Page Header */}
           <div className="text-center mb-8">

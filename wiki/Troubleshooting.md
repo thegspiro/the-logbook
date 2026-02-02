@@ -5,11 +5,12 @@ This guide covers common issues and their solutions for The Logbook deployment.
 ## Table of Contents
 
 1. [Onboarding Failures](#onboarding-failures)
-2. [Frontend Not Rendering](#frontend-not-rendering)
-3. [Malformed API URLs](#malformed-api-urls)
-4. [Build Errors](#build-errors)
-5. [Docker Issues](#docker-issues)
-6. [Network & Connectivity](#network--connectivity)
+2. [Redis Container Unhealthy](#redis-container-unhealthy)
+3. [Frontend Not Rendering](#frontend-not-rendering)
+4. [Malformed API URLs](#malformed-api-urls)
+5. [Build Errors](#build-errors)
+6. [Docker Issues](#docker-issues)
+7. [Network & Connectivity](#network--connectivity)
 
 ---
 
@@ -62,6 +63,68 @@ curl http://YOUR-IP:7881/health
 
 # Test nginx proxy (CRITICAL)
 curl http://YOUR-IP:7880/api/v1/onboarding/status
+```
+
+---
+
+## Redis Container Unhealthy
+
+### Problem: Redis container marked as unhealthy, blocking other containers
+**Error:** `dependency failed to start: container intranet-redis is unhealthy`
+
+**Redis Logs Show:**
+```
+WARNING Memory overcommit must be enabled!
+Redis is starting...
+Ready to accept connections tcp
+```
+
+### Root Cause
+The Redis health check command outputs a warning message when using password authentication with the `-a` flag. This warning interferes with the `grep PONG` command, causing Docker to mark the container as unhealthy even though Redis is actually running fine.
+
+### Solution
+
+**1. Update docker-compose.yml Health Check**
+
+The health check should include `--no-auth-warning` to suppress the warning:
+
+```yaml
+redis:
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-change_me_in_production} --no-auth-warning ping | grep PONG"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+```
+
+**2. Apply the Fix**
+
+```bash
+cd /mnt/user/appdata/the-logbook
+git pull
+docker-compose down
+docker-compose up -d
+```
+
+**3. Verify Redis is Healthy**
+
+```bash
+docker ps | grep redis
+# Should show (healthy) status
+
+# Test Redis manually
+docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning ping
+# Should return: PONG
+```
+
+### Note on Memory Overcommit Warning
+The warning about `vm.overcommit_memory` is informational and doesn't prevent Redis from working. To resolve it (optional):
+
+```bash
+# On the host system (not in container)
+echo 'vm.overcommit_memory = 1' | sudo tee -a /etc/sysctl.conf
+sudo sysctl vm.overcommit_memory=1
 ```
 
 ---

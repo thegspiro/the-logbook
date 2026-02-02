@@ -4,17 +4,24 @@ The Onboarding Module handles the first-time setup wizard for The Logbook fire d
 
 ## Features
 
-- **7-Step Setup Wizard**:
+- **9-Step Setup Wizard**:
   1. Welcome screen with animated introduction
   2. Department name and logo collection
-  3. Navigation layout selection (top bar vs. left sidebar)
-  4. Email platform configuration (Gmail, Microsoft 365, self-hosted SMTP, or skip)
-  5. Email credentials setup
-  6. Admin user account creation
-  7. Security verification and completion
+  3. Email platform configuration (Gmail, Microsoft 365, self-hosted SMTP, or skip)
+  4. File storage selection (Local, S3, MinIO, Azure, GCS)
+  5. File storage configuration
+  6. Authentication platform selection:
+     - Google OAuth (recommended for Google Workspace)
+     - Microsoft Azure AD (recommended for Microsoft 365)
+     - Authentik SSO (self-hosted option)
+     - **Local Passwords** (Argon2id hashing, no external services)
+  7. IT Team & backup access configuration
+  8. Module selection with 3-tier organization (Essential, Recommended, Optional)
+  9. Admin user account creation and review
 
+- **Reset Progress**: Button available on every page to clear all data and start over
+- **Persistent State**: Zustand store with localStorage persistence across navigation
 - **Modular Architecture**: Entire module can be enabled/disabled with a single line
-- **Session Storage**: Maintains state across wizard steps
 - **Comprehensive Validation**: Real-time field validation and password strength checking
 - **Accessible**: WCAG 2.1 Level AA compliant with ARIA labels
 - **Responsive**: Works on all screen sizes
@@ -27,6 +34,11 @@ onboarding/
 │   ├── OnboardingHeader.tsx
 │   ├── OnboardingFooter.tsx
 │   ├── ProgressIndicator.tsx
+│   ├── BackButton.tsx
+│   ├── ResetProgressButton.tsx
+│   ├── AutoSaveNotification.tsx
+│   ├── ErrorAlert.tsx
+│   ├── LoadingOverlay.tsx
 │   └── index.ts
 ├── hooks/               # Custom React hooks
 │   ├── useOnboardingStorage.ts
@@ -122,7 +134,59 @@ Shows setup progress through the wizard.
 ```tsx
 import { ProgressIndicator } from './modules/onboarding';
 
-<ProgressIndicator currentStep={3} totalSteps={7} />
+<ProgressIndicator currentStep={3} totalSteps={9} />
+```
+
+### BackButton
+
+Navigation button to return to the previous step.
+
+```tsx
+import { BackButton } from './modules/onboarding';
+
+<BackButton to="/onboarding/previous-step" />
+// or use browser back:
+<BackButton />
+```
+
+### ResetProgressButton
+
+Button that allows users to clear all onboarding data and start fresh.
+
+```tsx
+import { ResetProgressButton } from './modules/onboarding';
+
+<ResetProgressButton />
+```
+
+When clicked, displays a confirmation modal warning that:
+- All onboarding database records will be deleted
+- The action cannot be undone
+- On confirmation, clears localStorage and redirects to start
+
+### ErrorAlert
+
+Displays error messages with retry and dismiss options.
+
+```tsx
+import { ErrorAlert } from './modules/onboarding';
+
+<ErrorAlert
+  message="Something went wrong"
+  canRetry={true}
+  onRetry={() => handleRetry()}
+  onDismiss={() => clearError()}
+/>
+```
+
+### AutoSaveNotification
+
+Shows when data was last auto-saved.
+
+```tsx
+import { AutoSaveNotification } from './modules/onboarding';
+
+<AutoSaveNotification showTimestamp lastSaved={lastSavedTimestamp} />
 ```
 
 ## Hooks
@@ -227,9 +291,17 @@ The onboarding wizard is designed to work with the backend API endpoints:
 
 - `GET /api/v1/onboarding/status` - Check onboarding status
 - `GET /api/v1/onboarding/security-check` - Verify security configuration
+- `POST /api/v1/onboarding/start` - Start onboarding session (returns session_id)
+- `POST /api/v1/onboarding/session/department` - Save department info
+- `POST /api/v1/onboarding/session/email` - Save email configuration
+- `POST /api/v1/onboarding/session/file-storage` - Save file storage config
+- `POST /api/v1/onboarding/session/auth` - Save authentication platform
+- `POST /api/v1/onboarding/session/it-team` - Save IT team and backup access
+- `POST /api/v1/onboarding/session/modules` - Save module selection
 - `POST /api/v1/onboarding/organization` - Create organization
 - `POST /api/v1/onboarding/admin-user` - Create admin user
 - `POST /api/v1/onboarding/complete` - Complete onboarding
+- `POST /api/v1/onboarding/reset` - Reset all onboarding data (destructive)
 
 ## Customization
 

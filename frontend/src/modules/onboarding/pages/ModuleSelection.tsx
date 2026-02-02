@@ -24,6 +24,7 @@ import {
 import toast from 'react-hot-toast';
 import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../components';
 import { useOnboardingStorage } from '../hooks';
+import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { AVAILABLE_MODULES, Module } from '../../../types/modules';
 
@@ -48,7 +49,12 @@ const iconMap: Record<string, React.ReactNode> = {
 const ModuleSelection: React.FC = () => {
   const navigate = useNavigate();
   const { departmentName, logoPreview } = useOnboardingStorage();
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+
+  // Use Zustand store for persisted module selection
+  const selectedModules = useOnboardingStore((state) => state.selectedModules);
+  const setSelectedModules = useOnboardingStore((state) => state.setSelectedModules);
+  const storeToggleModule = useOnboardingStore((state) => state.toggleModule);
+
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -58,18 +64,18 @@ const ModuleSelection: React.FC = () => {
       return;
     }
 
-    // Initialize with all enabled modules by default
-    const defaultEnabled = AVAILABLE_MODULES.filter((m) => m.enabled).map((m) => m.id);
-    setSelectedModules(defaultEnabled);
-  }, [departmentName, navigate]);
+    // Only initialize with defaults if no modules have been selected yet
+    if (selectedModules.length === 0) {
+      const defaultEnabled = AVAILABLE_MODULES.filter((m) => m.enabled).map((m) => m.id);
+      setSelectedModules(defaultEnabled);
+    }
+  }, [departmentName, navigate, selectedModules.length, setSelectedModules]);
 
   const toggleModule = (moduleId: string) => {
     const module = AVAILABLE_MODULES.find((m) => m.id === moduleId);
     if (!module || !module.canDisable) return; // Can't toggle core modules
 
-    setSelectedModules((prev) =>
-      prev.includes(moduleId) ? prev.filter((id) => id !== moduleId) : [...prev, moduleId]
-    );
+    storeToggleModule(moduleId);
   };
 
   const toggleExpanded = (moduleId: string) => {

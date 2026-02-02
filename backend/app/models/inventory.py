@@ -106,8 +106,8 @@ class InventoryCategory(Base):
     requires_maintenance = Column(Boolean, default=False)
     low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
 
-    # Metadata
-    metadata = Column(JSONB)  # Additional category-specific data
+    # Extra data
+    extra_data = Column(JSONB)  # Additional category-specific data
 
     # Status
     active = Column(Boolean, default=True, index=True)
