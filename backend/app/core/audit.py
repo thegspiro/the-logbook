@@ -277,7 +277,7 @@ async def log_event(
             "user_login",
             {"username": "john.doe"},
             event_category="auth",
-            severity="info",
+            severity="INFO",
             user_id=user.id,
             ip_address=request.client.host,
         )
