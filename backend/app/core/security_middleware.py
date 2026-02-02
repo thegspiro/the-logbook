@@ -489,3 +489,187 @@ def get_client_ip(request: Request) -> str:
 def get_user_agent(request: Request) -> Optional[str]:
     """Get user agent from request"""
     return request.headers.get("User-Agent")
+
+
+# ============================================
+# IP/Country Blocking Middleware
+# ============================================
+
+class IPBlockingMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware for IP-based and country-based access control.
+
+    Features:
+    - Blocks requests from specified countries (geo-blocking)
+    - Supports IP allowlist exceptions
+    - Logs all blocked attempts for security auditing
+    - Integrates with GeoIP service for country lookup
+    """
+
+    # Paths that bypass IP blocking (health checks, etc.)
+    BYPASS_PATHS = {"/health", "/health/detailed", "/"}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        enabled: bool = True,
+        log_blocked_attempts: bool = True,
+    ):
+        super().__init__(app)
+        self.enabled = enabled
+        self.log_blocked_attempts = log_blocked_attempts
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint
+    ) -> Response:
+        """Process request and check IP/country restrictions."""
+
+        # Skip if disabled
+        if not self.enabled:
+            return await call_next(request)
+
+        # Skip health check endpoints
+        if request.url.path in self.BYPASS_PATHS:
+            return await call_next(request)
+
+        # Get client IP
+        client_ip = get_client_ip(request)
+
+        # Check if IP should be blocked
+        from app.core.geoip import get_geoip_service
+
+        geoip = get_geoip_service()
+        if geoip:
+            # Get allowed IPs from database (cached)
+            allowed_ips = await self._get_allowed_ips()
+
+            is_blocked, reason = geoip.is_ip_blocked(client_ip, allowed_ips)
+
+            if is_blocked:
+                # Log the blocked attempt
+                if self.log_blocked_attempts:
+                    await self._log_blocked_attempt(request, client_ip, reason)
+
+                # Return 403 Forbidden
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={
+                        "detail": "Access denied from your location",
+                        "error_code": "GEO_BLOCKED",
+                    }
+                )
+
+            # Add geo info to request state for downstream use
+            geo_info = geoip.lookup_ip(client_ip)
+            request.state.geo_info = geo_info
+            request.state.client_ip = client_ip
+
+        return await call_next(request)
+
+    async def _get_allowed_ips(self) -> set:
+        """
+        Get set of allowed IPs from database.
+
+        In production, this should be cached with TTL.
+        """
+        # Import here to avoid circular imports
+        try:
+            from app.core.cache import cache_manager
+
+            # Try to get from cache first
+            if cache_manager.is_connected:
+                cached = await cache_manager.get("ip_allowlist")
+                if cached:
+                    return set(cached)
+
+            # Load from database
+            # This would be implemented with a service function
+            # For now, return empty set
+            return set()
+
+        except Exception:
+            return set()
+
+    async def _log_blocked_attempt(
+        self,
+        request: Request,
+        client_ip: str,
+        reason: str
+    ) -> None:
+        """Log blocked access attempt to database."""
+        try:
+            from app.core.geoip import get_geoip_service
+            import json
+
+            geoip = get_geoip_service()
+            geo_info = geoip.lookup_ip(client_ip) if geoip else {}
+
+            # Log using loguru (immediate)
+            from loguru import logger
+            logger.warning(
+                f"BLOCKED ACCESS: IP={client_ip}, "
+                f"Country={geo_info.get('country_code', 'unknown')}, "
+                f"Reason={reason}, "
+                f"Path={request.url.path}"
+            )
+
+            # TODO: Also log to database asynchronously
+            # This should use a background task or queue
+
+        except Exception as e:
+            from loguru import logger
+            logger.error(f"Failed to log blocked attempt: {e}")
+
+
+# ============================================
+# IP Logging Middleware
+# ============================================
+
+class IPLoggingMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware for logging all request IP addresses and geo information.
+
+    Provides comprehensive request logging for security auditing.
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint
+    ) -> Response:
+        """Log request IP and geo information."""
+        from loguru import logger
+        from app.core.geoip import get_geoip_service
+
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
+        # Get geo info if available
+        geo_info = {}
+        geoip = get_geoip_service()
+        if geoip:
+            geo_info = geoip.lookup_ip(client_ip)
+
+        # Store in request state
+        request.state.client_ip = client_ip
+        request.state.user_agent = user_agent
+        request.state.geo_info = geo_info
+
+        # Log request (debug level for non-sensitive endpoints)
+        logger.debug(
+            f"Request: {request.method} {request.url.path} | "
+            f"IP: {client_ip} | "
+            f"Country: {geo_info.get('country_code', 'unknown')}"
+        )
+
+        # Process request
+        response = await call_next(request)
+
+        # Add request ID header
+        request_id = request.headers.get("X-Request-ID", str(hash(f"{client_ip}{datetime.now().timestamp()}")))
+        response.headers["X-Request-ID"] = request_id
+
+        return response

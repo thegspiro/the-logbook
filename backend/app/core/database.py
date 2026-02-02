@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import MetaData
 from sqlalchemy.pool import NullPool
 from typing import AsyncGenerator
 from loguru import logger
@@ -19,8 +20,19 @@ from loguru import logger
 from app.core.config import settings
 
 
-# Create declarative base for models
-Base = declarative_base()
+# Naming convention for constraints - ensures consistent names for Alembic migrations
+# This is critical for MySQL which requires explicit constraint names for ALTER operations
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+# Create declarative base with naming conventions
+metadata = MetaData(naming_convention=NAMING_CONVENTION)
+Base = declarative_base(metadata=metadata)
 
 
 class DatabaseManager:

@@ -3,6 +3,13 @@ Alembic Environment Configuration
 
 This configures Alembic to work with our MySQL database
 and SQLAlchemy models.
+
+Features:
+- Automatic model discovery
+- Type comparison for autogenerate
+- Server default comparison
+- Table exclusion filtering
+- Improved error handling
 """
 
 from logging.config import fileConfig
@@ -11,6 +18,7 @@ from sqlalchemy import pool
 from alembic import context
 import sys
 import os
+import logging
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -47,6 +55,11 @@ from app.models.inventory import (
     CheckOutRecord, MaintenanceRecord
 )
 
+# IP Security
+from app.models.ip_security import (
+    IPException, BlockedAccessAttempt, CountryBlockRule
+)
+
 # This is the Alembic Config object
 config = context.config
 
@@ -57,8 +70,25 @@ config.set_main_option('sqlalchemy.url', settings.SYNC_DATABASE_URL)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Get logger for this module
+logger = logging.getLogger('alembic.env')
+
 # Add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
+
+# Tables to exclude from autogenerate (e.g., external tables, views)
+EXCLUDE_TABLES = set()
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    """
+    Filter function for autogenerate.
+
+    Excludes tables in EXCLUDE_TABLES from migration autogeneration.
+    """
+    if type_ == "table" and name in EXCLUDE_TABLES:
+        return False
+    return True
 
 
 def run_migrations_offline() -> None:
@@ -74,6 +104,9 @@ def run_migrations_offline() -> None:
     script output.
     """
     url = config.get_main_option("sqlalchemy.url")
+
+    logger.info("Running migrations in offline mode")
+
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -81,6 +114,9 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
+        include_object=include_object,
+        # Render items for MySQL compatibility
+        render_as_batch=False,
     )
 
     with context.begin_transaction():
@@ -97,22 +133,42 @@ def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
     configuration['sqlalchemy.url'] = settings.SYNC_DATABASE_URL
 
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    logger.info("Connecting to database for migrations...")
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-            compare_server_default=True,
+    try:
+        connectable = engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
         )
+    except Exception as e:
+        logger.error(f"Failed to create database engine: {e}")
+        raise
 
-        with context.begin_transaction():
-            context.run_migrations()
+    try:
+        with connectable.connect() as connection:
+            logger.info("Database connection established")
+
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                compare_type=True,
+                compare_server_default=True,
+                include_object=include_object,
+                # Render items for MySQL compatibility
+                render_as_batch=False,
+            )
+
+            with context.begin_transaction():
+                logger.info("Running migrations...")
+                context.run_migrations()
+                logger.info("Migrations completed successfully")
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():
