@@ -192,14 +192,16 @@ class Role(Base):
 
 
 # User-Role Association Table (Many-to-Many)
+# Note: When inserting, you MUST provide the 'id' field explicitly since
+# Table objects don't auto-generate UUIDs like mapped classes do.
 user_roles = Table(
     'user_roles',
     Base.metadata,
-    Column('id', String(36), primary_key=True, default=generate_uuid),
-    Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), nullable=False),
-    Column('assigned_at', DateTime(timezone=True), server_default=func.now()),
-    Column('assigned_by', String(36), ForeignKey('users.id')),
+    Column('id', String(36), primary_key=True),  # Must be provided on insert
+    Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
+    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), nullable=False, index=True),
+    Column('assigned_at', DateTime(timezone=True), server_default=func.now(), index=True),
+    Column('assigned_by', String(36), ForeignKey('users.id'), index=True),
     Index('idx_user_role', 'user_id', 'role_id', unique=True),
 )
 
