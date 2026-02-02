@@ -35,13 +35,21 @@ This document describes the complete onboarding flow for The Logbook application
            │ If needs_onboarding = true
            v
 ┌──────────────────────────────┐
-│ 3. Department Info           │
+│ 3. Organization Setup        │
 │ Route: /onboarding/start     │
-│ Collects:                    │
-│ - Department name            │
-│ - Logo upload (optional)     │
+│ API: POST /api/v1/onboarding/│
+│ session/organization         │
+│ Collects (comprehensive):    │
+│ - Organization name & slug   │
 │ - Organization type          │
 │ - Timezone                   │
+│ - Contact info (phone/email) │
+│ - Mailing address            │
+│ - Physical address           │
+│ - Department identifiers     │
+│   (FDID/State ID/Dept ID)    │
+│ - Logo upload (optional)     │
+│ COMMITS TO DATABASE          │
 └──────────┬───────────────────┘
            │
            │ Button: "Continue" → Navigate to /onboarding/navigation-choice
@@ -231,35 +239,97 @@ Response: {
 
 ---
 
-### 3. Department Info (`/onboarding/start`)
-**Purpose**: Collect basic department information
+### 3. Organization Setup (`/onboarding/start`)
+**Purpose**: Collect comprehensive organization information and commit to database
 
-**Form Fields**:
-- Department Name (required)
-- Logo Upload (optional)
-- Organization Type (dropdown)
-- Timezone (dropdown)
+**Form Sections** (collapsible):
+
+1. **Basic Information** (required):
+   - Organization Name
+   - URL Slug (auto-generated)
+   - Description (optional)
+   - Organization Type: `fire_department`, `ems_only`, `fire_ems_combined`
+   - Timezone
+
+2. **Contact Information**:
+   - Phone Number
+   - Fax Number
+   - Email Address
+   - Website URL
+
+3. **Mailing Address** (required):
+   - Street Address (line 1 & 2)
+   - City, State, ZIP Code
+   - Country
+
+4. **Physical Address**:
+   - Checkbox: "Same as mailing address"
+   - If different: Full address fields
+
+5. **Department Identifiers**:
+   - Identifier Type: `FDID`, `State ID`, or `Department ID`
+   - Corresponding ID field based on selection
+
+6. **Additional Information**:
+   - County/Jurisdiction
+   - Year Founded
+   - Tax ID (EIN)
+
+7. **Organization Logo**:
+   - Drag-and-drop upload
+   - Supports PNG, JPG, WebP (max 5MB)
 
 **API Call**:
 ```
-POST /api/v1/onboarding/organization
+POST /api/v1/onboarding/session/organization
 Body: {
+  name: string,
+  slug?: string,
+  description?: string,
+  organization_type: "fire_department" | "ems_only" | "fire_ems_combined",
+  timezone: string,
+  phone?: string,
+  fax?: string,
+  email?: string,
+  website?: string,
+  mailing_address: {
+    line1: string,
+    line2?: string,
+    city: string,
+    state: string,
+    zip_code: string,
+    country?: string
+  },
+  physical_address_same: boolean,
+  physical_address?: { ... },  // Same structure as mailing_address
+  identifier_type: "fdid" | "state_id" | "department_id",
+  fdid?: string,
+  state_id?: string,
+  department_id?: string,
+  county?: string,
+  founded_year?: number,
+  tax_id?: string,
+  logo?: string  // Base64 data URL
+}
+Response: {
+  id: string,
   name: string,
   slug: string,
   organization_type: string,
   timezone: string,
-  description?: string
+  active: boolean,
+  created_at: string
 }
 ```
+
+**Important**: Organization is committed to database at this step (Step 1 of backend flow).
 
 **Navigation**:
 - Button: "Continue" → `/onboarding/navigation-choice`
 
-**Data Storage**: SessionStorage
-- `departmentName`
-- `hasLogo` (boolean)
-- `organizationType`
-- `timezone`
+**Data Storage**:
+- Database (organization table)
+- Zustand store (department name, logo for other components)
 
 ---
 
@@ -601,7 +671,7 @@ GET /api/v1/onboarding/database-check
 ```
 Tests database connectivity.
 
-### Create Organization
+### Create Organization (Legacy)
 ```
 POST /api/v1/onboarding/organization
 Body: {
@@ -612,7 +682,35 @@ Body: {
   description?: string
 }
 ```
-Creates the first organization with default roles.
+Creates the first organization with default roles (simple version).
+
+### Create Organization (Comprehensive - Step 1)
+```
+POST /api/v1/onboarding/session/organization
+Body: {
+  name: string,
+  slug?: string,
+  description?: string,
+  organization_type: "fire_department" | "ems_only" | "fire_ems_combined",
+  timezone: string,
+  phone?: string,
+  fax?: string,
+  email?: string,
+  website?: string,
+  mailing_address: { line1, line2?, city, state, zip_code, country? },
+  physical_address_same: boolean,
+  physical_address?: { ... },
+  identifier_type: "fdid" | "state_id" | "department_id",
+  fdid?: string,
+  state_id?: string,
+  department_id?: string,
+  county?: string,
+  founded_year?: number,
+  tax_id?: string,
+  logo?: string
+}
+```
+Creates organization with comprehensive details and commits to database immediately.
 
 ### Create Admin User
 ```
@@ -801,4 +899,4 @@ Before deploying to production:
 
 ---
 
-**Last Updated**: February 2, 2026
+**Last Updated**: February 2, 2026 (Updated with comprehensive Organization Setup)

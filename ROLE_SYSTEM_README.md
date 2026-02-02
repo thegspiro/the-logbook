@@ -132,13 +132,38 @@ Permissions are organized into the following categories:
 
 ### Modules
 Each module has view and manage permissions:
+
+**Essential Modules:**
+- Members (`members.view`, `members.manage`)
+- Events (`events.view`, `events.manage`)
+- Documents (`documents.view`, `documents.manage`)
+
+**Operations Modules:**
 - Training (`training.view`, `training.manage`)
-- Compliance (`compliance.view`, `compliance.manage`)
-- Scheduling (`scheduling.view`, `scheduling.manage`)
 - Inventory (`inventory.view`, `inventory.manage`)
-- Meetings (`meetings.view`, `meetings.manage`)
+- Scheduling (`scheduling.view`, `scheduling.manage`)
+
+**Governance Modules:**
 - Elections (`elections.view`, `elections.manage`)
+- Minutes (`minutes.view`, `minutes.manage`)
+- Reports (`reports.view`, `reports.manage`)
+- Compliance (`compliance.view`, `compliance.manage`)
+
+**Communication Modules:**
+- Notifications (`notifications.view`, `notifications.manage`)
+- Mobile (`mobile.view`, `mobile.manage`)
+
+**Advanced Modules:**
+- Forms (`forms.view`, `forms.manage`)
+- Integrations (`integrations.view`, `integrations.manage`)
+
+**Legacy/Additional Modules:**
+- Meetings (`meetings.view`, `meetings.manage`)
 - Fundraising (`fundraising.view`, `fundraising.manage`)
+- Incidents (`incidents.view`, `incidents.manage`)
+- Equipment (`equipment.view`, `equipment.manage`)
+- Vehicles (`vehicles.view`, `vehicles.manage`)
+- Budget (`budget.view`, `budget.manage`)
 - Audit (`audit.view`, `audit.export`)
 
 ## Using the System
