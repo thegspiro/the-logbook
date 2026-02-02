@@ -145,28 +145,55 @@ def validate_password_strength(password: str) -> bool:
 # Data Encryption (AES-256)
 # ============================================
 
+def get_encryption_salt() -> bytes:
+    """
+    Get installation-specific salt for key derivation.
+
+    SECURITY: Each installation MUST have a unique salt set via ENCRYPTION_SALT.
+    This prevents rainbow table attacks across installations.
+
+    Returns:
+        Salt bytes for key derivation
+    """
+    salt = settings.ENCRYPTION_SALT
+
+    if not salt:
+        # Fallback for development only - log warning
+        import logging
+        logging.warning(
+            "SECURITY WARNING: ENCRYPTION_SALT not set. "
+            "Using fallback salt. This is insecure for production!"
+        )
+        # Use a hash of SECRET_KEY as fallback (still unique per installation if SECRET_KEY is set)
+        salt = hashlib.sha256(settings.SECRET_KEY.encode()).hexdigest()[:32]
+
+    return salt.encode()
+
+
 def get_encryption_key() -> bytes:
     """
-    Get or derive encryption key from settings
+    Get or derive encryption key from settings.
+
+    SECURITY: Uses PBKDF2 with installation-specific salt to derive
+    a secure encryption key from the configured ENCRYPTION_KEY.
 
     Returns:
         32-byte encryption key for AES-256
     """
-    # In production, this should be a proper 32-byte key from environment
     key = settings.ENCRYPTION_KEY.encode()
 
-    # If not exactly 32 bytes, derive it using PBKDF2
-    if len(key) != 32:
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=b'fire_dept_intranet_salt',  # In production, use a random salt
-            iterations=100000,
-            backend=default_backend()
-        )
-        key = kdf.derive(key)
+    # Always derive key using PBKDF2 with installation-specific salt
+    # This ensures consistent key derivation and adds salt protection
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=get_encryption_salt(),
+        iterations=100000,
+        backend=default_backend()
+    )
+    derived_key = kdf.derive(key)
 
-    return base64.urlsafe_b64encode(key)
+    return base64.urlsafe_b64encode(derived_key)
 
 
 # Initialize Fernet cipher with encryption key

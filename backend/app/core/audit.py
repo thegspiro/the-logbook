@@ -312,3 +312,92 @@ async def log_audit_event(
         event_data=event_data,
         **kwargs,
     )
+
+
+async def verify_audit_log_integrity(
+    db: AsyncSession,
+    start_id: Optional[int] = None,
+    end_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Verify the integrity of the audit log chain.
+
+    This is a critical zero-trust function that should be called:
+    - On application startup
+    - Periodically via scheduled tasks
+    - On-demand via admin API
+
+    Args:
+        db: Database session
+        start_id: Optional start ID for range verification
+        end_id: Optional end ID for range verification
+
+    Returns:
+        Verification result with status and any detected issues
+    """
+    result = await audit_logger.verify_integrity(db, start_id, end_id)
+
+    # Log the verification itself
+    await audit_logger.create_log_entry(
+        db=db,
+        event_type="audit_integrity_check",
+        event_category="security",
+        severity="critical" if not result["verified"] else "info",
+        event_data={
+            "verified": result["verified"],
+            "total_checked": result["total_checked"],
+            "first_id": result.get("first_id"),
+            "last_id": result.get("last_id"),
+            "errors_found": len(result.get("errors", [])),
+        },
+    )
+
+    if not result["verified"]:
+        logger.critical(
+            f"AUDIT LOG INTEGRITY FAILURE: {len(result['errors'])} issues detected"
+        )
+        for error in result["errors"]:
+            logger.critical(f"  - Log ID {error['log_id']}: {error['error']}")
+
+    return result
+
+
+async def get_audit_log_status(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Get current audit log status and statistics.
+
+    Returns:
+        Status information including total entries, latest entry, and last checkpoint
+    """
+    # Get total count
+    result = await db.execute(select(func.count(AuditLog.id)))
+    total_count = result.scalar()
+
+    # Get latest entry
+    result = await db.execute(
+        select(AuditLog).order_by(AuditLog.id.desc()).limit(1)
+    )
+    latest_entry = result.scalar_one_or_none()
+
+    # Get latest checkpoint
+    result = await db.execute(
+        select(AuditLogCheckpoint).order_by(AuditLogCheckpoint.id.desc()).limit(1)
+    )
+    latest_checkpoint = result.scalar_one_or_none()
+
+    return {
+        "total_entries": total_count,
+        "latest_entry": {
+            "id": latest_entry.id if latest_entry else None,
+            "timestamp": latest_entry.timestamp.isoformat() if latest_entry else None,
+            "event_type": latest_entry.event_type if latest_entry else None,
+            "current_hash": latest_entry.current_hash if latest_entry else None,
+        } if latest_entry else None,
+        "latest_checkpoint": {
+            "id": latest_checkpoint.id if latest_checkpoint else None,
+            "checkpoint_time": latest_checkpoint.checkpoint_time.isoformat() if latest_checkpoint else None,
+            "first_log_id": latest_checkpoint.first_log_id if latest_checkpoint else None,
+            "last_log_id": latest_checkpoint.last_log_id if latest_checkpoint else None,
+            "merkle_root": latest_checkpoint.merkle_root if latest_checkpoint else None,
+        } if latest_checkpoint else None,
+    }

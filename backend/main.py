@@ -58,43 +58,73 @@ def run_migrations():
         # Don't fail startup - tables might already exist
 
 
+def validate_security_configuration():
+    """
+    Validate security configuration on startup.
+    Blocks startup in production if critical security settings are missing.
+    """
+    warnings = settings.validate_security_config()
+
+    if warnings:
+        logger.warning("=" * 60)
+        logger.warning("SECURITY CONFIGURATION WARNINGS:")
+        for warning in warnings:
+            if "CRITICAL" in warning:
+                logger.error(f"  {warning}")
+            else:
+                logger.warning(f"  {warning}")
+        logger.warning("=" * 60)
+
+        # Block startup in production if critical issues exist
+        if settings.SECURITY_BLOCK_INSECURE_DEFAULTS:
+            critical_warnings = [w for w in warnings if "CRITICAL" in w]
+            if critical_warnings:
+                raise RuntimeError(
+                    "SECURITY FAILURE: Cannot start with insecure default configuration. "
+                    "Set required environment variables or disable SECURITY_BLOCK_INSECURE_DEFAULTS."
+                )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Lifespan context manager for startup and shutdown events
     """
     # Startup
-    logger.info("🚀 Starting The Logbook Backend...")
+    logger.info("Starting The Logbook Backend...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Version: {settings.VERSION}")
+
+    # Validate security configuration first
+    validate_security_configuration()
 
     # Connect to database
     logger.info("Connecting to database...")
     await database_manager.connect()
-    logger.info("✓ Database connected")
+    logger.info("Database connected")
 
     # Run migrations to ensure tables exist
     run_migrations()
-    
+
     # Connect to Redis (graceful degradation if unavailable)
     logger.info("Connecting to Redis...")
     await cache_manager.connect()
     if cache_manager.is_connected:
-        logger.info("✓ Redis connected")
+        logger.info("Redis connected")
     else:
-        logger.warning("⚠ Redis unavailable - running in degraded mode (caching disabled)")
-    
-    logger.info(f"✓ Server started on port {settings.PORT}")
-    logger.info(f"📚 API Documentation: http://localhost:{settings.PORT}/docs")
-    logger.info(f"🔒 Health Check: http://localhost:{settings.PORT}/health")
-    
+        logger.warning("Redis unavailable - running in degraded mode (caching disabled)")
+
+    logger.info(f"Server started on port {settings.PORT}")
+    logger.info(f"API Documentation: http://localhost:{settings.PORT}/docs")
+    logger.info(f"Health Check: http://localhost:{settings.PORT}/health")
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down gracefully...")
     await database_manager.disconnect()
     await cache_manager.disconnect()
-    logger.info("✓ Shutdown complete")
+    logger.info("Shutdown complete")
 
 
 # Create FastAPI application
@@ -112,22 +142,29 @@ app = FastAPI(
 # Middleware
 # ============================================
 
-# CORS
+# Security Headers Middleware (add first so it wraps all responses)
+from app.core.security_middleware import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS - Restrict methods and headers for security
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Requested-With",
+        "X-CSRF-Token",
+        "Accept",
+        "Origin",
+    ],
+    expose_headers=["X-Request-ID"],
 )
 
 # Compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-# Custom middleware for request logging, security headers, etc.
-# from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
-# app.add_middleware(RequestLoggingMiddleware)
-# app.add_middleware(SecurityHeadersMiddleware)
 
 
 # ============================================
@@ -183,23 +220,26 @@ async def health_check():
         health_status["checks"]["redis"] = f"error: {str(e)}"
         health_status["status"] = "degraded"  # Redis is not critical
 
-    # Configuration warnings
-    config_warnings = []
-    if settings.ENVIRONMENT == "production":
-        if settings.DEBUG:
-            config_warnings.append("DEBUG mode enabled in production")
-        if settings.SECRET_KEY == "change_me_to_random_64_character_string":
-            config_warnings.append("Default SECRET_KEY detected")
-        if settings.DB_PASSWORD == "change_me_in_production":
-            config_warnings.append("Default DB_PASSWORD detected")
+    # Security configuration validation
+    security_warnings = settings.validate_security_config()
 
-    if config_warnings:
-        health_status["checks"]["configuration"] = "warnings"
-        health_status["warnings"] = config_warnings
-        if health_status["status"] == "healthy":
+    if security_warnings:
+        # Only expose warning count, not details (security)
+        critical_count = len([w for w in security_warnings if "CRITICAL" in w])
+        warning_count = len(security_warnings) - critical_count
+
+        health_status["checks"]["security"] = {
+            "status": "issues_detected",
+            "critical_issues": critical_count,
+            "warnings": warning_count,
+        }
+
+        if critical_count > 0:
+            health_status["status"] = "unhealthy"
+        elif warning_count > 0 and health_status["status"] == "healthy":
             health_status["status"] = "degraded"
     else:
-        health_status["checks"]["configuration"] = "ok"
+        health_status["checks"]["security"] = {"status": "ok"}
 
     return health_status
 

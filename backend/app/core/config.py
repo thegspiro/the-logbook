@@ -80,24 +80,69 @@ class Settings(BaseSettings):
     # ============================================
     # Security
     # ============================================
-    SECRET_KEY: str = "change_me_to_random_64_character_string"
+    # CRITICAL: These must be changed in production via environment variables
+    SECRET_KEY: str = "INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
+
     # Password Policy
     PASSWORD_MIN_LENGTH: int = 12
     PASSWORD_REQUIRE_UPPERCASE: bool = True
     PASSWORD_REQUIRE_LOWERCASE: bool = True
     PASSWORD_REQUIRE_NUMBERS: bool = True
     PASSWORD_REQUIRE_SPECIAL: bool = True
-    
-    # Encryption
-    ENCRYPTION_KEY: str = "change_me_to_32_byte_hex_string"
-    
+
+    # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
+    ENCRYPTION_KEY: str = "INSECURE_DEFAULT_KEY_CHANGE_ME"
+
+    # Installation-specific salt for key derivation
+    # CRITICAL: Must be unique per installation, set via ENCRYPTION_SALT env var
+    ENCRYPTION_SALT: str = ""
+
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 60
+
+    # Security enforcement
+    SECURITY_ENFORCE_HTTPS: bool = False  # Set to True in production
+    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False  # Block startup with default keys
+
+    def validate_security_config(self) -> list[str]:
+        """
+        Validate security configuration for production readiness.
+        Returns list of security warnings/errors.
+        """
+        warnings = []
+
+        if self.ENVIRONMENT == "production":
+            if "INSECURE_DEFAULT" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                warnings.append("CRITICAL: SECRET_KEY must be set to a secure random value (min 32 chars)")
+
+            if "INSECURE_DEFAULT" in self.ENCRYPTION_KEY:
+                warnings.append("CRITICAL: ENCRYPTION_KEY must be set to a secure random value")
+
+            if not self.ENCRYPTION_SALT:
+                warnings.append("CRITICAL: ENCRYPTION_SALT must be set to a unique random value")
+
+            if self.DB_PASSWORD == "change_me_in_production":
+                warnings.append("CRITICAL: DB_PASSWORD must be changed from default")
+
+            if self.DEBUG:
+                warnings.append("WARNING: DEBUG mode should be disabled in production")
+
+            if self.ENABLE_DOCS:
+                warnings.append("WARNING: API documentation should be disabled in production")
+
+            if not self.SECURITY_ENFORCE_HTTPS:
+                warnings.append("WARNING: HTTPS enforcement should be enabled in production")
+
+        return warnings
+
+    def is_production_ready(self) -> bool:
+        """Check if configuration is production-ready (no CRITICAL warnings)."""
+        warnings = self.validate_security_config()
+        return not any("CRITICAL" in w for w in warnings)
     
     # ============================================
     # CORS
