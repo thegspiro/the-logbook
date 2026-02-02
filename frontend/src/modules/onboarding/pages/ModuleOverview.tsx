@@ -134,7 +134,7 @@ const ModuleOverview: React.FC = () => {
         <div className="max-w-6xl w-full mx-auto">
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <BackButton to="/onboarding/it-team" />
+            <BackButton to="/onboarding/roles" />
             <ResetProgressButton />
           </div>
 
