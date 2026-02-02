@@ -16,8 +16,8 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    JSON,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -25,6 +25,11 @@ import enum
 import uuid
 
 from app.core.database import Base
+
+
+def generate_uuid() -> str:
+    """Generate a UUID string for MySQL compatibility"""
+    return str(uuid.uuid4())
 
 
 class TrainingStatus(str, enum.Enum):
@@ -105,8 +110,8 @@ class TrainingCourse(Base):
 
     __tablename__ = "training_courses"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Course Information
     name = Column(String(255), nullable=False)
@@ -119,13 +124,13 @@ class TrainingCourse(Base):
     credit_hours = Column(Float)  # How many training hours it's worth
 
     # Requirements
-    prerequisites = Column(JSONB)  # List of prerequisite course IDs
+    prerequisites = Column(JSON)  # List of prerequisite course IDs
     expiration_months = Column(Integer)  # How long before recertification needed (null = doesn't expire)
 
     # Course Details
     instructor = Column(String(255))
     max_participants = Column(Integer)
-    materials_required = Column(JSONB)  # List of required materials
+    materials_required = Column(JSON)  # List of required materials
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -133,7 +138,7 @@ class TrainingCourse(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     training_records = relationship("TrainingRecord", back_populates="course", cascade="all, delete-orphan")
@@ -155,10 +160,10 @@ class TrainingRecord(Base):
 
     __tablename__ = "training_records"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    course_id = Column(UUID(as_uuid=True), ForeignKey("training_courses.id", ondelete="SET NULL"))
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"))
 
     # Training Details
     course_name = Column(String(255), nullable=False)  # Stored in case course is deleted
@@ -190,12 +195,12 @@ class TrainingRecord(Base):
 
     # Additional Information
     notes = Column(Text)
-    attachments = Column(JSONB)  # List of file URLs or references
+    attachments = Column(JSON)  # List of file URLs or references
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     course = relationship("TrainingCourse", back_populates="training_records")
@@ -220,8 +225,8 @@ class TrainingRequirement(Base):
 
     __tablename__ = "training_requirements"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Requirement Details
     name = Column(String(255), nullable=False)
@@ -237,12 +242,12 @@ class TrainingRequirement(Base):
 
     # Requirement Quantities (based on requirement_type)
     required_hours = Column(Float)  # For HOURS type
-    required_courses = Column(JSONB)  # For COURSES type - list of course IDs
+    required_courses = Column(JSON)  # For COURSES type - list of course IDs
     required_shifts = Column(Integer)  # For SHIFTS type
     required_calls = Column(Integer)  # For CALLS type
-    required_call_types = Column(JSONB)  # Specific incident types required
-    required_skills = Column(JSONB)  # For SKILLS_EVALUATION type - skill IDs
-    checklist_items = Column(JSONB)  # For CHECKLIST type - list of items
+    required_call_types = Column(JSON)  # Specific incident types required
+    required_skills = Column(JSON)  # For SKILLS_EVALUATION type - skill IDs
+    checklist_items = Column(JSON)  # For CHECKLIST type - list of items
 
     # Frequency
     frequency = Column(Enum(RequirementFrequency), nullable=False)
@@ -250,8 +255,8 @@ class TrainingRequirement(Base):
 
     # Applicability
     applies_to_all = Column(Boolean, default=True)
-    required_roles = Column(JSONB)  # List of role slugs this applies to (if not all)
-    required_positions = Column(JSONB)  # Positions: probationary, driver_candidate, officer, aic, etc.
+    required_roles = Column(JSON)  # List of role slugs this applies to (if not all)
+    required_positions = Column(JSON)  # Positions: probationary, driver_candidate, officer, aic, etc.
 
     # Deadlines
     start_date = Column(Date)
@@ -264,7 +269,7 @@ class TrainingRequirement(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (
         Index('idx_requirement_org_source', 'organization_id', 'source'),
@@ -286,12 +291,12 @@ class TrainingSession(Base):
 
     __tablename__ = "training_sessions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Links to Event and Course
-    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    course_id = Column(UUID(as_uuid=True), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True)
+    event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True)
 
     # Training Details (stored here for quick access)
     course_name = Column(String(255), nullable=False)
@@ -317,12 +322,12 @@ class TrainingSession(Base):
     # Status
     is_finalized = Column(Boolean, default=False)  # Event ended, approval workflow triggered
     finalized_at = Column(DateTime(timezone=True))
-    finalized_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    finalized_by = Column(String(36), ForeignKey("users.id"))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (
         Index('idx_training_session_event', 'event_id'),
@@ -351,12 +356,12 @@ class TrainingApproval(Base):
 
     __tablename__ = "training_approvals"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Links
-    training_session_id = Column(UUID(as_uuid=True), ForeignKey("training_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    training_session_id = Column(String(36), ForeignKey("training_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Approval Token (for email link)
     approval_token = Column(String(64), unique=True, nullable=False, index=True)  # Random token for secure access
@@ -364,7 +369,7 @@ class TrainingApproval(Base):
 
     # Approval Details
     status = Column(Enum(ApprovalStatus), default=ApprovalStatus.PENDING, index=True)
-    approved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    approved_by = Column(String(36), ForeignKey("users.id"))
     approved_at = Column(DateTime(timezone=True))
     approval_notes = Column(Text)
 
@@ -374,7 +379,7 @@ class TrainingApproval(Base):
 
     # Attendee Data (JSONB for flexibility)
     # Format: [{"user_id": "...", "check_in": "...", "check_out": "...", "duration": 120, ...}]
-    attendee_data = Column(JSONB, nullable=False)
+    attendee_data = Column(JSON, nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -401,8 +406,8 @@ class TrainingProgram(Base):
 
     __tablename__ = "training_programs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Program Details
     name = Column(String(255), nullable=False)
@@ -412,13 +417,13 @@ class TrainingProgram(Base):
 
     # Target Audience
     target_position = Column(String(100))  # probationary, driver_candidate, officer, aic, etc.
-    target_roles = Column(JSONB)  # Role slugs this program applies to
+    target_roles = Column(JSON)  # Role slugs this program applies to
 
     # Structure
     structure_type = Column(Enum(ProgramStructureType), nullable=False, default=ProgramStructureType.FLEXIBLE)
 
     # Prerequisites
-    prerequisite_program_ids = Column(JSONB)  # Programs that must be completed before enrollment
+    prerequisite_program_ids = Column(JSON)  # Programs that must be completed before enrollment
 
     # Enrollment Settings
     allows_concurrent_enrollment = Column(Boolean, default=True)  # Can member be in multiple programs
@@ -428,7 +433,7 @@ class TrainingProgram(Base):
     warning_days_before = Column(Integer, default=30)  # Send warning X days before deadline
 
     # Reminder Settings
-    reminder_conditions = Column(JSONB)  # Conditional reminder rules
+    reminder_conditions = Column(JSON)  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
     # Status
@@ -438,7 +443,7 @@ class TrainingProgram(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     phases = relationship("ProgramPhase", back_populates="program", cascade="all, delete-orphan", order_by="ProgramPhase.phase_number")
@@ -462,8 +467,8 @@ class ProgramPhase(Base):
 
     __tablename__ = "program_phases"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    program_id = Column(UUID(as_uuid=True), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Phase Details
     phase_number = Column(Integer, nullable=False)  # Order in program
@@ -471,7 +476,7 @@ class ProgramPhase(Base):
     description = Column(Text)
 
     # Prerequisites
-    prerequisite_phase_ids = Column(JSONB)  # Phases that must be completed first
+    prerequisite_phase_ids = Column(JSON)  # Phases that must be completed first
 
     # Advancement Settings
     requires_manual_advancement = Column(Boolean, default=False)  # Officer must approve advancement to next phase
@@ -505,10 +510,10 @@ class ProgramRequirement(Base):
 
     __tablename__ = "program_requirements"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    program_id = Column(UUID(as_uuid=True), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
-    phase_id = Column(UUID(as_uuid=True), ForeignKey("program_phases.id", ondelete="CASCADE"), nullable=True, index=True)  # Null if not phase-based
-    requirement_id = Column(UUID(as_uuid=True), ForeignKey("training_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="CASCADE"), nullable=True, index=True)  # Null if not phase-based
+    requirement_id = Column(String(36), ForeignKey("training_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Requirement Settings
     is_required = Column(Boolean, default=True)  # Required vs optional
@@ -547,9 +552,9 @@ class ProgramMilestone(Base):
 
     __tablename__ = "program_milestones"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    program_id = Column(UUID(as_uuid=True), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
-    phase_id = Column(UUID(as_uuid=True), ForeignKey("program_phases.id", ondelete="CASCADE"), nullable=True, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Milestone Details
     name = Column(String(255), nullable=False)
@@ -588,17 +593,17 @@ class ProgramEnrollment(Base):
 
     __tablename__ = "program_enrollments"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    program_id = Column(UUID(as_uuid=True), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Enrollment Details
     enrolled_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     target_completion_date = Column(Date)  # Calculated from time_limit_days
 
     # Current Progress
-    current_phase_id = Column(UUID(as_uuid=True), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True)
+    current_phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True)
     progress_percentage = Column(Float, default=0.0)  # Overall program completion percentage
 
     # Status
@@ -614,7 +619,7 @@ class ProgramEnrollment(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    enrolled_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Who enrolled the member
+    enrolled_by = Column(String(36), ForeignKey("users.id"))  # Who enrolled the member
 
     # Relationships
     program = relationship("TrainingProgram", back_populates="enrollments")
@@ -639,9 +644,9 @@ class RequirementProgress(Base):
 
     __tablename__ = "requirement_progress"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    enrollment_id = Column(UUID(as_uuid=True), ForeignKey("program_enrollments.id", ondelete="CASCADE"), nullable=False, index=True)
-    requirement_id = Column(UUID(as_uuid=True), ForeignKey("training_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    enrollment_id = Column(String(36), ForeignKey("program_enrollments.id", ondelete="CASCADE"), nullable=False, index=True)
+    requirement_id = Column(String(36), ForeignKey("training_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Progress Tracking
     status = Column(Enum(RequirementProgressStatus), default=RequirementProgressStatus.NOT_STARTED, index=True)
@@ -649,12 +654,12 @@ class RequirementProgress(Base):
     progress_percentage = Column(Float, default=0.0)  # Calculated percentage
 
     # Details
-    progress_notes = Column(JSONB)  # Track specific items completed, timestamps, etc.
+    progress_notes = Column(JSON)  # Track specific items completed, timestamps, etc.
 
     # Completion
     completed_at = Column(DateTime(timezone=True))
     verified_at = Column(DateTime(timezone=True))
-    verified_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Officer who verified
+    verified_by = Column(String(36), ForeignKey("users.id"))  # Officer who verified
     verification_notes = Column(Text)
 
     # Timestamps
@@ -682,8 +687,8 @@ class SkillEvaluation(Base):
 
     __tablename__ = "skill_evaluations"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Skill Details
     name = Column(String(255), nullable=False)
@@ -691,11 +696,11 @@ class SkillEvaluation(Base):
     category = Column(String(100))  # e.g., "Firefighting", "EMS", "Driver", "Officer"
 
     # Evaluation Criteria
-    evaluation_criteria = Column(JSONB)  # List of criteria to evaluate
+    evaluation_criteria = Column(JSON)  # List of criteria to evaluate
     passing_requirements = Column(Text)  # What constitutes passing
 
     # Linked Programs
-    required_for_programs = Column(JSONB)  # Program IDs that require this skill
+    required_for_programs = Column(JSON)  # Program IDs that require this skill
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -703,7 +708,7 @@ class SkillEvaluation(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (
         Index('idx_skill_org_category', 'organization_id', 'category'),
@@ -722,17 +727,17 @@ class SkillCheckoff(Base):
 
     __tablename__ = "skill_checkoffs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    skill_evaluation_id = Column(UUID(as_uuid=True), ForeignKey("skill_evaluations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill_evaluation_id = Column(String(36), ForeignKey("skill_evaluations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Evaluation Details
-    evaluator_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     status = Column(String(20), nullable=False)  # pending, passed, failed
 
     # Results
-    evaluation_results = Column(JSONB)  # Detailed results for each criterion
+    evaluation_results = Column(JSON)  # Detailed results for each criterion
     score = Column(Float)  # Overall score if applicable
     notes = Column(Text)
 
@@ -762,8 +767,8 @@ class Shift(Base):
 
     __tablename__ = "shifts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Shift Details
     shift_date = Column(Date, nullable=False, index=True)
@@ -771,20 +776,20 @@ class Shift(Base):
     end_time = Column(DateTime(timezone=True))
 
     # Assignment
-    apparatus_id = Column(UUID(as_uuid=True))  # Link to apparatus (future)
-    station_id = Column(UUID(as_uuid=True))  # Link to station (future)
+    apparatus_id = Column(String(36))  # Link to apparatus (future)
+    station_id = Column(String(36))  # Link to station (future)
 
     # Leadership
-    shift_officer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    shift_officer_id = Column(String(36), ForeignKey("users.id"))
 
     # Notes
     notes = Column(Text)
-    activities = Column(JSONB)  # Training, station duties, etc.
+    activities = Column(JSON)  # Training, station duties, etc.
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     __table_args__ = (
         Index('idx_shift_date', 'organization_id', 'shift_date'),
@@ -803,9 +808,9 @@ class ShiftAttendance(Base):
 
     __tablename__ = "shift_attendance"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    shift_id = Column(UUID(as_uuid=True), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Timing
     checked_in_at = Column(DateTime(timezone=True))
@@ -833,9 +838,9 @@ class ShiftCall(Base):
 
     __tablename__ = "shift_calls"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    shift_id = Column(UUID(as_uuid=True), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False, index=True)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Incident Details
     incident_number = Column(String(100))
@@ -851,7 +856,7 @@ class ShiftCall(Base):
     medical_refusal = Column(Boolean, default=False)
 
     # Responding Members
-    responding_members = Column(JSONB)  # Array of user IDs
+    responding_members = Column(JSON)  # Array of user IDs
 
     # Notes
     notes = Column(Text)
