@@ -55,6 +55,11 @@ from app.models.inventory import (
     CheckOutRecord, MaintenanceRecord
 )
 
+# IP Security
+from app.models.ip_security import (
+    IPException, BlockedAccessAttempt, CountryBlockRule
+)
+
 # This is the Alembic Config object
 config = context.config
 

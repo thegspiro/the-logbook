@@ -143,7 +143,34 @@ class Settings(BaseSettings):
         """Check if configuration is production-ready (no CRITICAL warnings)."""
         warnings = self.validate_security_config()
         return not any("CRITICAL" in w for w in warnings)
-    
+
+    # ============================================
+    # GeoIP and Country Blocking
+    # ============================================
+    GEOIP_ENABLED: bool = True  # Enable geo-blocking
+    GEOIP_DATABASE_PATH: str = "./data/GeoLite2-Country.mmdb"  # MaxMind database path
+
+    # Blocked countries (ISO 3166-1 alpha-2 codes, comma-separated)
+    # Default: High-risk nations commonly blocked in security-sensitive applications
+    BLOCKED_COUNTRIES: str = "KP,IR,SY,CU,RU,BY"
+
+    # IP Logging
+    IP_LOGGING_ENABLED: bool = True  # Log all request IPs with geo info
+
+    @field_validator('BLOCKED_COUNTRIES', mode='before')
+    @classmethod
+    def parse_blocked_countries(cls, v):
+        """Parse BLOCKED_COUNTRIES - keep as string for later parsing."""
+        if isinstance(v, list):
+            return ",".join(v)
+        return v
+
+    def get_blocked_countries_set(self) -> set:
+        """Get blocked countries as a set of ISO codes."""
+        if not self.BLOCKED_COUNTRIES:
+            return set()
+        return {c.strip().upper() for c in self.BLOCKED_COUNTRIES.split(",") if c.strip()}
+
     # ============================================
     # CORS
     # ============================================

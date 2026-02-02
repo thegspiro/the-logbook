@@ -114,6 +114,19 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Redis unavailable - running in degraded mode (caching disabled)")
 
+    # Initialize GeoIP service for country blocking
+    if settings.GEOIP_ENABLED:
+        from app.core.geoip import init_geoip_service
+        blocked_countries = settings.get_blocked_countries_set()
+        geoip = init_geoip_service(
+            geoip_db_path=settings.GEOIP_DATABASE_PATH,
+            blocked_countries=blocked_countries,
+            enabled=True,
+        )
+        logger.info(f"GeoIP service initialized. Blocked countries: {blocked_countries or 'none'}")
+    else:
+        logger.info("GeoIP service disabled")
+
     logger.info(f"Server started on port {settings.PORT}")
     logger.info(f"API Documentation: http://localhost:{settings.PORT}/docs")
     logger.info(f"Health Check: http://localhost:{settings.PORT}/health")
@@ -143,8 +156,16 @@ app = FastAPI(
 # ============================================
 
 # Security Headers Middleware (add first so it wraps all responses)
-from app.core.security_middleware import SecurityHeadersMiddleware
+from app.core.security_middleware import SecurityHeadersMiddleware, IPBlockingMiddleware, IPLoggingMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
+
+# IP Blocking Middleware (geo-blocking and IP blocklist)
+if settings.GEOIP_ENABLED:
+    app.add_middleware(IPBlockingMiddleware, enabled=True, log_blocked_attempts=True)
+
+# IP Logging Middleware (logs all requests with geo info)
+if settings.IP_LOGGING_ENABLED:
+    app.add_middleware(IPLoggingMiddleware)
 
 # CORS - Restrict methods and headers for security
 app.add_middleware(
