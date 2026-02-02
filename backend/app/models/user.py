@@ -42,11 +42,27 @@ class UserStatus(str, enum.Enum):
     RETIRED = "retired"
 
 
+class OrganizationType(str, enum.Enum):
+    """Organization/Department type"""
+    FIRE_DEPARTMENT = "fire_department"
+    EMS_ONLY = "ems_only"
+    FIRE_EMS_COMBINED = "fire_ems_combined"
+
+
+class IdentifierType(str, enum.Enum):
+    """Type of department identifier used"""
+    FDID = "fdid"  # Fire Department ID (NFIRS)
+    STATE_ID = "state_id"  # State license/certification number
+    DEPARTMENT_ID = "department_id"  # Internal department ID only
+
+
 class Organization(Base):
     """
     Organization/Department model
 
     Supports multi-tenancy - each organization is isolated.
+    Contains comprehensive organization details including addresses,
+    contact information, and regulatory identifiers.
     """
 
     __tablename__ = "organizations"
@@ -55,19 +71,74 @@ class Organization(Base):
     name = Column(String(255), nullable=False)
     slug = Column(String(100), nullable=False, unique=True)
     description = Column(Text)
+
+    # Organization Type
+    organization_type = Column(
+        Enum(OrganizationType),
+        default=OrganizationType.FIRE_DEPARTMENT,
+        nullable=False
+    )
+
+    # Timezone
+    timezone = Column(String(50), default="America/New_York")
+
+    # Contact Information
+    phone = Column(String(20))
+    fax = Column(String(20))
+    email = Column(String(255))
+    website = Column(String(255))
+
+    # Mailing Address
+    mailing_address_line1 = Column(String(255))
+    mailing_address_line2 = Column(String(255))
+    mailing_city = Column(String(100))
+    mailing_state = Column(String(50))
+    mailing_zip = Column(String(20))
+    mailing_country = Column(String(100), default="USA")
+
+    # Physical Address (station/headquarters location)
+    physical_address_same = Column(Boolean, default=True)
+    physical_address_line1 = Column(String(255))
+    physical_address_line2 = Column(String(255))
+    physical_city = Column(String(100))
+    physical_state = Column(String(50))
+    physical_zip = Column(String(20))
+    physical_country = Column(String(100), default="USA")
+
+    # Department Identifiers
+    identifier_type = Column(
+        Enum(IdentifierType),
+        default=IdentifierType.DEPARTMENT_ID,
+        nullable=False
+    )
+    fdid = Column(String(50))  # Fire Department ID (NFIRS)
+    state_id = Column(String(50))  # State license/certification number
+    department_id = Column(String(50))  # Internal department ID
+
+    # Additional Information
+    county = Column(String(100))
+    founded_year = Column(Integer)
+    tax_id = Column(String(50))  # EIN for 501(c)(3) organizations
+
+    # Logo stored as base64 or URL
+    logo = Column(Text)
+
+    # Legacy field - keep for compatibility
     type = Column(String(50), default="fire_department")
+
+    # Settings JSON for extensibility
     settings = Column(JSON, default={})
     active = Column(Boolean, default=True, index=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
     users = relationship("User", back_populates="organization")
     roles = relationship("Role", back_populates="organization")
-    
+
     def __repr__(self):
-        return f"<Organization(name={self.name})>"
+        return f"<Organization(name={self.name}, type={self.organization_type})>"
 
 
 class User(Base):
