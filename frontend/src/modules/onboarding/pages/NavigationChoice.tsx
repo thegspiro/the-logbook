@@ -34,7 +34,7 @@ const NavigationChoice: React.FC = () => {
     setIsSaving(true);
 
     // Save department info to API
-    const { data, error: apiError } = await execute(
+    const { data } = await execute(
       async () => {
         const response = await apiClient.saveDepartmentInfo({
           name: departmentName,
