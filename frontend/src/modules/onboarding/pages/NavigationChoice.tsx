@@ -1,11 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
-import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import toast from 'react-hot-toast';
+import { ProgressIndicator, BackButton, AutoSaveNotification, ErrorAlert, LoadingOverlay } from '../components';
 import { useOnboardingStore } from '../store';
+import { useApiRequest } from '../hooks';
+import { apiClient } from '../services/api-client';
 
 const NavigationChoice: React.FC = () => {
   const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
 
   // Zustand store
   const departmentName = useOnboardingStore(state => state.departmentName);
@@ -14,6 +18,9 @@ const NavigationChoice: React.FC = () => {
   const setNavigationLayout = useOnboardingStore(state => state.setNavigationLayout);
   const lastSaved = useOnboardingStore(state => state.lastSaved);
 
+  // API request hook
+  const { execute, error, canRetry, clearError } = useApiRequest();
+
   useEffect(() => {
     // Redirect if no department name set
     if (!departmentName) {
@@ -21,14 +28,43 @@ const NavigationChoice: React.FC = () => {
     }
   }, [departmentName, navigate]);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!navigationLayout) return;
 
-    // Store navigation preference (backward compatibility)
-    sessionStorage.setItem('navigationLayout', navigationLayout);
+    setIsSaving(true);
 
-    // Navigate to email platform choice
-    navigate('/onboarding/email-platform');
+    // Save department info to API
+    const { data, error: apiError } = await execute(
+      async () => {
+        const response = await apiClient.saveDepartmentInfo({
+          name: departmentName,
+          logo: logoPreview || undefined,
+          navigation_layout: navigationLayout,
+        });
+
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        return response;
+      },
+      {
+        step: 'Navigation Choice',
+        action: 'Save department information',
+        userContext: `Department: ${departmentName}, Layout: ${navigationLayout}`,
+      }
+    );
+
+    setIsSaving(false);
+
+    if (data) {
+      // Store navigation preference (backward compatibility)
+      sessionStorage.setItem('navigationLayout', navigationLayout);
+
+      toast.success('Department information saved');
+      // Navigate to email platform choice
+      navigate('/onboarding/email-platform');
+    }
   };
 
   const currentYear = new Date().getFullYear();
@@ -259,19 +295,31 @@ const NavigationChoice: React.FC = () => {
             </button>
           </div>
 
+          {/* Error Alert */}
+          {error && (
+            <div className="max-w-md mx-auto mb-6">
+              <ErrorAlert
+                message={error}
+                canRetry={canRetry}
+                onRetry={handleContinue}
+                onDismiss={clearError}
+              />
+            </div>
+          )}
+
           {/* Continue Button */}
           <div className="max-w-md mx-auto">
             <button
               onClick={handleContinue}
-              disabled={!navigationLayout}
+              disabled={!navigationLayout || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
-                navigationLayout
+                navigationLayout && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
-              Continue
+              {isSaving ? 'Saving...' : 'Continue'}
             </button>
 
             {/* Help Text */}
