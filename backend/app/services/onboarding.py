@@ -432,7 +432,7 @@ class OnboardingService:
             db=self.db,
             event_type="onboarding.admin_created",
             event_category="onboarding",
-            severity="info",
+            severity="INFO",
             user_id=str(user.id),
             username=username,
             event_data={
@@ -554,7 +554,7 @@ class OnboardingService:
             db=self.db,
             event_type="onboarding.completed",
             event_category="onboarding",
-            severity="info",
+            severity="INFO",
             event_data={
                 "organization": status.organization_name,
                 "admin_user": status.admin_username,
