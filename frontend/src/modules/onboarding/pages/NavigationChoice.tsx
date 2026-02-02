@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ProgressIndicator, BackButton, AutoSaveNotification, ErrorAlert, LoadingOverlay } from '../components';
+import { ProgressIndicator, BackButton, AutoSaveNotification, ErrorAlert } from '../components';
 import { useOnboardingStore } from '../store';
 import { useApiRequest } from '../hooks';
 import { apiClient } from '../services/api-client';

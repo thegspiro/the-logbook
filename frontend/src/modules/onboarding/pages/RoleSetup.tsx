@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -22,73 +22,108 @@ import {
 import toast from 'react-hot-toast';
 import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
+import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
 
-// Permission categories with View/Manage distinction
-const permissionCategories = {
-  members: {
-    name: 'Member Management',
-    icon: Users,
-    view: ['View member directory', 'See contact info', 'View profiles'],
-    manage: ['Add/edit members', 'Manage status', 'Import/export'],
-  },
-  roles: {
-    name: 'Role Management',
-    icon: Shield,
-    view: ['View roles', 'See role assignments'],
-    manage: ['Create/edit roles', 'Assign roles', 'Set permissions'],
-  },
-  events: {
-    name: 'Events & Attendance',
-    icon: ClipboardList,
-    view: ['View events', 'RSVP', 'Check-in'],
-    manage: ['Create events', 'Manage RSVPs', 'Override attendance'],
-  },
-  documents: {
-    name: 'Documents & Files',
-    icon: ClipboardList,
-    view: ['Browse documents', 'Download files'],
-    manage: ['Upload files', 'Create folders', 'Set visibility'],
-  },
-  training: {
-    name: 'Training & Certifications',
-    icon: GraduationCap,
-    view: ['View training records', 'See courses'],
-    manage: ['Create courses', 'Record completions', 'Set requirements'],
-  },
-  inventory: {
-    name: 'Equipment & Inventory',
-    icon: Wrench,
-    view: ['View equipment', 'Request items'],
-    manage: ['Add equipment', 'Track maintenance', 'Manage assignments'],
-  },
-  elections: {
-    name: 'Elections & Voting',
-    icon: CheckCircle,
-    view: ['View elections', 'Cast votes'],
-    manage: ['Create elections', 'Manage candidates', 'Certify results'],
-  },
-  scheduling: {
-    name: 'Scheduling & Shifts',
-    icon: ClipboardList,
-    view: ['View schedules', 'Request swaps'],
-    manage: ['Create schedules', 'Approve swaps', 'Assign shifts'],
-  },
-  reports: {
-    name: 'Reports & Analytics',
-    icon: ClipboardList,
-    view: ['View dashboards', 'Personal reports'],
-    manage: ['Create reports', 'Export data', 'Configure analytics'],
-  },
-  settings: {
-    name: 'Organization Settings',
-    icon: UserCog,
-    view: ['View settings'],
-    manage: ['Edit settings', 'Manage integrations', 'Configure modules'],
-  },
+/**
+ * Build permission categories dynamically from the module registry.
+ * This ensures new modules automatically appear in role configuration.
+ */
+const buildPermissionCategories = (modules: ModuleDefinition[]) => {
+  const categories: Record<
+    string,
+    {
+      name: string;
+      icon: React.ElementType;
+      view: string[];
+      manage: string[];
+    }
+  > = {};
+
+  modules.forEach((module) => {
+    categories[module.id] = {
+      name: module.name,
+      icon: module.icon,
+      view: module.permissions.view,
+      manage: module.permissions.manage,
+    };
+  });
+
+  return categories;
 };
 
-// Predefined role templates
-const roleTemplates = {
+/**
+ * Generate default permissions object with all modules set to specified values.
+ */
+const generateDefaultPermissions = (
+  modules: ModuleDefinition[],
+  defaults: { view: boolean; manage: boolean }
+): Record<string, { view: boolean; manage: boolean }> => {
+  return Object.fromEntries(modules.map((m) => [m.id, { ...defaults }]));
+};
+
+/**
+ * Generate permissions for a specific role type.
+ * This ensures new modules get sensible defaults for each role.
+ */
+const generateRolePermissions = (
+  modules: ModuleDefinition[],
+  roleType: 'full_access' | 'leadership' | 'officer' | 'specialist' | 'member' | 'probationary',
+  specialties?: string[]
+): Record<string, { view: boolean; manage: boolean }> => {
+  const permissions: Record<string, { view: boolean; manage: boolean }> = {};
+
+  modules.forEach((module) => {
+    switch (roleType) {
+      case 'full_access':
+        // Full access to everything
+        permissions[module.id] = { view: true, manage: true };
+        break;
+      case 'leadership':
+        // Leaders can manage most things except sensitive system modules
+        permissions[module.id] = {
+          view: true,
+          manage: module.id !== 'settings',
+        };
+        break;
+      case 'officer':
+        // Officers can view everything, manage their area
+        permissions[module.id] = {
+          view: true,
+          manage: specialties?.includes(module.id) || false,
+        };
+        break;
+      case 'specialist':
+        // Specialists have narrow focus
+        permissions[module.id] = {
+          view: true,
+          manage: specialties?.includes(module.id) || false,
+        };
+        break;
+      case 'member':
+        // Standard members can view most things
+        permissions[module.id] = {
+          view: module.category !== 'System',
+          manage: false,
+        };
+        break;
+      case 'probationary':
+        // Limited view access
+        permissions[module.id] = {
+          view: ['members', 'events', 'documents', 'training', 'scheduling'].includes(module.id),
+          manage: false,
+        };
+        break;
+    }
+  });
+
+  return permissions;
+};
+
+/**
+ * Build role templates dynamically using the module registry.
+ * This ensures new modules are included in role permissions automatically.
+ */
+const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
   leadership: {
     name: 'Leadership',
     description: 'Executive and administrative leadership roles',
@@ -99,18 +134,7 @@ const roleTemplates = {
         description: 'Top leadership with full organizational oversight',
         icon: Crown,
         priority: 95,
-        permissions: {
-          members: { view: true, manage: true },
-          roles: { view: true, manage: true },
-          events: { view: true, manage: true },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: true },
-          inventory: { view: true, manage: true },
-          elections: { view: true, manage: true },
-          scheduling: { view: true, manage: true },
-          reports: { view: true, manage: true },
-          settings: { view: true, manage: true },
-        },
+        permissions: generateRolePermissions(modules, 'full_access'),
       },
       {
         id: 'assistant_chief',
@@ -118,18 +142,7 @@ const roleTemplates = {
         description: 'Second in command, supports chief duties',
         icon: Star,
         priority: 90,
-        permissions: {
-          members: { view: true, manage: true },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: true },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: true },
-          inventory: { view: true, manage: true },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: true },
-          reports: { view: true, manage: true },
-          settings: { view: true, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'leadership'),
       },
     ],
   },
@@ -143,18 +156,14 @@ const roleTemplates = {
         description: 'Records, communications, and elections',
         icon: Briefcase,
         priority: 75,
-        permissions: {
-          members: { view: true, manage: true },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: true },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: false },
-          elections: { view: true, manage: true },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: true },
-          settings: { view: true, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'officer', [
+          'members',
+          'events',
+          'documents',
+          'elections',
+          'minutes',
+          'reports',
+        ]),
       },
       {
         id: 'treasurer',
@@ -162,18 +171,7 @@ const roleTemplates = {
         description: 'Financial oversight and reporting',
         icon: Briefcase,
         priority: 75,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: false },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: false },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: true },
-          settings: { view: true, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'officer', ['documents', 'reports']),
       },
       {
         id: 'training_officer',
@@ -181,18 +179,11 @@ const roleTemplates = {
         description: 'Manages training programs and certifications',
         icon: GraduationCap,
         priority: 65,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: true },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: true },
-          inventory: { view: true, manage: false },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: false },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'specialist', [
+          'training',
+          'events',
+          'documents',
+        ]),
       },
       {
         id: 'safety_officer',
@@ -200,18 +191,14 @@ const roleTemplates = {
         description: 'Safety compliance and oversight',
         icon: Shield,
         priority: 65,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: true },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: true },
-          inventory: { view: true, manage: true },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: true },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'specialist', [
+          'training',
+          'events',
+          'documents',
+          'inventory',
+          'reports',
+          'forms',
+        ]),
       },
     ],
   },
@@ -225,18 +212,7 @@ const roleTemplates = {
         description: 'Equipment and inventory management',
         icon: Wrench,
         priority: 60,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: false },
-          documents: { view: true, manage: false },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: true },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: false },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
       },
       {
         id: 'scheduling_officer',
@@ -244,18 +220,7 @@ const roleTemplates = {
         description: 'Manages duty rosters and shift scheduling',
         icon: ClipboardList,
         priority: 60,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: false },
-          documents: { view: true, manage: false },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: false },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: true },
-          reports: { view: true, manage: false },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'specialist', ['scheduling']),
       },
       {
         id: 'public_outreach',
@@ -263,18 +228,7 @@ const roleTemplates = {
         description: 'Community events and public education',
         icon: Users,
         priority: 55,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: true },
-          documents: { view: true, manage: true },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: false },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: false },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents']),
       },
     ],
   },
@@ -288,18 +242,7 @@ const roleTemplates = {
         description: 'Active member with standard access',
         icon: Users,
         priority: 20,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: true, manage: false },
-          events: { view: true, manage: false },
-          documents: { view: true, manage: false },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: false },
-          elections: { view: true, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: true, manage: false },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'member'),
       },
       {
         id: 'probationary',
@@ -307,22 +250,11 @@ const roleTemplates = {
         description: 'New member with limited access during probation',
         icon: Users,
         priority: 10,
-        permissions: {
-          members: { view: true, manage: false },
-          roles: { view: false, manage: false },
-          events: { view: true, manage: false },
-          documents: { view: true, manage: false },
-          training: { view: true, manage: false },
-          inventory: { view: true, manage: false },
-          elections: { view: false, manage: false },
-          scheduling: { view: true, manage: false },
-          reports: { view: false, manage: false },
-          settings: { view: false, manage: false },
-        },
+        permissions: generateRolePermissions(modules, 'probationary'),
       },
     ],
   },
-};
+});
 
 interface RoleConfig {
   id: string;
@@ -340,8 +272,16 @@ const RoleSetup: React.FC = () => {
   const logoPreview = useOnboardingStore(state => state.logoData);
   const lastSaved = useOnboardingStore(state => state.lastSaved);
 
+  // Build permission categories and role templates from the module registry
+  // This ensures new modules automatically appear in role configuration
+  const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
+  const roleTemplates = useMemo(() => buildRoleTemplates(MODULE_REGISTRY), []);
+
   // Selected roles
   const [selectedRoles, setSelectedRoles] = useState<Record<string, RoleConfig>>(() => {
+    // Build templates for initial state
+    const templates = buildRoleTemplates(MODULE_REGISTRY);
+
     // Pre-select essential roles
     const initial: Record<string, RoleConfig> = {};
     // Always include admin
@@ -351,13 +291,11 @@ const RoleSetup: React.FC = () => {
       description: 'Full system access - IT and system administrators',
       icon: Shield,
       priority: 100,
-      permissions: Object.fromEntries(
-        Object.keys(permissionCategories).map(k => [k, { view: true, manage: true }])
-      ),
+      permissions: generateRolePermissions(MODULE_REGISTRY, 'full_access'),
     };
     // Pre-select some common roles
     ['chief', 'secretary', 'training_officer', 'member'].forEach(roleId => {
-      Object.values(roleTemplates).forEach(category => {
+      Object.values(templates).forEach(category => {
         const role = category.roles.find(r => r.id === roleId);
         if (role) {
           initial[roleId] = { ...role };
@@ -436,6 +374,7 @@ const RoleSetup: React.FC = () => {
       return;
     }
 
+    // Use registry to generate permissions for all modules
     const newRole: RoleConfig = {
       id: roleId,
       name: customRoleName,
@@ -443,9 +382,7 @@ const RoleSetup: React.FC = () => {
       icon: UserCog,
       priority: 50,
       isCustom: true,
-      permissions: Object.fromEntries(
-        Object.keys(permissionCategories).map(k => [k, { view: true, manage: false }])
-      ),
+      permissions: generateDefaultPermissions(MODULE_REGISTRY, { view: true, manage: false }),
     };
 
     setSelectedRoles(prev => ({ ...prev, [roleId]: newRole }));

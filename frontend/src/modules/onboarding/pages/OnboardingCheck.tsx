@@ -135,8 +135,6 @@ const OnboardingCheck: React.FC = () => {
         setRetryCount(prev => prev + 1);
         setIsWaiting(true);
 
-        const remainingAttempts = MAX_RETRIES - retryCount - 1;
-        const estimatedSeconds = Math.round((remainingAttempts * (delay + 1000)) / 1000);
         setStatusMessage(`Waiting for services... (${retryCount + 1}/${MAX_RETRIES})`);
 
         setTimeout(() => {
