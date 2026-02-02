@@ -18,8 +18,8 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Numeric,
+    JSON,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -27,6 +27,11 @@ import enum
 import uuid
 
 from app.core.database import Base
+
+
+def generate_uuid() -> str:
+    """Generate a UUID string for MySQL compatibility"""
+    return str(uuid.uuid4())
 
 
 class ItemType(str, enum.Enum):
@@ -89,8 +94,8 @@ class InventoryCategory(Base):
 
     __tablename__ = "inventory_categories"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Category Information
     name = Column(String(255), nullable=False)
@@ -98,7 +103,7 @@ class InventoryCategory(Base):
     item_type = Column(Enum(ItemType), nullable=False)
 
     # Organization
-    parent_category_id = Column(UUID(as_uuid=True), ForeignKey("inventory_categories.id", ondelete="SET NULL"))
+    parent_category_id = Column(String(36), ForeignKey("inventory_categories.id", ondelete="SET NULL"))
 
     # Settings
     requires_assignment = Column(Boolean, default=False)  # Must be assigned to member
@@ -115,7 +120,7 @@ class InventoryCategory(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     items = relationship("InventoryItem", back_populates="category", foreign_keys="InventoryItem.category_id")
@@ -137,9 +142,9 @@ class InventoryItem(Base):
 
     __tablename__ = "inventory_items"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    category_id = Column(UUID(as_uuid=True), ForeignKey("inventory_categories.id", ondelete="SET NULL"), index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id = Column(String(36), ForeignKey("inventory_categories.id", ondelete="SET NULL"), index=True)
 
     # Basic Information
     name = Column(String(255), nullable=False, index=True)
@@ -187,13 +192,13 @@ class InventoryItem(Base):
     inspection_interval_days = Column(Integer)  # How often to inspect
 
     # Assignment (current assignment if any)
-    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    assigned_to_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True)
     assigned_date = Column(DateTime(timezone=True))
 
     # Additional Data
     notes = Column(Text)
-    custom_fields = Column(JSONB)  # Organization-specific fields
-    attachments = Column(JSONB)  # Links to photos, manuals, etc.
+    custom_fields = Column(JSON)  # Organization-specific fields
+    attachments = Column(JSON)  # Links to photos, manuals, etc.
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -201,7 +206,7 @@ class InventoryItem(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     category = relationship("InventoryCategory", back_populates="items", foreign_keys=[category_id])
@@ -228,12 +233,12 @@ class ItemAssignment(Base):
 
     __tablename__ = "item_assignments"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Assignment Details
-    item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     assignment_type = Column(Enum(AssignmentType), default=AssignmentType.PERMANENT, nullable=False)
 
     # Dates
@@ -242,8 +247,8 @@ class ItemAssignment(Base):
     expected_return_date = Column(DateTime(timezone=True))
 
     # Assignment Info
-    assigned_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    returned_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    assigned_by = Column(String(36), ForeignKey("users.id"))
+    returned_by = Column(String(36), ForeignKey("users.id"))
     assignment_reason = Column(Text)
     return_condition = Column(Enum(ItemCondition))
     return_notes = Column(Text)
@@ -276,12 +281,12 @@ class CheckOutRecord(Base):
 
     __tablename__ = "checkout_records"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Checkout Details
-    item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Dates & Times
     checked_out_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -289,8 +294,8 @@ class CheckOutRecord(Base):
     checked_in_at = Column(DateTime(timezone=True), index=True)
 
     # Checkout Info
-    checked_out_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Who approved/logged the checkout
-    checked_in_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Who logged the return
+    checked_out_by = Column(String(36), ForeignKey("users.id"))  # Who approved/logged the checkout
+    checked_in_by = Column(String(36), ForeignKey("users.id"))  # Who logged the return
     checkout_reason = Column(Text)
 
     # Return Condition
@@ -327,11 +332,11 @@ class MaintenanceRecord(Base):
 
     __tablename__ = "maintenance_records"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Maintenance Details
-    item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
     maintenance_type = Column(Enum(MaintenanceType), nullable=False)
 
     # Dates
@@ -340,7 +345,7 @@ class MaintenanceRecord(Base):
     next_due_date = Column(Date, index=True)
 
     # Details
-    performed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    performed_by = Column(String(36), ForeignKey("users.id"))
     vendor_name = Column(String(255))  # If serviced by external vendor
     cost = Column(Numeric(10, 2))
 
@@ -350,15 +355,15 @@ class MaintenanceRecord(Base):
 
     # Work Performed
     description = Column(Text)
-    parts_replaced = Column(JSONB)  # List of parts that were replaced
+    parts_replaced = Column(JSON)  # List of parts that were replaced
     parts_cost = Column(Numeric(10, 2))
     labor_hours = Column(Float)
 
     # Results
     passed = Column(Boolean)  # For inspections
     notes = Column(Text)
-    issues_found = Column(JSONB)  # List of issues discovered
-    attachments = Column(JSONB)  # Photos, service reports, etc.
+    issues_found = Column(JSON)  # List of issues discovered
+    attachments = Column(JSON)  # Photos, service reports, etc.
 
     # Status
     is_completed = Column(Boolean, default=False, index=True)
@@ -366,7 +371,7 @@ class MaintenanceRecord(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     item = relationship("InventoryItem", back_populates="maintenance_records", foreign_keys=[item_id])

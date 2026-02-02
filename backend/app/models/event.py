@@ -14,14 +14,19 @@ from sqlalchemy import (
     Integer,
     Enum as SQLEnum,
     Index,
+    JSON,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from uuid import uuid4
 from datetime import datetime
 from enum import Enum
+import uuid
 
 from app.core.database import Base
+
+
+def generate_uuid() -> str:
+    """Generate a UUID string for MySQL compatibility"""
+    return str(uuid.uuid4())
 
 
 class EventType(str, Enum):
@@ -58,8 +63,8 @@ class Event(Base):
     """
     __tablename__ = "events"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
 
     # Event details
     title = Column(String(200), nullable=False)
@@ -67,7 +72,7 @@ class Event(Base):
     event_type = Column(SQLEnum(EventType), nullable=False, default=EventType.OTHER)
 
     # Location (new system with location_id FK, or legacy free-text location for "Other")
-    location_id = Column(UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True)  # FK to Location table
+    location_id = Column(String(36), ForeignKey("locations.id"), nullable=True)  # FK to Location table
     location = Column(String(300), nullable=True)  # Free-text location for "Other Location" or legacy events
     location_details = Column(Text, nullable=True)  # Additional directions, room numbers, etc.
 
@@ -81,11 +86,11 @@ class Event(Base):
     requires_rsvp = Column(Boolean, nullable=False, default=False)
     rsvp_deadline = Column(DateTime, nullable=True)
     max_attendees = Column(Integer, nullable=True)  # Null means unlimited
-    allowed_rsvp_statuses = Column(JSONB, nullable=True)  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
+    allowed_rsvp_statuses = Column(JSON, nullable=True)  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
 
     # Attendance settings
     is_mandatory = Column(Boolean, nullable=False, default=False)
-    eligible_roles = Column(JSONB, nullable=True)  # List of role slugs, null means all members
+    eligible_roles = Column(JSON, nullable=True)  # List of role slugs, null means all members
 
     # Additional settings
     allow_guests = Column(Boolean, nullable=False, default=False)
@@ -99,8 +104,8 @@ class Event(Base):
     require_checkout = Column(Boolean, nullable=False, default=False)  # Require manual check-out
 
     # Custom fields
-    custom_fields = Column(JSONB, nullable=True)  # Flexible storage for event-specific data
-    attachments = Column(JSONB, nullable=True)  # List of attachment URLs/metadata
+    custom_fields = Column(JSON, nullable=True)  # Flexible storage for event-specific data
+    attachments = Column(JSON, nullable=True)  # List of attachment URLs/metadata
 
     # Status
     is_cancelled = Column(Boolean, nullable=False, default=False)
@@ -108,7 +113,7 @@ class Event(Base):
     cancelled_at = Column(DateTime, nullable=True)
 
     # Metadata
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -132,9 +137,9 @@ class EventRSVP(Base):
     """
     __tablename__ = "event_rsvps"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     # RSVP details
     status = Column(SQLEnum(RSVPStatus), nullable=False, default=RSVPStatus.GOING)
@@ -155,7 +160,7 @@ class EventRSVP(Base):
     override_check_in_at = Column(DateTime, nullable=True)  # Manual override of check-in time
     override_check_out_at = Column(DateTime, nullable=True)  # Manual override of check-out time
     override_duration_minutes = Column(Integer, nullable=True)  # Manual override of duration
-    overridden_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # Who made the override
+    overridden_by = Column(String(36), ForeignKey("users.id"), nullable=True)  # Who made the override
     overridden_at = Column(DateTime, nullable=True)  # When the override was made
 
     # Relationships

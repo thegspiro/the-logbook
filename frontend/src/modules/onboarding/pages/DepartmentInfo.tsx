@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
 import { useApiRequest } from '../hooks';
-import { apiClient } from '../services/api-client';
 import { ProgressIndicator, LoadingOverlay, ErrorAlert, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 
@@ -26,7 +25,7 @@ const DepartmentInfo: React.FC = () => {
 
   // Hooks
   const { initializeSession, hasSession, isLoading: sessionLoading } = useOnboardingSession();
-  const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
+  const { isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // Initialize session on mount
   useEffect(() => {

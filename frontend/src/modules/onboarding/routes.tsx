@@ -10,6 +10,7 @@ import {
   FileStorageChoice,
   AuthenticationChoice,
   ITTeamBackupAccess,
+  RoleSetup,
   ModuleOverview,
   ModuleConfigTemplate,
   AdminUserCreation,
@@ -17,26 +18,37 @@ import {
 
 /**
  * File Storage Config Placeholder Component
- * Temporary placeholder while the full file storage config page is under development
+ * Skips detailed configuration for now - can be configured later in settings
  */
 const FileStorageConfigPlaceholder: React.FC = () => {
   const navigate = useNavigate();
+  const platform = sessionStorage.getItem('fileStoragePlatform') || 'local';
+
+  // Auto-redirect after a brief moment to show the user what happened
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      navigate('/onboarding/authentication');
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
+        <div className="text-green-400 text-5xl mb-4">✓</div>
         <h2 className="text-3xl font-bold text-white mb-4">
-          File Storage Configuration
+          File Storage Selected
         </h2>
-        <p className="text-slate-300 mb-6">
-          File storage configuration page is under development.
+        <p className="text-slate-300 mb-2">
+          You selected: <span className="text-white font-semibold capitalize">{platform.replace('_', ' ')}</span>
         </p>
-        <button
-          onClick={() => navigate('/onboarding/authentication')}
-          className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
-        >
-          Continue to Authentication →
-        </button>
+        <p className="text-slate-400 text-sm mb-6">
+          Detailed configuration can be done later in Settings → File Storage.
+        </p>
+        <div className="flex items-center justify-center gap-2 text-slate-400">
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+          <span>Continuing to authentication...</span>
+        </div>
       </div>
     </div>
   );
@@ -44,71 +56,33 @@ const FileStorageConfigPlaceholder: React.FC = () => {
 
 /**
  * Security Check Placeholder Component
- * Temporary placeholder while security check page is under development
+ * This route is not part of the main onboarding flow - redirects to modules
  */
 const SecurityCheckPlaceholder: React.FC = () => {
   const navigate = useNavigate();
 
+  // Auto-redirect to modules page since this isn't in the main flow
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      navigate('/onboarding/modules');
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [navigate]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
+        <div className="text-blue-400 text-5xl mb-4">🔒</div>
         <h2 className="text-3xl font-bold text-white mb-4">
-          Security Check - Step 2
+          Security Configuration
         </h2>
         <p className="text-slate-300 mb-6">
-          The remaining onboarding steps are under development. For now,
-          please use the API at{' '}
-          <a
-            href="/docs"
-            className="text-red-400 hover:text-red-300 underline"
-          >
-            /docs
-          </a>{' '}
-          to complete the setup.
+          Security settings will be configured automatically based on your authentication choice.
+          You can customize security options later in Settings → Security.
         </p>
-        <div className="text-left bg-slate-900/50 rounded-lg p-6 text-sm font-mono text-slate-300">
-          <p className="mb-2">Onboarding Info Collected:</p>
-          <p className="mb-1">
-            • Department:{' '}
-            {sessionStorage.getItem('departmentName') || 'Not set'}
-          </p>
-          <p className="mb-1">
-            • Logo:{' '}
-            {sessionStorage.getItem('hasLogo') === 'true'
-              ? 'Uploaded ✓'
-              : 'Skipped'}
-          </p>
-          <p className="mb-1">
-            • Navigation:{' '}
-            {sessionStorage.getItem('navigationLayout') === 'top'
-              ? 'Top Bar'
-              : sessionStorage.getItem('navigationLayout') === 'left'
-              ? 'Left Sidebar'
-              : 'Not set'}
-          </p>
-          <p className="mb-1">
-            • Email: {sessionStorage.getItem('emailPlatform') || 'Not set'}
-          </p>
-          <p className="mt-4 mb-2">Next API Endpoints:</p>
-          <p className="mb-1">• GET /api/v1/onboarding/security-check</p>
-          <p className="mb-1">• POST /api/v1/onboarding/organization</p>
-          <p className="mb-1">• POST /api/v1/onboarding/admin-user</p>
-        </div>
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all duration-300"
-          >
-            ← Go Back
-          </button>
-          <a
-            href="/docs"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300 text-center"
-          >
-            Open API Docs
-          </a>
+        <div className="flex items-center justify-center gap-2 text-slate-400">
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+          <span>Redirecting to module selection...</span>
         </div>
       </div>
     </div>
@@ -154,6 +128,9 @@ export const getOnboardingRoutes = () => {
 
     {/* Onboarding wizard - IT Team & Backup Access */}
     <Route path="/onboarding/it-team" element={<ITTeamBackupAccess />} />
+
+    {/* Onboarding wizard - Role Setup */}
+    <Route path="/onboarding/roles" element={<RoleSetup />} />
 
     {/* Onboarding wizard - Module Overview */}
     <Route path="/onboarding/modules" element={<ModuleOverview />} />

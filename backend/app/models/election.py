@@ -14,14 +14,19 @@ from sqlalchemy import (
     Integer,
     Enum as SQLEnum,
     Index,
+    JSON,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from uuid import uuid4
 from datetime import datetime
 from enum import Enum
+import uuid
 
 from app.core.database import Base
+
+
+def generate_uuid() -> str:
+    """Generate a UUID string for MySQL compatibility"""
+    return str(uuid.uuid4())
 
 
 class ElectionStatus(str, Enum):
@@ -41,8 +46,8 @@ class Election(Base):
     """
     __tablename__ = "elections"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
 
     # Election details
     title = Column(String(200), nullable=False)
@@ -50,21 +55,21 @@ class Election(Base):
     election_type = Column(String(50), nullable=False, default="general")  # officer, board, general, poll
 
     # Positions being voted on (for multi-position elections)
-    positions = Column(JSONB, nullable=True)  # ["Chief", "President", "Secretary"]
+    positions = Column(JSON, nullable=True)  # ["Chief", "President", "Secretary"]
 
     # Ballot items for structured voting with per-item eligibility
     # Format: [{"id": "item1", "type": "membership_approval", "title": "...",
     #           "eligible_voter_types": ["operational"], "vote_type": "approval"}]
-    ballot_items = Column(JSONB, nullable=True)
+    ballot_items = Column(JSON, nullable=True)
 
     # Position-specific eligibility rules
     # Format: {"Chief": {"voter_types": ["operational"]}, "Member": {"voter_types": ["all"]}}
-    position_eligibility = Column(JSONB, nullable=True)
+    position_eligibility = Column(JSON, nullable=True)
 
     # Email notification tracking
     email_sent = Column(Boolean, nullable=False, default=False)
     email_sent_at = Column(DateTime, nullable=True)
-    email_recipients = Column(JSONB, nullable=True)  # List of user IDs who received email
+    email_recipients = Column(JSON, nullable=True)  # List of user IDs who received email
     meeting_date = Column(DateTime, nullable=True)  # For meeting-based ballots
 
     # Timing
@@ -79,7 +84,7 @@ class Election(Base):
     allow_write_ins = Column(Boolean, nullable=False, default=False)
     max_votes_per_position = Column(Integer, nullable=False, default=1)
     results_visible_immediately = Column(Boolean, nullable=False, default=False)
-    eligible_voters = Column(JSONB, nullable=True)  # List of user IDs or role slugs
+    eligible_voters = Column(JSON, nullable=True)  # List of user IDs or role slugs
 
     # Voting method and victory conditions
     voting_method = Column(String(50), nullable=False, default="simple_majority")
@@ -107,19 +112,19 @@ class Election(Base):
     is_runoff = Column(Boolean, nullable=False, default=False)
     # Indicates this election is a runoff from another election
 
-    parent_election_id = Column(UUID(as_uuid=True), ForeignKey("elections.id"), nullable=True)
+    parent_election_id = Column(String(36), ForeignKey("elections.id"), nullable=True)
     # Reference to parent election if this is a runoff
 
     runoff_round = Column(Integer, nullable=False, default=0)
     # Which round of runoff this is (0 = original election)
 
     # Rollback audit trail
-    rollback_history = Column(JSONB, nullable=True)
+    rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",
     #           "from_status": "closed", "to_status": "open", "reason": "Error in vote count"}]
 
     # Metadata
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -142,11 +147,11 @@ class Candidate(Base):
     """
     __tablename__ = "candidates"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    election_id = Column(UUID(as_uuid=True), ForeignKey("elections.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Candidate information
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # Null for write-ins
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # Null for write-ins
     name = Column(String(200), nullable=False)  # For display (or write-in name)
     position = Column(String(100), nullable=True)  # Position they're running for
     statement = Column(Text, nullable=True)  # Candidate statement
@@ -154,7 +159,7 @@ class Candidate(Base):
 
     # Nomination details
     nomination_date = Column(DateTime, nullable=False, default=datetime.utcnow)
-    nominated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    nominated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     accepted = Column(Boolean, nullable=False, default=True)  # For member candidates
     is_write_in = Column(Boolean, nullable=False, default=False)
 
@@ -185,8 +190,8 @@ class VotingToken(Base):
     """
     __tablename__ = "voting_tokens"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    election_id = Column(UUID(as_uuid=True), ForeignKey("elections.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Secure token for ballot access (sent via email)
     token = Column(String(128), nullable=False, unique=True, index=True)
@@ -224,12 +229,12 @@ class Vote(Base):
     """
     __tablename__ = "votes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    election_id = Column(UUID(as_uuid=True), ForeignKey("elections.id"), nullable=False)
-    candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidates.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
+    candidate_id = Column(String(36), ForeignKey("candidates.id"), nullable=False)
 
     # Voter information (nullable for anonymous voting)
-    voter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    voter_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     # For tracking purposes (even in anonymous voting, we can track that a user voted)
     voter_hash = Column(String(64), nullable=True)  # SHA256 hash of voter_id + election_id
