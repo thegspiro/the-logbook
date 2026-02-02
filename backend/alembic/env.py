@@ -57,7 +57,7 @@ from app.models.inventory import (
 
 # IP Security
 from app.models.ip_security import (
-    IPException, BlockedAccessAttempt, CountryBlockRule
+    IPException, BlockedAccessAttempt, CountryBlockRule, IPExceptionAuditLog
 )
 
 # This is the Alembic Config object

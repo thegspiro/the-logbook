@@ -73,3 +73,43 @@ class UserRoleResponse(BaseModel):
     roles: List[RoleResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RoleCloneRequest(BaseModel):
+    """Schema for cloning a role"""
+    name: str = Field(..., min_length=1, max_length=100, description="Name for the new role")
+    slug: str = Field(..., min_length=1, max_length=100, description="Slug for the new role")
+    description: Optional[str] = Field(None, description="Optional description for the new role")
+
+
+class RoleWithUserCount(RoleResponse):
+    """Role response with user count"""
+    user_count: int = 0
+
+
+class RoleUserItem(BaseModel):
+    """Basic user info for role user lists"""
+    id: UUID
+    username: str
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RoleUsersResponse(BaseModel):
+    """Response for role users list"""
+    role_id: UUID
+    role_name: str
+    users: List[RoleUserItem]
+    total_count: int
+
+
+class UserPermissionsResponse(BaseModel):
+    """Response for user permissions"""
+    user_id: UUID
+    permissions: List[str]
+    roles: List[str]  # Role names that grant these permissions
