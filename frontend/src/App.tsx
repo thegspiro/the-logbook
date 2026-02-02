@@ -16,6 +16,9 @@ import EventSelfCheckInPage from './pages/EventSelfCheckInPage';
 import EventCheckInMonitoringPage from './pages/EventCheckInMonitoringPage';
 import ErrorMonitoringPage from './pages/ErrorMonitoringPage';
 import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage';
+import { RoleManagementPage } from './pages/RoleManagementPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { MembersAdminPage } from './pages/MembersAdminPage';
 
 /**
  * Main Application Component
@@ -59,6 +62,11 @@ function App() {
           {/* Admin/Monitoring Routes */}
           <Route path="/admin/errors" element={<ErrorMonitoringPage />} />
           <Route path="/admin/analytics" element={<AnalyticsDashboardPage />} />
+          <Route path="/admin/members" element={<MembersAdminPage />} />
+
+          {/* Settings Module */}
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/roles" element={<RoleManagementPage />} />
 
           {/* Login Page */}
           <Route

@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 # Import route modules
 from app.api.v1 import onboarding
-from app.api.v1.endpoints import events, locations
+from app.api.v1.endpoints import events, locations, roles, users, organizations
 
 api_router = APIRouter()
 
@@ -16,6 +16,9 @@ api_router = APIRouter()
 api_router.include_router(onboarding.router)
 api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(locations.router, prefix="/locations", tags=["locations"])
+api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(organizations.router, prefix="/organization", tags=["organization"])
 
 # Placeholder routes
 @api_router.get("/")

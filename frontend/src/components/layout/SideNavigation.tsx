@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
   Users,
@@ -9,7 +9,11 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  Shield,
+  Building2,
+  UserCog
 } from 'lucide-react';
 
 interface SideNavigationProps {
@@ -18,24 +22,64 @@ interface SideNavigationProps {
   onLogout: () => void;
 }
 
+interface NavItem {
+  label: string;
+  path: string;
+  icon: React.ElementType;
+  subItems?: { label: string; path: string; icon: React.ElementType }[];
+}
+
 export const SideNavigation: React.FC<SideNavigationProps> = ({
   departmentName,
   logoPreview,
   onLogout,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
 
-  const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: Home, active: true },
-    { label: 'Members', path: '/members', icon: Users, active: false },
-    { label: 'Events', path: '/events', icon: Calendar, active: false },
-    { label: 'Reports', path: '#', icon: FileText, active: false },
-    { label: 'Settings', path: '#', icon: Settings, active: false },
+  const navItems: NavItem[] = [
+    { label: 'Dashboard', path: '/dashboard', icon: Home },
+    { label: 'Members', path: '/members', icon: Users },
+    { label: 'Events', path: '/events', icon: Calendar },
+    { label: 'Reports', path: '#', icon: FileText },
+    {
+      label: 'Settings',
+      path: '/settings',
+      icon: Settings,
+      subItems: [
+        { label: 'Organization', path: '/settings', icon: Building2 },
+        { label: 'Role Management', path: '/settings/roles', icon: Shield },
+        { label: 'Member Admin', path: '/admin/members', icon: UserCog },
+      ],
+    },
   ];
 
-  const handleNavigation = (path: string) => {
+  const isActive = (path: string) => {
+    if (path === '#') return false;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
+
+  const isParentActive = (item: NavItem) => {
+    if (item.subItems) {
+      return item.subItems.some(sub => isActive(sub.path));
+    }
+    return isActive(item.path);
+  };
+
+  const toggleMenu = (label: string) => {
+    setExpandedMenus(prev =>
+      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
+    );
+  };
+
+  const handleNavigation = (path: string, hasSubItems?: boolean, label?: string) => {
+    if (hasSubItems && !collapsed) {
+      toggleMenu(label!);
+      return;
+    }
     if (path !== '#') {
       navigate(path);
       setMobileMenuOpen(false);
@@ -137,27 +181,67 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const hasSubItems = !!item.subItems;
+              const isExpanded = expandedMenus.includes(item.label);
+              const parentActive = isParentActive(item);
+
               return (
-                <button
-                  key={item.label}
-                  onClick={() => handleNavigation(item.path)}
-                  className={`w-full flex items-center rounded-lg transition-all ${
-                    collapsed ? 'justify-center p-3' : 'px-4 py-3'
-                  } ${
-                    item.active
-                      ? 'bg-red-600 text-white'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                  }`}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon className={`w-5 h-5 flex-shrink-0 ${collapsed ? '' : 'mr-3'}`} />
-                  {!collapsed && (
-                    <span className="text-sm font-medium">{item.label}</span>
+                <div key={item.label}>
+                  <button
+                    onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
+                    className={`w-full flex items-center rounded-lg transition-all ${
+                      collapsed ? 'justify-center p-3' : 'px-4 py-3'
+                    } ${
+                      parentActive && !hasSubItems
+                        ? 'bg-red-600 text-white'
+                        : parentActive && hasSubItems
+                        ? 'bg-white/5 text-white'
+                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                    }`}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon className={`w-5 h-5 flex-shrink-0 ${collapsed ? '' : 'mr-3'}`} />
+                    {!collapsed && (
+                      <>
+                        <span className="text-sm font-medium flex-1 text-left">{item.label}</span>
+                        {hasSubItems && (
+                          <ChevronDown
+                            className={`w-4 h-4 transition-transform ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
+                        )}
+                      </>
+                    )}
+                  </button>
+
+                  {/* Sub Items */}
+                  {hasSubItems && isExpanded && !collapsed && (
+                    <div className="mt-1 ml-4 space-y-1">
+                      {item.subItems!.map((subItem) => {
+                        const SubIcon = subItem.icon;
+                        const subActive = isActive(subItem.path);
+                        return (
+                          <button
+                            key={subItem.path}
+                            onClick={() => handleNavigation(subItem.path)}
+                            className={`w-full flex items-center px-4 py-2 rounded-lg transition-all ${
+                              subActive
+                                ? 'bg-red-600 text-white'
+                                : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            <SubIcon className="w-4 h-4 mr-3 flex-shrink-0" />
+                            <span className="text-sm">{subItem.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </nav>
