@@ -131,13 +131,33 @@ This document describes the complete onboarding flow for The Logbook application
 │ Collects IT contact info     │
 └──────────┬───────────────────┘
            │
+           │ Button: "Continue" → Navigate to /onboarding/roles
+           v
+┌──────────────────────────────┐
+│ 9. Role Setup                │
+│ Route: /onboarding/roles     │
+│ API: POST                    │
+│ /api/v1/onboarding/          │
+│ session/roles                │
+│ Two-tier permission model:   │
+│ - View Access (read-only)    │
+│ - Manage Access (full CRUD)  │
+│ Role templates by category:  │
+│ - Leadership (Chief, Pres)   │
+│ - Officers (Captain, Lt)     │
+│ - Administrative (Sec, Trs)  │
+│ - Specialized (TO, Safety)   │
+│ - Member (Regular members)   │
+└──────────┬───────────────────┘
+           │
            │ Button: "Continue" → Navigate to /onboarding/modules
            v
 ┌──────────────────────────────┐
-│ 9. Module Overview           │
+│ 10. Module Overview          │
 │ Route: /onboarding/modules   │
 │ API: POST                    │
-│ /api/v1/onboarding/modules   │
+│ /api/v1/onboarding/          │
+│ session/modules              │
 │ Priority-based selection:    │
 │ - Essential (Core modules)   │
 │ - Recommended (Operations)   │
@@ -153,7 +173,7 @@ This document describes the complete onboarding flow for The Logbook application
            │ Button: "Continue to Admin Setup" → Navigate to /onboarding/admin-user
            v
 ┌──────────────────────────────┐
-│ 10. Admin User Creation      │
+│ 11. Admin User Creation      │
 │ Route: /onboarding/          │
 │ admin-user                   │
 │ API: POST                    │
@@ -172,7 +192,7 @@ This document describes the complete onboarding flow for The Logbook application
            │
            v
 ┌──────────────────────────────┐
-│ 11. Dashboard                │
+│ 12. Dashboard                │
 │ Route: /dashboard            │
 │ Onboarding Complete!         │
 └──────────────────────────────┘
@@ -373,21 +393,63 @@ Body: {
 
 **API Call**:
 ```
-POST /api/v1/onboarding/it-team
+POST /api/v1/onboarding/session/it-team
 Body: {
-  it_contact_email?: string,
-  it_contact_phone?: string,
-  enable_backup_access: boolean,
-  backup_access_email?: string
+  it_team: [{ name, email, phone, role }],
+  backup_access: {
+    email: string,
+    phone: string,
+    secondary_admin_email?: string
+  }
 }
 ```
 
 **Navigation**:
-- Button: "Continue" → `/onboarding/modules`
+- Button: "Continue" → `/onboarding/roles`
 
 ---
 
-### 9. Module Overview (`/onboarding/modules`)
+### 9. Role Setup (`/onboarding/roles`)
+**Purpose**: Configure roles and permissions using a two-tier model
+
+**Two-Tier Permission Model**:
+- **View Access**: Read-only access to module data (all members typically)
+- **Manage Access**: Full CRUD operations (selected roles only)
+
+**Role Categories**:
+- **Leadership**: Chief, President, Assistant Chief, Vice President
+- **Officers**: Captain, Lieutenant
+- **Administrative**: Secretary, Treasurer
+- **Specialized**: Training Officer, Safety Officer, Quartermaster
+- **Member**: Regular member access
+
+**Features**:
+- Pre-configured role templates by category
+- Permissions auto-generated from module registry
+- Custom role creation support
+- Priority-based role ordering (0-100)
+
+**API Call**:
+```
+POST /api/v1/onboarding/session/roles
+Body: {
+  roles: [{
+    id: string,
+    name: string,
+    description?: string,
+    priority: number,
+    permissions: Record<string, { view: boolean, manage: boolean }>,
+    is_custom?: boolean
+  }]
+}
+```
+
+**Navigation**:
+- Button: "Continue to Module Selection" → `/onboarding/modules`
+
+---
+
+### 10. Module Overview (`/onboarding/modules`)
 **Purpose**: Select and configure optional modules
 
 **Module Categories**:
@@ -430,10 +492,14 @@ Body: {
 
 ---
 
-### 9a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
-**Purpose**: Configure individual module settings
+### 10a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
+**Purpose**: Configure individual module settings with two-tier permissions
 
-**Status**: Template page (module-specific config under development)
+**Features**:
+- View Access configuration (typically all members)
+- Manage Access role selection
+- Module-specific permission descriptions
+- Auto-populated from module registry
 
 **Navigation**:
 - Button: "Save Configuration" → `/onboarding/modules`
@@ -441,7 +507,7 @@ Body: {
 
 ---
 
-### 10. Admin User Creation (`/onboarding/admin-user`)
+### 11. Admin User Creation (`/onboarding/admin-user`)
 **Purpose**: Create the first administrator account
 
 **Form Fields**:
@@ -485,7 +551,7 @@ Body: {
 
 ---
 
-### 11. Dashboard (`/dashboard`)
+### 12. Dashboard (`/dashboard`)
 **Purpose**: Main application dashboard
 
 **Status**: Onboarding complete!
@@ -493,8 +559,13 @@ Body: {
 **Features Available**:
 - All enabled modules
 - User profile
-- Settings
+- Settings (Organization, Role Management, Member Admin)
 - Full application access
+
+**Post-Onboarding Settings Navigation**:
+- `/settings` - Organization settings
+- `/settings/roles` - Role management (create/edit/delete roles)
+- `/admin/members` - Member administration (assign roles)
 
 ---
 
@@ -560,12 +631,28 @@ Creates administrator user with Super Admin role.
 
 ### Configure Modules
 ```
-POST /api/v1/onboarding/modules
+POST /api/v1/onboarding/session/modules
 Body: {
-  enabled_modules: string[]
+  modules: string[]
 }
 ```
 Saves enabled module configuration.
+
+### Configure Roles
+```
+POST /api/v1/onboarding/session/roles
+Body: {
+  roles: [{
+    id: string,
+    name: string,
+    description?: string,
+    priority: number,
+    permissions: Record<string, { view: boolean, manage: boolean }>,
+    is_custom?: boolean
+  }]
+}
+```
+Configures roles with two-tier permissions during onboarding.
 
 ### Configure Notifications
 ```
@@ -714,4 +801,4 @@ Before deploying to production:
 
 ---
 
-**Last Updated**: January 22, 2026
+**Last Updated**: February 2, 2026
