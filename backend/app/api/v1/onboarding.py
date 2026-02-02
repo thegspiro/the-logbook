@@ -273,6 +273,43 @@ class SessionModulesRequest(BaseModel):
     modules: List[str] = Field(default_factory=list, description="List of enabled modules")
 
 
+class RolePermission(BaseModel):
+    """Permission settings for a module"""
+    view: bool = True
+    manage: bool = False
+
+
+class RoleSetupItem(BaseModel):
+    """Individual role configuration"""
+    id: str = Field(..., description="Unique role identifier (slug)")
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    priority: int = Field(default=50, ge=0, le=100)
+    permissions: Dict[str, RolePermission] = Field(
+        default_factory=dict,
+        description="Module permissions with view/manage flags"
+    )
+    is_custom: bool = Field(default=False, description="Whether this is a custom role")
+
+
+class RolesSetupRequest(BaseModel):
+    """Request model for role setup during onboarding"""
+    roles: List[RoleSetupItem] = Field(
+        ...,
+        min_length=1,
+        description="List of roles to create for the organization"
+    )
+
+
+class RolesSetupResponse(BaseModel):
+    """Response model for role setup"""
+    success: bool
+    message: str
+    created: List[str] = Field(default_factory=list)
+    updated: List[str] = Field(default_factory=list)
+    total_roles: int
+
+
 class SessionDataResponse(BaseModel):
     """Response model for session data operations"""
     success: bool
@@ -1158,6 +1195,132 @@ async def save_session_modules(
         success=True,
         message="Module configuration saved successfully",
         step="modules"
+    )
+
+
+@router.post("/session/roles", response_model=RolesSetupResponse)
+async def save_session_roles(
+    request: Request,
+    data: RolesSetupRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Save role configuration during onboarding.
+
+    Creates or updates roles for the organization based on user selections.
+    This endpoint should be called after the organization is created.
+
+    The roles data includes:
+    - id: Unique identifier (slug) for the role
+    - name: Display name
+    - description: Role description
+    - priority: Role priority (0-100, higher = more authority)
+    - permissions: Dictionary of module_id -> {view: bool, manage: bool}
+    - is_custom: Whether this is a user-created custom role
+    """
+    # Validate session
+    session = await validate_session(request, db)
+
+    # Get organization from session data
+    organization_id = None
+    if session.data and 'department' in session.data:
+        organization_id = session.data['department'].get('organization_id')
+
+    if not organization_id:
+        # Try to get from onboarding status
+        service = OnboardingService(db)
+        onboarding_status = await service.get_onboarding_status()
+        if onboarding_status and onboarding_status.organization_name:
+            from app.models.user import Organization
+            result = await db.execute(
+                select(Organization).where(Organization.name == onboarding_status.organization_name)
+            )
+            org = result.scalar_one_or_none()
+            if org:
+                organization_id = str(org.id)
+
+    if not organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization must be created before configuring roles"
+        )
+
+    # Convert role permissions to backend format
+    # Frontend sends: { module_id: { view: bool, manage: bool } }
+    # Backend stores: ["module.view", "module.manage", ...]
+    from app.models.user import Role
+    from sqlalchemy import delete
+
+    # Delete existing non-system roles for this organization (custom roles from previous attempts)
+    await db.execute(
+        delete(Role).where(
+            Role.organization_id == organization_id,
+            Role.is_system == False
+        )
+    )
+
+    # Get existing system roles
+    result = await db.execute(
+        select(Role).where(
+            Role.organization_id == organization_id,
+            Role.is_system == True
+        )
+    )
+    existing_system_roles = {role.slug: role for role in result.scalars().all()}
+
+    created_roles = []
+    updated_roles = []
+
+    for role_data in data.roles:
+        # Convert permissions dict to list format
+        permission_list = []
+        for module_id, perms in role_data.permissions.items():
+            if perms.view:
+                permission_list.append(f"{module_id}.view")
+            if perms.manage:
+                permission_list.append(f"{module_id}.manage")
+                permission_list.append(f"{module_id}.*")  # Also grant full access if manage
+
+        # Check if this is an existing system role
+        if role_data.id in existing_system_roles:
+            # Update existing system role permissions
+            existing_role = existing_system_roles[role_data.id]
+            existing_role.permissions = permission_list
+            existing_role.priority = role_data.priority
+            if role_data.description:
+                existing_role.description = role_data.description
+            updated_roles.append(role_data.name)
+        else:
+            # Create new role
+            new_role = Role(
+                organization_id=organization_id,
+                name=role_data.name,
+                slug=role_data.id,
+                description=role_data.description or f"Custom role: {role_data.name}",
+                permissions=permission_list,
+                is_system=not role_data.is_custom,  # System roles can't be deleted
+                priority=role_data.priority
+            )
+            db.add(new_role)
+            created_roles.append(role_data.name)
+
+    # Update session data
+    session.data = session.data or {}
+    session.data['roles'] = {
+        'configured': True,
+        'role_count': len(data.roles),
+        'roles': [{"id": r.id, "name": r.name, "priority": r.priority} for r in data.roles],
+        'saved_at': datetime.utcnow().isoformat()
+    }
+
+    await db.commit()
+
+    return RolesSetupResponse(
+        success=True,
+        message="Roles configured successfully",
+        created=created_roles,
+        updated=updated_roles,
+        total_roles=len(data.roles)
     )
 
 

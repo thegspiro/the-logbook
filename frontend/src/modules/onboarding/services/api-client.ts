@@ -316,6 +316,29 @@ class SecureApiClient {
   }
 
   /**
+   * Save role configuration
+   * Creates roles with their permissions for the organization
+   */
+  async saveRolesConfig(data: {
+    roles: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      priority: number;
+      permissions: Record<string, { view: boolean; manage: boolean }>;
+      is_custom?: boolean;
+    }>;
+  }): Promise<ApiResponse<{
+    success: boolean;
+    message: string;
+    created: string[];
+    updated: string[];
+    total_roles: number;
+  }>> {
+    return this.request('POST', '/onboarding/session/roles', data, true);
+  }
+
+  /**
    * Create organization
    * Creates the first organization during onboarding with default roles
    */

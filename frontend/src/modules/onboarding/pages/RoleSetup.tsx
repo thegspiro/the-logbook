@@ -23,6 +23,7 @@ import toast from 'react-hot-toast';
 import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
+import { apiClient } from '../services/api-client';
 
 /**
  * Build permission categories dynamically from the module registry.
@@ -396,12 +397,34 @@ const RoleSetup: React.FC = () => {
   const handleContinue = async () => {
     setIsSaving(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Convert selected roles to API format
+      const rolesPayload = Object.values(selectedRoles).map((role) => ({
+        id: role.id,
+        name: role.name,
+        description: role.description,
+        priority: role.priority,
+        permissions: role.permissions,
+        is_custom: role.isCustom || false,
+      }));
 
-    toast.success('Roles configured successfully!');
-    setIsSaving(false);
-    navigate('/onboarding/modules');
+      const response = await apiClient.saveRolesConfig({ roles: rolesPayload });
+
+      if (response.error) {
+        toast.error(response.error);
+        setIsSaving(false);
+        return;
+      }
+
+      toast.success(
+        `Roles configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
+      );
+      navigate('/onboarding/modules');
+    } catch (error) {
+      toast.error('Failed to save role configuration. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const selectedCount = Object.keys(selectedRoles).length;
