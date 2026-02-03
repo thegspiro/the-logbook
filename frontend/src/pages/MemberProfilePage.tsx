@@ -16,11 +16,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { userService, trainingService, inventoryService } from '../services/api';
-import type { UserInventoryItem, UserCheckoutItem } from '../services/api';
-import type { TrainingRecord } from '../types/training';
-import { apparatusOperatorService } from '../modules/apparatus/services/api';
-import type { ApparatusOperator } from '../modules/apparatus/types';
+import { userService, organizationService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
@@ -40,6 +36,7 @@ export const MemberProfilePage: React.FC = () => {
   const [user, setUser] = useState<UserWithRoles | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inventoryModuleEnabled, setInventoryModuleEnabled] = useState(false);
 
   // Edit mode states
   const [isEditing, setIsEditing] = useState(false);
@@ -75,9 +72,20 @@ export const MemberProfilePage: React.FC = () => {
   useEffect(() => {
     if (userId) {
       fetchUserData();
-      fetchModuleData();
+      fetchModuleStatus();
     }
   }, [userId]);
+
+  const fetchModuleStatus = async () => {
+    try {
+      const response = await organizationService.getEnabledModules();
+      setInventoryModuleEnabled(response.enabled_modules.includes('inventory'));
+    } catch (err) {
+      // If we can't fetch module status, default to not showing inventory
+      console.error('Error fetching module status:', err);
+      setInventoryModuleEnabled(false);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -403,161 +411,60 @@ export const MemberProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* Assigned Inventory */}
-          {inventoryEnabled && (
+          {/* Assigned Inventory - Only shown if inventory module is enabled */}
+          {inventoryModuleEnabled && (
             <div className="bg-white shadow rounded-lg p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Assigned Inventory</h2>
-              {inventoryLoading ? (
-                <p className="text-sm text-gray-500">Loading inventory...</p>
-              ) : permanentInventory.length === 0 && activeCheckouts.length === 0 ? (
-                <p className="text-sm text-gray-500">No inventory assigned.</p>
-              ) : (
-                <div className="space-y-4">
-                  {permanentInventory.length > 0 && (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead>
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Item
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Serial / Asset
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Condition
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                              Assigned
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {permanentInventory.map((item) => (
-                            <tr key={item.assignment_id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                                {item.item_name}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-600">
-                                {item.serial_number || item.asset_tag || '-'}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getConditionColor(
-                                    item.condition
-                                  )}`}
-                                >
-                                  {item.condition}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-600">
-                                {formatDate(item.assigned_date)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {activeCheckouts.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Active Checkouts</h3>
-                      <div className="space-y-2">
-                        {activeCheckouts.map((checkout) => (
-                          <div
-                            key={checkout.checkout_id}
-                            className={`flex items-center justify-between p-3 rounded-lg ${
-                              checkout.is_overdue ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Item
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Item #
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Condition
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Assigned
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {inventoryItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {item.name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{item.item_number}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              item.condition === 'Excellent'
+                                ? 'bg-green-100 text-green-800'
+                                : item.condition === 'Good'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-yellow-100 text-yellow-800'
                             }`}
                           >
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{checkout.item_name}</p>
-                              <p className="text-xs text-gray-600">
-                                Checked out: {formatDate(checkout.checked_out_at)}
-                              </p>
-                            </div>
-                            {checkout.is_overdue && (
-                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                                Overdue
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Apparatus Certifications */}
-          {apparatusEnabled && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Apparatus Certifications</h2>
-              {operatorCertsLoading ? (
-                <p className="text-sm text-gray-500">Loading apparatus certifications...</p>
-              ) : operatorCerts.length === 0 ? (
-                <p className="text-sm text-gray-500">No apparatus certifications found.</p>
-              ) : (
-                <div className="space-y-3">
-                  {operatorCerts.map((op) => (
-                    <div
-                      key={op.id}
-                      className="border border-gray-200 rounded-lg p-4 hover:border-gray-300"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">
-                            Apparatus {op.apparatusId}
-                          </h3>
-                          {op.licenseTypeRequired && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              License Required: {op.licenseTypeRequired}
-                              {op.licenseVerified && (
-                                <span className="ml-2 text-green-600 font-medium">Verified</span>
-                              )}
-                            </p>
-                          )}
-                          <div className="flex gap-4 mt-2 text-sm text-gray-600">
-                            {op.certificationDate && (
-                              <span>Certified: {formatDate(op.certificationDate)}</span>
-                            )}
-                            {op.certificationExpiration && (
-                              <span>Expires: {formatDate(op.certificationExpiration)}</span>
-                            )}
-                          </div>
-                          {op.hasRestrictions && op.restrictionNotes && (
-                            <p className="text-sm text-amber-700 mt-2">
-                              Restrictions: {op.restrictionNotes}
-                            </p>
-                          )}
-                        </div>
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            op.isCertified
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {op.isCertified ? 'Certified' : 'Not Certified'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Scheduling placeholder — shown when scheduling module is on but no API data yet */}
-          {schedulingEnabled && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Shifts</h2>
-              <p className="text-sm text-gray-500">
-                Shift data will appear here once scheduling is configured.
-              </p>
+                            {item.condition}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {formatDate(item.assigned_date)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -717,38 +624,32 @@ export const MemberProfilePage: React.FC = () => {
           <div className="bg-white shadow rounded-lg p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h2>
             <div className="space-y-3">
-              {trainingEnabled && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Active Certifications</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {completedTrainings.length}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Expiring Soon</span>
-                    <span className="text-sm font-semibold text-yellow-600">
-                      {expiringTrainings.length}
-                    </span>
-                  </div>
-                </>
-              )}
-              {inventoryEnabled && (
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Active Certifications</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  {trainings.filter((t) => t.status === 'current').length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Expiring Soon</span>
+                <span className="text-sm font-semibold text-yellow-600">
+                  {trainings.filter((t) => t.status === 'expiring_soon').length}
+                </span>
+              </div>
+              {inventoryModuleEnabled && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Assigned Equipment</span>
                   <span className="text-sm font-semibold text-gray-900">
-                    {totalInventory}
+                    {inventoryItems.length}
                   </span>
                 </div>
               )}
-              {apparatusEnabled && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Apparatus Certified</span>
-                  <span className="text-sm font-semibold text-gray-900">
-                    {certifiedApparatus.length}
-                  </span>
-                </div>
-              )}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Upcoming Shifts</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  {upcomingShifts.length}
+                </span>
+              </div>
             </div>
           </div>
         </div>

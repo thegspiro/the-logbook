@@ -149,6 +149,18 @@ class OrganizationSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra='allow')
 
 
+class EnabledModulesResponse(BaseModel):
+    """Schema for enabled modules response"""
+    enabled_modules: list[str] = Field(
+        default_factory=list,
+        description="List of enabled module IDs for this organization"
+    )
+
+    def is_module_enabled(self, module_id: str) -> bool:
+        """Check if a specific module is enabled"""
+        return module_id in self.enabled_modules
+
+
 # ============================================
 # Organization Setup Schemas (Onboarding)
 # ============================================

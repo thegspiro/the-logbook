@@ -12,6 +12,7 @@ from app.schemas.organization import (
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
     ContactInfoSettings,
+    EnabledModulesResponse,
 )
 from app.services.organization_service import OrganizationService
 from app.api.dependencies import get_current_user, require_permission
@@ -120,3 +121,20 @@ async def update_contact_info_settings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/modules", response_model=EnabledModulesResponse)
+async def get_enabled_modules(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get enabled modules for the current organization
+
+    Returns the list of module IDs that are enabled for this organization.
+    This is used to conditionally display module-specific UI components.
+
+    **Authentication required**
+    """
+    org_service = OrganizationService(db)
+    return await org_service.get_enabled_modules(current_user.organization_id)
