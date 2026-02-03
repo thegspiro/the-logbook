@@ -6,7 +6,6 @@ import {
   MapPin,
   Phone,
   Mail,
-  Globe,
   Clock,
   FileText,
   ChevronDown,

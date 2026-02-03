@@ -7,8 +7,11 @@
  * - Upcoming shifts
  * - Training records
  * - Assigned inventory items
+ * - Apparatus certifications
  * - Contact information
  * - Roles and permissions
+ *
+ * Module sections are conditionally rendered based on AVAILABLE_MODULES.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -17,39 +20,12 @@ import { userService, organizationService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
+import { AVAILABLE_MODULES } from '../types/modules';
 
-interface MonthlyHours {
-  month: string;
-  regular_hours: number;
-  overtime_hours: number;
-  total_hours: number;
-}
-
-interface Shift {
-  id: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-  position: string;
-  location?: string;
-}
-
-interface Training {
-  id: string;
-  name: string;
-  certification_number?: string;
-  completion_date: string;
-  expiration_date?: string;
-  status: 'current' | 'expiring_soon' | 'expired';
-}
-
-interface InventoryItem {
-  id: string;
-  name: string;
-  item_number: string;
-  assigned_date: string;
-  condition: string;
-  category: string;
+/** Check if a module is enabled by its id. */
+function isModuleEnabled(moduleId: string): boolean {
+  const mod = AVAILABLE_MODULES.find((m) => m.id === moduleId);
+  return mod?.enabled ?? false;
 }
 
 export const MemberProfilePage: React.FC = () => {
@@ -76,101 +52,22 @@ export const MemberProfilePage: React.FC = () => {
     },
   });
 
-  // Placeholder data - these would come from API calls
-  const [monthlyHours] = useState<MonthlyHours>({
-    month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-    regular_hours: 160,
-    overtime_hours: 12,
-    total_hours: 172,
-  });
+  // Module data states
+  const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
+  const [trainingsLoading, setTrainingsLoading] = useState(false);
 
-  const [upcomingShifts] = useState<Shift[]>([
-    {
-      id: '1',
-      date: '2026-01-20',
-      start_time: '08:00',
-      end_time: '16:00',
-      position: 'Engine 1',
-      location: 'Station 1',
-    },
-    {
-      id: '2',
-      date: '2026-01-23',
-      start_time: '08:00',
-      end_time: '16:00',
-      position: 'Ladder 2',
-      location: 'Station 2',
-    },
-    {
-      id: '3',
-      date: '2026-01-27',
-      start_time: '08:00',
-      end_time: '16:00',
-      position: 'Engine 1',
-      location: 'Station 1',
-    },
-  ]);
+  const [permanentInventory, setPermanentInventory] = useState<UserInventoryItem[]>([]);
+  const [activeCheckouts, setActiveCheckouts] = useState<UserCheckoutItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
 
-  const [trainings] = useState<Training[]>([
-    {
-      id: '1',
-      name: 'EMT Certification',
-      certification_number: 'EMT-2024-1234',
-      completion_date: '2024-03-15',
-      expiration_date: '2026-03-15',
-      status: 'current',
-    },
-    {
-      id: '2',
-      name: 'Firefighter I',
-      certification_number: 'FF1-2023-5678',
-      completion_date: '2023-06-20',
-      status: 'current',
-    },
-    {
-      id: '3',
-      name: 'Hazmat Operations',
-      certification_number: 'HAZ-2024-9012',
-      completion_date: '2024-08-10',
-      expiration_date: '2026-02-10',
-      status: 'expiring_soon',
-    },
-  ]);
+  const [operatorCerts, setOperatorCerts] = useState<ApparatusOperator[]>([]);
+  const [operatorCertsLoading, setOperatorCertsLoading] = useState(false);
 
-  const [inventoryItems] = useState<InventoryItem[]>([
-    {
-      id: '1',
-      name: 'Turnout Gear',
-      item_number: 'TOG-042',
-      assigned_date: '2024-01-15',
-      condition: 'Good',
-      category: 'PPE',
-    },
-    {
-      id: '2',
-      name: 'SCBA Unit',
-      item_number: 'SCBA-128',
-      assigned_date: '2024-01-15',
-      condition: 'Excellent',
-      category: 'Breathing Apparatus',
-    },
-    {
-      id: '3',
-      name: 'Radio - Portable',
-      item_number: 'RAD-P-089',
-      assigned_date: '2024-03-20',
-      condition: 'Good',
-      category: 'Communications',
-    },
-    {
-      id: '4',
-      name: 'Helmet',
-      item_number: 'HLM-042',
-      assigned_date: '2024-01-15',
-      condition: 'Good',
-      category: 'PPE',
-    },
-  ]);
+  // Module enablement checks
+  const trainingEnabled = isModuleEnabled('training');
+  const inventoryEnabled = isModuleEnabled('inventory');
+  const apparatusEnabled = isModuleEnabled('apparatus');
+  const schedulingEnabled = isModuleEnabled('scheduling');
 
   useEffect(() => {
     if (userId) {
@@ -194,8 +91,6 @@ export const MemberProfilePage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Fetch user with roles
       const userData = await userService.getUserWithRoles(userId!);
       setUser(userData);
     } catch (err) {
@@ -203,6 +98,48 @@ export const MemberProfilePage: React.FC = () => {
       setError('Failed to load member information.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchModuleData = async () => {
+    // Fetch training records
+    if (trainingEnabled) {
+      setTrainingsLoading(true);
+      try {
+        const records = await trainingService.getRecords({ user_id: userId! });
+        setTrainings(records);
+      } catch (err) {
+        console.error('Error fetching training records:', err);
+      } finally {
+        setTrainingsLoading(false);
+      }
+    }
+
+    // Fetch inventory
+    if (inventoryEnabled) {
+      setInventoryLoading(true);
+      try {
+        const inv = await inventoryService.getUserInventory(userId!);
+        setPermanentInventory(inv.permanent_assignments);
+        setActiveCheckouts(inv.active_checkouts);
+      } catch (err) {
+        console.error('Error fetching inventory:', err);
+      } finally {
+        setInventoryLoading(false);
+      }
+    }
+
+    // Fetch apparatus operator certifications
+    if (apparatusEnabled) {
+      setOperatorCertsLoading(true);
+      try {
+        const operators = await apparatusOperatorService.getOperators({ userId: userId! });
+        setOperatorCerts(operators);
+      } catch (err) {
+        console.error('Error fetching apparatus certifications:', err);
+      } finally {
+        setOperatorCertsLoading(false);
+      }
     }
   };
 
@@ -217,11 +154,45 @@ export const MemberProfilePage: React.FC = () => {
 
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
-      case 'current':
+      case 'completed':
         return 'bg-green-100 text-green-800';
-      case 'expiring_soon':
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800';
+      case 'scheduled':
         return 'bg-yellow-100 text-yellow-800';
-      case 'expired':
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-600';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  /** Check if a training record's certification is expiring within 90 days. */
+  const isExpiringSoon = (record: TrainingRecord): boolean => {
+    if (!record.expiration_date) return false;
+    const expDate = new Date(record.expiration_date);
+    const now = new Date();
+    const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
+  };
+
+  const isExpired = (record: TrainingRecord): boolean => {
+    if (!record.expiration_date) return false;
+    return new Date(record.expiration_date) < new Date();
+  };
+
+  const getConditionColor = (condition: string) => {
+    switch (condition.toLowerCase()) {
+      case 'excellent':
+        return 'bg-green-100 text-green-800';
+      case 'good':
+        return 'bg-blue-100 text-blue-800';
+      case 'fair':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'poor':
+      case 'damaged':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -229,7 +200,6 @@ export const MemberProfilePage: React.FC = () => {
   };
 
   const handleEditClick = () => {
-    // Populate form with current user data
     setEditForm({
       email: user?.email || '',
       phone: user?.phone || '',
@@ -296,7 +266,7 @@ export const MemberProfilePage: React.FC = () => {
     );
   }
 
-  if (error || !user) {
+  if (error && !user) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -306,6 +276,22 @@ export const MemberProfilePage: React.FC = () => {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-700">Member not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Derived stats
+  const completedTrainings = trainings.filter((t) => t.status === 'completed' && !isExpired(t));
+  const expiringTrainings = trainings.filter((t) => t.status === 'completed' && isExpiringSoon(t));
+  const totalInventory = permanentInventory.length + activeCheckouts.length;
+  const certifiedApparatus = operatorCerts.filter((o) => o.isCertified);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -314,7 +300,7 @@ export const MemberProfilePage: React.FC = () => {
           onClick={() => navigate(-1)}
           className="text-sm text-gray-500 hover:text-gray-700 mb-4 flex items-center gap-1"
         >
-          ← Back
+          &larr; Back
         </button>
 
         <div className="bg-white shadow rounded-lg p-6">
@@ -364,97 +350,66 @@ export const MemberProfilePage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Current Month Hours */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Hours - {monthlyHours.month}
-            </h2>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <p className="text-sm text-blue-600 font-medium">Regular Hours</p>
-                <p className="text-2xl font-bold text-blue-900 mt-1">
-                  {monthlyHours.regular_hours}
-                </p>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-4">
-                <p className="text-sm text-amber-600 font-medium">Overtime</p>
-                <p className="text-2xl font-bold text-amber-900 mt-1">
-                  {monthlyHours.overtime_hours}
-                </p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <p className="text-sm text-green-600 font-medium">Total Hours</p>
-                <p className="text-2xl font-bold text-green-900 mt-1">
-                  {monthlyHours.total_hours}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Upcoming Shifts */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Shifts</h2>
-            <div className="space-y-3">
-              {upcomingShifts.map((shift) => (
-                <div
-                  key={shift.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{formatDate(shift.date)}</p>
-                    <p className="text-sm text-gray-600">
-                      {shift.start_time} - {shift.end_time}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-gray-900">{shift.position}</p>
-                    {shift.location && (
-                      <p className="text-sm text-gray-600">{shift.location}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Training & Certifications */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Training & Certifications
-            </h2>
-            <div className="space-y-3">
-              {trainings.map((training) => (
-                <div
-                  key={training.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:border-gray-300"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-medium text-gray-900">{training.name}</h3>
-                      {training.certification_number && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          Cert #: {training.certification_number}
-                        </p>
-                      )}
-                      <div className="flex gap-4 mt-2 text-sm text-gray-600">
-                        <span>Completed: {formatDate(training.completion_date)}</span>
-                        {training.expiration_date && (
-                          <span>Expires: {formatDate(training.expiration_date)}</span>
-                        )}
+          {trainingEnabled && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Training & Certifications
+              </h2>
+              {trainingsLoading ? (
+                <p className="text-sm text-gray-500">Loading training records...</p>
+              ) : trainings.length === 0 ? (
+                <p className="text-sm text-gray-500">No training records found.</p>
+              ) : (
+                <div className="space-y-3">
+                  {trainings.map((training) => (
+                    <div
+                      key={training.id}
+                      className="border border-gray-200 rounded-lg p-4 hover:border-gray-300"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900">{training.course_name || training.course_id}</h3>
+                          {training.certification_number && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              Cert #: {training.certification_number}
+                            </p>
+                          )}
+                          <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                            {training.completion_date && (
+                              <span>Completed: {formatDate(training.completion_date)}</span>
+                            )}
+                            {training.expiration_date && (
+                              <span>Expires: {formatDate(training.expiration_date)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${getTrainingStatusColor(
+                              training.status
+                            )}`}
+                          >
+                            {training.status.replace('_', ' ')}
+                          </span>
+                          {isExpired(training) && (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              expired
+                            </span>
+                          )}
+                          {isExpiringSoon(training) && (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              expiring soon
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium ${getTrainingStatusColor(
-                        training.status
-                      )}`}
-                    >
-                      {training.status.replace('_', ' ')}
-                    </span>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
+          )}
 
           {/* Assigned Inventory - Only shown if inventory module is enabled */}
           {inventoryModuleEnabled && (
@@ -662,10 +617,6 @@ export const MemberProfilePage: React.FC = () => {
                   <p className="text-sm text-gray-900 mt-1">{formatDate(user.hire_date)}</p>
                 </div>
               )}
-              <div>
-                <p className="text-xs text-gray-500 uppercase font-medium">Organization</p>
-                <p className="text-sm text-gray-900 mt-1">Fire Department</p>
-              </div>
             </div>
           </div>
 

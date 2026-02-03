@@ -7,7 +7,6 @@
 import axios from 'axios';
 import type {
   Apparatus,
-  ApparatusListItem,
   ApparatusCreate,
   ApparatusUpdate,
   ApparatusStatusChange,

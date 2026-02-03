@@ -10,7 +10,6 @@ import {
   Truck,
   Save,
   ArrowLeft,
-  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApparatusStore } from '../store/apparatusStore';

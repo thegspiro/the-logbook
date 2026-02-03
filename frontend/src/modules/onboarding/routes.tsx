@@ -3,7 +3,6 @@ import { Route, useNavigate, Navigate } from 'react-router-dom';
 import {
   Welcome,
   OnboardingCheck,
-  DepartmentInfo,
   OrganizationSetup,
   NavigationChoice,
   EmailPlatformChoice,
