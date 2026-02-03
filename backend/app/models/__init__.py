@@ -28,6 +28,31 @@ from app.models.location import (
     Location
 )
 
+from app.models.apparatus import (
+    Apparatus,
+    ApparatusType,
+    ApparatusStatus,
+    ApparatusCustomField,
+    ApparatusPhoto,
+    ApparatusDocument,
+    ApparatusMaintenanceType,
+    ApparatusMaintenance,
+    ApparatusFuelLog,
+    ApparatusOperator,
+    ApparatusEquipment,
+    ApparatusLocationHistory,
+    ApparatusStatusHistory,
+    ApparatusNFPACompliance,
+    ApparatusReportConfig,
+    ApparatusCategory,
+    DefaultApparatusType,
+    DefaultApparatusStatus,
+    FuelType,
+    CustomFieldType,
+    MaintenanceCategory,
+    MaintenanceIntervalUnit,
+)
+
 __all__ = [
     # User models
     "Organization",
@@ -45,4 +70,28 @@ __all__ = [
     "OnboardingChecklistItem",
     # Location models
     "Location",
+    # Apparatus models
+    "Apparatus",
+    "ApparatusType",
+    "ApparatusStatus",
+    "ApparatusCustomField",
+    "ApparatusPhoto",
+    "ApparatusDocument",
+    "ApparatusMaintenanceType",
+    "ApparatusMaintenance",
+    "ApparatusFuelLog",
+    "ApparatusOperator",
+    "ApparatusEquipment",
+    "ApparatusLocationHistory",
+    "ApparatusStatusHistory",
+    "ApparatusNFPACompliance",
+    "ApparatusReportConfig",
+    # Apparatus enums
+    "ApparatusCategory",
+    "DefaultApparatusType",
+    "DefaultApparatusStatus",
+    "FuelType",
+    "CustomFieldType",
+    "MaintenanceCategory",
+    "MaintenanceIntervalUnit",
 ]
