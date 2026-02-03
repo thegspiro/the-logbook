@@ -41,6 +41,8 @@ services:
     container_name: logbook-redis
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - /mnt/user/appdata/the-logbook/redis:/data
     networks:
