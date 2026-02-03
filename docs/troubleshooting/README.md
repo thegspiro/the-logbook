@@ -13,6 +13,13 @@ This guide covers common issues and their solutions for The Logbook deployment.
 7. [Build Errors](#build-errors)
 8. [Docker Issues](#docker-issues)
 9. [Network & Connectivity](#network--connectivity)
+10. [Authentication & Login Issues](#authentication--login-issues)
+11. [Session Management Issues](#session-management-issues)
+12. [Role & Permission Issues](#role--permission-issues)
+13. [API Debugging Guide](#api-debugging-guide)
+14. [Common Error Codes Reference](#common-error-codes-reference)
+15. [Development Environment Issues](#development-environment-issues)
+16. [Performance Issues](#performance-issues)
 
 ---
 
@@ -715,6 +722,519 @@ INFO:     Uvicorn running on http://0.0.0.0:3001
 - [ ] Frontend accessible: `curl -I http://YOUR-IP:7880`
 - [ ] No JavaScript errors in browser console
 - [ ] Port mapping correct (`:80` not `:3000` for frontend)
+
+---
+
+## Authentication & Login Issues
+
+### Problem: "Invalid credentials" when logging in
+**Error:** `Authentication failed: Invalid credentials`
+
+### Root Cause
+The password or email entered doesn't match the database records, or the user account doesn't exist.
+
+### Solution
+1. **Verify user exists:**
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SELECT id, email, active FROM users WHERE email = 'user@example.com';
+```
+
+2. **Check if account is active:**
+```sql
+> SELECT active, failed_login_attempts, locked_until FROM users WHERE email = 'user@example.com';
+```
+
+3. **Reset password (if needed):**
+```bash
+# Generate a new password hash in Python
+docker exec -it intranet-backend python -c "from passlib.context import CryptContext; pwd = CryptContext(schemes=['bcrypt']); print(pwd.hash('newpassword'))"
+
+# Update in database
+> UPDATE users SET password_hash = 'generated_hash_here', failed_login_attempts = 0, locked_until = NULL WHERE email = 'user@example.com';
+```
+
+---
+
+### Problem: Account locked after failed login attempts
+**Error:** `Account locked. Try again later.`
+
+### Root Cause
+Too many failed login attempts triggered the account lockout security feature.
+
+### Solution
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE email = 'user@example.com';
+```
+
+---
+
+### Problem: JWT token errors
+**Error:** `Token expired` or `Invalid token signature`
+
+### Root Cause
+- Token has expired (default: 24 hours)
+- JWT secret key changed between token issuance and validation
+- Token was tampered with
+
+### Solution
+1. **Clear browser storage and re-login:**
+   - Open browser DevTools (F12)
+   - Go to Application → Local Storage
+   - Delete all entries for your site
+   - Refresh and login again
+
+2. **Verify JWT secret consistency:**
+```bash
+# Check backend .env
+cat .env | grep JWT_SECRET
+
+# Ensure it's the same across all backend instances
+```
+
+3. **Check token expiration setting:**
+```bash
+cat .env | grep ACCESS_TOKEN_EXPIRE
+# Default: ACCESS_TOKEN_EXPIRE_MINUTES=1440 (24 hours)
+```
+
+---
+
+## Session Management Issues
+
+### Problem: Session lost after page refresh
+**Symptom:** User gets logged out after refreshing the page
+
+### Root Cause
+- LocalStorage or cookies being cleared
+- Frontend not persisting session token correctly
+- Backend session validation failing
+
+### Solution
+1. **Check browser storage:**
+   - DevTools (F12) → Application → Local Storage
+   - Look for `auth-token` or similar keys
+   - Verify token exists after login
+
+2. **Verify session in backend:**
+```bash
+# Check active sessions
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SELECT * FROM user_sessions WHERE user_id = YOUR_USER_ID ORDER BY created_at DESC LIMIT 5;
+```
+
+3. **Check for CORS issues:**
+```bash
+# Verify credentials are being sent
+curl -v -X OPTIONS http://YOUR-IP:7881/api/v1/auth/me \
+  -H "Origin: http://YOUR-IP:7880" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: Authorization"
+```
+
+---
+
+### Problem: "Session expired" popup appears unexpectedly
+**Symptom:** User gets session expired message while actively using the app
+
+### Root Cause
+- Backend token refresh not working
+- Network issues causing failed token validation
+- Clock skew between frontend and backend
+
+### Solution
+1. **Check backend logs for token errors:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "token\|session\|auth"
+```
+
+2. **Verify system time sync:**
+```bash
+# On host
+date
+# In backend container
+docker exec intranet-backend date
+```
+
+3. **Check for network timeouts:**
+```bash
+# Increase timeout in frontend if needed
+# Check network tab in DevTools for slow API responses
+```
+
+---
+
+## Role & Permission Issues
+
+### Problem: "Permission denied" when accessing a feature
+**Error:** `You don't have permission to access this resource`
+
+### Root Cause
+User's role doesn't have the required permission for the requested action.
+
+### Solution
+1. **Check user's current roles:**
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SELECT r.name, r.slug, ur.assigned_at
+  FROM user_roles ur
+  JOIN roles r ON ur.role_id = r.id
+  WHERE ur.user_id = YOUR_USER_ID;
+```
+
+2. **Check role permissions:**
+```sql
+> SELECT rp.permission, rp.access_level
+  FROM role_permissions rp
+  JOIN roles r ON rp.role_id = r.id
+  WHERE r.slug = 'user_role_slug';
+```
+
+3. **Verify permission naming:**
+Valid permission format: `module.action` (e.g., `members.view`, `events.manage`)
+
+Access levels:
+- `view` - Read-only access
+- `manage` - Full CRUD operations
+
+4. **Add missing permission to role:**
+```sql
+> INSERT INTO role_permissions (role_id, permission, access_level)
+  SELECT id, 'members.view', 'view' FROM roles WHERE slug = 'member';
+```
+
+---
+
+### Problem: Role changes not taking effect
+**Symptom:** After changing a user's role, they still have old permissions
+
+### Root Cause
+- Cached permissions in frontend
+- User token contains old role claims
+
+### Solution
+1. **User should log out and log back in** to get a new token with updated roles
+
+2. **Clear frontend cache:**
+```javascript
+// In browser console
+localStorage.clear();
+sessionStorage.clear();
+location.reload();
+```
+
+3. **Verify role assignment in database:**
+```sql
+> SELECT * FROM user_roles WHERE user_id = YOUR_USER_ID;
+```
+
+---
+
+### Problem: Custom role not appearing in role list
+**Symptom:** A newly created role doesn't show up in the UI
+
+### Root Cause
+- Role not marked as active
+- Role not associated with the current organization
+
+### Solution
+```sql
+> SELECT id, name, slug, active, organization_id FROM roles WHERE name LIKE '%role_name%';
+
+# If inactive, activate it:
+> UPDATE roles SET active = 1 WHERE slug = 'your_role_slug';
+
+# If wrong organization:
+> UPDATE roles SET organization_id = CORRECT_ORG_ID WHERE slug = 'your_role_slug';
+```
+
+---
+
+## API Debugging Guide
+
+### Testing API Endpoints
+
+**Health Check:**
+```bash
+curl http://YOUR-IP:7881/health
+# Expected: {"status":"healthy","database":"connected",...}
+```
+
+**Authentication Test:**
+```bash
+# Login and get token
+curl -X POST http://YOUR-IP:7881/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"your_password"}'
+
+# Use token for authenticated requests
+curl http://YOUR-IP:7881/api/v1/auth/me \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+**Onboarding Status:**
+```bash
+curl http://YOUR-IP:7881/api/v1/onboarding/status
+```
+
+---
+
+### Problem: API returns 500 Internal Server Error
+**Symptom:** API calls fail with generic 500 error
+
+### Solution
+1. **Check backend logs for detailed error:**
+```bash
+docker logs intranet-backend --tail 100 2>&1 | grep -A 5 "ERROR\|Exception\|Traceback"
+```
+
+2. **Enable debug mode (development only):**
+```bash
+# In backend .env
+DEBUG=true
+LOG_LEVEL=DEBUG
+
+docker compose restart backend
+```
+
+3. **Test database connectivity:**
+```bash
+docker exec intranet-backend python -c "
+from app.database import get_db
+import asyncio
+async def test():
+    async for db in get_db():
+        result = await db.execute('SELECT 1')
+        print('Database OK:', result.scalar())
+asyncio.run(test())
+"
+```
+
+---
+
+### Problem: API returns 422 Unprocessable Entity
+**Symptom:** POST/PUT requests fail with validation errors
+
+### Root Cause
+Request body doesn't match expected Pydantic schema.
+
+### Solution
+1. **Check API documentation:**
+```bash
+# Open in browser
+http://YOUR-IP:7881/docs  # Swagger UI
+http://YOUR-IP:7881/redoc # ReDoc
+```
+
+2. **Verify request format:**
+```bash
+# Example with verbose output
+curl -v -X POST http://YOUR-IP:7881/api/v1/endpoint \
+  -H "Content-Type: application/json" \
+  -d '{"field": "value"}'
+```
+
+3. **Check for required fields in error response:**
+The 422 response includes details about which fields failed validation.
+
+---
+
+### Problem: CORS errors blocking API requests
+**Error:** `Access to fetch has been blocked by CORS policy`
+
+### Solution
+1. **Verify ALLOWED_ORIGINS in backend .env:**
+```bash
+cat .env | grep ALLOWED_ORIGINS
+# Should include your frontend URL: ["http://YOUR-IP:7880"]
+```
+
+2. **Test CORS preflight:**
+```bash
+curl -v -X OPTIONS http://YOUR-IP:7881/api/v1/auth/login \
+  -H "Origin: http://YOUR-IP:7880" \
+  -H "Access-Control-Request-Method: POST"
+```
+
+3. **Check response headers:**
+Should include:
+- `Access-Control-Allow-Origin`
+- `Access-Control-Allow-Methods`
+- `Access-Control-Allow-Headers`
+
+---
+
+## Common Error Codes Reference
+
+| Code | Meaning | Common Causes | Solution |
+|------|---------|---------------|----------|
+| 400 | Bad Request | Malformed JSON, invalid parameters | Check request body format |
+| 401 | Unauthorized | Missing/expired token | Re-login to get new token |
+| 403 | Forbidden | Valid token but insufficient permissions | Check user roles |
+| 404 | Not Found | Resource doesn't exist, wrong URL | Verify endpoint path |
+| 409 | Conflict | Duplicate entry, constraint violation | Check for existing records |
+| 422 | Validation Error | Schema mismatch, invalid field values | Check API docs for required fields |
+| 429 | Too Many Requests | Rate limit exceeded | Wait and retry later |
+| 500 | Server Error | Backend exception | Check backend logs |
+| 502 | Bad Gateway | Backend not running | Restart backend container |
+| 503 | Service Unavailable | Database/Redis down | Check dependency containers |
+
+---
+
+## Development Environment Issues
+
+### Problem: Hot reload not working in development
+**Symptom:** Code changes not reflected without manual restart
+
+### Solution
+1. **For backend (Uvicorn):**
+```bash
+# Ensure running with --reload flag
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+```
+
+2. **For frontend (Vite):**
+```bash
+# Ensure running in dev mode
+cd frontend
+npm run dev
+```
+
+3. **Docker volume mounting:**
+```yaml
+# In docker-compose.yml for development
+volumes:
+  - ./backend:/app
+  - ./frontend:/app
+```
+
+---
+
+### Problem: TypeScript errors not showing in IDE
+**Symptom:** IDE doesn't show type errors that appear during build
+
+### Solution
+1. **Ensure TypeScript server is running:**
+   - VSCode: Cmd/Ctrl + Shift + P → "TypeScript: Restart TS Server"
+
+2. **Check tsconfig.json paths:**
+```bash
+cd frontend
+cat tsconfig.json | grep -A 10 "paths"
+```
+
+3. **Regenerate node_modules:**
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+---
+
+### Problem: Local database different from production schema
+**Symptom:** Code works locally but fails in production
+
+### Solution
+1. **Sync migrations:**
+```bash
+# Check current migration state
+docker exec intranet-backend alembic current
+docker exec intranet-backend alembic history
+
+# Apply all migrations
+docker exec intranet-backend alembic upgrade head
+```
+
+2. **Compare schemas:**
+```bash
+# Export local schema
+mysqldump -u root -p --no-data the_logbook > local_schema.sql
+
+# Compare with production (if accessible)
+diff local_schema.sql production_schema.sql
+```
+
+---
+
+### Problem: npm install fails with permission errors
+**Error:** `EACCES: permission denied`
+
+### Solution
+```bash
+# Fix npm cache permissions
+sudo chown -R $(whoami) ~/.npm
+
+# Or use npm with sudo (not recommended for development)
+sudo npm install
+
+# Better: Use nvm for Node.js management
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install --lts
+nvm use --lts
+```
+
+---
+
+## Performance Issues
+
+### Problem: Slow API responses
+**Symptom:** API calls take several seconds to complete
+
+### Solution
+1. **Check database query performance:**
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SHOW PROCESSLIST;
+> SHOW STATUS LIKE 'Slow_queries';
+```
+
+2. **Enable slow query log:**
+```sql
+> SET GLOBAL slow_query_log = 'ON';
+> SET GLOBAL long_query_time = 1;
+> SHOW VARIABLES LIKE 'slow_query_log_file';
+```
+
+3. **Check Redis performance:**
+```bash
+docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning info stats
+```
+
+4. **Monitor container resources:**
+```bash
+docker stats intranet-backend intranet-mysql intranet-redis
+```
+
+---
+
+### Problem: Frontend loads slowly
+**Symptom:** Initial page load takes a long time
+
+### Solution
+1. **Check bundle size:**
+```bash
+cd frontend
+npm run build -- --report
+# Check dist/report.html for bundle analysis
+```
+
+2. **Enable gzip compression in nginx:**
+```nginx
+# In nginx.conf
+gzip on;
+gzip_types text/plain application/json application/javascript text/css;
+```
+
+3. **Check for unnecessary re-renders:**
+   - Use React DevTools Profiler
+   - Look for components rendering multiple times
 
 ---
 
