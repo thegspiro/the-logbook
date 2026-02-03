@@ -976,3 +976,37 @@ export const eventService = {
     return response.data;
   },
 };
+
+export interface UserInventoryItem {
+  assignment_id: string;
+  item_id: string;
+  item_name: string;
+  serial_number?: string;
+  asset_tag?: string;
+  condition: string;
+  assigned_date: string;
+}
+
+export interface UserCheckoutItem {
+  checkout_id: string;
+  item_id: string;
+  item_name: string;
+  checked_out_at: string;
+  expected_return_at?: string;
+  is_overdue: boolean;
+}
+
+export interface UserInventoryResponse {
+  permanent_assignments: UserInventoryItem[];
+  active_checkouts: UserCheckoutItem[];
+}
+
+export const inventoryService = {
+  /**
+   * Get a user's complete inventory (permanent assignments + active checkouts)
+   */
+  async getUserInventory(userId: string): Promise<UserInventoryResponse> {
+    const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
+    return response.data;
+  },
+};
