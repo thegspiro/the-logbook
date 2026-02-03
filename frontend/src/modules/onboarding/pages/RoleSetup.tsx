@@ -131,16 +131,18 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
     roles: [
       {
         id: 'chief',
-        name: 'Chief / President',
-        description: 'Top leadership with full organizational oversight',
+        name: 'Chief or President',
+        description:
+          'Top leader of the organization (one person, title varies by department)',
         icon: Crown,
         priority: 95,
         permissions: generateRolePermissions(modules, 'full_access'),
       },
       {
         id: 'assistant_chief',
-        name: 'Assistant Chief / Vice President',
-        description: 'Second in command, supports chief duties',
+        name: 'Assistant Chief or Vice President',
+        description:
+          'Second in command (one person, title varies by department)',
         icon: Star,
         priority: 90,
         permissions: generateRolePermissions(modules, 'leadership'),
