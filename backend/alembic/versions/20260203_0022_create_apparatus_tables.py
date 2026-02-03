@@ -691,11 +691,5 @@ def downgrade() -> None:
     op.drop_index('idx_apparatus_types_org_code', table_name='apparatus_types')
     op.drop_table('apparatus_types')
 
-    # Drop enums
-    op.execute("DROP TYPE IF EXISTS apparatuscategory")
-    op.execute("DROP TYPE IF EXISTS defaultapparatustype")
-    op.execute("DROP TYPE IF EXISTS defaultapparatusstatus")
-    op.execute("DROP TYPE IF EXISTS fueltype")
-    op.execute("DROP TYPE IF EXISTS customfieldtype")
-    op.execute("DROP TYPE IF EXISTS maintenancecategory")
-    op.execute("DROP TYPE IF EXISTS maintenanceintervalunit")
+    # Note: MySQL handles ENUM types inline within columns, so no separate
+    # DROP TYPE statements are needed (unlike PostgreSQL).

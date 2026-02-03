@@ -89,7 +89,7 @@ export const ApparatusFormPage: React.FC = () => {
   });
 
   useEffect(() => {
-    const authToken = localStorage.getItem('auth_token');
+    const authToken = localStorage.getItem('access_token');
     if (!authToken) {
       navigate('/login');
       return;

@@ -465,6 +465,24 @@ export interface ApparatusMaintenanceType {
   updatedAt: string;
 }
 
+export interface ApparatusMaintenanceTypeCreate {
+  name: string;
+  code: string;
+  description?: string;
+  category?: MaintenanceCategory;
+  defaultIntervalValue?: number;
+  defaultIntervalUnit?: MaintenanceIntervalUnit;
+  defaultIntervalMiles?: number;
+  defaultIntervalHours?: number;
+  isNfpaRequired?: boolean;
+  nfpaReference?: string;
+  appliesToTypes?: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface ApparatusMaintenanceTypeUpdate extends Partial<ApparatusMaintenanceTypeCreate> {}
+
 export interface ApparatusMaintenance {
   id: string;
   organizationId: string;

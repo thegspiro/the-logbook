@@ -69,7 +69,7 @@ export const ApparatusDetailPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    const authToken = localStorage.getItem('auth_token');
+    const authToken = localStorage.getItem('access_token');
     if (!authToken) {
       navigate('/login');
       return;
@@ -89,19 +89,19 @@ export const ApparatusDetailPage: React.FC = () => {
       try {
         switch (activeTab) {
           case 'maintenance':
-            const maint = await apparatusMaintenanceService.getMaintenanceByApparatus(id);
+            const maint = await apparatusMaintenanceService.getMaintenanceRecords({ apparatusId: id });
             setMaintenanceRecords(maint);
             break;
           case 'fuel':
-            const fuel = await apparatusFuelLogService.getFuelLogsByApparatus(id);
+            const fuel = await apparatusFuelLogService.getFuelLogs({ apparatusId: id });
             setFuelLogs(fuel);
             break;
           case 'operators':
-            const ops = await apparatusOperatorService.getOperatorsByApparatus(id);
+            const ops = await apparatusOperatorService.getOperators({ apparatusId: id });
             setOperators(ops);
             break;
           case 'equipment':
-            const equip = await apparatusEquipmentService.getEquipmentByApparatus(id);
+            const equip = await apparatusEquipmentService.getEquipment({ apparatusId: id });
             setEquipment(equip);
             break;
         }

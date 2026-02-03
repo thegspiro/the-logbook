@@ -5,11 +5,16 @@ Request and response schemas for apparatus-related endpoints.
 """
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic.alias_generators import to_camel
 from typing import Optional, List, Any, Dict
 from datetime import datetime, date
 from decimal import Decimal
 from uuid import UUID
 from enum import Enum
+
+
+# Shared config for response schemas that need camelCase serialization
+_response_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
 
 
 # =============================================================================
@@ -142,7 +147,7 @@ class ApparatusTypeResponse(ApparatusTypeBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ApparatusTypeListItem(BaseModel):
@@ -156,7 +161,7 @@ class ApparatusTypeListItem(BaseModel):
     color: Optional[str] = None
     is_active: bool
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -207,7 +212,7 @@ class ApparatusStatusResponse(ApparatusStatusBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ApparatusStatusListItem(BaseModel):
@@ -223,7 +228,7 @@ class ApparatusStatusListItem(BaseModel):
     icon: Optional[str] = None
     is_active: bool
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -455,7 +460,7 @@ class ApparatusResponse(ApparatusBase):
     apparatus_type: Optional[ApparatusTypeListItem] = None
     status_record: Optional[ApparatusStatusListItem] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ApparatusListItem(BaseModel):
@@ -477,7 +482,7 @@ class ApparatusListItem(BaseModel):
     apparatus_type: Optional[ApparatusTypeListItem] = None
     status_record: Optional[ApparatusStatusListItem] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 class ApparatusStatusChange(BaseModel):
@@ -579,7 +584,7 @@ class ApparatusCustomFieldResponse(ApparatusCustomFieldBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -639,7 +644,7 @@ class ApparatusMaintenanceTypeResponse(ApparatusMaintenanceTypeBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -722,7 +727,7 @@ class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
     # Nested info
     maintenance_type: Optional[ApparatusMaintenanceTypeResponse] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -778,7 +783,7 @@ class ApparatusFuelLogResponse(ApparatusFuelLogBase):
     recorded_by: Optional[str] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -845,7 +850,7 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -906,7 +911,7 @@ class ApparatusEquipmentResponse(ApparatusEquipmentBase):
     assigned_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -952,7 +957,7 @@ class ApparatusPhotoResponse(ApparatusPhotoBase):
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -998,7 +1003,7 @@ class ApparatusDocumentResponse(ApparatusDocumentBase):
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _response_config
 
 
 # =============================================================================
@@ -1024,6 +1029,8 @@ class PaginatedApparatusList(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 # =============================================================================
@@ -1051,9 +1058,12 @@ class ApparatusFleetSummary(BaseModel):
     inspections_expiring_soon: int
     insurance_expiring_soon: int
 
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
 
 class ApparatusMaintenanceDue(BaseModel):
     """Maintenance due item"""
+    id: str
     apparatus_id: str
     apparatus_unit_number: str
     maintenance_type_name: str
@@ -1061,3 +1071,5 @@ class ApparatusMaintenanceDue(BaseModel):
     due_mileage: Optional[int] = None
     due_hours: Optional[Decimal] = None
     is_overdue: bool
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
