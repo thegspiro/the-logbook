@@ -106,7 +106,7 @@ class Settings(BaseSettings):
 
     # Security enforcement
     SECURITY_ENFORCE_HTTPS: bool = False  # Set to True in production
-    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False  # Block startup with default keys
+    SECURITY_BLOCK_INSECURE_DEFAULTS: bool = True  # Block startup with default keys in production
 
     def validate_security_config(self) -> list[str]:
         """
@@ -127,6 +127,9 @@ class Settings(BaseSettings):
 
             if self.DB_PASSWORD == "change_me_in_production":
                 warnings.append("CRITICAL: DB_PASSWORD must be changed from default")
+
+            if not self.REDIS_PASSWORD:
+                warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
 
             if self.DEBUG:
                 warnings.append("WARNING: DEBUG mode should be disabled in production")
