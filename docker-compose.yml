@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${DB_USER:-intranet_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_in_production}
-      TZ: UTC
+      TZ: ${TZ:-UTC}
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -81,7 +81,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
       
       # Frontend URL (for CORS)
-      ALLOWED_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     volumes:
