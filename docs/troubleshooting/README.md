@@ -20,6 +20,11 @@ This guide covers common issues and their solutions for The Logbook deployment.
 14. [Common Error Codes Reference](#common-error-codes-reference)
 15. [Development Environment Issues](#development-environment-issues)
 16. [Performance Issues](#performance-issues)
+17. [Security & SSL Issues](#security--ssl-issues)
+18. [Backup & Recovery](#backup--recovery)
+19. [File Upload Issues](#file-upload-issues)
+20. [Email & Notification Issues](#email--notification-issues)
+21. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
 
 ---
 
@@ -1235,6 +1240,455 @@ gzip_types text/plain application/json application/javascript text/css;
 3. **Check for unnecessary re-renders:**
    - Use React DevTools Profiler
    - Look for components rendering multiple times
+
+---
+
+## Security & SSL Issues
+
+### Problem: HTTPS not working or certificate errors
+**Error:** `ERR_CERT_AUTHORITY_INVALID` or `NET::ERR_CERT_COMMON_NAME_INVALID`
+
+### Root Cause
+- Self-signed certificate not trusted by browser
+- Certificate doesn't match domain name
+- Certificate expired
+
+### Solution
+
+**For development (self-signed):**
+```bash
+# Generate self-signed certificate
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /path/to/ssl/private.key \
+  -out /path/to/ssl/certificate.crt \
+  -subj "/CN=your-domain.local"
+```
+
+**For production (Let's Encrypt):**
+```bash
+# Install certbot
+apt-get install certbot
+
+# Generate certificate
+certbot certonly --standalone -d your-domain.com
+
+# Certificates are stored in /etc/letsencrypt/live/your-domain.com/
+```
+
+**Update nginx configuration:**
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    # ... rest of config
+}
+```
+
+---
+
+### Problem: Mixed content warnings
+**Error:** `Mixed Content: The page was loaded over HTTPS, but requested an insecure resource`
+
+### Root Cause
+Frontend loaded via HTTPS but making HTTP API requests.
+
+### Solution
+1. **Update frontend .env:**
+```bash
+VITE_API_URL=https://your-domain.com/api/v1
+```
+
+2. **Rebuild frontend:**
+```bash
+docker-compose build --no-cache frontend
+docker-compose up -d
+```
+
+3. **Ensure backend CORS allows HTTPS origin:**
+```bash
+# In .env
+ALLOWED_ORIGINS=["https://your-domain.com"]
+```
+
+---
+
+### Problem: Security headers missing
+**Symptom:** Security scan reports missing headers (CSP, X-Frame-Options, etc.)
+
+### Solution
+Add security headers to nginx configuration:
+
+```nginx
+# In nginx.conf or site config
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';" always;
+```
+
+---
+
+## Backup & Recovery
+
+### Creating Database Backups
+
+**Manual backup:**
+```bash
+# Full database backup
+docker exec intranet-mysql mysqldump -u root -p the_logbook > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Specific tables only
+docker exec intranet-mysql mysqldump -u root -p the_logbook users organizations roles > critical_tables_backup.sql
+
+# Compressed backup
+docker exec intranet-mysql mysqldump -u root -p the_logbook | gzip > backup_$(date +%Y%m%d).sql.gz
+```
+
+**Automated backup script:**
+```bash
+#!/bin/bash
+# Save as /opt/scripts/backup-logbook.sh
+BACKUP_DIR="/path/to/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+KEEP_DAYS=7
+
+# Create backup
+docker exec intranet-mysql mysqldump -u root -p${MYSQL_ROOT_PASSWORD} the_logbook | gzip > "${BACKUP_DIR}/backup_${DATE}.sql.gz"
+
+# Remove old backups
+find ${BACKUP_DIR} -name "backup_*.sql.gz" -mtime +${KEEP_DAYS} -delete
+
+echo "Backup completed: backup_${DATE}.sql.gz"
+```
+
+**Schedule with cron:**
+```bash
+# Run daily at 2 AM
+0 2 * * * /opt/scripts/backup-logbook.sh >> /var/log/logbook-backup.log 2>&1
+```
+
+---
+
+### Restoring from Backup
+
+**Restore full database:**
+```bash
+# Stop the application first
+docker-compose stop backend
+
+# Restore from SQL file
+docker exec -i intranet-mysql mysql -u root -p the_logbook < backup_20260201.sql
+
+# Restore from compressed backup
+gunzip < backup_20260201.sql.gz | docker exec -i intranet-mysql mysql -u root -p the_logbook
+
+# Restart application
+docker-compose start backend
+```
+
+**Restore specific tables:**
+```bash
+# Extract specific table from backup (if you have a full backup)
+grep -A 9999 "CREATE TABLE \`users\`" full_backup.sql | grep -B 9999 -m 1 "^--" > users_only.sql
+
+# Or restore entire backup to a test database first
+docker exec -i intranet-mysql mysql -u root -p -e "CREATE DATABASE test_restore"
+docker exec -i intranet-mysql mysql -u root -p test_restore < backup.sql
+```
+
+---
+
+### Problem: Backup fails with "Access denied"
+**Error:** `mysqldump: Got error: 1045: Access denied for user`
+
+### Solution
+```bash
+# Check MySQL credentials
+docker exec intranet-mysql mysql -u root -p -e "SELECT 1"
+
+# Use credentials from .env
+source .env
+docker exec intranet-mysql mysqldump -u root -p${MYSQL_ROOT_PASSWORD} the_logbook > backup.sql
+```
+
+---
+
+## File Upload Issues
+
+### Problem: Logo upload fails
+**Error:** `File too large` or `Upload failed`
+
+### Root Cause
+- File exceeds size limit
+- Nginx request body size limit
+- Storage directory permissions
+
+### Solution
+
+1. **Check nginx client_max_body_size:**
+```nginx
+# In nginx.conf
+client_max_body_size 10M;  # Adjust as needed
+```
+
+2. **Check backend upload settings:**
+```bash
+# In backend .env
+MAX_UPLOAD_SIZE=10485760  # 10MB in bytes
+```
+
+3. **Verify storage directory permissions:**
+```bash
+docker exec intranet-backend ls -la /app/uploads
+# Should be writable by the application user
+
+# Fix permissions if needed
+docker exec intranet-backend chmod 755 /app/uploads
+```
+
+---
+
+### Problem: Uploaded files not displaying
+**Symptom:** Files upload successfully but don't appear in the UI
+
+### Root Cause
+- Static file serving not configured
+- Volume not mounted correctly
+- Wrong URL path
+
+### Solution
+
+1. **Check volume mounting:**
+```yaml
+# In docker-compose.yml
+backend:
+  volumes:
+    - ./uploads:/app/uploads
+```
+
+2. **Verify nginx serves static files:**
+```nginx
+location /uploads/ {
+    alias /app/uploads/;
+    expires 30d;
+    add_header Cache-Control "public, immutable";
+}
+```
+
+3. **Check file exists:**
+```bash
+docker exec intranet-backend ls -la /app/uploads/
+```
+
+---
+
+### Problem: "Disk quota exceeded" on file upload
+**Error:** `OSError: [Errno 28] No space left on device`
+
+### Solution
+```bash
+# Check disk space
+df -h
+
+# Check Docker disk usage
+docker system df
+
+# Clean up Docker resources
+docker system prune -a --volumes
+
+# Check specific volume size
+du -sh /var/lib/docker/volumes/the-logbook_uploads/
+```
+
+---
+
+## Email & Notification Issues
+
+### Problem: Emails not being sent
+**Symptom:** Password reset emails, notifications not arriving
+
+### Root Cause
+- SMTP not configured
+- SMTP credentials incorrect
+- Email blocked by spam filter
+
+### Solution
+
+1. **Check SMTP configuration in .env:**
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=noreply@yourdomain.com
+SMTP_TLS=true
+```
+
+2. **Test SMTP connection:**
+```bash
+docker exec intranet-backend python -c "
+import smtplib
+import os
+
+smtp = smtplib.SMTP(os.environ['SMTP_HOST'], int(os.environ['SMTP_PORT']))
+smtp.starttls()
+smtp.login(os.environ['SMTP_USER'], os.environ['SMTP_PASSWORD'])
+print('SMTP connection successful!')
+smtp.quit()
+"
+```
+
+3. **For Gmail, use App Passwords:**
+   - Go to Google Account → Security → 2-Step Verification
+   - Generate an App Password for "Mail"
+   - Use this instead of your regular password
+
+---
+
+### Problem: Emails going to spam
+**Symptom:** Emails arrive but go to spam folder
+
+### Solution
+1. **Set up SPF record** for your domain:
+```
+v=spf1 include:_spf.google.com ~all
+```
+
+2. **Set up DKIM** (varies by email provider)
+
+3. **Set up DMARC record:**
+```
+v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com
+```
+
+4. **Use a reputable SMTP service:**
+   - SendGrid
+   - Mailgun
+   - Amazon SES
+
+---
+
+### Problem: Email queue building up
+**Symptom:** Emails delayed or not sent, queue growing
+
+### Solution
+```bash
+# Check Redis queue (if using Redis for job queue)
+docker exec intranet-redis redis-cli -a YOUR_PASSWORD --no-auth-warning LLEN email_queue
+
+# Check backend logs for email errors
+docker logs intranet-backend 2>&1 | grep -i "email\|smtp\|mail"
+
+# Restart email worker if applicable
+docker-compose restart worker
+```
+
+---
+
+## Quick Commands Cheatsheet
+
+### Container Management
+```bash
+# View all containers
+docker-compose ps
+
+# Restart all services
+docker-compose restart
+
+# Restart specific service
+docker-compose restart backend
+
+# View logs (follow mode)
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs -f backend --tail 100
+
+# Enter container shell
+docker exec -it intranet-backend /bin/bash
+docker exec -it intranet-mysql /bin/bash
+```
+
+### Database Commands
+```bash
+# Connect to MySQL
+docker exec -it intranet-mysql mysql -u root -p the_logbook
+
+# Run Alembic migrations
+docker exec intranet-backend alembic upgrade head
+
+# Check migration status
+docker exec intranet-backend alembic current
+
+# View migration history
+docker exec intranet-backend alembic history
+```
+
+### Health Checks
+```bash
+# Backend health
+curl http://localhost:7881/health
+
+# Frontend health
+curl -I http://localhost:7880
+
+# Redis health
+docker exec intranet-redis redis-cli -a PASSWORD --no-auth-warning ping
+
+# MySQL health
+docker exec intranet-mysql mysqladmin -u root -p ping
+```
+
+### Debugging
+```bash
+# Check container resource usage
+docker stats
+
+# View container details
+docker inspect intranet-backend
+
+# Check network connectivity
+docker network inspect logbook-internal
+
+# Test internal connectivity
+docker exec intranet-backend ping -c 3 mysql
+docker exec intranet-frontend wget -qO- http://backend:3001/health
+```
+
+### Cleanup Commands
+```bash
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# Remove unused volumes (CAUTION: may delete data)
+docker volume prune
+
+# Full cleanup (CAUTION)
+docker system prune -a
+```
+
+### Log Analysis
+```bash
+# Search for errors in backend logs
+docker logs intranet-backend 2>&1 | grep -i "error\|exception"
+
+# Search for specific user activity
+docker logs intranet-backend 2>&1 | grep "user@example.com"
+
+# Export logs to file
+docker logs intranet-backend > backend_logs_$(date +%Y%m%d).txt 2>&1
+
+# Monitor logs in real-time with filtering
+docker logs -f intranet-backend 2>&1 | grep --line-buffered "ERROR"
+```
 
 ---
 
