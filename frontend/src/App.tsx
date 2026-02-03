@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 
 // Modules
 import { getOnboardingRoutes } from './modules/onboarding';
+import { getApparatusRoutes } from './modules/apparatus';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -37,6 +38,12 @@ function App() {
               Comment out the line below to disable onboarding
               ============================================ */}
           {getOnboardingRoutes()}
+
+          {/* ============================================
+              APPARATUS MODULE
+              Comment out the line below to disable apparatus
+              ============================================ */}
+          {getApparatusRoutes()}
 
           {/* ============================================
               MAIN APPLICATION ROUTES
