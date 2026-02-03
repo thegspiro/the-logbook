@@ -222,6 +222,10 @@ export const userService = {
   },
 };
 
+export interface EnabledModulesResponse {
+  enabled_modules: string[];
+}
+
 export const organizationService = {
   /**
    * Get organization settings
@@ -237,6 +241,22 @@ export const organizationService = {
   async updateContactInfoSettings(settings: ContactInfoSettings): Promise<ContactInfoSettings> {
     const response = await api.patch('/organization/settings/contact-info', settings);
     return response.data;
+  },
+
+  /**
+   * Get enabled modules for the organization
+   */
+  async getEnabledModules(): Promise<EnabledModulesResponse> {
+    const response = await api.get<EnabledModulesResponse>('/organization/modules');
+    return response.data;
+  },
+
+  /**
+   * Check if a specific module is enabled
+   */
+  async isModuleEnabled(moduleId: string): Promise<boolean> {
+    const response = await this.getEnabledModules();
+    return response.enabled_modules.includes(moduleId);
   },
 };
 

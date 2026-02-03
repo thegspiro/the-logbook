@@ -10,7 +10,7 @@ from sqlalchemy import select
 from uuid import UUID
 
 from app.models.user import Organization
-from app.schemas.organization import OrganizationSettings, ContactInfoSettings
+from app.schemas.organization import OrganizationSettings, ContactInfoSettings, EnabledModulesResponse
 
 
 class OrganizationService:
@@ -93,3 +93,21 @@ class OrganizationService:
     def check_contact_info_enabled(self, settings: OrganizationSettings) -> bool:
         """Check if contact information display is enabled"""
         return settings.contact_info_visibility.enabled
+
+    async def get_enabled_modules(
+        self,
+        organization_id: UUID
+    ) -> EnabledModulesResponse:
+        """
+        Get enabled modules for an organization
+
+        Returns the list of enabled module IDs from organization settings.
+        """
+        org = await self.get_organization(organization_id)
+        if not org:
+            return EnabledModulesResponse(enabled_modules=[])
+
+        settings_dict = org.settings or {}
+        enabled_modules = settings_dict.get("enabled_modules", [])
+
+        return EnabledModulesResponse(enabled_modules=enabled_modules)

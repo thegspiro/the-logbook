@@ -13,7 +13,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { userService } from '../services/api';
+import { userService, organizationService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
@@ -60,6 +60,7 @@ export const MemberProfilePage: React.FC = () => {
   const [user, setUser] = useState<UserWithRoles | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inventoryModuleEnabled, setInventoryModuleEnabled] = useState(false);
 
   // Edit mode states
   const [isEditing, setIsEditing] = useState(false);
@@ -174,8 +175,20 @@ export const MemberProfilePage: React.FC = () => {
   useEffect(() => {
     if (userId) {
       fetchUserData();
+      fetchModuleStatus();
     }
   }, [userId]);
+
+  const fetchModuleStatus = async () => {
+    try {
+      const response = await organizationService.getEnabledModules();
+      setInventoryModuleEnabled(response.enabled_modules.includes('inventory'));
+    } catch (err) {
+      // If we can't fetch module status, default to not showing inventory
+      console.error('Error fetching module status:', err);
+      setInventoryModuleEnabled(false);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -443,60 +456,62 @@ export const MemberProfilePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Assigned Inventory */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Assigned Inventory</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Item
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Item #
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Condition
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Assigned
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {inventoryItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {item.name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{item.item_number}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            item.condition === 'Excellent'
-                              ? 'bg-green-100 text-green-800'
-                              : item.condition === 'Good'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {item.condition}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {formatDate(item.assigned_date)}
-                      </td>
+          {/* Assigned Inventory - Only shown if inventory module is enabled */}
+          {inventoryModuleEnabled && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Assigned Inventory</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Item
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Item #
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Condition
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Assigned
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {inventoryItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {item.name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{item.item_number}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              item.condition === 'Excellent'
+                                ? 'bg-green-100 text-green-800'
+                                : item.condition === 'Good'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {item.condition}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {formatDate(item.assigned_date)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Right Column - Contact & Additional Info */}
@@ -670,12 +685,14 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.filter((t) => t.status === 'expiring_soon').length}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Assigned Equipment</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {inventoryItems.length}
-                </span>
-              </div>
+              {inventoryModuleEnabled && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Assigned Equipment</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {inventoryItems.length}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Upcoming Shifts</span>
                 <span className="text-sm font-semibold text-gray-900">
