@@ -77,7 +77,8 @@ class RateLimiter:
             return True, f"Too many requests. Account locked for {lockout_seconds // 60} minutes"
 
         # Record this request
-        self.requests[key] = []
+        if key not in self.requests:
+            self.requests[key] = []
         self.requests[key].append(current_time)
 
         return False, None
