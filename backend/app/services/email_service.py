@@ -224,3 +224,126 @@ Please do not reply to this email.
         )
 
         return success_count > 0
+
+    async def send_training_approval_request(
+        self,
+        to_emails: List[str],
+        event_title: str,
+        course_name: str,
+        event_date: datetime,
+        approval_url: str,
+        attendee_count: int,
+        approval_deadline: datetime,
+        submitter_name: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """
+        Send training approval request notification to training officers
+
+        Args:
+            to_emails: List of training officer email addresses
+            event_title: Title of the training event
+            course_name: Name of the training course
+            event_date: Date/time of the training event
+            approval_url: URL to the approval page
+            attendee_count: Number of attendees to approve
+            approval_deadline: Deadline for approval
+            submitter_name: Name of the person who submitted for approval
+
+        Returns:
+            Tuple of (success_count, failure_count)
+        """
+        subject = f"Training Approval Required: {course_name}"
+
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #2563eb; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; }}
+        .details-row {{ display: flex; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }}
+        .details-label {{ font-weight: bold; width: 140px; color: #6b7280; }}
+        .button {{ display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+        .warning {{ color: #dc2626; font-weight: bold; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Training Approval Required</h1>
+        </div>
+        <div class="content">
+            <p>A training session has been submitted for approval and requires your review.</p>
+
+            <div class="details">
+                <div class="details-row">
+                    <span class="details-label">Course Name:</span>
+                    <span>{course_name}</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Event:</span>
+                    <span>{event_title}</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Date:</span>
+                    <span>{event_date.strftime('%B %d, %Y at %I:%M %p')}</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">Attendees:</span>
+                    <span>{attendee_count} member(s)</span>
+                </div>
+                {f'<div class="details-row"><span class="details-label">Submitted By:</span><span>{submitter_name}</span></div>' if submitter_name else ''}
+                <div class="details-row">
+                    <span class="details-label">Deadline:</span>
+                    <span class="warning">{approval_deadline.strftime('%B %d, %Y at %I:%M %p')}</span>
+                </div>
+            </div>
+
+            <p>Please review the attendee hours and approve or make adjustments as needed.</p>
+
+            <p style="text-align: center;">
+                <a href="{approval_url}" class="button">Review & Approve Training</a>
+            </p>
+
+            <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{approval_url}</small></p>
+        </div>
+        <div class="footer">
+            <p>This is an automated message from {self._smtp_config['from_name']}</p>
+            <p>Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+        text_body = f"""
+Training Approval Required
+
+A training session has been submitted for approval and requires your review.
+
+Course Name: {course_name}
+Event: {event_title}
+Date: {event_date.strftime('%B %d, %Y at %I:%M %p')}
+Attendees: {attendee_count} member(s)
+{f"Submitted By: {submitter_name}" if submitter_name else ""}
+Approval Deadline: {approval_deadline.strftime('%B %d, %Y at %I:%M %p')}
+
+Please review the attendee hours and approve or make adjustments as needed.
+
+Review & Approve: {approval_url}
+
+---
+This is an automated message from {self._smtp_config['from_name']}
+Please do not reply to this email.
+"""
+
+        return await self.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )

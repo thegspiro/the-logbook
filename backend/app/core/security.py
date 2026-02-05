@@ -459,21 +459,93 @@ def mask_sensitive_data(data: str, visible_chars: int = 4) -> str:
 # Rate Limiting Helpers
 # ============================================
 
-def is_rate_limited(key: str, limit: int, window_seconds: int) -> bool:
+async def is_rate_limited(key: str, limit: int, window_seconds: int) -> bool:
     """
-    Check if a key has exceeded rate limit
+    Check if a key has exceeded rate limit using Redis sliding window.
 
-    Note: This is a helper function. Actual implementation
-    should use Redis for distributed rate limiting.
+    Uses Redis for distributed rate limiting across multiple instances.
+    Falls back to allowing requests if Redis is unavailable (graceful degradation).
 
     Args:
         key: Unique key to track (e.g., IP address, user ID)
-        limit: Maximum number of requests
+        limit: Maximum number of requests allowed in the window
         window_seconds: Time window in seconds
 
     Returns:
-        True if rate limit exceeded
+        True if rate limit exceeded, False otherwise
     """
-    # TODO: Implement with Redis
-    # For now, return False (no rate limiting)
-    return False
+    from app.core.cache import cache_manager
+    from loguru import logger
+    import time
+
+    # If Redis is not connected, allow the request (graceful degradation)
+    if not cache_manager.is_connected or not cache_manager.redis_client:
+        logger.debug(f"Rate limiting disabled - Redis not connected")
+        return False
+
+    try:
+        redis_client = cache_manager.redis_client
+        rate_limit_key = f"rate_limit:{key}"
+        current_time = time.time()
+        window_start = current_time - window_seconds
+
+        # Use a Redis pipeline for atomic operations
+        pipe = redis_client.pipeline()
+
+        # Remove old entries outside the window
+        pipe.zremrangebyscore(rate_limit_key, 0, window_start)
+
+        # Count requests in current window
+        pipe.zcard(rate_limit_key)
+
+        # Add current request with timestamp as score
+        pipe.zadd(rate_limit_key, {str(current_time): current_time})
+
+        # Set expiry on the key to auto-cleanup
+        pipe.expire(rate_limit_key, window_seconds)
+
+        # Execute pipeline
+        results = await pipe.execute()
+
+        # Get the count (second command result, before adding current request)
+        request_count = results[1]
+
+        if request_count >= limit:
+            logger.warning(f"Rate limit exceeded for key: {key} ({request_count}/{limit} requests)")
+            return True
+
+        return False
+
+    except Exception as e:
+        logger.error(f"Rate limiting error: {e}")
+        # On error, allow the request (fail open for availability)
+        return False
+
+
+def is_rate_limited_sync(key: str, limit: int, window_seconds: int) -> bool:
+    """
+    Synchronous version of rate limiting check.
+
+    Note: This is a fallback for synchronous contexts. Prefer the async
+    version when possible for better performance.
+
+    Args:
+        key: Unique key to track (e.g., IP address, user ID)
+        limit: Maximum number of requests allowed in the window
+        window_seconds: Time window in seconds
+
+    Returns:
+        True if rate limit exceeded, False otherwise
+    """
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If we're in an async context, we can't use run_until_complete
+            # Fall back to allowing the request
+            return False
+        return loop.run_until_complete(is_rate_limited(key, limit, window_seconds))
+    except RuntimeError:
+        # No event loop available, allow the request
+        return False
