@@ -84,26 +84,27 @@ def verify_password(password: str, hashed_password: str) -> bool:
         return False
 
 
-def validate_password_strength(password: str) -> bool:
+def validate_password_strength(password: str) -> tuple[bool, str | None]:
     """
-    Validate password meets complexity requirements
+    Validate password meets complexity requirements for HIPAA compliance.
 
-    Requirements based on NIST SP 800-63B and HIPAA guidelines:
-    - Minimum length: 12 characters
+    Requirements based on NIST SP 800-63B and HIPAA Security Rule:
+    - Minimum length: 12 characters (configurable)
     - At least one uppercase letter
     - At least one lowercase letter
     - At least one number
     - At least one special character
-    - No common passwords
+    - Not a common/breached password
+    - No sequential characters (e.g., '123', 'abc')
+    - No repeated characters (e.g., 'aaa')
 
     Args:
         password: Password to validate
 
     Returns:
-        True if valid
-
-    Raises:
-        ValueError: If password doesn't meet requirements
+        Tuple of (is_valid, error_message)
+        - is_valid: True if password meets all requirements
+        - error_message: None if valid, otherwise description of failures
     """
     errors = []
 
@@ -124,21 +125,55 @@ def validate_password_strength(password: str) -> bool:
         errors.append("Password must contain at least one number")
 
     # Check special characters
-    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?~`]', password):
         errors.append("Password must contain at least one special character")
 
-    # Check for common passwords (basic list - expand in production)
-    common_passwords = [
-        'password', '12345678', 'qwerty', 'admin', 'letmein',
-        'welcome', 'monkey', 'dragon', 'master', 'password123'
+    # Check for sequential characters (3+ in a row)
+    sequential_patterns = [
+        '012', '123', '234', '345', '456', '567', '678', '789',
+        'abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij',
+        'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr',
+        'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'
     ]
-    if password.lower() in common_passwords:
+    password_lower = password.lower()
+    for pattern in sequential_patterns:
+        if pattern in password_lower:
+            errors.append("Password cannot contain sequential characters (e.g., '123', 'abc')")
+            break
+
+    # Check for repeated characters (3+ in a row)
+    if re.search(r'(.)\1{2,}', password):
+        errors.append("Password cannot contain 3 or more repeated characters")
+
+    # Check for common passwords (expanded list for security)
+    common_passwords = [
+        'password', '12345678', '123456789', '1234567890', 'qwerty', 'admin',
+        'letmein', 'welcome', 'monkey', 'dragon', 'master', 'password123',
+        'password1', 'password!', 'iloveyou', 'sunshine', 'princess', 'admin123',
+        'qwerty123', 'login', 'passw0rd', 'baseball', 'football', 'shadow',
+        'michael', 'batman', 'trustno1', 'whatever', 'freedom', 'mustang',
+        'jennifer', 'jordan', 'harley', 'ranger', 'thomas', 'robert', 'soccer',
+        'hockey', 'killer', 'george', 'charlie', 'andrew', 'daniel', 'joshua',
+        'matthew', 'firedepart', 'firehouse', 'firefighter', 'rescue', 'engine',
+        'ladder', 'station', 'department', 'emergency', 'medic', 'ems', 'ambulance'
+    ]
+    if password_lower in common_passwords:
         errors.append("Password is too common. Please choose a stronger password")
 
-    if errors:
-        raise ValueError("; ".join(errors))
+    # Check for keyboard patterns
+    keyboard_patterns = [
+        'qwerty', 'asdfgh', 'zxcvbn', 'qazwsx', 'qweasd', '!@#$%^',
+        '1qaz2wsx', '1234qwer', 'asdf1234'
+    ]
+    for pattern in keyboard_patterns:
+        if pattern in password_lower:
+            errors.append("Password cannot contain keyboard patterns")
+            break
 
-    return True
+    if errors:
+        return False, "; ".join(errors)
+
+    return True, None
 
 
 # ============================================
