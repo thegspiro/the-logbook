@@ -4,14 +4,152 @@ This guide covers common issues and their solutions for The Logbook deployment.
 
 ## Table of Contents
 
-1. [Onboarding Failures](#onboarding-failures)
-2. [Redis Container Unhealthy](#redis-container-unhealthy)
-3. [Frontend Not Rendering](#frontend-not-rendering)
-4. [Malformed API URLs](#malformed-api-urls)
-5. [Build Errors](#build-errors)
-6. [Docker Issues](#docker-issues)
-7. [Network & Connectivity](#network--connectivity)
-8. [Security Issues](#security-issues)
+1. [Installation Issues](#installation-issues)
+2. [Onboarding Failures](#onboarding-failures)
+3. [Redis Container Unhealthy](#redis-container-unhealthy)
+4. [Frontend Not Rendering](#frontend-not-rendering)
+5. [Malformed API URLs](#malformed-api-urls)
+6. [Build Errors](#build-errors)
+7. [Docker Issues](#docker-issues)
+8. [Network & Connectivity](#network--connectivity)
+9. [Security Issues](#security-issues)
+10. [Accessibility Issues](#accessibility-issues)
+
+---
+
+## Installation Issues
+
+### Problem: Universal installer fails to detect OS
+
+**Error:** `Could not detect operating system`
+
+### Root Cause
+The installer couldn't identify your Linux distribution from `/etc/os-release`.
+
+### Solution
+
+**1. Check your OS release file:**
+```bash
+cat /etc/os-release
+```
+
+**2. Run with explicit flags:**
+```bash
+# For Debian/Ubuntu-based
+curl -sSL .../universal-install.sh | bash -s -- --profile standard
+
+# For Raspberry Pi
+curl -sSL .../universal-install.sh | bash -s -- --profile minimal --arm
+```
+
+---
+
+### Problem: Installation fails on ARM device (Raspberry Pi)
+
+**Error:** `Image not found for platform linux/arm64`
+
+### Root Cause
+Default Docker images may not support ARM architecture.
+
+### Solution
+
+**1. Use the ARM-specific compose file:**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+```
+
+**2. For Raspberry Pi with low memory (1-2GB), use minimal profile:**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
+```
+
+**3. Or use the universal installer with flags:**
+```bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal --arm
+```
+
+---
+
+### Problem: Out of memory during installation
+
+**Error:** `Cannot allocate memory` or containers crash/restart repeatedly
+
+### Root Cause
+System doesn't have enough RAM for the default configuration.
+
+### Solution
+
+**1. Use minimal profile for low-memory systems (1-2GB RAM):**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
+```
+
+**2. Profile recommendations:**
+
+| RAM | Profile | Command |
+|-----|---------|---------|
+| 1-2GB | minimal | `--profile minimal` |
+| 4GB | standard | (default) |
+| 8GB+ | full | `--profile full` |
+
+**3. Reduce memory further if needed:**
+```yaml
+# In docker-compose.override.yml
+services:
+  mysql:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+  backend:
+    command: uvicorn main:app --host 0.0.0.0 --port 3001 --workers 1
+```
+
+---
+
+### Problem: Docker not installed
+
+**Error:** `docker: command not found`
+
+### Solution
+
+**1. Use the universal installer (auto-installs Docker):**
+```bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+```
+
+**2. Or install Docker manually:**
+
+```bash
+# Debian/Ubuntu
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+
+# macOS
+brew install --cask docker
+
+# Then start Docker Desktop
+```
+
+---
+
+### Problem: Permission denied running Docker commands
+
+**Error:** `permission denied while trying to connect to the Docker daemon`
+
+### Solution
+
+```bash
+# Add user to docker group
+sudo usermod -aG docker $USER
+
+# Apply changes (logout/login or run):
+newgrp docker
+
+# Verify
+docker ps
+```
 
 ---
 
@@ -663,4 +801,150 @@ curl http://YOUR-IP:7881/api/v1/security/data-exfiltration/status
 
 # Trigger manual security check
 curl -X POST http://YOUR-IP:7881/api/v1/security/manual-check
+```
+
+---
+
+## Accessibility Issues
+
+### Problem: Screen reader not announcing navigation items correctly
+
+### Root Cause
+Missing ARIA labels or incorrect semantic structure.
+
+### Solution
+
+The application uses proper ARIA attributes throughout. If issues persist:
+
+**1. Ensure browser and screen reader are up to date:**
+- NVDA 2023+ recommended
+- JAWS 2023+ recommended
+- VoiceOver (latest macOS/iOS)
+
+**2. Verify navigation landmarks are detected:**
+- Press `D` in NVDA to cycle through landmarks
+- Use VoiceOver rotor (VO+U) to view landmarks
+
+**3. Check that JavaScript is enabled:**
+ARIA attributes are applied dynamically and require JavaScript.
+
+---
+
+### Problem: Cannot navigate using keyboard only
+
+### Root Cause
+Missing focus management or skip links not working.
+
+### Solution
+
+**1. Use skip links:**
+- Press Tab immediately after page load
+- "Skip to main content" and "Skip to navigation" links should appear
+- Press Enter to activate
+
+**2. Keyboard navigation shortcuts:**
+- `Tab`: Move forward through interactive elements
+- `Shift+Tab`: Move backward
+- `Enter/Space`: Activate buttons and links
+- `Escape`: Close modals and dropdowns
+- `Arrow keys`: Navigate within menus
+
+**3. If focus is lost after actions:**
+Clear browser cache and reload. Focus management should return to appropriate elements after modal closes or form submissions.
+
+---
+
+### Problem: Color contrast issues or hard to read text
+
+### Root Cause
+System or browser settings may override application styles.
+
+### Solution
+
+**1. The application meets WCAG 2.1 AA contrast requirements:**
+- Body text: minimum 4.5:1 contrast ratio
+- Large text (18pt+): minimum 3:1 contrast ratio
+- Interactive elements: visible focus indicators
+
+**2. Enable high contrast mode:**
+- Windows: Settings → Accessibility → High contrast themes
+- macOS: System Preferences → Accessibility → Display → Increase contrast
+- The application respects system high contrast preferences
+
+**3. Use browser zoom:**
+- The application supports zoom up to 200% without horizontal scrolling
+- Press `Ctrl/Cmd + +` to zoom in
+
+---
+
+### Problem: Form errors not announced by screen reader
+
+### Root Cause
+Form validation messages need proper ARIA attributes.
+
+### Solution
+
+Form inputs include:
+- `aria-invalid="true"` when validation fails
+- `aria-describedby` pointing to error message element
+- Error messages have `role="alert"` for immediate announcement
+
+**If not working:**
+1. Check that JavaScript is enabled
+2. Try a different screen reader
+3. Ensure browser accessibility settings aren't blocking announcements
+
+---
+
+### Problem: Modal dialogs not trapping focus
+
+### Root Cause
+Keyboard focus escaping modal to background elements.
+
+### Solution
+
+**1. Modals should trap focus:**
+- Tab should cycle only through modal elements
+- Escape should close the modal
+- Focus should return to trigger element after close
+
+**2. If focus escapes:**
+Clear browser cache and reload. This typically indicates JavaScript hasn't fully loaded.
+
+---
+
+### Accessibility Testing Checklist
+
+Use this checklist to verify accessibility:
+
+- [ ] All pages have proper heading hierarchy (h1, h2, h3...)
+- [ ] All images have alt text
+- [ ] All form inputs have visible labels
+- [ ] Color is not the only way to convey information
+- [ ] All interactive elements are keyboard accessible
+- [ ] Focus indicator is visible on all interactive elements
+- [ ] Skip links work on each page
+- [ ] Screen reader announces page content correctly
+- [ ] Zoom to 200% works without horizontal scroll
+- [ ] No content flashes more than 3 times per second
+
+---
+
+### Accessibility Testing Tools
+
+**Browser Extensions:**
+- axe DevTools (Chrome/Firefox)
+- WAVE Evaluation Tool
+- Lighthouse (Chrome DevTools)
+
+**Screen Readers:**
+- NVDA (Windows, free)
+- JAWS (Windows, commercial)
+- VoiceOver (macOS/iOS, built-in)
+- TalkBack (Android, built-in)
+
+**Manual Testing:**
+```bash
+# Run Lighthouse accessibility audit from command line
+npx lighthouse http://localhost:3000 --only-categories=accessibility
 ```

@@ -4,13 +4,78 @@ This guide covers all installation methods for The Logbook.
 
 ---
 
+## Quick Start (Universal Installer)
+
+**Works on any platform!** The universal installer automatically detects your OS and hardware:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+```
+
+This automatically:
+- Detects your OS (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch, macOS)
+- Detects architecture (x86_64, ARM64, ARMv7)
+- Installs Docker if needed
+- Generates secure secrets
+- Configures optimal settings for your hardware
+- Starts all services
+
+**Access:** `http://localhost:3000`
+
+---
+
+## Installation Profiles
+
+Choose a profile based on your hardware:
+
+| Profile | RAM | Best For | Command |
+|---------|-----|----------|---------|
+| `minimal` | 1-2GB | Raspberry Pi, small VPS | `--profile minimal` |
+| `standard` | 4GB | Most deployments | (default) |
+| `full` | 8GB+ | Large organizations | `--profile full` |
+
+**Examples:**
+```bash
+# Raspberry Pi / Low memory (1-2GB)
+curl -sSL .../universal-install.sh | bash -s -- --profile minimal
+
+# Standard (default, 4GB RAM)
+curl -sSL .../universal-install.sh | bash
+
+# Full with all features (8GB+ RAM)
+curl -sSL .../universal-install.sh | bash -s -- --profile full
+```
+
+---
+
+## Supported Platforms
+
+| Platform | Architecture | Profiles | Status |
+|----------|--------------|----------|--------|
+| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64 | All | Full support |
+| **macOS** (Intel & Apple Silicon) | x86_64, ARM64 | All | Full support |
+| **Windows** (WSL2) | x86_64 | All | Full support |
+| **Raspberry Pi 4/5** | ARM64 | minimal, standard | Full support |
+| **Raspberry Pi 3** | ARMv7 | minimal | Limited (1GB RAM) |
+| **AWS** (EC2, ECS, Fargate) | x86_64, ARM64 | All | Full support |
+| **Azure** (VMs, Container Instances) | x86_64 | All | Full support |
+| **Google Cloud** (Compute, Cloud Run) | x86_64 | All | Full support |
+| **DigitalOcean** (Droplets, App Platform) | x86_64 | All | Full support |
+| **Unraid** | x86_64 | standard | Optimized |
+| **Kubernetes** | x86_64, ARM64 | standard, full | Helm chart available |
+
+---
+
 ## Choose Your Installation Method
 
-| Method | Best For | Difficulty | Time |
-|--------|----------|------------|------|
-| **[Unraid](#unraid-one-command)** | Unraid users | ⭐ Easy | 5-10 min |
-| **[Docker Compose](#docker-compose)** | General use | ⭐⭐ Moderate | 10-15 min |
-| **[Development](#development-setup)** | Contributors | ⭐⭐⭐ Advanced | 20-30 min |
+| Method | Best For | Difficulty |
+|--------|----------|------------|
+| **[Universal Installer](#quick-start-universal-installer)** | Any platform | Easy |
+| **[Unraid](#unraid-one-command)** | Unraid users | Easy |
+| **[Docker Compose](#docker-compose)** | Manual control | Moderate |
+| **[Raspberry Pi](#raspberry-pi)** | ARM devices | Moderate |
+| **[Cloud Deployment](#cloud-deployment)** | AWS, Azure, GCP | Moderate |
+| **[Development](#development-setup)** | Contributors | Advanced |
 
 ---
 
@@ -103,6 +168,123 @@ ALLOWED_ORIGINS=http://localhost:3000
 ENVIRONMENT=production
 DEBUG=false
 ```
+
+---
+
+## Raspberry Pi
+
+**For Raspberry Pi 3, 4, or 5**
+
+### Automatic Installation (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
+```
+
+### Manual Installation
+
+```bash
+# Clone repository
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+
+# Copy and configure environment
+cp .env.example .env
+nano .env  # Edit settings
+
+# Start with ARM + minimal profiles
+docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
+```
+
+### Raspberry Pi Memory Requirements
+
+| Model | RAM | Recommended Profile |
+|-------|-----|---------------------|
+| Pi 3 | 1GB | `minimal` (limited functionality) |
+| Pi 4 (2GB) | 2GB | `minimal` |
+| Pi 4 (4GB) | 4GB | `standard` |
+| Pi 4 (8GB) | 8GB | `standard` or `full` |
+| Pi 5 | 4-8GB | `standard` |
+
+### Performance Tips for Raspberry Pi
+
+1. **Use an SSD** - USB 3.0 SSD significantly improves performance over SD card
+2. **Increase swap** - Add 2GB swap for stability
+3. **Use minimal profile** - Reduces memory usage by ~60%
+4. **Disable unused services** - Comment out elasticsearch in compose file
+
+---
+
+## Cloud Deployment
+
+### AWS (EC2)
+
+```bash
+# SSH to your EC2 instance, then:
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+
+# With managed RDS database:
+# Edit .env to point to RDS endpoint
+DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
+DB_PASSWORD=your-secure-password
+docker compose up -d backend frontend
+```
+
+**Recommended EC2 instances:**
+| Instance | vCPUs | RAM | Profile |
+|----------|-------|-----|---------|
+| t3.micro | 2 | 1GB | minimal |
+| t3.small | 2 | 2GB | minimal |
+| t3.medium | 2 | 4GB | standard |
+| t3.large | 2 | 8GB | full |
+
+### Azure (Virtual Machines)
+
+```bash
+# SSH to your Azure VM, then:
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+```
+
+### Google Cloud (Compute Engine)
+
+```bash
+# SSH to your GCE instance, then:
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+```
+
+### DigitalOcean (Droplets)
+
+```bash
+# SSH to your Droplet, then:
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+```
+
+**Recommended Droplet sizes:**
+| Size | RAM | Profile |
+|------|-----|---------|
+| Basic $6 | 1GB | minimal |
+| Basic $12 | 2GB | minimal |
+| Basic $24 | 4GB | standard |
+| Basic $48 | 8GB | full |
+
+### Kubernetes (Helm)
+
+```bash
+# Add Helm repository
+helm repo add the-logbook https://thegspiro.github.io/the-logbook/charts
+helm repo update
+
+# Install with default values
+helm install logbook the-logbook/the-logbook
+
+# Install with custom values
+helm install logbook the-logbook/the-logbook \
+  --set profile=standard \
+  --set ingress.enabled=true \
+  --set ingress.host=logbook.yourdomain.com
+```
+
+See [Deployment Guide](Deployment-Guide) for detailed cloud deployment instructions.
 
 ---
 
