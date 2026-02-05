@@ -31,10 +31,12 @@ def upgrade():
     op.add_column('program_requirements', sa.Column('notification_message', sa.Text(), nullable=True))
 
     # Rename is_mandatory to is_required in program_requirements
-    op.alter_column('program_requirements', 'is_mandatory', new_column_name='is_required')
+    op.alter_column('program_requirements', 'is_mandatory', new_column_name='is_required',
+                    existing_type=sa.Boolean(), existing_nullable=True)
 
     # Rename order to sort_order in program_requirements
-    op.alter_column('program_requirements', 'order', new_column_name='sort_order')
+    op.alter_column('program_requirements', 'order', new_column_name='sort_order',
+                    existing_type=sa.Integer(), existing_nullable=True)
 
     # Add is_prerequisite column to program_requirements
     op.add_column('program_requirements', sa.Column('is_prerequisite', sa.Boolean(), nullable=True, server_default='0'))
@@ -49,8 +51,10 @@ def downgrade():
 
     # Remove columns from program_requirements
     op.drop_column('program_requirements', 'is_prerequisite')
-    op.alter_column('program_requirements', 'sort_order', new_column_name='order')
-    op.alter_column('program_requirements', 'is_required', new_column_name='is_mandatory')
+    op.alter_column('program_requirements', 'sort_order', new_column_name='order',
+                    existing_type=sa.Integer(), existing_nullable=True)
+    op.alter_column('program_requirements', 'is_required', new_column_name='is_mandatory',
+                    existing_type=sa.Boolean(), existing_nullable=True)
     op.drop_column('program_requirements', 'notification_message')
     op.drop_column('program_requirements', 'custom_deadline_days')
     op.drop_column('program_requirements', 'program_specific_description')
