@@ -353,7 +353,7 @@ const ModuleOverview: React.FC = () => {
 
           {/* Progress Indicator */}
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <ProgressIndicator currentStep={8} totalSteps={9} />
+            <ProgressIndicator currentStep={9} totalSteps={10} />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>

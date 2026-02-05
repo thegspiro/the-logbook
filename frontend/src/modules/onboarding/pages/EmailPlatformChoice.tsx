@@ -287,7 +287,7 @@ const EmailPlatformChoice: React.FC = () => {
             </p>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={3} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
+            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-white/10" />
 
             {/* Auto-Save Notification */}
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />

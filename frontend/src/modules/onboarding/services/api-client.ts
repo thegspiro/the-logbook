@@ -28,9 +28,28 @@ interface HealthStatus {
   checks: {
     database: string;
     redis: string;
-    configuration: string;
+    configuration?: string;
+    schema?: string;
+    security?: {
+      status: string;
+      critical_issues?: number;
+      warnings?: number;
+    };
   };
   warnings?: string[];
+  schema_error?: string;
+  startup?: {
+    phase: string;
+    message: string;
+    ready: boolean;
+    migrations?: {
+      total: number;
+      completed: number;
+      current: string | null;
+    } | null;
+    uptime_seconds: number;
+    errors?: string[] | null;
+  };
 }
 
 class SecureApiClient {

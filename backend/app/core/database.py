@@ -107,11 +107,11 @@ class DatabaseManager:
                 self.engine = None
                 self.session_factory = None
 
-            # Wait before retrying (exponential backoff)
+            # Wait before retrying (exponential backoff with max cap)
             if attempt < settings.DB_CONNECT_RETRIES:
                 logger.info(f"Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                retry_delay = min(retry_delay * 2, settings.DB_CONNECT_RETRY_MAX_DELAY)  # Exponential backoff with cap
 
         # All retries exhausted
         logger.error(f"Database connection failed after {settings.DB_CONNECT_RETRIES} attempts")

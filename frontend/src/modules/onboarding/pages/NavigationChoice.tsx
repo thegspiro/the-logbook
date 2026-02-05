@@ -331,7 +331,7 @@ const NavigationChoice: React.FC = () => {
             </p>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={2} totalSteps={9} className="pt-6 border-t border-white/10" />
+          <ProgressIndicator currentStep={2} totalSteps={10} className="pt-6 border-t border-white/10" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
