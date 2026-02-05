@@ -182,6 +182,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
+    # Frontend URL for generating links in emails
+    FRONTEND_URL: str = "http://localhost:3000"
+
     @field_validator('ALLOWED_ORIGINS', mode='before')
     @classmethod
     def parse_allowed_origins(cls, v):

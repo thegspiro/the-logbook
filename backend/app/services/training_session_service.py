@@ -13,9 +13,10 @@ from sqlalchemy.orm import selectinload
 import secrets
 
 from app.models.event import Event, EventRSVP, EventType, CheckInWindowType
-from app.models.training import TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus, TrainingType
-from app.models.user import User
+from app.models.training import TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus, TrainingType, TrainingRecord
+from app.models.user import User, Role
 from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
+from app.core.config import settings
 
 
 class TrainingSessionService:
@@ -246,10 +247,96 @@ class TrainingSessionService:
         await self.db.commit()
         await self.db.refresh(training_approval)
 
-        # TODO: Send email notification to training officers
-        # This will be implemented in the email service
+        # Send email notification to training officers
+        await self._notify_training_officers(
+            organization_id=organization_id,
+            event=event,
+            training_session=training_session,
+            approval_token=approval_token,
+            attendee_count=len(attendee_data),
+            approval_deadline=approval_deadline,
+            finalized_by=finalized_by,
+        )
 
         return training_approval, None
+
+    async def _notify_training_officers(
+        self,
+        organization_id: UUID,
+        event: Event,
+        training_session: TrainingSession,
+        approval_token: str,
+        attendee_count: int,
+        approval_deadline: datetime,
+        finalized_by: UUID,
+    ) -> None:
+        """
+        Send email notifications to training officers about pending approval.
+        """
+        from app.services.email_service import EmailService
+        from app.models.user import user_roles
+
+        try:
+            # Get training officer role
+            role_result = await self.db.execute(
+                select(Role)
+                .where(Role.slug == "training_officer")
+                .where(Role.organization_id == str(organization_id))
+            )
+            training_officer_role = role_result.scalar_one_or_none()
+
+            if not training_officer_role:
+                # No training officer role configured, skip notification
+                return
+
+            # Get users with training officer role
+            users_result = await self.db.execute(
+                select(User)
+                .join(user_roles, User.id == user_roles.c.user_id)
+                .where(user_roles.c.role_id == training_officer_role.id)
+                .where(User.organization_id == str(organization_id))
+            )
+            training_officers = list(users_result.scalars().all())
+
+            if not training_officers:
+                return
+
+            # Get officer emails
+            to_emails = [
+                officer.email for officer in training_officers
+                if officer.email
+            ]
+
+            if not to_emails:
+                return
+
+            # Get submitter name
+            submitter_result = await self.db.execute(
+                select(User).where(User.id == str(finalized_by))
+            )
+            submitter = submitter_result.scalar_one_or_none()
+            submitter_name = f"{submitter.first_name} {submitter.last_name}" if submitter else None
+
+            # Build approval URL
+            approval_url = f"{settings.FRONTEND_URL}/training/approve/{approval_token}"
+
+            # Send email
+            email_service = EmailService()
+            await email_service.send_training_approval_request(
+                to_emails=to_emails,
+                event_title=event.title,
+                course_name=training_session.course_name,
+                event_date=event.start_datetime,
+                approval_url=approval_url,
+                attendee_count=attendee_count,
+                approval_deadline=approval_deadline,
+                submitter_name=submitter_name,
+            )
+
+        except Exception as e:
+            # Log error but don't fail the finalization
+            import logging
+            logging.error(f"Failed to send training officer notification: {e}")
 
     async def get_training_approval_by_token(
         self,
@@ -365,7 +452,110 @@ class TrainingSessionService:
 
         await self.db.commit()
 
-        # TODO: Update TrainingRecords with final hours and mark as completed
-        # This will calculate final hours from approved durations
+        # Create/Update TrainingRecords with final hours and mark as completed
+        await self._finalize_training_records(
+            approval=approval,
+            attendees=attendees,
+            approved_by=approved_by,
+        )
 
         return True, None
+
+    async def _finalize_training_records(
+        self,
+        approval: TrainingApproval,
+        attendees: list[AttendeeApprovalData],
+        approved_by: UUID,
+    ) -> None:
+        """
+        Create or update TrainingRecords for all approved attendees.
+
+        Calculates final hours from approved durations and marks records as completed.
+        """
+        # Get training session details
+        session_result = await self.db.execute(
+            select(TrainingSession)
+            .options(selectinload(TrainingSession.course))
+            .where(TrainingSession.id == approval.training_session_id)
+        )
+        training_session = session_result.scalar_one_or_none()
+
+        if not training_session:
+            return
+
+        # Get event details for dates
+        event_result = await self.db.execute(
+            select(Event).where(Event.id == approval.event_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return
+
+        # Process each attendee
+        for attendee in attendees:
+            # Calculate final hours
+            # Priority: override_duration_minutes > calculated from check-in/out > session credit_hours
+            hours_completed = 0.0
+
+            if attendee.override_duration_minutes:
+                hours_completed = attendee.override_duration_minutes / 60.0
+            elif attendee.override_check_in_at and attendee.override_check_out_at:
+                # Calculate from override times
+                duration = attendee.override_check_out_at - attendee.override_check_in_at
+                hours_completed = duration.total_seconds() / 3600.0
+            else:
+                # Get actual RSVP check-in/out times
+                rsvp_result = await self.db.execute(
+                    select(EventRSVP)
+                    .where(EventRSVP.event_id == approval.event_id)
+                    .where(EventRSVP.user_id == attendee.user_id)
+                )
+                rsvp = rsvp_result.scalar_one_or_none()
+
+                if rsvp and rsvp.check_in_at and rsvp.check_out_at:
+                    duration = rsvp.check_out_at - rsvp.check_in_at
+                    hours_completed = duration.total_seconds() / 3600.0
+                else:
+                    # Fall back to session credit hours
+                    hours_completed = float(training_session.credit_hours or 0)
+
+            # Round to 2 decimal places
+            hours_completed = round(hours_completed, 2)
+
+            # Check for existing training record for this user/session
+            existing_record_result = await self.db.execute(
+                select(TrainingRecord)
+                .where(TrainingRecord.user_id == str(attendee.user_id))
+                .where(TrainingRecord.organization_id == str(training_session.organization_id))
+                .where(TrainingRecord.course_name == training_session.course_name)
+                .where(TrainingRecord.completion_date == event.start_datetime.date())
+            )
+            existing_record = existing_record_result.scalar_one_or_none()
+
+            if existing_record:
+                # Update existing record
+                existing_record.hours_completed = hours_completed
+                existing_record.status = "completed"
+                existing_record.updated_at = datetime.utcnow()
+            else:
+                # Create new training record
+                training_record = TrainingRecord(
+                    organization_id=str(training_session.organization_id),
+                    user_id=str(attendee.user_id),
+                    course_id=str(training_session.course_id) if training_session.course_id else None,
+                    course_name=training_session.course_name,
+                    course_code=training_session.course.code if training_session.course else None,
+                    training_type=training_session.training_type or TrainingType.IN_SERVICE,
+                    scheduled_date=event.start_datetime.date(),
+                    completion_date=event.start_datetime.date(),
+                    hours_completed=hours_completed,
+                    credit_hours=float(training_session.credit_hours or 0),
+                    status="completed",
+                    instructor=training_session.instructor,
+                    location=event.location,
+                    created_by=str(approved_by),
+                )
+                self.db.add(training_record)
+
+        await self.db.commit()

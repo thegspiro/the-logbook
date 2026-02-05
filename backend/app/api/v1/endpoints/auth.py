@@ -133,7 +133,7 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=dict)
+@router.post("/refresh", response_model=dict, dependencies=[Depends(check_rate_limit)])
 async def refresh_token(
     token_data: TokenRefresh,
     db: AsyncSession = Depends(get_db),
@@ -142,6 +142,8 @@ async def refresh_token(
     Refresh an access token using a refresh token
 
     Returns a new access token if the refresh token is valid.
+
+    Rate limited to 5 requests per minute per IP address to prevent token refresh abuse.
     """
     auth_service = AuthService(db)
 

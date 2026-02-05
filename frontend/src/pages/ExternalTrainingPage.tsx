@@ -9,11 +9,9 @@ import React, { useState, useEffect } from 'react';
 import {
   Link2,
   Plus,
-  Settings,
   RefreshCw,
   CheckCircle,
   XCircle,
-  Clock,
   AlertTriangle,
   ChevronRight,
   Users,
@@ -22,7 +20,6 @@ import {
   Trash2,
   Edit2,
   PlayCircle,
-  ExternalLink,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout';
 import { externalTrainingService } from '../services/api';
@@ -32,8 +29,6 @@ import type {
   ExternalProviderType,
   ExternalCategoryMapping,
   ExternalUserMapping,
-  ExternalTrainingSyncLog,
-  ExternalTrainingImport,
 } from '../types/training';
 
 type TabView = 'providers' | 'imports' | 'mappings';
@@ -182,7 +177,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
               </label>
               <select
                 value={formData.auth_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
               >
                 <option value="api_key">API Key</option>
@@ -626,7 +621,6 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
 const ExternalTrainingPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabView>('providers');
   const [providers, setProviders] = useState<ExternalTrainingProvider[]>([]);
-  const [imports, setImports] = useState<ExternalTrainingImport[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
