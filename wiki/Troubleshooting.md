@@ -208,6 +208,36 @@ grep -h "^revision = " backend/alembic/versions/*.py | sort | uniq -d
 
 ---
 
+### Problem: Backend can't connect to database
+
+**Error:** `Can't connect to MySQL server on 'db'` or `Name or service not known`
+
+### Root Cause
+The `DB_HOST` in your `.env` file doesn't match the Docker service name. The MySQL service is named `mysql` in docker-compose.yml, not `db`.
+
+### Solution
+
+**1. Check your .env file:**
+```bash
+grep DB_HOST .env
+```
+
+**2. Correct value should be:**
+```env
+DB_HOST=mysql
+```
+
+**3. If using an old .env.example:**
+```bash
+# Update your .env
+sed -i 's/DB_HOST=db/DB_HOST=mysql/' .env
+
+# Restart backend
+docker compose restart backend
+```
+
+---
+
 ### Problem: Backend crashes with "Database not initialized"
 
 **Error:** `RuntimeError: Database not initialized. Call database_manager.connect() first.`
@@ -496,6 +526,39 @@ const url = "/api/v1";  // ✅ Hardcoded into bundle
 ## Build Errors
 
 ### Problem: TypeScript errors during Docker build
+
+**Common errors:**
+- `Property 'X' does not exist on type 'Y'`
+- `Cannot find name 'X'`
+- `'X' is declared but its value is never read`
+
+### Root Cause
+TypeScript strict mode catches type mismatches, missing imports, or unused variables at build time.
+
+### Solution
+
+**1. Check for recent fixes:**
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+```
+
+**2. Common TypeScript fixes:**
+
+| Error | Likely Cause | Fix |
+|-------|-------------|-----|
+| Property doesn't exist | Wrong property name | Check interface definition |
+| Cannot find name | Missing import | Add import statement |
+| Declared but never read | Unused variable | Remove or use the variable |
+| Implicitly has 'any' type | Missing type annotation | Add explicit type |
+
+**3. Check the type definition:**
+```bash
+# Find where a type is defined
+grep -r "interface YourType" frontend/src/
+```
+
+---
 
 ### Solution 1: Pull Latest Changes
 
