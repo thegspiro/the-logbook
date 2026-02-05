@@ -1,6 +1,6 @@
 export { default as Welcome } from './Welcome';
 export { default as OnboardingCheck } from './OnboardingCheck';
-export { default as DepartmentInfo } from './DepartmentInfo';
+// DepartmentInfo is deprecated - use OrganizationSetup instead
 export { default as OrganizationSetup } from './OrganizationSetup';
 export { default as NavigationChoice } from './NavigationChoice';
 export { default as EmailPlatformChoice } from './EmailPlatformChoice';

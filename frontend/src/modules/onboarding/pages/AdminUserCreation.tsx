@@ -672,7 +672,7 @@ const AdminUserCreation: React.FC = () => {
               <div className="mt-6 pt-6 border-t border-white/10">
                 <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
                   <span>Setup Progress</span>
-                  <span>Step 9 of 9</span>
+                  <span>Step 10 of 10</span>
                 </div>
                 <div className="w-full bg-slate-800 rounded-full h-2">
                   <div

@@ -491,7 +491,7 @@ const ITTeamBackupAccess: React.FC = () => {
               </button>
 
               {/* Progress Indicator */}
-              <ProgressIndicator currentStep={7} totalSteps={9} className="mt-6 pt-6 border-t border-white/10" />
+              <ProgressIndicator currentStep={7} totalSteps={10} className="mt-6 pt-6 border-t border-white/10" />
               <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
             </div>
           </form>
