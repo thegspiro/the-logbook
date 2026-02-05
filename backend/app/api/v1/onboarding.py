@@ -1509,11 +1509,22 @@ async def reset_onboarding(
     from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
 
     try:
+        # Log the reset BEFORE deletion to ensure we capture it
+        from app.core.audit import log_audit_event
+        await log_audit_event(
+            db=db,
+            event_type="onboarding.reset_initiated",
+            event_category="onboarding",
+            severity="warning",
+            ip_address=request.client.host if request.client else None,
+            event_data={
+                "action": "full_reset",
+                "message": "Onboarding reset initiated - clearing all data"
+            }
+        )
+
         # Delete in order to respect foreign key constraints
         # 1. Delete onboarding sessions
-        await db.execute(
-            select(OnboardingSessionModel).execution_options(synchronize_session="fetch")
-        )
         await db.execute(
             OnboardingSessionModel.__table__.delete()
         )
@@ -1553,17 +1564,16 @@ async def reset_onboarding(
         # Commit all deletions
         await db.commit()
 
-        # Log the reset
-        from app.core.audit import log_audit_event
+        # Log successful completion of reset
         await log_audit_event(
             db=db,
-            event_type="onboarding.reset",
+            event_type="onboarding.reset_completed",
             event_category="onboarding",
             severity="warning",
             ip_address=request.client.host if request.client else None,
             event_data={
                 "action": "full_reset",
-                "message": "Onboarding reset - all data cleared"
+                "message": "Onboarding reset completed - all data cleared successfully"
             }
         )
 

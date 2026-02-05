@@ -225,6 +225,7 @@ REDIS_PORT=6379
 # Security
 SECRET_KEY=your-secret-key-here
 ENCRYPTION_KEY=your-encryption-key-here
+ENCRYPTION_SALT=your-encryption-salt-here
 
 # CORS
 ALLOWED_ORIGINS=["http://localhost:5173"]

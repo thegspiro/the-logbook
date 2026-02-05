@@ -68,27 +68,28 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Quick Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" role="region" aria-label="Quick statistics">
+          <button
             onClick={() => navigate('/members')}
-            className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 cursor-pointer hover:bg-white/15 transition-colors"
+            className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 cursor-pointer hover:bg-white/15 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+            aria-label="Total Members: 1. Click to manage members"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm font-medium">Total Members</p>
+                <p className="text-slate-300 text-sm font-medium">Total Members</p>
                 <p className="text-white text-3xl font-bold mt-1">1</p>
               </div>
-              <div className="bg-blue-600 rounded-full p-3">
+              <div className="bg-blue-600 rounded-full p-3" aria-hidden="true">
                 <Users className="w-6 h-6 text-white" />
               </div>
             </div>
             <p className="text-slate-300 text-xs mt-2">Click to manage members →</p>
-          </div>
+          </button>
 
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm font-medium">Documents</p>
+                <p className="text-slate-300 text-sm font-medium">Documents</p>
                 <p className="text-white text-3xl font-bold mt-1">0</p>
               </div>
               <div className="bg-green-600 rounded-full p-3">
@@ -101,7 +102,7 @@ const Dashboard: React.FC = () => {
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm font-medium">Setup Status</p>
+                <p className="text-slate-300 text-sm font-medium">Setup Status</p>
                 <p className="text-white text-3xl font-bold mt-1">100%</p>
               </div>
               <div className="bg-purple-600 rounded-full p-3">
@@ -122,10 +123,10 @@ const Dashboard: React.FC = () => {
               </h3>
               <button
                 onClick={() => navigate('/training/my-progress')}
-                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1"
+                className="text-red-400 hover:text-red-300 text-sm flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-red-500 focus:rounded-md"
               >
                 <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -140,10 +141,11 @@ const Dashboard: React.FC = () => {
                                         progress.time_remaining_days < 30;
 
                 return (
-                  <div
+                  <button
                     key={enrollment.id}
                     onClick={() => navigate('/training/my-progress')}
-                    className="bg-slate-800/50 rounded-lg p-4 hover:bg-slate-800/70 cursor-pointer transition-colors"
+                    className="w-full bg-slate-800/50 rounded-lg p-4 hover:bg-slate-800/70 cursor-pointer transition-colors text-left focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    aria-label={`${enrollment.program?.name || 'Program'}: ${Math.round(enrollment.progress_percentage)}% complete. Click to view details`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -157,7 +159,7 @@ const Dashboard: React.FC = () => {
                           )}
                         </div>
                         {enrollment.program?.description && (
-                          <p className="text-slate-400 text-sm">{enrollment.program.description}</p>
+                          <p className="text-slate-300 text-sm">{enrollment.program.description}</p>
                         )}
                       </div>
                       <span className="text-2xl font-bold text-white ml-4">
@@ -188,7 +190,7 @@ const Dashboard: React.FC = () => {
                           </div>
                         ) : nextSteps && nextSteps.length > 0 ? (
                           <div>
-                            <p className="text-slate-400 text-xs mb-1">Next Steps:</p>
+                            <p className="text-slate-300 text-xs mb-1">Next Steps:</p>
                             <div className="space-y-1">
                               {nextSteps.map((rp) => (
                                 <div key={rp.id} className="flex items-start space-x-2 text-sm">
@@ -199,7 +201,7 @@ const Dashboard: React.FC = () => {
                             </div>
                           </div>
                         ) : (
-                          <div className="text-slate-400 text-sm">All requirements in progress</div>
+                          <div className="text-slate-300 text-sm">All requirements in progress</div>
                         )}
 
                         {/* Deadline Info */}
@@ -207,14 +209,14 @@ const Dashboard: React.FC = () => {
                           <div className={`text-xs ${
                             progress.time_remaining_days < 30 ? 'text-red-400' :
                             progress.time_remaining_days < 90 ? 'text-yellow-400' :
-                            'text-slate-400'
+                            'text-slate-300'
                           }`}>
                             {progress.time_remaining_days} days remaining
                           </div>
                         )}
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -223,7 +225,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-4 text-center">
                 <button
                   onClick={() => navigate('/training/my-progress')}
-                  className="text-red-400 hover:text-red-300 text-sm"
+                  className="text-red-400 hover:text-red-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:rounded-md px-2 py-1"
                 >
                   View {enrollments.length - 3} more program{enrollments.length - 3 !== 1 ? 's' : ''}
                 </button>
@@ -268,12 +270,12 @@ const Dashboard: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 mt-12">
+      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 mt-12" role="contentinfo">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-slate-400 text-sm">
+          <p className="text-center text-slate-300 text-sm">
             © {new Date().getFullYear()} {departmentName}. All rights reserved.
           </p>
-          <p className="text-center text-slate-500 text-xs mt-1">
+          <p className="text-center text-slate-400 text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>

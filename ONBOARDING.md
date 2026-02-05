@@ -426,7 +426,12 @@ PATCH /api/v1/onboarding/checklist/{item_id}/complete
    - Must be 64-character hex string (32 bytes)
    - Generate with: `python -c "import secrets; print(secrets.token_hex(32))"`
 
-3. **DB_PASSWORD**
+3. **ENCRYPTION_SALT**
+   - Must be set (unique per installation)
+   - Used for secure key derivation
+   - Generate with: `python -c "import secrets; print(secrets.token_hex(16))"`
+
+4. **DB_PASSWORD**
    - Cannot be "change_me_in_production"
    - Should be strong, unique password
 

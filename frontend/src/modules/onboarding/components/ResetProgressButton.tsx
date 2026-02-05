@@ -41,14 +41,21 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
         return;
       }
 
-      // Clear Zustand store (which also clears localStorage)
+      // Clear Zustand store (which also clears localStorage via persist middleware)
       resetOnboarding();
 
-      // Clear any remaining session/local storage items
-      localStorage.removeItem('onboarding-storage');
-      localStorage.removeItem('onboarding_session_id');
-      localStorage.removeItem('csrf_token');
-      localStorage.removeItem('auth_token');
+      // Clear all onboarding-related localStorage items comprehensively
+      // This ensures any keys we may have missed or added later are cleared
+      const localStorageKeysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('onboarding') || key === 'csrf_token' || key === 'auth_token')) {
+          localStorageKeysToRemove.push(key);
+        }
+      }
+      localStorageKeysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Clear all session storage
       sessionStorage.clear();
 
       // Clear API client session

@@ -95,25 +95,25 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          </h1>
+          <p className="mt-2 text-center text-sm text-gray-700">
             Join The Logbook platform
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} aria-label="Registration form">
           {error && (
-            <div className="rounded-md bg-red-50 p-4">
+            <div className="rounded-md bg-red-50 p-4" role="alert" aria-live="polite">
               <div className="flex">
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
+                  <p className="text-sm font-medium text-red-800">
                     {error}
-                  </h3>
+                  </p>
                 </div>
               </div>
             </div>
@@ -122,7 +122,7 @@ export const RegisterPage: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username *
+                Username <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
                 id="username"
@@ -130,22 +130,24 @@ export const RegisterPage: React.FC = () => {
                 type="text"
                 autoComplete="username"
                 required
+                aria-invalid={formErrors.username ? 'true' : 'false'}
+                aria-describedby={formErrors.username ? 'username-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.username ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Choose a username"
                 value={formData.username}
                 onChange={handleChange}
                 disabled={isLoading}
               />
               {formErrors.username && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
+                <p id="username-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.username}</p>
               )}
             </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address *
+                Email address <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
                 id="email"
@@ -153,23 +155,26 @@ export const RegisterPage: React.FC = () => {
                 type="email"
                 autoComplete="email"
                 required
+                aria-invalid={formErrors.email ? 'true' : 'false'}
+                aria-describedby={formErrors.email ? 'email-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={handleChange}
                 disabled={isLoading}
               />
               {formErrors.email && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                <p id="email-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.email}</p>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <fieldset className="grid grid-cols-2 gap-4">
+              <legend className="sr-only">Name</legend>
               <div>
                 <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-                  First name *
+                  First name <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
                 </label>
                 <input
                   id="firstName"
@@ -177,22 +182,24 @@ export const RegisterPage: React.FC = () => {
                   type="text"
                   autoComplete="given-name"
                   required
+                  aria-invalid={formErrors.firstName ? 'true' : 'false'}
+                  aria-describedby={formErrors.firstName ? 'firstName-error' : undefined}
                   className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                     formErrors.firstName ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                   placeholder="John"
                   value={formData.firstName}
                   onChange={handleChange}
                   disabled={isLoading}
                 />
                 {formErrors.firstName && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.firstName}</p>
+                  <p id="firstName-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.firstName}</p>
                 )}
               </div>
 
               <div>
                 <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-                  Last name *
+                  Last name <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
                 </label>
                 <input
                   id="lastName"
@@ -200,19 +207,21 @@ export const RegisterPage: React.FC = () => {
                   type="text"
                   autoComplete="family-name"
                   required
+                  aria-invalid={formErrors.lastName ? 'true' : 'false'}
+                  aria-describedby={formErrors.lastName ? 'lastName-error' : undefined}
                   className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                     formErrors.lastName ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                   placeholder="Doe"
                   value={formData.lastName}
                   onChange={handleChange}
                   disabled={isLoading}
                 />
                 {formErrors.lastName && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.lastName}</p>
+                  <p id="lastName-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.lastName}</p>
                 )}
               </div>
-            </div>
+            </fieldset>
 
             <div>
               <label htmlFor="badgeNumber" className="block text-sm font-medium text-gray-700">
@@ -232,7 +241,7 @@ export const RegisterPage: React.FC = () => {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password *
+                Password <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
                 id="password"
@@ -240,25 +249,27 @@ export const RegisterPage: React.FC = () => {
                 type="password"
                 autoComplete="new-password"
                 required
+                aria-invalid={formErrors.password ? 'true' : 'false'}
+                aria-describedby={formErrors.password ? 'password-error password-hint' : 'password-hint'}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Create a strong password"
                 value={formData.password}
                 onChange={handleChange}
                 disabled={isLoading}
               />
               {formErrors.password && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.password}</p>
               )}
-              <p className="mt-1 text-xs text-gray-500">
+              <p id="password-hint" className="mt-1 text-xs text-gray-600">
                 Must be at least 8 characters with uppercase, lowercase, and number
               </p>
             </div>
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm password *
+                Confirm password <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
                 id="confirmPassword"
@@ -266,16 +277,18 @@ export const RegisterPage: React.FC = () => {
                 type="password"
                 autoComplete="new-password"
                 required
+                aria-invalid={formErrors.confirmPassword ? 'true' : 'false'}
+                aria-describedby={formErrors.confirmPassword ? 'confirmPassword-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 disabled={isLoading}
               />
               {formErrors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.confirmPassword}</p>
+                <p id="confirmPassword-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.confirmPassword}</p>
               )}
             </div>
           </div>
@@ -303,6 +316,6 @@ export const RegisterPage: React.FC = () => {
           </div>
         </form>
       </div>
-    </div>
+    </main>
   );
 };

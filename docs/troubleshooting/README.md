@@ -24,7 +24,8 @@ This guide covers common issues and their solutions for The Logbook deployment.
 18. [Backup & Recovery](#backup--recovery)
 19. [File Upload Issues](#file-upload-issues)
 20. [Email & Notification Issues](#email--notification-issues)
-21. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
+21. [Security Configuration Issues](#security-configuration-issues)
+22. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
 
 ---
 
@@ -715,8 +716,145 @@ INFO:     Uvicorn running on http://0.0.0.0:3001
 
 ---
 
+## Security Configuration Issues
+
+### Problem: Backend fails to start with "SECURITY FAILURE" error
+**Error:** `SECURITY FAILURE: Cannot start with insecure default configuration`
+
+### Root Cause
+The backend validates security configuration on startup in production mode. If critical security variables are missing or use default values, the application will refuse to start when `SECURITY_BLOCK_INSECURE_DEFAULTS=true` (the default).
+
+### Required Security Variables
+
+| Variable | Purpose | How to Generate |
+|----------|---------|-----------------|
+| `SECRET_KEY` | JWT signing key (min 32 chars) | `openssl rand -hex 32` |
+| `ENCRYPTION_KEY` | AES encryption key (32 bytes hex) | `openssl rand -hex 32` |
+| `ENCRYPTION_SALT` | Key derivation salt (unique per installation) | `openssl rand -hex 16` |
+| `DB_PASSWORD` | Database password (not `change_me_in_production`) | `openssl rand -base64 32` |
+| `REDIS_PASSWORD` | Redis password (required in production) | `openssl rand -base64 32` |
+
+### Solution
+
+**1. Generate all required secrets:**
+```bash
+# Generate and display all secrets at once
+echo "SECRET_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_SALT=$(openssl rand -hex 16)"
+echo "DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+```
+
+**2. Add to your `.env` file:**
+```bash
+# Security Keys (REQUIRED - Generate unique values!)
+SECRET_KEY=your_generated_64_char_hex_string
+ENCRYPTION_KEY=your_generated_64_char_hex_string
+ENCRYPTION_SALT=your_generated_32_char_hex_string
+
+# Database & Redis Passwords
+DB_PASSWORD=your_generated_secure_password
+REDIS_PASSWORD=your_generated_secure_password
+```
+
+**3. Restart the backend:**
+```bash
+docker-compose restart backend
+```
+
+### Verifying Security Configuration
+
+Check the backend health endpoint for security status:
+```bash
+curl http://YOUR-IP:7881/health | jq '.checks.security'
+```
+
+Expected response for a properly configured system:
+```json
+{
+  "status": "ok"
+}
+```
+
+If security issues exist:
+```json
+{
+  "status": "issues_detected",
+  "critical_issues": 2,
+  "warnings": 1
+}
+```
+
+### Development Mode Override
+
+For local development only, you can disable the security block:
+```bash
+# In .env (NEVER use in production!)
+ENVIRONMENT=development
+SECURITY_BLOCK_INSECURE_DEFAULTS=false
+```
+
+**WARNING:** Never disable security checks in production. The application will still log warnings about insecure configuration.
+
+---
+
+### Problem: "ENCRYPTION_SALT not set" warning in logs
+**Warning:** `SECURITY WARNING: ENCRYPTION_SALT not set. Using derived salt (less secure).`
+
+### Root Cause
+The `ENCRYPTION_SALT` environment variable is missing. While the application will start and derive a salt from other values, this is less secure and not recommended for production.
+
+### Why ENCRYPTION_SALT Matters
+- Used for secure key derivation (PBKDF2) when encrypting sensitive data
+- Each installation should have a unique salt
+- Without it, the derived salt depends on other configuration values which may be predictable
+
+### Solution
+Add `ENCRYPTION_SALT` to your `.env` file:
+
+```bash
+# Generate a 16-byte hex salt (32 characters)
+openssl rand -hex 16
+
+# Add to .env
+ENCRYPTION_SALT=your_generated_32_char_hex_string
+```
+
+For Docker Compose, ensure it's passed to the backend:
+```yaml
+# In docker-compose.yml
+backend:
+  environment:
+    ENCRYPTION_SALT: ${ENCRYPTION_SALT:-change_me_in_production}
+```
+
+---
+
+### Problem: Configuration validation shows critical issues but app still runs
+**Symptom:** Health check shows `critical_issues: X` but application is running
+
+### Root Cause
+`SECURITY_BLOCK_INSECURE_DEFAULTS` may be set to `false`, or the environment is set to `development`.
+
+### Solution
+1. Set `ENVIRONMENT=production` in `.env`
+2. Ensure `SECURITY_BLOCK_INSECURE_DEFAULTS=true` (or remove it, as true is the default)
+3. Fix all critical security issues listed above
+4. Restart the backend
+
+---
+
 ## Quick Diagnostic Checklist
 
+### Security Configuration
+- [ ] `SECRET_KEY` is set (min 32 characters, not default)
+- [ ] `ENCRYPTION_KEY` is set (64 hex characters, not default)
+- [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
+- [ ] `DB_PASSWORD` is not `change_me_in_production`
+- [ ] `REDIS_PASSWORD` is set (required in production)
+
+### Application Configuration
 - [ ] Frontend `.env` exists with correct `VITE_API_URL`
 - [ ] Backend `.env` has `ALLOWED_ORIGINS` with frontend URL
 - [ ] Root `.env` has correct `FRONTEND_PORT` and `BACKEND_PORT`

@@ -9,7 +9,7 @@ from fastapi import Request, HTTPException, status
 from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Any
 import time
 import hashlib
 import secrets
@@ -673,3 +673,212 @@ class IPLoggingMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
 
         return response
+
+
+# ============================================
+# Security Monitoring Integration Middleware
+# ============================================
+
+class SecurityMonitoringMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware for real-time security monitoring.
+
+    Integrates with the SecurityMonitoringService to:
+    - Detect injection attempts
+    - Monitor for brute force attacks
+    - Track session anomalies
+    - Monitor data exfiltration
+    """
+
+    # Sensitive endpoints that need extra monitoring
+    SENSITIVE_ENDPOINTS = {
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/users/password",
+        "/api/v1/roles",
+        "/api/v1/organization",
+    }
+
+    # Export endpoints for data exfiltration monitoring
+    EXPORT_ENDPOINTS = {
+        "/api/v1/users/export",
+        "/api/v1/events/export",
+        "/api/v1/audit/export",
+        "/api/v1/reports",
+    }
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint
+    ) -> Response:
+        """Process request through security monitoring."""
+        from loguru import logger
+
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
+        # Build request data for analysis
+        request_data = {
+            "ip_address": client_ip,
+            "user_agent": user_agent,
+            "path": request.url.path,
+            "method": request.method,
+            "query_params": dict(request.query_params),
+        }
+
+        # Try to get user ID if authenticated
+        user_id = None
+        session_id = None
+        try:
+            if hasattr(request, "state") and hasattr(request.state, "user"):
+                user_id = str(request.state.user.id)
+        except Exception:
+            pass
+
+        # Get session ID from header
+        session_id = request.headers.get("X-Session-ID")
+
+        # Analyze request for threats (only for write operations)
+        if request.method not in ["GET", "HEAD", "OPTIONS"]:
+            try:
+                # Read body for analysis (need to reconstruct for handler)
+                body = await request.body()
+                if body:
+                    try:
+                        request_data["body"] = body.decode("utf-8")[:10000]  # Limit size
+                    except UnicodeDecodeError:
+                        pass  # Binary data, skip
+
+                # Re-wrap body for handler
+                from starlette.requests import Request as StarletteRequest
+                request = StarletteRequest(
+                    scope=request.scope,
+                    receive=lambda: {"type": "http.request", "body": body},
+                )
+            except Exception as e:
+                logger.debug(f"Could not read request body: {e}")
+
+        # Check for session hijacking on authenticated requests
+        if user_id and session_id and client_ip:
+            try:
+                # Import here to avoid circular imports
+                from app.services.security_monitoring import security_monitor
+                from app.core.database import async_session_factory
+
+                async with async_session_factory() as db:
+                    alert = await security_monitor.detect_session_hijack(
+                        db=db,
+                        session_id=session_id,
+                        current_ip=client_ip,
+                        user_agent=user_agent or "",
+                        user_id=user_id,
+                    )
+                    if alert:
+                        logger.critical(f"Session hijack detected: {alert.description}")
+            except Exception as e:
+                logger.debug(f"Session monitoring error: {e}")
+
+        # Process the request
+        response = await call_next(request)
+
+        # Monitor data exfiltration on export endpoints
+        if request.url.path in self.EXPORT_ENDPOINTS and user_id:
+            try:
+                # Estimate response size
+                content_length = response.headers.get("content-length")
+                if content_length:
+                    data_size = int(content_length)
+
+                    from app.services.security_monitoring import security_monitor
+                    from app.core.database import async_session_factory
+
+                    async with async_session_factory() as db:
+                        await security_monitor.detect_data_exfiltration(
+                            db=db,
+                            user_id=user_id,
+                            data_size_bytes=data_size,
+                            endpoint=request.url.path,
+                            ip_address=client_ip,
+                        )
+            except Exception as e:
+                logger.debug(f"Data exfiltration monitoring error: {e}")
+
+        return response
+
+
+# ============================================
+# Periodic Security Check Task
+# ============================================
+
+async def run_periodic_security_checks() -> Dict[str, Any]:
+    """
+    Run periodic security checks.
+
+    Should be called by a scheduler (e.g., APScheduler, Celery) every hour.
+
+    Returns:
+        Dictionary with check results
+    """
+    from loguru import logger
+    from app.services.security_monitoring import security_monitor
+    from app.core.database import async_session_factory
+    from app.core.audit import verify_audit_log_integrity, audit_logger
+
+    results = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {},
+    }
+
+    try:
+        async with async_session_factory() as db:
+            # 1. Verify audit log integrity
+            logger.info("Running scheduled audit log integrity check...")
+            integrity = await verify_audit_log_integrity(db)
+            results["checks"]["log_integrity"] = {
+                "verified": integrity["verified"],
+                "entries_checked": integrity["total_checked"],
+                "errors": len(integrity.get("errors", [])),
+            }
+
+            if not integrity["verified"]:
+                logger.critical(
+                    f"SCHEDULED CHECK FAILED: Audit log tampering detected! "
+                    f"{len(integrity.get('errors', []))} errors found"
+                )
+
+            # 2. Get security status
+            logger.info("Running scheduled security status check...")
+            status = await security_monitor.get_security_status(db)
+            results["checks"]["security_status"] = {
+                "status": status["status"],
+                "alerts_last_hour": status["alerts"]["total_last_hour"],
+                "failed_logins": status["metrics"]["failed_logins_last_hour"],
+            }
+
+            # 3. Create periodic checkpoint if enough logs
+            log_status = await db.execute(
+                "SELECT MIN(id), MAX(id), COUNT(*) FROM audit_logs WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)"
+            )
+            row = log_status.fetchone()
+            if row and row[2] > 100:  # At least 100 logs
+                try:
+                    checkpoint = await audit_logger.create_checkpoint(
+                        db, row[0], row[1]
+                    )
+                    results["checks"]["checkpoint_created"] = {
+                        "id": checkpoint.id,
+                        "entries": checkpoint.total_entries,
+                    }
+                    logger.info(f"Created hourly checkpoint: {checkpoint.id}")
+                except Exception as e:
+                    logger.warning(f"Could not create checkpoint: {e}")
+
+            results["overall_status"] = "healthy" if integrity["verified"] else "critical"
+
+    except Exception as e:
+        logger.error(f"Periodic security check failed: {e}")
+        results["error"] = str(e)
+        results["overall_status"] = "error"
+
+    return results

@@ -127,6 +127,25 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("GeoIP service disabled")
 
+    # Verify audit log integrity on startup (zero-trust)
+    if settings.ENVIRONMENT == "production":
+        logger.info("Verifying audit log integrity...")
+        try:
+            from app.core.audit import verify_audit_log_integrity
+            from app.core.database import async_session_factory
+
+            async with async_session_factory() as db:
+                integrity_result = await verify_audit_log_integrity(db)
+                if integrity_result["verified"]:
+                    logger.info(f"✓ Audit log integrity verified ({integrity_result['total_checked']} entries)")
+                else:
+                    logger.critical(
+                        f"⚠ AUDIT LOG INTEGRITY FAILURE: {len(integrity_result.get('errors', []))} issues detected!"
+                    )
+                    # Log but don't block startup - allow investigation
+        except Exception as e:
+            logger.warning(f"Could not verify audit log integrity: {e}")
+
     logger.info(f"Server started on port {settings.PORT}")
     logger.info(f"API Documentation: http://localhost:{settings.PORT}/docs")
     logger.info(f"Health Check: http://localhost:{settings.PORT}/health")
@@ -156,8 +175,17 @@ app = FastAPI(
 # ============================================
 
 # Security Headers Middleware (add first so it wraps all responses)
-from app.core.security_middleware import SecurityHeadersMiddleware, IPBlockingMiddleware, IPLoggingMiddleware
+from app.core.security_middleware import (
+    SecurityHeadersMiddleware,
+    IPBlockingMiddleware,
+    IPLoggingMiddleware,
+    SecurityMonitoringMiddleware,
+)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Security Monitoring Middleware (intrusion detection, session hijacking, data exfiltration)
+if settings.ENVIRONMENT == "production":
+    app.add_middleware(SecurityMonitoringMiddleware)
 
 # IP Blocking Middleware (geo-blocking and IP blocklist)
 if settings.GEOIP_ENABLED:

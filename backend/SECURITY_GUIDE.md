@@ -25,6 +25,7 @@ DB_NAME=logbook
 # Security Keys (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
 SECRET_KEY=kZ4Hf9_YOUR_RANDOM_SECRET_HERE  # ← Application secret (JWT signing)
 ENCRYPTION_KEY=nP2Jm_YOUR_ENCRYPTION_KEY_HERE  # ← Application secret (AES encryption)
+ENCRYPTION_SALT=xY7Kp_YOUR_ENCRYPTION_SALT_HERE  # ← Application secret (key derivation)
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -150,7 +151,10 @@ cp .env.example .env
 python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(32))"
 
 # Generate ENCRYPTION_KEY
-python -c "import secrets; print('ENCRYPTION_KEY=' + secrets.token_urlsafe(32))"
+python -c "import secrets; print('ENCRYPTION_KEY=' + secrets.token_hex(32))"
+
+# Generate ENCRYPTION_SALT (unique per installation)
+python -c "import secrets; print('ENCRYPTION_SALT=' + secrets.token_hex(16))"
 
 # Generate CSRF_SECRET
 python -c "import secrets; print('CSRF_SECRET=' + secrets.token_urlsafe(32))"
@@ -225,6 +229,7 @@ ENVIRONMENT=production
 
 - [ ] Generate new SECRET_KEY (never use default)
 - [ ] Generate new ENCRYPTION_KEY (never use default)
+- [ ] Generate new ENCRYPTION_SALT (unique per installation)
 - [ ] Use strong database password (16+ characters)
 - [ ] Enable HTTPS/TLS
 - [ ] Set ENVIRONMENT=production

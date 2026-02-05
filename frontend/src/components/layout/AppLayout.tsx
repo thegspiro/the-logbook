@@ -46,12 +46,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   if (navigationLayout === 'left') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+        {/* Skip to main content link for keyboard users */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-none focus:ring-2 focus:ring-white"
+        >
+          Skip to main content
+        </a>
         <SideNavigation
           departmentName={departmentName}
           logoPreview={logoPreview}
           onLogout={handleLogout}
         />
-        <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
+        <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0" id="main-content" role="main">
           {children}
         </div>
       </div>
@@ -60,12 +67,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+      {/* Skip to main content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-none focus:ring-2 focus:ring-white"
+      >
+        Skip to main content
+      </a>
       <TopNavigation
         departmentName={departmentName}
         logoPreview={logoPreview}
         onLogout={handleLogout}
       />
-      {children}
+      <div id="main-content" role="main">
+        {children}
+      </div>
     </div>
   );
 };

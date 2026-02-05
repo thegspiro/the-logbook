@@ -371,6 +371,7 @@ docker-compose up -d
 ```bash
 SECRET_KEY=                 # openssl rand -hex 32
 ENCRYPTION_KEY=             # openssl rand -hex 32
+ENCRYPTION_SALT=            # openssl rand -hex 16
 DB_PASSWORD=                # Strong password
 REDIS_PASSWORD=             # Strong password
 ALLOWED_ORIGINS=            # http://your-domain.com

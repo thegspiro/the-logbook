@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 # Import route modules
 from app.api.v1 import onboarding
-from app.api.v1.endpoints import events, locations, roles, users, organizations, apparatus
+from app.api.v1.endpoints import events, locations, roles, users, organizations, apparatus, security_monitoring
 
 api_router = APIRouter()
 
@@ -20,6 +20,7 @@ api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(organizations.router, prefix="/organization", tags=["organization"])
 api_router.include_router(apparatus.router, prefix="/apparatus", tags=["apparatus"])
+api_router.include_router(security_monitoring.router, prefix="/security", tags=["security"])
 
 # Placeholder routes
 @api_router.get("/")
@@ -43,6 +44,7 @@ async def api_root():
             "training_programs": "/api/v1/training/programs",
             "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory",
-            "apparatus": "/api/v1/apparatus"
+            "apparatus": "/api/v1/apparatus",
+            "security": "/api/v1/security"
         }
     }

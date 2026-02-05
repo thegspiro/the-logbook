@@ -79,7 +79,9 @@ services:
       
       # Security
       SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
-      
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change_me_in_production}
+      ENCRYPTION_SALT: ${ENCRYPTION_SALT:-change_me_in_production}
+
       # Frontend URL (for CORS)
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:

@@ -123,7 +123,7 @@ If you use third-party services (cloud hosting, email, SMS), ensure you have BAA
 #### Initial Setup
 
 - [ ] Change all default passwords
-- [ ] Generate strong SECRET_KEY and ENCRYPTION_KEY
+- [ ] Generate strong SECRET_KEY, ENCRYPTION_KEY, and ENCRYPTION_SALT
 - [ ] Enable HTTPS/TLS in production
 - [ ] Configure automatic session timeout
 - [ ] Set up secure backup procedures

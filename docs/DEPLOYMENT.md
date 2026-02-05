@@ -317,20 +317,26 @@ MYSQL_ROOT_PASSWORD=another-secure-password
 # Security Keys (CHANGE THESE!)
 SECRET_KEY=generate-with-openssl-rand-hex-32
 ENCRYPTION_KEY=generate-with-openssl-rand-hex-32
+ENCRYPTION_SALT=generate-with-openssl-rand-hex-16
 ```
 
 ### Generating Secure Secrets
 
 ```bash
-# Generate SECRET_KEY
+# Generate SECRET_KEY (64 hex characters)
 openssl rand -hex 32
 
-# Generate ENCRYPTION_KEY
+# Generate ENCRYPTION_KEY (64 hex characters)
 openssl rand -hex 32
+
+# Generate ENCRYPTION_SALT (32 hex characters, unique per installation)
+openssl rand -hex 16
 
 # Generate Database Password
 openssl rand -base64 32
 ```
+
+**Important:** The `ENCRYPTION_SALT` must be unique for each installation and is used for secure key derivation. Never share this value between installations.
 
 ---
 

@@ -244,8 +244,8 @@ const DepartmentInfo: React.FC = () => {
             ) : (
               <div className="border-2 border-slate-600 rounded-lg p-6 bg-slate-900/50">
                 <div className="flex items-start space-x-4">
-                  {/* Preview */}
-                  <div className="flex-shrink-0 w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                  {/* Preview - transparent background to preserve PNG transparency */}
+                  <div className="flex-shrink-0 w-24 h-24 rounded-lg flex items-center justify-center overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZTJlOGYwIi8+PHJlY3QgeD0iOCIgeT0iOCIgd2lkdGg9IjgiIGhlaWdodD0iOCIgZmlsbD0iI2UyZThmMCIvPjxyZWN0IHg9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmMWY1ZjkiLz48cmVjdCB5PSI4IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZjFmNWY5Ii8+PC9zdmc+')]">
                     <img
                       src={logoPreview}
                       alt="Department logo preview"

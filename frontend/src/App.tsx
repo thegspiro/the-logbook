@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+
+// Security initialization
+import { clearLegacySensitiveData } from './modules/onboarding/utils/storage';
 
 // Modules
 import { getOnboardingRoutes } from './modules/onboarding';
@@ -29,6 +33,11 @@ import { MembersAdminPage } from './pages/MembersAdminPage';
  * - Future modules will follow the same pattern
  */
 function App() {
+  // Security: Clear any legacy sensitive data on app initialization
+  useEffect(() => {
+    clearLegacySensitiveData();
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="App">

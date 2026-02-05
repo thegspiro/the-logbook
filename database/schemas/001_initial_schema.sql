@@ -4,69 +4,21 @@
 -- ============================================
 -- This schema is automatically executed when the MySQL container
 -- is first created. Alembic migrations handle subsequent updates.
+--
+-- IMPORTANT: This schema creates ONLY the core tables that match
+-- Alembic migration 20260118_0001. Additional tables (onboarding,
+-- training, elections, events, etc.) are created by subsequent
+-- Alembic migrations when the backend starts.
+--
+-- The alembic_version is set to '20260118_0001' so Alembic knows
+-- to start from the next migration (20260118_0002).
 -- ============================================
 
 -- Create database if not exists (handled by docker-compose env vars)
 -- USE the_logbook;
 
 -- ============================================
--- Onboarding Tables (needed for first-time setup)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS onboarding_status (
-    id VARCHAR(36) PRIMARY KEY,
-    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
-    completed_at DATETIME(6),
-    steps_completed JSON,
-    current_step INT DEFAULT 0,
-    organization_name VARCHAR(255),
-    organization_type VARCHAR(50),
-    admin_email VARCHAR(255),
-    admin_username VARCHAR(100),
-    security_keys_verified BOOLEAN DEFAULT FALSE,
-    database_verified BOOLEAN DEFAULT FALSE,
-    email_configured BOOLEAN DEFAULT FALSE,
-    enabled_modules JSON,
-    timezone VARCHAR(50) DEFAULT 'America/New_York',
-    setup_started_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    setup_ip_address VARCHAR(45),
-    setup_user_agent TEXT,
-    setup_notes TEXT,
-    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS onboarding_checklist (
-    id VARCHAR(36) PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    category VARCHAR(50),
-    priority VARCHAR(20),
-    is_completed BOOLEAN DEFAULT FALSE,
-    completed_at DATETIME(6),
-    completed_by VARCHAR(36),
-    documentation_link TEXT,
-    estimated_time_minutes INT,
-    sort_order INT DEFAULT 0,
-    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS onboarding_sessions (
-    id VARCHAR(36) PRIMARY KEY,
-    session_id VARCHAR(64) NOT NULL UNIQUE,
-    data JSON NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,
-    user_agent TEXT,
-    expires_at DATETIME(6) NOT NULL,
-    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    INDEX idx_session_id (session_id),
-    INDEX idx_expires_at (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================
--- Core Tables
+-- Core Tables (matches Alembic migration 20260118_0001)
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS organizations (
@@ -217,6 +169,7 @@ CREATE TABLE IF NOT EXISTS alembic_version (
     PRIMARY KEY (version_num)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Mark initial schema as applied (skip Alembic migrations for base tables)
--- This prevents Alembic from trying to recreate tables that already exist
-INSERT INTO alembic_version (version_num) VALUES ('0001') ON DUPLICATE KEY UPDATE version_num = '0001';
+-- Mark initial schema migration as applied
+-- This tells Alembic to start from 20260118_0002 (the next migration)
+-- The revision ID must match the first Alembic migration exactly
+INSERT INTO alembic_version (version_num) VALUES ('20260118_0001') ON DUPLICATE KEY UPDATE version_num = '20260118_0001';

@@ -150,6 +150,29 @@ class DatabaseManager:
 database_manager = DatabaseManager()
 
 
+def async_session_factory() -> AsyncSession:
+    """
+    Get an async session factory for creating database sessions.
+
+    This function provides access to the session factory for use
+    outside of FastAPI dependency injection (e.g., background tasks,
+    middleware, startup checks).
+
+    Usage:
+        async with async_session_factory() as db:
+            result = await db.execute(...)
+
+    Returns:
+        AsyncSession context manager
+
+    Raises:
+        RuntimeError: If database is not initialized
+    """
+    if not database_manager.session_factory:
+        raise RuntimeError("Database not initialized. Call database_manager.connect() first.")
+    return database_manager.session_factory()
+
+
 # Dependency for FastAPI route handlers
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """

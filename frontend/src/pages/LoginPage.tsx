@@ -56,25 +56,25 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          </h1>
+          <p className="mt-2 text-center text-sm text-gray-700">
             Access The Logbook platform
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} aria-label="Sign in form">
           {error && (
-            <div className="rounded-md bg-red-50 p-4">
+            <div className="rounded-md bg-red-50 p-4" role="alert" aria-live="polite">
               <div className="flex">
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
+                  <p className="text-sm font-medium text-red-800">
                     {error}
-                  </h3>
+                  </p>
                 </div>
               </div>
             </div>
@@ -91,16 +91,18 @@ export const LoginPage: React.FC = () => {
                 type="text"
                 autoComplete="username"
                 required
+                aria-invalid={formErrors.username ? 'true' : 'false'}
+                aria-describedby={formErrors.username ? 'username-error' : undefined}
                 className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
                   formErrors.username ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
+                } placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                 placeholder="Username"
                 value={formData.username}
                 onChange={handleChange}
                 disabled={isLoading}
               />
               {formErrors.username && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
+                <p id="username-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.username}</p>
               )}
             </div>
             <div>
@@ -113,16 +115,18 @@ export const LoginPage: React.FC = () => {
                 type="password"
                 autoComplete="current-password"
                 required
+                aria-invalid={formErrors.password ? 'true' : 'false'}
+                aria-describedby={formErrors.password ? 'password-error' : undefined}
                 className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
                   formErrors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
+                } placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
                 disabled={isLoading}
               />
               {formErrors.password && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.password}</p>
               )}
             </div>
           </div>
@@ -150,6 +154,6 @@ export const LoginPage: React.FC = () => {
           </div>
         </form>
       </div>
-    </div>
+    </main>
   );
 };
