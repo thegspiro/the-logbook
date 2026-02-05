@@ -32,6 +32,7 @@ import TrainingDashboardPage from './pages/TrainingDashboardPage';
 import TrainingProgramsPage from './pages/TrainingProgramsPage';
 import CreateTrainingSessionPage from './pages/CreateTrainingSessionPage';
 import ExternalTrainingPage from './pages/ExternalTrainingPage';
+import { LoginPage } from './pages/LoginPage';
 
 /**
  * Main Application Component
@@ -103,21 +104,7 @@ function App() {
           <Route path="/settings/roles" element={<RoleManagementPage />} />
 
           {/* Login Page */}
-          <Route
-            path="/login"
-            element={
-              <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
-                  <h2 className="text-3xl font-bold text-white mb-4">
-                    Login Page
-                  </h2>
-                  <p className="text-slate-300">
-                    Login functionality is under development.
-                  </p>
-                </div>
-              </div>
-            }
-          />
+          <Route path="/login" element={<LoginPage />} />
 
           {/* Catch all - redirect to welcome */}
           <Route path="*" element={<Navigate to="/" replace />} />

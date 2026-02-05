@@ -528,9 +528,12 @@ class SyncRequest(BaseModel):
 
 class SyncResponse(BaseModel):
     """Response after initiating a sync"""
-    sync_log_id: UUID
+    sync_log_id: Optional[UUID] = None  # May be None for background tasks
     status: SyncStatus
     message: str
+    records_fetched: int = 0
+    records_imported: int = 0
+    records_failed: int = 0
 
 
 class TestConnectionResponse(BaseModel):

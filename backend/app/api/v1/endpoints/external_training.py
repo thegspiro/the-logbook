@@ -11,8 +11,10 @@ from sqlalchemy import select, func
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, date, timedelta
+import logging
 
 from app.core.database import get_db
+from app.services.external_training_service import ExternalTrainingSyncService
 from app.models.training import (
     ExternalTrainingProvider,
     ExternalCategoryMapping,
@@ -237,6 +239,8 @@ async def test_provider_connection(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    logger = logging.getLogger(__name__)
+
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == provider_id)
@@ -250,31 +254,26 @@ async def test_provider_connection(
             detail="Provider not found"
         )
 
-    # TODO: Implement actual connection test based on provider_type
-    # For now, return a placeholder response
-    # In production, this would make an actual API call to verify credentials
+    # Use the sync service to test the connection
+    sync_service = ExternalTrainingSyncService(db)
 
     try:
-        # Placeholder - would call external_training_service.test_connection(provider)
-        # For demo purposes, just verify required fields exist
-        if not provider.api_base_url:
-            raise ValueError("API base URL is required")
-        if not provider.api_key and provider.auth_type == "api_key":
-            raise ValueError("API key is required for api_key authentication")
+        success, message = await sync_service.test_connection(provider)
 
         # Update provider status
-        provider.connection_verified = True
+        provider.connection_verified = success
         provider.last_connection_test = datetime.utcnow()
-        provider.connection_error = None
+        provider.connection_error = None if success else message
         await db.commit()
 
         return TestConnectionResponse(
-            success=True,
-            message="Connection test successful",
+            success=success,
+            message=message,
             details={"provider_type": provider.provider_type.value}
         )
 
     except Exception as e:
+        logger.exception(f"Connection test failed for provider {provider_id}")
         provider.connection_verified = False
         provider.last_connection_test = datetime.utcnow()
         provider.connection_error = str(e)
@@ -285,11 +284,66 @@ async def test_provider_connection(
             message=f"Connection test failed: {str(e)}",
             details=None
         )
+    finally:
+        await sync_service.close()
 
 
 # ============================================
 # Sync Operations
 # ============================================
+
+
+async def perform_sync_task(
+    provider_id: str,
+    sync_type: str,
+    from_date: Optional[date],
+    to_date: Optional[date],
+    user_id: Optional[str],
+    organization_id: str,
+):
+    """
+    Background task to perform the actual sync operation.
+    This runs outside the request lifecycle.
+    """
+    from app.core.database import async_session_factory
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting background sync for provider {provider_id}")
+
+    async with async_session_factory() as db:
+        try:
+            # Get provider
+            result = await db.execute(
+                select(ExternalTrainingProvider)
+                .where(ExternalTrainingProvider.id == provider_id)
+            )
+            provider = result.scalar_one_or_none()
+
+            if not provider:
+                logger.error(f"Provider {provider_id} not found for sync")
+                return
+
+            # Run the sync
+            sync_service = ExternalTrainingSyncService(db)
+            try:
+                sync_log = await sync_service.sync_training_records(
+                    provider=provider,
+                    sync_type=sync_type,
+                    from_date=from_date,
+                    to_date=to_date,
+                    user_id=user_id,
+                )
+                logger.info(
+                    f"Sync completed for provider {provider_id}: "
+                    f"fetched={sync_log.records_fetched}, "
+                    f"imported={sync_log.records_imported}, "
+                    f"failed={sync_log.records_failed}"
+                )
+            finally:
+                await sync_service.close()
+
+        except Exception as e:
+            logger.exception(f"Background sync failed for provider {provider_id}: {e}")
 
 
 @router.post("/providers/{provider_id}/sync", response_model=SyncResponse)
@@ -303,9 +357,13 @@ async def trigger_sync(
     """
     Trigger a sync operation with an external training provider.
 
+    The sync runs as a background task. Use the sync-logs endpoint to check progress.
+
     **Authentication required**
     **Requires permission: training.manage**
     """
+    logger = logging.getLogger(__name__)
+
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == provider_id)
@@ -323,7 +381,7 @@ async def trigger_sync(
     # Check if there's already a sync in progress
     existing_sync = await db.execute(
         select(ExternalTrainingSyncLog)
-        .where(ExternalTrainingSyncLog.provider_id == provider_id)
+        .where(ExternalTrainingSyncLog.provider_id == str(provider_id))
         .where(ExternalTrainingSyncLog.status.in_([SyncStatus.PENDING, SyncStatus.IN_PROGRESS]))
     )
     if existing_sync.scalar_one_or_none():
@@ -332,28 +390,26 @@ async def trigger_sync(
             detail="A sync operation is already in progress for this provider"
         )
 
-    # Create sync log entry
-    sync_log = ExternalTrainingSyncLog(
+    # Add background task to perform the sync
+    background_tasks.add_task(
+        perform_sync_task,
         provider_id=str(provider_id),
-        organization_id=current_user.organization_id,
         sync_type=sync_request.sync_type,
-        status=SyncStatus.PENDING,
-        sync_from_date=sync_request.from_date,
-        sync_to_date=sync_request.to_date,
-        initiated_by=current_user.id,
+        from_date=sync_request.from_date,
+        to_date=sync_request.to_date,
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
-    db.add(sync_log)
-    await db.commit()
-    await db.refresh(sync_log)
-
-    # TODO: Add background task to actually perform the sync
-    # background_tasks.add_task(external_training_service.perform_sync, sync_log.id)
+    logger.info(f"Sync initiated for provider {provider_id} by user {current_user.id}")
 
     return SyncResponse(
-        sync_log_id=UUID(sync_log.id),
+        sync_log_id=None,  # Log will be created by background task
         status=SyncStatusEnum.PENDING,
-        message="Sync operation initiated. Check sync logs for progress."
+        message="Sync operation initiated. Check sync logs for progress.",
+        records_fetched=0,
+        records_imported=0,
+        records_failed=0,
     )
 
 

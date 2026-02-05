@@ -675,8 +675,9 @@ const ExternalTrainingPage: React.FC = () => {
     setSyncingProvider(providerId);
     try {
       const result = await externalTrainingService.triggerSync(providerId, { sync_type: 'incremental' });
-      alert(`Sync completed! Fetched: ${result.records_fetched}, Imported: ${result.records_imported}`);
-      await loadProviders();
+      alert(result.message || 'Sync initiated. Check sync logs for progress.');
+      // Reload providers after a short delay to show updated last_sync_at
+      setTimeout(() => loadProviders(), 2000);
     } catch (err: any) {
       alert(`Sync failed: ${err.response?.data?.detail || err.message}`);
     } finally {

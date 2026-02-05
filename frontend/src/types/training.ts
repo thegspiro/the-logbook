@@ -844,9 +844,12 @@ export interface SyncRequest {
 }
 
 export interface SyncResponse {
-  sync_log_id: string;
+  sync_log_id: string | null;
   status: SyncStatus;
   message: string;
+  records_fetched: number;
+  records_imported: number;
+  records_failed: number;
 }
 
 export interface TestConnectionResponse {
