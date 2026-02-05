@@ -15,24 +15,15 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { userService, organizationService } from '../services/api';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { userService, organizationService, trainingService, inventoryService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
+import type { TrainingRecord } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 
-// Types for module-specific data (defined locally until services are implemented)
-interface TrainingRecord {
-  id: string;
-  course_id: string;
-  course_name?: string;
-  status: string;
-  completion_date?: string;
-  expiration_date?: string;
-  certification_number?: string;
-}
-
+// Types for inventory data
 interface InventoryItem {
   id: string;
   name: string;
@@ -72,10 +63,11 @@ export const MemberProfilePage: React.FC = () => {
     },
   });
 
-  // Module data states (placeholder - will be populated when services are implemented)
-  const trainings: TrainingRecord[] = [];
-  const trainingsLoading = false;
-  const inventoryItems: InventoryItem[] = [];
+  // Module data states
+  const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
+  const [trainingsLoading, setTrainingsLoading] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
@@ -84,13 +76,22 @@ export const MemberProfilePage: React.FC = () => {
     if (userId) {
       fetchUserData();
       fetchModuleStatus();
+      if (trainingEnabled) {
+        fetchTrainingRecords();
+      }
     }
-  }, [userId]);
+  }, [userId, trainingEnabled]);
 
   const fetchModuleStatus = async () => {
     try {
       const response = await organizationService.getEnabledModules();
-      setInventoryModuleEnabled(response.enabled_modules.includes('inventory'));
+      const inventoryEnabled = response.enabled_modules.includes('inventory');
+      setInventoryModuleEnabled(inventoryEnabled);
+
+      // Fetch inventory if module is enabled
+      if (inventoryEnabled && userId) {
+        fetchInventoryItems();
+      }
     } catch (err) {
       // If we can't fetch module status, default to not showing inventory
       console.error('Error fetching module status:', err);
@@ -112,8 +113,40 @@ export const MemberProfilePage: React.FC = () => {
     }
   };
 
-  // Note: Module data fetching (training, inventory, apparatus) will be implemented
-  // when the corresponding backend services are available. Currently using placeholder data.
+  const fetchTrainingRecords = async () => {
+    try {
+      setTrainingsLoading(true);
+      const records = await trainingService.getRecords({ user_id: userId! });
+      setTrainings(records);
+    } catch (err) {
+      console.error('Error fetching training records:', err);
+      // Don't set error - just log it and show empty state
+    } finally {
+      setTrainingsLoading(false);
+    }
+  };
+
+  const fetchInventoryItems = async () => {
+    try {
+      setInventoryLoading(true);
+      const response = await inventoryService.getUserInventory(userId!);
+      // Transform the inventory response to match our InventoryItem interface
+      const items: InventoryItem[] = response.permanent_assignments.map((item) => ({
+        id: item.assignment_id,
+        name: item.item_name,
+        item_number: item.serial_number || item.asset_tag || '',
+        category: 'Equipment', // Category not in response, using default
+        condition: item.condition,
+        assigned_date: item.assigned_date,
+      }));
+      setInventoryItems(items);
+    } catch (err) {
+      console.error('Error fetching inventory items:', err);
+      // Don't set error - just log it and show empty state
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -304,34 +337,53 @@ export const MemberProfilePage: React.FC = () => {
           {/* Training & Certifications */}
           {trainingEnabled && (
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Training & Certifications
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Training & Certifications
+                </h2>
+                <Link
+                  to={`/members/${userId}/training`}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  View Full History
+                </Link>
+              </div>
               {trainingsLoading ? (
-                <p className="text-sm text-gray-500">Loading training records...</p>
+                <div className="flex items-center justify-center h-24">
+                  <div className="text-sm text-gray-500">Loading training records...</div>
+                </div>
               ) : trainings.length === 0 ? (
-                <p className="text-sm text-gray-500">No training records found.</p>
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-500">No training records found.</p>
+                  <p className="text-xs text-gray-400 mt-1">Training records will appear here as they are completed.</p>
+                </div>
               ) : (
                 <div className="space-y-3">
-                  {trainings.map((training) => (
+                  {/* Show only the 5 most recent/important records */}
+                  {trainings.slice(0, 5).map((training) => (
                     <div
                       key={training.id}
-                      className="border border-gray-200 rounded-lg p-4 hover:border-gray-300"
+                      className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">{training.course_name || training.course_id}</h3>
+                          <h3 className="font-medium text-gray-900">{training.course_name}</h3>
                           {training.certification_number && (
                             <p className="text-sm text-gray-600 mt-1">
                               Cert #: {training.certification_number}
                             </p>
                           )}
-                          <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
                             {training.completion_date && (
                               <span>Completed: {formatDate(training.completion_date)}</span>
                             )}
                             {training.expiration_date && (
-                              <span>Expires: {formatDate(training.expiration_date)}</span>
+                              <span className={isExpired(training) ? 'text-red-600' : isExpiringSoon(training) ? 'text-yellow-600' : ''}>
+                                Expires: {formatDate(training.expiration_date)}
+                              </span>
+                            )}
+                            {training.hours_completed > 0 && (
+                              <span>{training.hours_completed} hrs</span>
                             )}
                           </div>
                         </div>
@@ -348,7 +400,7 @@ export const MemberProfilePage: React.FC = () => {
                               expired
                             </span>
                           )}
-                          {isExpiringSoon(training) && (
+                          {!isExpired(training) && isExpiringSoon(training) && (
                             <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                               expiring soon
                             </span>
@@ -357,6 +409,14 @@ export const MemberProfilePage: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                  {trainings.length > 5 && (
+                    <Link
+                      to={`/members/${userId}/training`}
+                      className="block text-center py-3 text-sm text-blue-600 hover:text-blue-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      View all {trainings.length} training records →
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
@@ -575,18 +635,28 @@ export const MemberProfilePage: React.FC = () => {
           <div className="bg-white shadow rounded-lg p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h2>
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Active Certifications</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {trainings.filter((t) => t.status === 'current').length}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Expiring Soon</span>
-                <span className="text-sm font-semibold text-yellow-600">
-                  {trainings.filter((t) => t.status === 'expiring_soon').length}
-                </span>
-              </div>
+              {trainingEnabled && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Active Training</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Expiring Soon</span>
+                    <span className="text-sm font-semibold text-yellow-600">
+                      {trainings.filter((t) => isExpiringSoon(t)).length}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Total Hours</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {trainings.reduce((sum, t) => sum + (t.hours_completed || 0), 0)} hrs
+                    </span>
+                  </div>
+                </>
+              )}
               {inventoryModuleEnabled && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Assigned Equipment</span>
