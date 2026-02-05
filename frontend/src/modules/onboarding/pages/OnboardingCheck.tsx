@@ -9,6 +9,19 @@ interface ServiceStatus {
   optional?: boolean;
 }
 
+interface StartupInfo {
+  phase: string;
+  message: string;
+  ready: boolean;
+  migrations?: {
+    total: number;
+    completed: number;
+    current: string | null;
+  };
+  uptime_seconds: number;
+  errors?: string[] | null;
+}
+
 const MAX_RETRIES = 20; // Reduced from 30 - about 1.5 minutes with delays
 const INITIAL_DELAY = 2000;
 const MAX_DELAY = 5000;
@@ -26,6 +39,8 @@ const OnboardingCheck: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState('Connecting to services...');
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showSkipOption, setShowSkipOption] = useState(false);
+  const [startupInfo, setStartupInfo] = useState<StartupInfo | null>(null);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Track elapsed time
@@ -64,10 +79,38 @@ const OnboardingCheck: React.FC = () => {
       updateServiceStatus('Backend API', 'disconnected', healthResponse.error || 'Not responding');
       updateServiceStatus('Database', 'checking');
       updateServiceStatus('Cache (Redis)', 'checking');
+      setStartupInfo(null);
       return false;
     }
 
     const health = healthResponse.data;
+
+    // Check for schema errors
+    if (health.schema_error) {
+      setSchemaError(health.schema_error);
+      setError('Database schema is inconsistent and requires a reset.');
+      return false;
+    }
+
+    // Extract startup info if available
+    if (health.startup) {
+      setStartupInfo(health.startup as StartupInfo);
+      // Update status message based on startup phase
+      if (!health.startup.ready) {
+        setStatusMessage(health.startup.message || 'Starting up...');
+      }
+      // Check for startup errors
+      if (health.startup.errors && health.startup.errors.length > 0) {
+        const hasSchemaError = health.startup.errors.some(
+          (e: string) => e.toLowerCase().includes('schema')
+        );
+        if (hasSchemaError) {
+          setSchemaError(
+            'Database schema is inconsistent. This usually happens when migrations fail partway through.'
+          );
+        }
+      }
+    }
 
     // Update Backend API status
     updateServiceStatus('Backend API', 'connected', `v${health.version}`);
@@ -207,11 +250,34 @@ const OnboardingCheck: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <div className="text-red-400 text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-white mb-4">
-            Connection Error
+            {schemaError ? 'Database Reset Required' : 'Connection Error'}
           </h2>
           <p className="text-slate-300 mb-6">{error}</p>
+
+          {/* Schema error specific instructions */}
+          {schemaError && (
+            <div className="mb-6 text-left bg-black/30 rounded-lg p-4 border border-orange-500/30">
+              <p className="text-orange-300 text-sm font-semibold mb-2">To Fix This Issue:</p>
+              <ol className="text-slate-300 text-sm space-y-2 list-decimal list-inside">
+                <li>Stop all containers:
+                  <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
+                    docker compose down -v
+                  </code>
+                </li>
+                <li>Rebuild and start:
+                  <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
+                    docker compose up --build
+                  </code>
+                </li>
+              </ol>
+              <p className="text-slate-400 text-xs mt-3">
+                The <code className="text-orange-200">-v</code> flag removes database volumes for a fresh start.
+                Since onboarding hasn't completed, no data will be lost.
+              </p>
+            </div>
+          )}
 
           {/* Show service status even on error */}
           <div className="mb-6 text-left bg-black/20 rounded-lg p-4">
@@ -298,9 +364,47 @@ const OnboardingCheck: React.FC = () => {
             </div>
           ))}
 
+          {/* Startup Progress Details */}
+          {startupInfo && !startupInfo.ready && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-400 border-t-transparent"></span>
+                <span className="text-orange-400 text-sm font-medium">
+                  {startupInfo.phase === 'migrations' ? 'Setting up database' :
+                   startupInfo.phase === 'database' ? 'Connecting to database' :
+                   startupInfo.phase === 'redis' ? 'Connecting to cache' :
+                   startupInfo.phase === 'security' ? 'Checking security' :
+                   'Initializing'}
+                </span>
+              </div>
+              <p className="text-slate-300 text-sm mb-2">{startupInfo.message}</p>
+
+              {/* Migration progress bar */}
+              {startupInfo.migrations && startupInfo.migrations.total > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                    <span>Database migrations</span>
+                    <span>{startupInfo.migrations.completed}/{startupInfo.migrations.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
+                    ></div>
+                  </div>
+                  {startupInfo.migrations.current && (
+                    <p className="text-slate-500 text-xs mt-1 truncate">
+                      {startupInfo.migrations.current}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {isWaiting && (
             <div className="mt-4 pt-4 border-t border-white/10">
-              {/* Progress bar */}
+              {/* Retry progress bar */}
               <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
                 <div
                   className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
