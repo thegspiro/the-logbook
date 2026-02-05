@@ -27,6 +27,74 @@ The Training Module backend provides a comprehensive RESTful API for managing tr
 
 ## Models
 
+### DueDateType Enum
+
+Defines how training requirement due dates are calculated.
+
+**Values:**
+- `calendar_period`: Due by end of a calendar period (e.g., December 31st of each year). Uses `period_start_month` and `period_start_day` to define when the period starts.
+- `rolling`: Due X months from last completion. Uses `rolling_period_months` to define the interval.
+- `certification_period`: Due when the associated certification expires. Tied to the certification's expiration date.
+- `fixed_date`: Due by a specific fixed date. Used for one-time requirements with hard deadlines.
+
+**Example Usage:**
+```python
+# Annual training due by calendar year end
+requirement.due_date_type = DueDateType.CALENDAR_PERIOD
+requirement.period_start_month = 1   # January
+requirement.period_start_day = 1     # 1st
+
+# CPR recertification every 2 years from last completion
+requirement.due_date_type = DueDateType.ROLLING
+requirement.rolling_period_months = 24
+
+# Certification-based (expires with cert)
+requirement.due_date_type = DueDateType.CERTIFICATION_PERIOD
+```
+
+### TrainingCategory
+
+Hierarchical categories for organizing training courses and requirements. Categories allow grouping of related training topics and can be nested for sub-categories.
+
+**Fields:**
+- `id`: UUID primary key
+- `organization_id`: Organization this category belongs to (FK to organizations)
+- `name`: Category name (required, max 255 chars)
+- `code`: Short code for the category (optional, max 50 chars, e.g., "FF", "EMS", "HAZ")
+- `description`: Detailed description of the category (optional, text)
+- `color`: Hex color code for UI display (optional, max 7 chars, e.g., "#FF5733")
+- `parent_category_id`: Parent category for hierarchical structure (FK to training_categories, nullable)
+- `sort_order`: Display order within parent (integer, default 0)
+- `icon`: Icon identifier for UI (optional, max 50 chars, e.g., "fire", "medical", "hazmat")
+- `active`: Whether category is currently active (boolean, default true)
+- `created_at`: Creation timestamp
+- `updated_at`: Last update timestamp
+- `created_by`: User who created the category (FK to users)
+
+**Relationships:**
+- `parent`: Self-referential relationship to parent category
+- `children`: Self-referential relationship to child categories
+- `courses`: Many-to-many with TrainingCourse via category_ids JSON field
+- `requirements`: Many-to-many with TrainingRequirement via category_ids JSON field
+
+**Example Category Hierarchy:**
+```
+Firefighting (parent)
+├── Structural Firefighting
+├── Wildland Firefighting
+└── Fire Prevention
+
+EMS (parent)
+├── Basic Life Support
+├── Advanced Cardiac Life Support
+└── Pediatric Care
+
+Hazardous Materials (parent)
+├── Awareness Level
+├── Operations Level
+└── Technician Level
+```
+
 ### TrainingCourse
 Basic training course catalog.
 
@@ -38,6 +106,7 @@ Basic training course catalog.
 - `credit_hours`: Credit hours awarded
 - `prerequisites`: Array of prerequisite course IDs
 - `expiration_months`: Certification expiration period
+- `category_ids`: Array of category UUIDs this course belongs to (JSONB)
 
 ### TrainingRecord
 Individual member training history.
@@ -71,6 +140,48 @@ Requirements that members must complete.
 - `frequency`: annual | biannual | quarterly | monthly | one_time
 - `time_limit_days`: Days to complete from enrollment
 - `required_positions`: Array of positions this applies to
+
+**Due Date Configuration Fields:**
+- `due_date_type`: How the due date is calculated (see DueDateType enum above)
+  - `calendar_period`: Due by end of calendar period (default)
+  - `rolling`: Due X months from last completion
+  - `certification_period`: Due when certification expires
+  - `fixed_date`: Due by specific date
+- `rolling_period_months`: Number of months for rolling due dates (e.g., 12 for annual, 24 for biennial)
+- `period_start_month`: Month when calendar period starts (1-12, default 1 for January)
+- `period_start_day`: Day when calendar period starts (1-31, default 1)
+- `category_ids`: Array of category UUIDs that can satisfy this requirement (JSONB)
+
+**Due Date Calculation Examples:**
+
+1. **Calendar Period (Annual by Calendar Year)**
+   ```python
+   due_date_type = "calendar_period"
+   period_start_month = 1  # January
+   period_start_day = 1    # 1st
+   # Training is due December 31st each year
+   ```
+
+2. **Calendar Period (Fiscal Year - July to June)**
+   ```python
+   due_date_type = "calendar_period"
+   period_start_month = 7  # July
+   period_start_day = 1    # 1st
+   # Training is due June 30th each fiscal year
+   ```
+
+3. **Rolling (Every 12 months from completion)**
+   ```python
+   due_date_type = "rolling"
+   rolling_period_months = 12
+   # If completed Jan 15, 2026, due Jan 15, 2027
+   ```
+
+4. **Certification Period**
+   ```python
+   due_date_type = "certification_period"
+   # Due date matches the associated certification's expiration
+   ```
 
 ### TrainingProgram
 Structured training pathways.
@@ -348,6 +459,53 @@ async def import_registry_requirements(
 
 ## API Endpoints
 
+### Categories
+
+Training categories for organizing courses and requirements.
+
+```
+GET    /api/v1/training/categories              # List all categories
+POST   /api/v1/training/categories              # Create new category
+GET    /api/v1/training/categories/{id}         # Get category by ID
+PATCH  /api/v1/training/categories/{id}         # Update category
+DELETE /api/v1/training/categories/{id}         # Delete category (soft delete)
+```
+
+**List Categories Query Parameters:**
+- `active_only`: Boolean, filter to active categories only (default: true)
+
+**Create/Update Category Request:**
+```json
+{
+  "name": "Firefighting",
+  "code": "FF",
+  "description": "All firefighting-related training",
+  "color": "#FF5733",
+  "parent_category_id": null,
+  "sort_order": 1,
+  "icon": "fire"
+}
+```
+
+**Category Response:**
+```json
+{
+  "id": "uuid",
+  "organization_id": "uuid",
+  "name": "Firefighting",
+  "code": "FF",
+  "description": "All firefighting-related training",
+  "color": "#FF5733",
+  "parent_category_id": null,
+  "sort_order": 1,
+  "icon": "fire",
+  "active": true,
+  "created_at": "2026-02-05T00:00:00Z",
+  "updated_at": "2026-02-05T00:00:00Z",
+  "created_by": "uuid"
+}
+```
+
 ### Requirements
 
 ```
@@ -355,7 +513,34 @@ GET    /api/v1/training/programs/requirements
 POST   /api/v1/training/programs/requirements
 GET    /api/v1/training/programs/requirements/{id}
 PATCH  /api/v1/training/programs/requirements/{id}
+DELETE /api/v1/training/programs/requirements/{id}   # Soft delete (sets active=false)
 POST   /api/v1/training/programs/requirements/import/{registry_name}
+```
+
+**Create Requirement with Due Date Type:**
+```json
+{
+  "name": "Annual Fire Training",
+  "requirement_type": "hours",
+  "required_hours": 24,
+  "source": "department",
+  "due_date_type": "calendar_period",
+  "period_start_month": 1,
+  "period_start_day": 1,
+  "category_ids": ["uuid1", "uuid2"]
+}
+```
+
+```json
+{
+  "name": "CPR Recertification",
+  "requirement_type": "certification",
+  "source": "national",
+  "registry_name": "AHA",
+  "due_date_type": "rolling",
+  "rolling_period_months": 24,
+  "category_ids": ["ems-category-uuid"]
+}
 ```
 
 ### Programs
@@ -439,6 +624,25 @@ Adds:
 - Renames `is_mandatory` to `is_required`
 - Renames `order` to `sort_order`
 - Adds `is_prerequisite` to program_requirements
+
+### Training Categories and Due Date Types
+**File:** `20260205_0100_add_training_categories_and_due_date_type.py`
+
+Creates:
+- `training_categories` table with hierarchical structure support
+  - `parent_category_id` for nested categories
+  - `color`, `icon`, `sort_order` for UI display
+  - Indexes on `organization_id`, `code`, and `parent_category_id`
+
+Adds to `training_courses`:
+- `category_ids` (JSON): Array of category UUIDs the course belongs to
+
+Adds to `training_requirements`:
+- `due_date_type` (String): How due date is calculated (calendar_period, rolling, certification_period, fixed_date)
+- `rolling_period_months` (Integer): Months between completions for rolling requirements
+- `period_start_month` (Integer): Start month for calendar period (1-12)
+- `period_start_day` (Integer): Start day for calendar period (1-31)
+- `category_ids` (JSON): Array of category UUIDs that satisfy this requirement
 
 ## Registry Data Files
 
@@ -609,4 +813,4 @@ Using SQLAlchemy ORM:
 
 ---
 
-*Last Updated: January 22, 2026*
+*Last Updated: February 5, 2026*
