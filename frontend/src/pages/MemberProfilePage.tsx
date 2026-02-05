@@ -22,6 +22,26 @@ import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
 import { AVAILABLE_MODULES } from '../types/modules';
 
+// Types for module-specific data (defined locally until services are implemented)
+interface TrainingRecord {
+  id: string;
+  course_id: string;
+  course_name?: string;
+  status: string;
+  completion_date?: string;
+  expiration_date?: string;
+  certification_number?: string;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  item_number: string;
+  category: string;
+  condition: string;
+  assigned_date: string;
+}
+
 /** Check if a module is enabled by its id. */
 function isModuleEnabled(moduleId: string): boolean {
   const mod = AVAILABLE_MODULES.find((m) => m.id === moduleId);
@@ -52,22 +72,13 @@ export const MemberProfilePage: React.FC = () => {
     },
   });
 
-  // Module data states
-  const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
-  const [trainingsLoading, setTrainingsLoading] = useState(false);
-
-  const [permanentInventory, setPermanentInventory] = useState<UserInventoryItem[]>([]);
-  const [activeCheckouts, setActiveCheckouts] = useState<UserCheckoutItem[]>([]);
-  const [inventoryLoading, setInventoryLoading] = useState(false);
-
-  const [operatorCerts, setOperatorCerts] = useState<ApparatusOperator[]>([]);
-  const [operatorCertsLoading, setOperatorCertsLoading] = useState(false);
+  // Module data states (placeholder - will be populated when services are implemented)
+  const trainings: TrainingRecord[] = [];
+  const trainingsLoading = false;
+  const inventoryItems: InventoryItem[] = [];
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
-  const inventoryEnabled = isModuleEnabled('inventory');
-  const apparatusEnabled = isModuleEnabled('apparatus');
-  const schedulingEnabled = isModuleEnabled('scheduling');
 
   useEffect(() => {
     if (userId) {
@@ -101,47 +112,8 @@ export const MemberProfilePage: React.FC = () => {
     }
   };
 
-  const fetchModuleData = async () => {
-    // Fetch training records
-    if (trainingEnabled) {
-      setTrainingsLoading(true);
-      try {
-        const records = await trainingService.getRecords({ user_id: userId! });
-        setTrainings(records);
-      } catch (err) {
-        console.error('Error fetching training records:', err);
-      } finally {
-        setTrainingsLoading(false);
-      }
-    }
-
-    // Fetch inventory
-    if (inventoryEnabled) {
-      setInventoryLoading(true);
-      try {
-        const inv = await inventoryService.getUserInventory(userId!);
-        setPermanentInventory(inv.permanent_assignments);
-        setActiveCheckouts(inv.active_checkouts);
-      } catch (err) {
-        console.error('Error fetching inventory:', err);
-      } finally {
-        setInventoryLoading(false);
-      }
-    }
-
-    // Fetch apparatus operator certifications
-    if (apparatusEnabled) {
-      setOperatorCertsLoading(true);
-      try {
-        const operators = await apparatusOperatorService.getOperators({ userId: userId! });
-        setOperatorCerts(operators);
-      } catch (err) {
-        console.error('Error fetching apparatus certifications:', err);
-      } finally {
-        setOperatorCertsLoading(false);
-      }
-    }
-  };
+  // Note: Module data fetching (training, inventory, apparatus) will be implemented
+  // when the corresponding backend services are available. Currently using placeholder data.
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -181,22 +153,6 @@ export const MemberProfilePage: React.FC = () => {
   const isExpired = (record: TrainingRecord): boolean => {
     if (!record.expiration_date) return false;
     return new Date(record.expiration_date) < new Date();
-  };
-
-  const getConditionColor = (condition: string) => {
-    switch (condition.toLowerCase()) {
-      case 'excellent':
-        return 'bg-green-100 text-green-800';
-      case 'good':
-        return 'bg-blue-100 text-blue-800';
-      case 'fair':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'poor':
-      case 'damaged':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
   };
 
   const handleEditClick = () => {
@@ -286,11 +242,6 @@ export const MemberProfilePage: React.FC = () => {
     );
   }
 
-  // Derived stats
-  const completedTrainings = trainings.filter((t) => t.status === 'completed' && !isExpired(t));
-  const expiringTrainings = trainings.filter((t) => t.status === 'completed' && isExpiringSoon(t));
-  const totalInventory = permanentInventory.length + activeCheckouts.length;
-  const certifiedApparatus = operatorCerts.filter((o) => o.isCertified);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -644,12 +595,6 @@ export const MemberProfilePage: React.FC = () => {
                   </span>
                 </div>
               )}
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Upcoming Shifts</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {upcomingShifts.length}
-                </span>
-              </div>
             </div>
           </div>
         </div>
