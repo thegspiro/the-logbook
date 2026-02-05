@@ -60,6 +60,14 @@ class RequirementFrequency(str, enum.Enum):
     ONE_TIME = "one_time"
 
 
+class DueDateType(str, enum.Enum):
+    """How the due date is calculated"""
+    CALENDAR_PERIOD = "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+    ROLLING = "rolling"  # Due X months from last completion
+    CERTIFICATION_PERIOD = "certification_period"  # Due when certification expires
+    FIXED_DATE = "fixed_date"  # Due by a specific fixed date
+
+
 class RequirementType(str, enum.Enum):
     """Type of training requirement"""
     HOURS = "hours"  # Minimum training hours
@@ -101,6 +109,56 @@ class RequirementProgressStatus(str, enum.Enum):
     VERIFIED = "verified"  # Completed and verified by officer
 
 
+class TrainingCategory(Base):
+    """
+    Training Category model
+
+    Defines categories that training sessions can be applied towards.
+    Examples: Fire Training, EMS Training, Driver Training, Officer Development, etc.
+    Training hours can count towards multiple categories.
+    """
+
+    __tablename__ = "training_categories"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Category Details
+    name = Column(String(255), nullable=False)
+    code = Column(String(50))  # Short code like "FIRE", "EMS", "DRIVER"
+    description = Column(Text)
+    color = Column(String(7))  # Hex color for UI display, e.g., "#FF5733"
+
+    # Parent Category (for hierarchical categories)
+    parent_category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True)
+
+    # Requirements can link to this category
+    # When training is completed in this category, it counts towards requirements linked to it
+
+    # Display Settings
+    sort_order = Column(Integer, default=0)
+    icon = Column(String(50))  # Icon name for UI
+
+    # Status
+    active = Column(Boolean, default=True, index=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    subcategories = relationship("TrainingCategory", backref="parent_category", remote_side=[id])
+
+    __table_args__ = (
+        Index('idx_category_org_code', 'organization_id', 'code'),
+        Index('idx_category_parent', 'parent_category_id'),
+    )
+
+    def __repr__(self):
+        return f"<TrainingCategory(name={self.name}, code={self.code})>"
+
+
 class TrainingCourse(Base):
     """
     Training Course model
@@ -131,6 +189,9 @@ class TrainingCourse(Base):
     instructor = Column(String(255))
     max_participants = Column(Integer)
     materials_required = Column(JSON)  # List of required materials
+
+    # Categories - training can count towards multiple categories
+    category_ids = Column(JSON)  # List of TrainingCategory IDs this course counts towards
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -252,6 +313,23 @@ class TrainingRequirement(Base):
     # Frequency
     frequency = Column(Enum(RequirementFrequency), nullable=False)
     year = Column(Integer)  # For annual requirements
+
+    # Due Date Calculation Type
+    due_date_type = Column(Enum(DueDateType), default=DueDateType.CALENDAR_PERIOD)
+    # - CALENDAR_PERIOD: Due by end of calendar period (e.g., Dec 31st for annual)
+    # - ROLLING: Due X months from last completion
+    # - CERTIFICATION_PERIOD: Due when certification expires
+    # - FIXED_DATE: Due by a specific fixed date
+
+    # Rolling Period (for ROLLING due_date_type)
+    rolling_period_months = Column(Integer)  # Number of months between required completions
+
+    # Calendar Period Settings (for CALENDAR_PERIOD)
+    period_start_month = Column(Integer, default=1)  # Month the period starts (1=January)
+    period_start_day = Column(Integer, default=1)  # Day the period starts
+
+    # Categories - which training categories count towards this requirement
+    category_ids = Column(JSON)  # List of TrainingCategory IDs that satisfy this requirement
 
     # Applicability
     applies_to_all = Column(Boolean, default=True)

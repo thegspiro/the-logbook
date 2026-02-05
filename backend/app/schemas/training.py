@@ -8,6 +8,57 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
+from enum import Enum
+
+
+class DueDateType(str, Enum):
+    """How the due date for a requirement is calculated"""
+    CALENDAR_PERIOD = "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+    ROLLING = "rolling"  # Due X months from last completion
+    CERTIFICATION_PERIOD = "certification_period"  # Due when certification expires
+    FIXED_DATE = "fixed_date"  # Due by a specific fixed date
+
+
+# Training Category Schemas
+
+class TrainingCategoryBase(BaseModel):
+    """Base training category schema"""
+    name: str = Field(..., min_length=1, max_length=255)
+    code: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
+    color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    parent_category_id: Optional[UUID] = None
+    sort_order: int = 0
+    icon: Optional[str] = Field(None, max_length=50)
+
+
+class TrainingCategoryCreate(TrainingCategoryBase):
+    """Schema for creating a new training category"""
+    pass
+
+
+class TrainingCategoryUpdate(BaseModel):
+    """Schema for updating a training category"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
+    color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    parent_category_id: Optional[UUID] = None
+    sort_order: Optional[int] = None
+    icon: Optional[str] = Field(None, max_length=50)
+    active: Optional[bool] = None
+
+
+class TrainingCategoryResponse(TrainingCategoryBase):
+    """Schema for training category response"""
+    id: UUID
+    organization_id: UUID
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Training Course Schemas
@@ -25,6 +76,7 @@ class TrainingCourseBase(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
+    category_ids: Optional[List[UUID]] = None  # Categories this course belongs to
 
 
 class TrainingCourseCreate(TrainingCourseBase):
@@ -45,6 +97,7 @@ class TrainingCourseUpdate(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
+    category_ids: Optional[List[UUID]] = None
     active: Optional[bool] = None
 
 
@@ -56,6 +109,7 @@ class TrainingCourseResponse(TrainingCourseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Note: category_ids is inherited from TrainingCourseBase
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -140,6 +194,13 @@ class TrainingRequirementBase(BaseModel):
     required_roles: Optional[List[UUID]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    # Due date calculation fields
+    due_date_type: DueDateType = DueDateType.CALENDAR_PERIOD
+    rolling_period_months: Optional[int] = Field(None, ge=1, le=120)  # 1-10 years
+    period_start_month: int = Field(1, ge=1, le=12)  # Month period starts (1=January)
+    period_start_day: int = Field(1, ge=1, le=31)  # Day period starts
+    # Category requirements - training in these categories satisfies this requirement
+    category_ids: Optional[List[UUID]] = None
 
 
 class TrainingRequirementCreate(TrainingRequirementBase):
@@ -160,6 +221,12 @@ class TrainingRequirementUpdate(BaseModel):
     required_roles: Optional[List[UUID]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    # Due date calculation fields
+    due_date_type: Optional[DueDateType] = None
+    rolling_period_months: Optional[int] = Field(None, ge=1, le=120)
+    period_start_month: Optional[int] = Field(None, ge=1, le=12)
+    period_start_day: Optional[int] = Field(None, ge=1, le=31)
+    category_ids: Optional[List[UUID]] = None
     active: Optional[bool] = None
 
 
@@ -217,3 +284,5 @@ class RequirementProgress(BaseModel):
     percentage_complete: float
     is_complete: bool
     due_date: Optional[date]
+    due_date_type: Optional[DueDateType] = None
+    days_until_due: Optional[int] = None  # Negative if overdue

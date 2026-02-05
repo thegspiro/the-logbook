@@ -26,6 +26,12 @@ export type RequirementFrequency =
   | 'monthly'
   | 'one_time';
 
+export type DueDateType =
+  | 'calendar_period'   // Due by end of calendar period (e.g., Dec 31st)
+  | 'rolling'           // Due X months from last completion
+  | 'certification_period'  // Due when certification expires
+  | 'fixed_date';       // Due by a specific fixed date
+
 /**
  * Training Session
  *
@@ -108,6 +114,44 @@ export interface TrainingSessionCreate {
   require_completion_confirmation?: boolean;  // Instructor must confirm completion
 }
 
+// Training Category Types
+export interface TrainingCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  color?: string;  // Hex color like #FF5733
+  parent_category_id?: string;
+  sort_order: number;
+  icon?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface TrainingCategoryCreate {
+  name: string;
+  code?: string;
+  description?: string;
+  color?: string;
+  parent_category_id?: string;
+  sort_order?: number;
+  icon?: string;
+}
+
+export interface TrainingCategoryUpdate {
+  name?: string;
+  code?: string;
+  description?: string;
+  color?: string;
+  parent_category_id?: string;
+  sort_order?: number;
+  icon?: string;
+  active?: boolean;
+}
+
 export interface TrainingCourse {
   id: string;
   organization_id: string;
@@ -122,6 +166,7 @@ export interface TrainingCourse {
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
+  category_ids?: string[];  // Categories this course belongs to
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -140,6 +185,7 @@ export interface TrainingCourseCreate {
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
+  category_ids?: string[];
 }
 
 export interface TrainingCourseUpdate {
@@ -154,6 +200,7 @@ export interface TrainingCourseUpdate {
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
+  category_ids?: string[];
   active?: boolean;
 }
 
@@ -243,6 +290,12 @@ export interface TrainingRequirement {
   required_roles?: string[];
   start_date?: string;
   due_date?: string;
+  // Due date calculation fields
+  due_date_type: DueDateType;
+  rolling_period_months?: number;  // For rolling due dates: months between required completions
+  period_start_month?: number;     // For calendar period: month the period starts (1-12)
+  period_start_day?: number;       // For calendar period: day the period starts (1-31)
+  category_ids?: string[];         // Training categories that satisfy this requirement
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -261,6 +314,12 @@ export interface TrainingRequirementCreate {
   required_roles?: string[];
   start_date?: string;
   due_date?: string;
+  // Due date calculation fields
+  due_date_type?: DueDateType;
+  rolling_period_months?: number;
+  period_start_month?: number;
+  period_start_day?: number;
+  category_ids?: string[];
 }
 
 export interface TrainingRequirementUpdate {
@@ -275,6 +334,12 @@ export interface TrainingRequirementUpdate {
   required_roles?: string[];
   start_date?: string;
   due_date?: string;
+  // Due date calculation fields
+  due_date_type?: DueDateType;
+  rolling_period_months?: number;
+  period_start_month?: number;
+  period_start_day?: number;
+  category_ids?: string[];
   active?: boolean;
 }
 
@@ -314,6 +379,8 @@ export interface RequirementProgress {
   percentage_complete: number;
   is_complete: boolean;
   due_date?: string;
+  due_date_type?: DueDateType;
+  days_until_due?: number;  // Negative if overdue
 }
 
 // ==================== Training Program Types ====================

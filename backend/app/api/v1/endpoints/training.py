@@ -17,6 +17,7 @@ from app.models.training import (
     TrainingCourse,
     TrainingRecord,
     TrainingRequirement,
+    TrainingCategory,
     TrainingStatus,
 )
 from app.models.user import User
@@ -30,6 +31,9 @@ from app.schemas.training import (
     TrainingRequirementCreate,
     TrainingRequirementUpdate,
     TrainingRequirementResponse,
+    TrainingCategoryCreate,
+    TrainingCategoryUpdate,
+    TrainingCategoryResponse,
     UserTrainingStats,
     TrainingReport,
     RequirementProgress,
@@ -255,6 +259,156 @@ async def update_record(
     return record
 
 
+# Training Categories
+
+@router.get("/categories", response_model=List[TrainingCategoryResponse])
+async def list_categories(
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all training categories
+
+    **Authentication required**
+    """
+    query = select(TrainingCategory).where(
+        TrainingCategory.organization_id == current_user.organization_id
+    )
+
+    if active_only:
+        query = query.where(TrainingCategory.active == True)
+
+    query = query.order_by(TrainingCategory.sort_order, TrainingCategory.name)
+
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.post("/categories", response_model=TrainingCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_category(
+    category: TrainingCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Create a new training category
+
+    Requires training officer permissions.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    new_category = TrainingCategory(
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        **category.model_dump()
+    )
+
+    db.add(new_category)
+    await db.commit()
+    await db.refresh(new_category)
+
+    return new_category
+
+
+@router.get("/categories/{category_id}", response_model=TrainingCategoryResponse)
+async def get_category(
+    category_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get a specific training category
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(TrainingCategory)
+        .where(TrainingCategory.id == category_id)
+        .where(TrainingCategory.organization_id == current_user.organization_id)
+    )
+    category = result.scalar_one_or_none()
+
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found"
+        )
+
+    return category
+
+
+@router.patch("/categories/{category_id}", response_model=TrainingCategoryResponse)
+async def update_category(
+    category_id: UUID,
+    category_update: TrainingCategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a training category
+
+    Requires training officer permissions.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(TrainingCategory)
+        .where(TrainingCategory.id == category_id)
+        .where(TrainingCategory.organization_id == current_user.organization_id)
+    )
+    category = result.scalar_one_or_none()
+
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found"
+        )
+
+    # Update fields
+    for field, value in category_update.model_dump(exclude_unset=True).items():
+        setattr(category, field, value)
+
+    await db.commit()
+    await db.refresh(category)
+
+    return category
+
+
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a training category (soft delete by setting active=False)
+
+    Requires training officer permissions.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(TrainingCategory)
+        .where(TrainingCategory.id == category_id)
+        .where(TrainingCategory.organization_id == current_user.organization_id)
+    )
+    category = result.scalar_one_or_none()
+
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found"
+        )
+
+    # Soft delete
+    category.active = False
+    await db.commit()
+
+
 # Training Requirements
 
 @router.get("/requirements", response_model=List[TrainingRequirementResponse])
@@ -348,6 +502,38 @@ async def update_requirement(
     await db.refresh(requirement)
 
     return requirement
+
+
+@router.delete("/requirements/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_requirement(
+    requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a training requirement (soft delete by setting active=False)
+
+    Requires training officer permissions.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(TrainingRequirement)
+        .where(TrainingRequirement.id == requirement_id)
+        .where(TrainingRequirement.organization_id == current_user.organization_id)
+    )
+    requirement = result.scalar_one_or_none()
+
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requirement not found"
+        )
+
+    # Soft delete
+    requirement.active = False
+    await db.commit()
 
 
 # Statistics and Reports

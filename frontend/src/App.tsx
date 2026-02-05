@@ -26,6 +26,11 @@ import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage';
 import { RoleManagementPage } from './pages/RoleManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { MembersAdminPage } from './pages/MembersAdminPage';
+import TrainingOfficerDashboard from './pages/TrainingOfficerDashboard';
+import TrainingRequirementsPage from './pages/TrainingRequirementsPage';
+import TrainingDashboardPage from './pages/TrainingDashboardPage';
+import TrainingProgramsPage from './pages/TrainingProgramsPage';
+import CreateTrainingSessionPage from './pages/CreateTrainingSessionPage';
 
 /**
  * Main Application Component
@@ -78,6 +83,13 @@ function App() {
           <Route path="/events/:id/check-in" element={<EventSelfCheckInPage />} />
           <Route path="/events/:id/monitoring" element={<EventCheckInMonitoringPage />} />
           <Route path="/events/:id/analytics" element={<AnalyticsDashboardPage />} />
+
+          {/* Training Module */}
+          <Route path="/training" element={<TrainingDashboardPage />} />
+          <Route path="/training/officer" element={<TrainingOfficerDashboard />} />
+          <Route path="/training/requirements" element={<TrainingRequirementsPage />} />
+          <Route path="/training/programs" element={<TrainingProgramsPage />} />
+          <Route path="/training/sessions/new" element={<CreateTrainingSessionPage />} />
 
           {/* Admin/Monitoring Routes */}
           <Route path="/admin/errors" element={<ErrorMonitoringPage />} />

@@ -31,6 +31,9 @@ import type {
   TrainingRequirement,
   TrainingRequirementCreate,
   TrainingRequirementUpdate,
+  TrainingCategory,
+  TrainingCategoryCreate,
+  TrainingCategoryUpdate,
   UserTrainingStats,
   TrainingReport,
   RequirementProgress,
@@ -493,6 +496,62 @@ export const trainingService = {
       updates
     );
     return response.data;
+  },
+
+  /**
+   * Delete a training requirement (soft delete)
+   */
+  async deleteRequirement(requirementId: string): Promise<void> {
+    await api.delete(`/training/requirements/${requirementId}`);
+  },
+
+  // ==================== Training Categories ====================
+
+  /**
+   * Get all training categories
+   */
+  async getCategories(activeOnly: boolean = true): Promise<TrainingCategory[]> {
+    const response = await api.get<TrainingCategory[]>('/training/categories', {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get a specific category
+   */
+  async getCategory(categoryId: string): Promise<TrainingCategory> {
+    const response = await api.get<TrainingCategory>(`/training/categories/${categoryId}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new training category
+   */
+  async createCategory(category: TrainingCategoryCreate): Promise<TrainingCategory> {
+    const response = await api.post<TrainingCategory>('/training/categories', category);
+    return response.data;
+  },
+
+  /**
+   * Update a training category
+   */
+  async updateCategory(
+    categoryId: string,
+    updates: TrainingCategoryUpdate
+  ): Promise<TrainingCategory> {
+    const response = await api.patch<TrainingCategory>(
+      `/training/categories/${categoryId}`,
+      updates
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a training category (soft delete)
+   */
+  async deleteCategory(categoryId: string): Promise<void> {
+    await api.delete(`/training/categories/${categoryId}`);
   },
 
   /**
