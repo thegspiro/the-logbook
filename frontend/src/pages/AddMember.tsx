@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
+import { userService } from '../services/api';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -105,20 +106,68 @@ const AddMember: React.FC = () => {
     setIsSaving(true);
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/v1/members', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData),
-      // });
+      // Generate username from email (part before @)
+      const username = formData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
-      // Mock success
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Build emergency contacts array
+      const emergencyContacts: Array<{
+        name: string;
+        relationship: string;
+        phone: string;
+        email?: string;
+        is_primary: boolean;
+      }> = [];
+
+      // Primary emergency contact
+      if (formData.emergencyName1) {
+        emergencyContacts.push({
+          name: formData.emergencyName1,
+          relationship: formData.emergencyRelationship1,
+          phone: formData.emergencyPhone1,
+          email: formData.emergencyEmail1 || undefined,
+          is_primary: true,
+        });
+      }
+
+      // Secondary emergency contact (if provided)
+      if (formData.emergencyName2) {
+        emergencyContacts.push({
+          name: formData.emergencyName2,
+          relationship: formData.emergencyRelationship2,
+          phone: formData.emergencyPhone2,
+          email: formData.emergencyEmail2 || undefined,
+          is_primary: false,
+        });
+      }
+
+      // Call the API
+      await userService.createMember({
+        username,
+        email: formData.email,
+        first_name: formData.firstName,
+        middle_name: formData.middleName || undefined,
+        last_name: formData.lastName,
+        badge_number: formData.departmentId || undefined,
+        phone: formData.primaryPhone || undefined,
+        mobile: formData.secondaryPhone || undefined,
+        date_of_birth: formData.dateOfBirth || undefined,
+        hire_date: formData.joinDate || undefined,
+        rank: formData.rank || undefined,
+        station: formData.station || undefined,
+        address_street: formData.street || undefined,
+        address_city: formData.city || undefined,
+        address_state: formData.state || undefined,
+        address_zip: formData.zipCode || undefined,
+        address_country: 'USA',
+        emergency_contacts: emergencyContacts,
+        send_welcome_email: true,
+      });
 
       toast.success('Member added successfully!');
       navigate('/members');
-    } catch (error) {
-      toast.error('Failed to add member. Please try again.');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 'Failed to add member. Please try again.';
+      toast.error(errorMessage);
       setIsSaving(false);
     }
   };

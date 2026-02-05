@@ -208,14 +208,29 @@ export const userService = {
     username: string;
     email: string;
     first_name: string;
+    middle_name?: string;
     last_name: string;
     badge_number?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
     hire_date?: string;
-    role_ids: string[];
-    send_welcome_email: boolean;
+    rank?: string;
+    station?: string;
+    address_street?: string;
+    address_city?: string;
+    address_state?: string;
+    address_zip?: string;
+    address_country?: string;
+    emergency_contacts?: Array<{
+      name: string;
+      relationship: string;
+      phone: string;
+      email?: string;
+      is_primary: boolean;
+    }>;
+    role_ids?: string[];
+    send_welcome_email?: boolean;
   }): Promise<UserWithRoles> {
     const response = await api.post<UserWithRoles>('/users', memberData);
     return response.data;

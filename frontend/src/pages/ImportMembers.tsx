@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
+import { userService } from '../services/api';
 
 interface ImportResult {
   success: number;
@@ -122,31 +123,138 @@ const ImportMembers: React.FC = () => {
     if (!file) return;
 
     setImporting(true);
+    const result: ImportResult = {
+      success: 0,
+      failed: 0,
+      errors: [],
+    };
+
     try {
       const text = await file.text();
       const rows = text.split('\n').map((row) => row.split(','));
+      const headers = rows[0].map((h) => h.trim().toLowerCase());
 
-      // TODO: Replace with actual API call
-      // const formData = new FormData();
-      // formData.append('file', file);
-      // const response = await fetch('/api/v1/members/import', {
-      //   method: 'POST',
-      //   body: formData,
-      // });
+      // Process each row (skip header)
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length < 2) continue; // Skip empty rows
 
-      // Mock import result
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+        const rowData: CSVMemberRow = {
+          firstName: row[headers.indexOf('firstname')]?.trim() || '',
+          lastName: row[headers.indexOf('lastname')]?.trim() || '',
+          middleName: row[headers.indexOf('middlename')]?.trim(),
+          departmentId: row[headers.indexOf('departmentid')]?.trim() || '',
+          dateOfBirth: row[headers.indexOf('dateofbirth')]?.trim(),
+          street: row[headers.indexOf('street')]?.trim() || '',
+          city: row[headers.indexOf('city')]?.trim() || '',
+          state: row[headers.indexOf('state')]?.trim() || '',
+          zipCode: row[headers.indexOf('zipcode')]?.trim() || '',
+          primaryPhone: row[headers.indexOf('primaryphone')]?.trim() || '',
+          secondaryPhone: row[headers.indexOf('secondaryphone')]?.trim(),
+          email: row[headers.indexOf('email')]?.trim() || '',
+          joinDate: row[headers.indexOf('joindate')]?.trim() || '',
+          status: row[headers.indexOf('status')]?.trim(),
+          rank: row[headers.indexOf('rank')]?.trim(),
+          role: row[headers.indexOf('role')]?.trim(),
+          station: row[headers.indexOf('station')]?.trim(),
+          emergencyName1: row[headers.indexOf('emergencyname1')]?.trim() || '',
+          emergencyRelationship1: row[headers.indexOf('emergencyrelationship1')]?.trim() || '',
+          emergencyPhone1: row[headers.indexOf('emergencyphone1')]?.trim() || '',
+          emergencyEmail1: row[headers.indexOf('emergencyemail1')]?.trim(),
+          emergencyName2: row[headers.indexOf('emergencyname2')]?.trim(),
+          emergencyRelationship2: row[headers.indexOf('emergencyrelationship2')]?.trim(),
+          emergencyPhone2: row[headers.indexOf('emergencyphone2')]?.trim(),
+          emergencyEmail2: row[headers.indexOf('emergencyemail2')]?.trim(),
+        };
 
-      const result: ImportResult = {
-        success: rows.length - 1,
-        failed: 0,
-        errors: [],
-      };
+        // Skip rows without required fields
+        if (!rowData.firstName || !rowData.lastName || !rowData.email) {
+          result.failed++;
+          result.errors.push({
+            row: i + 1,
+            error: 'Missing required fields (firstName, lastName, or email)',
+            data: rowData,
+          });
+          continue;
+        }
+
+        try {
+          // Generate username from email
+          const username = rowData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
+          // Build emergency contacts array
+          const emergencyContacts: Array<{
+            name: string;
+            relationship: string;
+            phone: string;
+            email?: string;
+            is_primary: boolean;
+          }> = [];
+
+          if (rowData.emergencyName1) {
+            emergencyContacts.push({
+              name: rowData.emergencyName1,
+              relationship: rowData.emergencyRelationship1,
+              phone: rowData.emergencyPhone1,
+              email: rowData.emergencyEmail1 || undefined,
+              is_primary: true,
+            });
+          }
+
+          if (rowData.emergencyName2) {
+            emergencyContacts.push({
+              name: rowData.emergencyName2,
+              relationship: rowData.emergencyRelationship2 || '',
+              phone: rowData.emergencyPhone2 || '',
+              email: rowData.emergencyEmail2 || undefined,
+              is_primary: false,
+            });
+          }
+
+          // Call the API
+          await userService.createMember({
+            username,
+            email: rowData.email,
+            first_name: rowData.firstName,
+            middle_name: rowData.middleName || undefined,
+            last_name: rowData.lastName,
+            badge_number: rowData.departmentId || undefined,
+            phone: rowData.primaryPhone || undefined,
+            mobile: rowData.secondaryPhone || undefined,
+            date_of_birth: rowData.dateOfBirth || undefined,
+            hire_date: rowData.joinDate || undefined,
+            rank: rowData.rank || undefined,
+            station: rowData.station || undefined,
+            address_street: rowData.street || undefined,
+            address_city: rowData.city || undefined,
+            address_state: rowData.state || undefined,
+            address_zip: rowData.zipCode || undefined,
+            address_country: 'USA',
+            emergency_contacts: emergencyContacts,
+            send_welcome_email: true,
+          });
+
+          result.success++;
+        } catch (error: any) {
+          result.failed++;
+          const errorMessage = error.response?.data?.detail || 'Unknown error';
+          result.errors.push({
+            row: i + 1,
+            error: errorMessage,
+            data: rowData,
+          });
+        }
+      }
 
       setImportResult(result);
-      toast.success(`Successfully imported ${result.success} members!`);
+      if (result.success > 0) {
+        toast.success(`Successfully imported ${result.success} members!`);
+      }
+      if (result.failed > 0) {
+        toast.error(`Failed to import ${result.failed} members. Check the error details below.`);
+      }
     } catch (error) {
-      toast.error('Failed to import members. Please try again.');
+      toast.error('Failed to process CSV file. Please try again.');
       console.error(error);
     }
     setImporting(false);

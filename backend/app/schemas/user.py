@@ -10,11 +10,30 @@ from datetime import datetime, date
 from uuid import UUID
 
 
+class EmergencyContact(BaseModel):
+    """Emergency contact schema"""
+    name: str = Field(..., min_length=1, max_length=100)
+    relationship: str = Field(..., min_length=1, max_length=50)
+    phone: str = Field(..., max_length=20)
+    email: Optional[EmailStr] = None
+    is_primary: bool = False
+
+
+class AddressInfo(BaseModel):
+    """Address information schema"""
+    street: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=50)
+    zip_code: Optional[str] = Field(None, max_length=20)
+    country: Optional[str] = Field(default="USA", max_length=100)
+
+
 class UserBase(BaseModel):
     """Base user schema with common fields"""
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     first_name: Optional[str] = Field(None, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     badge_number: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
@@ -33,12 +52,29 @@ class AdminUserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     first_name: str = Field(..., min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     badge_number: Optional[str] = Field(None, max_length=50)
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
+
+    # Department info
+    rank: Optional[str] = Field(None, max_length=100)
+    station: Optional[str] = Field(None, max_length=100)
+
+    # Address
+    address_street: Optional[str] = Field(None, max_length=255)
+    address_city: Optional[str] = Field(None, max_length=100)
+    address_state: Optional[str] = Field(None, max_length=50)
+    address_zip: Optional[str] = Field(None, max_length=20)
+    address_country: Optional[str] = Field(default="USA", max_length=100)
+
+    # Emergency contacts
+    emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
+
+    # Admin options
     role_ids: List[UUID] = Field(default_factory=list, description="Initial roles to assign")
     send_welcome_email: bool = Field(default=True, description="Send welcome email with password setup link")
 
@@ -46,6 +82,7 @@ class AdminUserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for updating a user"""
     first_name: Optional[str] = Field(None, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
@@ -53,6 +90,20 @@ class UserUpdate(BaseModel):
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
     photo_url: Optional[str] = None
+
+    # Department info
+    rank: Optional[str] = Field(None, max_length=100)
+    station: Optional[str] = Field(None, max_length=100)
+
+    # Address
+    address_street: Optional[str] = Field(None, max_length=255)
+    address_city: Optional[str] = Field(None, max_length=100)
+    address_state: Optional[str] = Field(None, max_length=50)
+    address_zip: Optional[str] = Field(None, max_length=20)
+    address_country: Optional[str] = Field(None, max_length=100)
+
+    # Emergency contacts
+    emergency_contacts: Optional[List[EmergencyContact]] = None
 
 
 class UserResponse(UserBase):
@@ -76,6 +127,20 @@ class UserResponse(UserBase):
     phone: Optional[str] = None
     mobile: Optional[str] = None
 
+    # Department info
+    rank: Optional[str] = None
+    station: Optional[str] = None
+
+    # Address info
+    address_street: Optional[str] = None
+    address_city: Optional[str] = None
+    address_state: Optional[str] = None
+    address_zip: Optional[str] = None
+    address_country: Optional[str] = None
+
+    # Emergency contacts
+    emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
+
     # Computed field
     full_name: Optional[str] = None
 
@@ -89,6 +154,7 @@ class UserListResponse(BaseModel):
     username: str
     email: Optional[str] = None  # Conditionally included
     first_name: Optional[str] = None
+    middle_name: Optional[str] = None
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     badge_number: Optional[str] = None
@@ -97,6 +163,10 @@ class UserListResponse(BaseModel):
     photo_url: Optional[str] = None
     status: str
     hire_date: Optional[date] = None
+
+    # Department info
+    rank: Optional[str] = None
+    station: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
