@@ -44,6 +44,58 @@ except Exception as _log_err:
     pass
 
 
+# ============================================
+# Startup Status Tracking
+# ============================================
+class StartupStatus:
+    """Tracks startup progress for the health endpoint"""
+    def __init__(self):
+        self.phase = "initializing"
+        self.message = "Starting up..."
+        self.migrations_total = 0
+        self.migrations_completed = 0
+        self.current_migration = None
+        self.started_at = datetime.utcnow()
+        self.ready = False
+        self.errors = []
+
+    def set_phase(self, phase: str, message: str):
+        self.phase = phase
+        self.message = message
+        logger.info(f"Startup: {message}")
+
+    def set_migration_progress(self, current: str, completed: int, total: int):
+        self.current_migration = current
+        self.migrations_completed = completed
+        self.migrations_total = total
+        self.message = f"Running migration {completed}/{total}: {current}"
+
+    def set_ready(self):
+        self.ready = True
+        self.phase = "ready"
+        self.message = "Server is ready"
+
+    def add_error(self, error: str):
+        self.errors.append(error)
+
+    def to_dict(self):
+        return {
+            "phase": self.phase,
+            "message": self.message,
+            "ready": self.ready,
+            "migrations": {
+                "total": self.migrations_total,
+                "completed": self.migrations_completed,
+                "current": self.current_migration
+            } if self.migrations_total > 0 else None,
+            "uptime_seconds": (datetime.utcnow() - self.started_at).total_seconds(),
+            "errors": self.errors if self.errors else None
+        }
+
+# Global startup status instance
+startup_status = StartupStatus()
+
+
 def run_migrations():
     """
     Run Alembic migrations to ensure database schema is up to date.
@@ -56,11 +108,19 @@ def run_migrations():
     from sqlalchemy import create_engine, text
     import os
 
+    startup_status.set_phase("migrations", "Preparing database migrations...")
+
     try:
         # Get the directory where main.py is located
         base_dir = os.path.dirname(os.path.abspath(__file__))
         alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
         alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+
+        # Count total migrations to run
+        script_dir = ScriptDirectory.from_config(alembic_cfg)
+        all_revisions = list(script_dir.walk_revisions())
+        total_migrations = len(all_revisions)
+        startup_status.migrations_total = total_migrations
 
         # Check for revision mismatch (common when migration files are renamed)
         try:
@@ -74,13 +134,13 @@ def run_migrations():
 
                 if row:
                     current_rev = row[0]
-                    script_dir = ScriptDirectory.from_config(alembic_cfg)
 
                     # Check if current revision exists in our scripts
                     try:
                         script_dir.get_revision(current_rev)
                     except Exception:
                         # Revision not found - likely renamed migration files
+                        startup_status.set_phase("migrations", "Fixing migration version mismatch...")
                         logger.warning(
                             f"Migration revision '{current_rev}' not found. "
                             "This may be due to renamed migration files. "
@@ -94,9 +154,12 @@ def run_migrations():
             # Table might not exist yet, which is fine
             logger.debug(f"Could not check alembic_version: {e}")
 
+        startup_status.set_phase("migrations", f"Running {total_migrations} database migrations...")
         logger.info("Running database migrations...")
         try:
             command.upgrade(alembic_cfg, "head")
+            startup_status.migrations_completed = total_migrations
+            startup_status.set_phase("migrations", "Database migrations complete")
             logger.info("✓ Database migrations complete")
         except Exception as upgrade_error:
             # If upgrade fails due to table already exists, stamp to head
@@ -108,13 +171,17 @@ def run_migrations():
                 )
                 try:
                     command.stamp(alembic_cfg, "head")
+                    startup_status.migrations_completed = total_migrations
                     logger.info("✓ Stamped database to head")
                 except Exception as stamp_error:
                     logger.warning(f"Could not stamp database: {stamp_error}")
+                    startup_status.add_error(f"Migration stamp failed: {stamp_error}")
             else:
+                startup_status.add_error(f"Migration failed: {upgrade_error}")
                 raise
     except Exception as e:
         logger.warning(f"Migration warning: {e}")
+        startup_status.add_error(f"Migration warning: {e}")
         # Don't fail startup - tables might already exist
 
 
@@ -156,17 +223,21 @@ async def lifespan(app: FastAPI):
     logger.info(f"Version: {settings.VERSION}")
 
     # Validate security configuration first
+    startup_status.set_phase("security", "Validating security configuration...")
     validate_security_configuration()
 
     # Connect to database
+    startup_status.set_phase("database", "Connecting to database...")
     logger.info("Connecting to database...")
     await database_manager.connect()
     logger.info("Database connected")
 
     # Run migrations to ensure tables exist
+    startup_status.set_phase("migrations", "Setting up database tables...")
     run_migrations()
 
     # Connect to Redis (graceful degradation if unavailable)
+    startup_status.set_phase("redis", "Connecting to cache...")
     logger.info("Connecting to Redis...")
     await cache_manager.connect()
     if cache_manager.is_connected:
@@ -206,6 +277,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Could not verify audit log integrity: {e}")
 
+    # Mark server as ready
+    startup_status.set_ready()
     logger.info(f"Server started on port {settings.PORT}")
     logger.info(f"API Documentation: http://localhost:{settings.PORT}/docs")
     logger.info(f"Health Check: http://localhost:{settings.PORT}/health")
@@ -350,6 +423,9 @@ async def health_check():
             health_status["status"] = "degraded"
     else:
         health_status["checks"]["security"] = {"status": "ok"}
+
+    # Include startup status for frontend progress display
+    health_status["startup"] = startup_status.to_dict()
 
     return health_status
 

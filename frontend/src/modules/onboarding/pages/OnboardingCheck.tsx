@@ -9,6 +9,18 @@ interface ServiceStatus {
   optional?: boolean;
 }
 
+interface StartupInfo {
+  phase: string;
+  message: string;
+  ready: boolean;
+  migrations?: {
+    total: number;
+    completed: number;
+    current: string | null;
+  };
+  uptime_seconds: number;
+}
+
 const MAX_RETRIES = 20; // Reduced from 30 - about 1.5 minutes with delays
 const INITIAL_DELAY = 2000;
 const MAX_DELAY = 5000;
@@ -26,6 +38,7 @@ const OnboardingCheck: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState('Connecting to services...');
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showSkipOption, setShowSkipOption] = useState(false);
+  const [startupInfo, setStartupInfo] = useState<StartupInfo | null>(null);
   const navigate = useNavigate();
 
   // Track elapsed time
@@ -64,10 +77,20 @@ const OnboardingCheck: React.FC = () => {
       updateServiceStatus('Backend API', 'disconnected', healthResponse.error || 'Not responding');
       updateServiceStatus('Database', 'checking');
       updateServiceStatus('Cache (Redis)', 'checking');
+      setStartupInfo(null);
       return false;
     }
 
     const health = healthResponse.data;
+
+    // Extract startup info if available
+    if (health.startup) {
+      setStartupInfo(health.startup as StartupInfo);
+      // Update status message based on startup phase
+      if (!health.startup.ready) {
+        setStatusMessage(health.startup.message || 'Starting up...');
+      }
+    }
 
     // Update Backend API status
     updateServiceStatus('Backend API', 'connected', `v${health.version}`);
@@ -298,9 +321,47 @@ const OnboardingCheck: React.FC = () => {
             </div>
           ))}
 
+          {/* Startup Progress Details */}
+          {startupInfo && !startupInfo.ready && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-400 border-t-transparent"></span>
+                <span className="text-orange-400 text-sm font-medium">
+                  {startupInfo.phase === 'migrations' ? 'Setting up database' :
+                   startupInfo.phase === 'database' ? 'Connecting to database' :
+                   startupInfo.phase === 'redis' ? 'Connecting to cache' :
+                   startupInfo.phase === 'security' ? 'Checking security' :
+                   'Initializing'}
+                </span>
+              </div>
+              <p className="text-slate-300 text-sm mb-2">{startupInfo.message}</p>
+
+              {/* Migration progress bar */}
+              {startupInfo.migrations && startupInfo.migrations.total > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                    <span>Database migrations</span>
+                    <span>{startupInfo.migrations.completed}/{startupInfo.migrations.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
+                    ></div>
+                  </div>
+                  {startupInfo.migrations.current && (
+                    <p className="text-slate-500 text-xs mt-1 truncate">
+                      {startupInfo.migrations.current}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {isWaiting && (
             <div className="mt-4 pt-4 border-t border-white/10">
-              {/* Progress bar */}
+              {/* Retry progress bar */}
               <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
                 <div
                   className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
