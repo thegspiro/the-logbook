@@ -1,0 +1,55 @@
+# ============================================
+# ARM ARCHITECTURE - Docker Compose Override
+# ============================================
+# Use for: Raspberry Pi 3/4/5, Apple Silicon, AWS Graviton
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+#
+# For Raspberry Pi (minimal + ARM):
+#   docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
+# ============================================
+
+services:
+  # Use MariaDB instead of MySQL (better ARM support)
+  mysql:
+    image: mariadb:10.11
+    platform: linux/arm64
+    # MariaDB-specific optimizations for ARM
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=${MYSQL_MAX_CONNECTIONS:-100}
+      --max_allowed_packet=64M
+      --innodb_buffer_pool_size=${MYSQL_BUFFER_POOL_SIZE:-256M}
+      --skip-name-resolve
+      --performance_schema=OFF
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # Redis (native ARM support)
+  redis:
+    image: redis:7-alpine
+    platform: linux/arm64
+
+  # Backend (Python has excellent ARM support)
+  backend:
+    platform: linux/arm64
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm64
+
+  # Frontend (Node/nginx have excellent ARM support)
+  frontend:
+    platform: linux/arm64
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm64

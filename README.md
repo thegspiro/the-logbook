@@ -49,96 +49,147 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 
 ## 🚀 Quick Start
 
-### Option 1: Automated Setup (Recommended)
+### One-Line Install (Any Platform)
+
+Works on Linux (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch), macOS, and Raspberry Pi:
 
 ```bash
-# Clone the repository
-git clone https://github.com/thegspiro/the-logbook.git
-cd the-logbook
-
-# Run the interactive setup wizard
-python3 scripts/setup-env.py
-
-# The wizard will:
-# - Generate secure secrets automatically
-# - Configure database and Redis
-# - Set up CORS and network settings
-# - Enable/disable modules
-# - Create your .env file
-
-# Start with Docker Compose (includes MySQL, Redis, Backend, Frontend)
-docker-compose up -d
-
-# View logs
-docker-compose logs -f backend
-
-# Access the platform
-# - Frontend: http://localhost:3000
-# - Backend API: http://localhost:3001
-# - API Docs: http://localhost:3001/docs
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
 ```
 
-### Option 2: Manual Setup
+This automatically:
+- ✅ Detects your OS and architecture (x86_64, ARM64, ARMv7)
+- ✅ Installs Docker if needed
+- ✅ Generates secure secrets
+- ✅ Configures optimal settings for your hardware
+- ✅ Starts all services
+
+**Access:** `http://localhost:3000`
+
+### Installation Profiles
+
+Choose a profile based on your hardware:
+
+| Profile | RAM | Best For |
+|---------|-----|----------|
+| `minimal` | 1-2GB | Raspberry Pi, small VPS |
+| `standard` | 4GB | Most deployments (default) |
+| `full` | 8GB+ | Large organizations, all features |
 
 ```bash
-# Clone the repository
+# Raspberry Pi / Low memory
+curl -sSL .../universal-install.sh | bash -s -- --profile minimal
+
+# Standard (default)
+curl -sSL .../universal-install.sh | bash
+
+# Full with Elasticsearch, S3 storage
+curl -sSL .../universal-install.sh | bash -s -- --profile full
+```
+
+### Platform-Specific Guides
+
+<details>
+<summary><strong>🐳 Docker (Manual)</strong></summary>
+
+```bash
 git clone https://github.com/thegspiro/the-logbook.git
 cd the-logbook
-
-# Copy environment configuration
 cp .env.example .env
 
-# Generate secure keys and update .env
-python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))"
-python3 -c "import secrets; print('ENCRYPTION_KEY=' + secrets.token_hex(32))"
-python3 -c "import secrets; print('ENCRYPTION_SALT=' + secrets.token_hex(16))"
-python3 -c "import secrets; print('DB_PASSWORD=' + secrets.token_urlsafe(32))"
-python3 -c "import secrets; print('REDIS_PASSWORD=' + secrets.token_urlsafe(32))"
+# Generate secrets (copy output to .env)
+openssl rand -hex 32  # SECRET_KEY
+openssl rand -hex 32  # ENCRYPTION_KEY
+openssl rand -hex 16  # ENCRYPTION_SALT
 
-# Edit .env and replace CHANGE_ME values with generated secrets
+docker compose up -d
+```
+</details>
 
-# Start with Docker Compose
-docker-compose up -d
+<details>
+<summary><strong>🍓 Raspberry Pi</strong></summary>
 
-# View logs
-docker-compose logs -f backend
+```bash
+# Automatic (recommended)
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash -s -- --profile minimal
 
-# Access the platform
-# - Frontend: http://localhost:3000
-# - Backend API: http://localhost:3001
-# - API Docs: http://localhost:3001/docs
+# Manual with ARM + minimal profiles
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
+```
+</details>
+
+<details>
+<summary><strong>☁️ AWS / Azure / GCP</strong></summary>
+
+```bash
+# EC2/VM - SSH in, then:
+curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/universal-install.sh | bash
+
+# With managed database (RDS/Azure SQL/Cloud SQL):
+# Edit .env to point to your managed database
+DB_HOST=your-database-endpoint
+DB_PASSWORD=your-secure-password
+docker compose up -d backend frontend
 ```
 
-### Option 3: Unraid Installation (One Command!)
+See [Deployment Guide](wiki/Deployment-Guide.md) for detailed cloud instructions.
+</details>
 
-For Unraid users, run this single command:
+<details>
+<summary><strong>🖥️ Unraid</strong></summary>
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/unraid-setup.sh | bash
 ```
 
-This automated script will:
-- ✅ Clean up any existing containers (fixes conflicts)
-- ✅ Clone repository to `/mnt/user/appdata/the-logbook`
-- ✅ Generate secure passwords automatically
-- ✅ Build and start all services
-- ✅ Verify deployment
+Access: `http://YOUR-UNRAID-IP:7880`
 
-**Access:** `http://YOUR-UNRAID-IP:7880`
+See [Unraid Quick Start](unraid/QUICK-START-UPDATED.md) for details.
+</details>
 
-See [UNRAID-QUICKSTART.md](UNRAID-QUICKSTART.md) or [unraid/QUICK-START-UPDATED.md](unraid/QUICK-START-UPDATED.md) for detailed Unraid instructions.
+<details>
+<summary><strong>🔧 Traditional (No Docker)</strong></summary>
+
+```bash
+git clone https://github.com/thegspiro/the-logbook.git
+cd the-logbook
+./install.sh --traditional
+```
+
+Installs directly with systemd services (Ubuntu/Debian only).
+</details>
 
 ### First Time Setup
 
 After starting the containers:
 
-1. Access the API documentation at http://localhost:3001/docs
-2. The system will automatically create database tables on first run
-3. Create your first organization and admin user via the API
-4. Configure security settings and modules
-5. Set up email/SMS notifications (optional)
+1. Open `http://localhost:3000` in your browser
+2. Complete the onboarding wizard (organization setup, admin account)
+3. Configure modules and settings as needed
+4. Set up email notifications (optional)
+
+For API access: `http://localhost:3001/docs`
 
 See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
+
+## 🖥️ Supported Platforms
+
+| Platform | Architecture | Profile | Status |
+|----------|--------------|---------|--------|
+| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64 | All | ✅ Full support |
+| **macOS** (Intel & Apple Silicon) | x86_64, ARM64 | All | ✅ Full support |
+| **Windows** (WSL2) | x86_64 | All | ✅ Full support |
+| **Raspberry Pi 4/5** | ARM64 | minimal, standard | ✅ Full support |
+| **Raspberry Pi 3** | ARMv7 | minimal | ⚠️ Limited (1GB RAM) |
+| **AWS** (EC2, ECS, Fargate) | x86_64, ARM64 | All | ✅ Full support |
+| **Azure** (VMs, Container Instances) | x86_64 | All | ✅ Full support |
+| **Google Cloud** (Compute, Cloud Run) | x86_64 | All | ✅ Full support |
+| **DigitalOcean** (Droplets, App Platform) | x86_64 | All | ✅ Full support |
+| **Unraid** | x86_64 | standard | ✅ Optimized |
+| **Kubernetes** | x86_64, ARM64 | standard, full | ✅ Helm chart available |
 
 ## 📚 Documentation
 
