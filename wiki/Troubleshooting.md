@@ -11,6 +11,7 @@ This guide covers common issues and their solutions for The Logbook deployment.
 5. [Build Errors](#build-errors)
 6. [Docker Issues](#docker-issues)
 7. [Network & Connectivity](#network--connectivity)
+8. [Security Issues](#security-issues)
 
 ---
 
@@ -464,3 +465,202 @@ If issues persist after trying these solutions:
 1. Updating `frontend/.env` with correct `VITE_API_URL`
 2. Running `docker-compose build --no-cache frontend`
 3. Running `docker-compose up -d`
+
+---
+
+## Security Issues
+
+### Problem: Backend fails to start with "SECURITY FAILURE" error
+**Error:** `SECURITY FAILURE: Cannot start with insecure default configuration`
+
+### Root Cause
+The backend validates security configuration on startup in production mode. If critical security variables are missing or use default values, the application will refuse to start.
+
+### Solution
+
+**1. Generate required secrets:**
+
+```bash
+# Generate all secrets at once
+echo "SECRET_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_SALT=$(openssl rand -hex 16)"
+echo "DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+```
+
+**2. Add to your `.env` file:**
+
+```bash
+SECRET_KEY=your_generated_64_char_hex_string
+ENCRYPTION_KEY=your_generated_64_char_hex_string
+ENCRYPTION_SALT=your_generated_32_char_hex_string
+DB_PASSWORD=your_generated_secure_password
+REDIS_PASSWORD=your_generated_secure_password
+```
+
+**3. Restart backend:**
+
+```bash
+docker-compose restart backend
+```
+
+---
+
+### Problem: Security alerts being generated frequently
+
+### Common Causes
+
+1. **Brute force detection triggered**: Multiple failed login attempts
+2. **Rate limiting exceeded**: Too many API requests
+3. **Session anomalies**: IP changes during session
+
+### Solution
+
+**Check security status:**
+```bash
+curl http://YOUR-IP:7881/api/v1/security/status
+```
+
+**View recent alerts:**
+```bash
+curl http://YOUR-IP:7881/api/v1/security/alerts
+```
+
+**Acknowledge false positives:**
+```bash
+curl -X POST http://YOUR-IP:7881/api/v1/security/alerts/{alert_id}/acknowledge
+```
+
+---
+
+### Problem: Audit log integrity check fails
+
+**Error:** `AUDIT LOG INTEGRITY FAILURE: X issues detected`
+
+### Root Cause
+The audit log hash chain has been broken, indicating potential tampering or data corruption.
+
+### Solution
+
+**1. Check the integrity report:**
+```bash
+curl http://YOUR-IP:7881/api/v1/security/audit-log/integrity
+```
+
+**2. Review the errors:**
+The response will show which log entries have issues:
+- "Hash mismatch" = Entry data was modified
+- "Chain broken" = Entry was deleted or reordered
+
+**3. Investigation steps:**
+- Check database backup for original data
+- Review server access logs for unauthorized access
+- Check for disk corruption issues
+- Contact security team if tampering suspected
+
+**4. For data corruption (not tampering):**
+```bash
+# Restore from backup if available
+# DO NOT modify audit logs manually - this will compound the issue
+```
+
+---
+
+### Problem: Session hijacking alerts
+
+**Alert:** `Potential session hijacking: IP changed from X to Y`
+
+### Root Cause
+A user's IP address changed during an active session, which may indicate:
+- Session token theft
+- User switching networks (legitimate)
+- VPN connection changes
+
+### Solution
+
+**1. Review the alert details:**
+```bash
+curl http://YOUR-IP:7881/api/v1/security/alerts?alert_type=session_hijack
+```
+
+**2. If legitimate (user switched networks):**
+```bash
+# Acknowledge the alert
+curl -X POST http://YOUR-IP:7881/api/v1/security/alerts/{id}/resolve
+```
+
+**3. If suspicious:**
+- Force logout the affected session
+- Reset user password
+- Review audit logs for suspicious activity
+- Notify the user
+
+---
+
+### Problem: Data exfiltration alerts
+
+**Alert:** `Large data export: X MB` or `Data transfer to external destination`
+
+### Root Cause
+A user is exporting large amounts of data or sending data to external endpoints.
+
+### Solution
+
+**1. Review the alert:**
+```bash
+curl http://YOUR-IP:7881/api/v1/security/data-exfiltration/status
+```
+
+**2. Check the user's activity:**
+- Which user triggered the alert?
+- What data was being accessed?
+- Is this a legitimate business need?
+
+**3. If legitimate:**
+- Document the business justification
+- Acknowledge the alert
+
+**4. If suspicious:**
+- Disable the user account
+- Review all recent activity
+- Check for data on external endpoints
+- Initiate incident response
+
+---
+
+### Security Configuration Checklist
+
+- [ ] `SECRET_KEY` is set (min 32 characters, not default)
+- [ ] `ENCRYPTION_KEY` is set (64 hex characters, not default)
+- [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
+- [ ] `DB_PASSWORD` is not `change_me_in_production`
+- [ ] `REDIS_PASSWORD` is set (required in production)
+- [ ] HTTPS enabled for production
+- [ ] CORS configured properly
+- [ ] Rate limiting enabled
+- [ ] Audit logging verified working
+
+---
+
+### Security Monitoring Commands
+
+```bash
+# Check overall security status
+curl http://YOUR-IP:7881/api/v1/security/status
+
+# View recent security alerts
+curl http://YOUR-IP:7881/api/v1/security/alerts
+
+# Verify audit log integrity
+curl http://YOUR-IP:7881/api/v1/security/audit-log/integrity
+
+# Check intrusion detection status
+curl http://YOUR-IP:7881/api/v1/security/intrusion-detection/status
+
+# Check data exfiltration monitoring
+curl http://YOUR-IP:7881/api/v1/security/data-exfiltration/status
+
+# Trigger manual security check
+curl -X POST http://YOUR-IP:7881/api/v1/security/manual-check
+```

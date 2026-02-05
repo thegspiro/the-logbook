@@ -7,15 +7,18 @@ The Logbook is designed with security as a core principle, implementing industry
 ## Table of Contents
 
 1. [Security Features](#security-features)
-2. [HIPAA Compliance](#hipaa-compliance)
-3. [Section 508 Accessibility](#section-508-accessibility)
-4. [Password Security](#password-security)
-5. [Data Encryption](#data-encryption)
-6. [Audit Logging](#audit-logging)
-7. [Authentication & Authorization](#authentication--authorization)
-8. [Vulnerability Reporting](#vulnerability-reporting)
-9. [Security Best Practices](#security-best-practices)
-10. [Incident Response](#incident-response)
+2. [Security Monitoring](#security-monitoring)
+3. [Intrusion Detection](#intrusion-detection)
+4. [Data Exfiltration Prevention](#data-exfiltration-prevention)
+5. [HIPAA Compliance](#hipaa-compliance)
+6. [Section 508 Accessibility](#section-508-accessibility)
+7. [Password Security](#password-security)
+8. [Data Encryption](#data-encryption)
+9. [Audit Logging](#audit-logging)
+10. [Authentication & Authorization](#authentication--authorization)
+11. [Vulnerability Reporting](#vulnerability-reporting)
+12. [Security Best Practices](#security-best-practices)
+13. [Incident Response](#incident-response)
 
 ---
 
@@ -33,6 +36,149 @@ The Logbook is designed with security as a core principle, implementing industry
 ✅ **Rate Limiting**: Protection against brute force attacks
 ✅ **Input Sanitization**: XSS and injection attack prevention
 ✅ **Security Headers**: CSP, HSTS, X-Frame-Options, etc.
+✅ **Intrusion Detection**: Real-time anomaly and threat detection
+✅ **Data Exfiltration Monitoring**: Detection of unauthorized data transfers
+✅ **Session Hijacking Detection**: IP/session correlation monitoring
+✅ **Brute Force Protection**: Automated detection and lockout
+
+---
+
+## Security Monitoring
+
+### Real-Time Security Monitoring
+
+The Logbook includes a comprehensive security monitoring system that provides:
+
+- **Real-time threat detection**: Monitors all requests for suspicious patterns
+- **Automated alerting**: Generates security alerts for anomalies
+- **Dashboard visibility**: Security status accessible via API
+- **Log integrity verification**: Scheduled checks for tampering
+
+### Security Monitoring API Endpoints
+
+Access security monitoring through the API:
+
+```
+GET  /api/v1/security/status              - Overall security status
+GET  /api/v1/security/alerts              - Recent security alerts
+POST /api/v1/security/alerts/{id}/acknowledge - Acknowledge an alert
+POST /api/v1/security/alerts/{id}/resolve     - Mark alert as resolved
+GET  /api/v1/security/audit-log/integrity     - Verify log integrity
+GET  /api/v1/security/audit-log/status        - Get audit log statistics
+POST /api/v1/security/audit-log/checkpoint    - Create integrity checkpoint
+GET  /api/v1/security/intrusion-detection/status - IDS status
+GET  /api/v1/security/data-exfiltration/status   - DLP status
+POST /api/v1/security/manual-check              - Trigger manual security check
+```
+
+### Security Alert Types
+
+| Alert Type | Threat Level | Description |
+|------------|--------------|-------------|
+| `brute_force` | HIGH | Multiple failed login attempts |
+| `session_hijack` | CRITICAL | Potential session takeover detected |
+| `data_exfiltration` | HIGH/CRITICAL | Large or suspicious data transfers |
+| `log_tampering` | CRITICAL | Audit log integrity failure |
+| `anomaly_detected` | MEDIUM | Unusual patterns detected |
+| `unauthorized_access` | HIGH | Access to restricted resources |
+| `privilege_escalation` | CRITICAL | Unauthorized permission changes |
+| `suspicious_activity` | HIGH | Injection attempts, etc. |
+| `external_data_transfer` | CRITICAL | Data sent to external endpoints |
+| `rate_limit_exceeded` | MEDIUM | Too many requests |
+
+### Configurable Thresholds
+
+Security monitoring thresholds can be configured:
+
+| Threshold | Default | Description |
+|-----------|---------|-------------|
+| `failed_logins_per_hour` | 10 | Max failed logins per IP per hour |
+| `failed_logins_per_user` | 5 | Max failed logins per user per hour |
+| `api_calls_per_minute` | 60 | Max API calls per minute |
+| `large_data_export_mb` | 50 | Alert threshold for data exports |
+| `concurrent_sessions` | 3 | Max concurrent sessions per user |
+| `session_ip_changes` | 2 | Max IP changes per session |
+
+---
+
+## Intrusion Detection
+
+### Attack Pattern Detection
+
+The system monitors for common attack patterns:
+
+#### SQL Injection Detection
+- Monitors for patterns like `' OR '1'='1`, `; DROP TABLE`, `UNION SELECT`
+- All requests are analyzed before processing
+- Alerts generated on detection
+
+#### XSS Detection
+- Detects `<script>`, `javascript:`, `onerror=`, etc.
+- Input sanitization enforced on server-side
+- CSP headers prevent execution
+
+#### Path Traversal Detection
+- Blocks `../`, `..\\`, and encoded variants
+- Validates all file paths server-side
+
+#### Command Injection Detection
+- Detects shell metacharacters in inputs
+- All external commands parameterized
+
+### Session Monitoring
+
+Session hijacking detection through:
+- IP address correlation
+- User agent consistency checks
+- Geographic anomaly detection
+- Rapid IP change detection (within 5 minutes)
+
+### Brute Force Detection
+
+Multi-layer brute force protection:
+
+1. **Per-IP Rate Limiting**: Tracks failed logins by IP
+2. **Per-User Rate Limiting**: Tracks failed logins by username
+3. **Progressive Lockout**: 30-minute lockout after threshold
+4. **Alert Generation**: Notifies administrators
+
+---
+
+## Data Exfiltration Prevention
+
+### Monitoring Capabilities
+
+The system monitors for data exfiltration through:
+
+1. **Large Data Exports**: Alerts when exports exceed threshold (default 50MB)
+2. **Bulk Record Access**: Flags access to large numbers of records
+3. **External Destinations**: Detects data transfers to non-internal IPs
+4. **Cumulative Tracking**: 24-hour rolling window for total transfers
+
+### Protected Endpoints
+
+Export endpoints with DLP monitoring:
+- `/api/v1/users/export`
+- `/api/v1/events/export`
+- `/api/v1/audit/export`
+- `/api/v1/reports`
+
+### Alert Triggers
+
+| Trigger | Threshold | Threat Level |
+|---------|-----------|--------------|
+| Single large export | > 50MB | HIGH |
+| 24-hour cumulative | > 250MB | CRITICAL |
+| External destination | Any | CRITICAL |
+| Bulk record access | > 100 records | MEDIUM |
+
+### Response Actions
+
+When data exfiltration is detected:
+1. Alert generated and logged
+2. Administrator notified
+3. Event recorded in tamper-proof audit log
+4. Optional: Block further transfers (configurable)
 
 ---
 
