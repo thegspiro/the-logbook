@@ -180,6 +180,34 @@ docker compose restart backend
 
 ---
 
+### Problem: Migration fails with "Multiple heads detected"
+
+**Error:** `alembic.util.exc.CommandError: Multiple heads detected` or migration chain breaks
+
+### Root Cause
+Multiple migrations have the same revision ID or point to the same down_revision, creating a branch in the migration tree.
+
+### Solution
+
+**1. Check migration chain:**
+```bash
+docker compose exec backend alembic heads
+docker compose exec backend alembic history --verbose
+```
+
+**2. If multiple heads exist, identify the conflict:**
+```bash
+# Look for duplicate revision IDs
+grep -h "^revision = " backend/alembic/versions/*.py | sort | uniq -d
+```
+
+**3. Fix by editing the migration files:**
+- Each migration must have a unique `revision` ID
+- The `down_revision` should form a single chain (no branches)
+- Rename conflicting files and update their revision IDs
+
+---
+
 ### Problem: Backend crashes with "Database not initialized"
 
 **Error:** `RuntimeError: Database not initialized. Call database_manager.connect() first.`

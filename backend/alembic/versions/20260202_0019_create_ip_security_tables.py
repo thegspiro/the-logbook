@@ -1,6 +1,6 @@
 """Create IP security tables with approval workflow
 
-Revision ID: 20260202_0020
+Revision ID: 20260202_0019
 Revises: 20260201_0018
 Create Date: 2026-02-02
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20260202_0020'
+revision = '20260202_0019'
 down_revision = '20260201_0018'
 branch_labels = None
 depends_on = None
