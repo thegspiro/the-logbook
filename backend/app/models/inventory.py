@@ -112,7 +112,7 @@ class InventoryCategory(Base):
     low_stock_threshold = Column(Integer)  # Alert when quantity falls below this
 
     # Extra data
-    extra_data = Column(JSONB)  # Additional category-specific data
+    extra_data = Column(JSON)  # Additional category-specific data
 
     # Status
     active = Column(Boolean, default=True, index=True)
