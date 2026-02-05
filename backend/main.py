@@ -27,12 +27,21 @@ logger.add(
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     level="INFO" if settings.ENVIRONMENT == "production" else "DEBUG",
 )
-logger.add(
-    "logs/app.log",
-    rotation="500 MB",
-    retention="10 days",
-    level="INFO",
-)
+
+# Add file logging with directory creation
+import os
+_logs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+try:
+    os.makedirs(_logs_dir, exist_ok=True)
+    logger.add(
+        os.path.join(_logs_dir, "app.log"),
+        rotation="500 MB",
+        retention="10 days",
+        level="INFO",
+    )
+except Exception as _log_err:
+    # File logging is optional - stdout is sufficient for development
+    pass
 
 
 def run_migrations():
@@ -261,7 +270,7 @@ app.add_middleware(
         "Accept",
         "Origin",
     ],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-CSRF-Token"],
 )
 
 # Compression
