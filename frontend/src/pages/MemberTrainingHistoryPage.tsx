@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { trainingService, userService } from '../services/api';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';

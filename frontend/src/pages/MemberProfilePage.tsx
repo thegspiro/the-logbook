@@ -426,6 +426,9 @@ export const MemberProfilePage: React.FC = () => {
           {inventoryModuleEnabled && (
             <div className="bg-white shadow rounded-lg p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Assigned Inventory</h2>
+              {inventoryLoading ? (
+                <div className="text-center py-4 text-gray-500">Loading inventory...</div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
@@ -476,6 +479,7 @@ export const MemberProfilePage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           )}
         </div>

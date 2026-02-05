@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '../components/layout';
 import { trainingService, userService } from '../services/api';
-import type { TrainingRecord, TrainingRequirement } from '../types/training';
+import type { TrainingRequirement } from '../types/training';
 
 interface DashboardStats {
   totalMembers: number;
@@ -76,7 +76,7 @@ const TrainingOfficerDashboard: React.FC = () => {
   const [expiringCertifications, setExpiringCertifications] = useState<ExpirationItem[]>([]);
   const [recentCompletions, setRecentCompletions] = useState<CompletionItem[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
-  const [memberMap, setMemberMap] = useState<Map<string, MemberSummary>>(new Map());
+  const [_memberMap, setMemberMap] = useState<Map<string, MemberSummary>>(new Map());
 
   // Widget visibility preferences
   const [showSettings, setShowSettings] = useState(false);
