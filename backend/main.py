@@ -96,6 +96,60 @@ class StartupStatus:
 startup_status = StartupStatus()
 
 
+def validate_schema(engine) -> tuple[bool, list[str]]:
+    """
+    Validate that critical database schema elements exist.
+    Returns (is_valid, list_of_errors).
+    """
+    from sqlalchemy import text, inspect
+
+    errors = []
+
+    # Critical tables and their required columns
+    required_schema = {
+        "organizations": [
+            "id", "name", "slug", "organization_type", "timezone",
+            "identifier_type", "active", "created_at"
+        ],
+        "users": [
+            "id", "organization_id", "username", "email", "password_hash",
+            "status", "created_at"
+        ],
+        "roles": [
+            "id", "organization_id", "name", "slug", "permissions", "created_at"
+        ],
+        "onboarding_status": [
+            "id", "is_completed", "current_step", "created_at"
+        ],
+        "onboarding_sessions": [
+            "id", "session_id", "data", "expires_at"
+        ],
+    }
+
+    try:
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+
+        for table_name, required_columns in required_schema.items():
+            if table_name not in existing_tables:
+                errors.append(f"Missing table: {table_name}")
+                continue
+
+            # Get existing columns
+            columns = {col["name"] for col in inspector.get_columns(table_name)}
+
+            # Check for missing columns
+            missing_cols = [col for col in required_columns if col not in columns]
+            if missing_cols:
+                errors.append(
+                    f"Table '{table_name}' missing columns: {', '.join(missing_cols)}"
+                )
+    except Exception as e:
+        errors.append(f"Schema validation error: {e}")
+
+    return (len(errors) == 0, errors)
+
+
 def run_migrations():
     """
     Run Alembic migrations to ensure database schema is up to date.
@@ -156,6 +210,9 @@ def run_migrations():
 
         startup_status.set_phase("migrations", f"Running {total_migrations} database migrations...")
         logger.info("Running database migrations...")
+
+        schema_was_stamped = False
+
         try:
             command.upgrade(alembic_cfg, "head")
             startup_status.migrations_completed = total_migrations
@@ -171,6 +228,7 @@ def run_migrations():
                 )
                 try:
                     command.stamp(alembic_cfg, "head")
+                    schema_was_stamped = True
                     startup_status.migrations_completed = total_migrations
                     logger.info("✓ Stamped database to head")
                 except Exception as stamp_error:
@@ -179,6 +237,37 @@ def run_migrations():
             else:
                 startup_status.add_error(f"Migration failed: {upgrade_error}")
                 raise
+
+        # Validate schema after migrations or stamp
+        startup_status.set_phase("migrations", "Validating database schema...")
+        schema_valid, schema_errors = validate_schema(engine)
+
+        if not schema_valid:
+            error_msg = (
+                "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
+                "The database schema does not match the expected structure.\n"
+                "This usually happens when migrations fail partway through.\n\n"
+                "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
+                "TO FIX THIS ISSUE:\n"
+                "  1. Stop all containers: docker compose down -v\n"
+                "  2. Rebuild: docker compose up --build\n\n"
+                "The -v flag removes database volumes for a fresh start.\n"
+                "Since onboarding hasn't completed, no data will be lost."
+            )
+            logger.error(error_msg)
+            startup_status.add_error("Schema validation failed - database reset required")
+            startup_status.phase = "error"
+            startup_status.message = "Database schema invalid - see logs for fix instructions"
+
+            if schema_was_stamped:
+                # If we just stamped to head but schema is invalid, this is a critical issue
+                logger.critical(
+                    "CRITICAL: Schema stamped to head but validation failed. "
+                    "Database must be reset with 'docker compose down -v'"
+                )
+        else:
+            logger.info("✓ Database schema validated successfully")
+
     except Exception as e:
         logger.warning(f"Migration warning: {e}")
         startup_status.add_error(f"Migration warning: {e}")
@@ -369,6 +458,7 @@ async def health_check():
     - Database connectivity
     - Redis connectivity
     - Configuration validation
+    - Schema validation status
     """
     health_status = {
         "status": "healthy",
@@ -377,6 +467,15 @@ async def health_check():
         "timestamp": datetime.utcnow().isoformat(),
         "checks": {}
     }
+
+    # Check if startup had schema validation errors
+    if startup_status.phase == "error" or any("schema" in e.lower() for e in startup_status.errors):
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["schema"] = "invalid"
+        health_status["schema_error"] = (
+            "Database schema is inconsistent. "
+            "Run 'docker compose down -v' then 'docker compose up --build' to fix."
+        )
 
     # Check database
     try:

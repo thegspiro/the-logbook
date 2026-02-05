@@ -19,6 +19,7 @@ interface StartupInfo {
     current: string | null;
   };
   uptime_seconds: number;
+  errors?: string[] | null;
 }
 
 const MAX_RETRIES = 20; // Reduced from 30 - about 1.5 minutes with delays
@@ -39,6 +40,7 @@ const OnboardingCheck: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showSkipOption, setShowSkipOption] = useState(false);
   const [startupInfo, setStartupInfo] = useState<StartupInfo | null>(null);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Track elapsed time
@@ -83,12 +85,30 @@ const OnboardingCheck: React.FC = () => {
 
     const health = healthResponse.data;
 
+    // Check for schema errors
+    if (health.schema_error) {
+      setSchemaError(health.schema_error);
+      setError('Database schema is inconsistent and requires a reset.');
+      return false;
+    }
+
     // Extract startup info if available
     if (health.startup) {
       setStartupInfo(health.startup as StartupInfo);
       // Update status message based on startup phase
       if (!health.startup.ready) {
         setStatusMessage(health.startup.message || 'Starting up...');
+      }
+      // Check for startup errors
+      if (health.startup.errors && health.startup.errors.length > 0) {
+        const hasSchemaError = health.startup.errors.some(
+          (e: string) => e.toLowerCase().includes('schema')
+        );
+        if (hasSchemaError) {
+          setSchemaError(
+            'Database schema is inconsistent. This usually happens when migrations fail partway through.'
+          );
+        }
       }
     }
 
@@ -230,11 +250,34 @@ const OnboardingCheck: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <div className="text-red-400 text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-white mb-4">
-            Connection Error
+            {schemaError ? 'Database Reset Required' : 'Connection Error'}
           </h2>
           <p className="text-slate-300 mb-6">{error}</p>
+
+          {/* Schema error specific instructions */}
+          {schemaError && (
+            <div className="mb-6 text-left bg-black/30 rounded-lg p-4 border border-orange-500/30">
+              <p className="text-orange-300 text-sm font-semibold mb-2">To Fix This Issue:</p>
+              <ol className="text-slate-300 text-sm space-y-2 list-decimal list-inside">
+                <li>Stop all containers:
+                  <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
+                    docker compose down -v
+                  </code>
+                </li>
+                <li>Rebuild and start:
+                  <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
+                    docker compose up --build
+                  </code>
+                </li>
+              </ol>
+              <p className="text-slate-400 text-xs mt-3">
+                The <code className="text-orange-200">-v</code> flag removes database volumes for a fresh start.
+                Since onboarding hasn't completed, no data will be lost.
+              </p>
+            </div>
+          )}
 
           {/* Show service status even on error */}
           <div className="mb-6 text-left bg-black/20 rounded-lg p-4">
