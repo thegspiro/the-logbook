@@ -27,6 +27,74 @@ The Training Module backend provides a comprehensive RESTful API for managing tr
 
 ## Models
 
+### DueDateType Enum
+
+Defines how training requirement due dates are calculated.
+
+**Values:**
+- `calendar_period`: Due by end of a calendar period (e.g., December 31st of each year). Uses `period_start_month` and `period_start_day` to define when the period starts.
+- `rolling`: Due X months from last completion. Uses `rolling_period_months` to define the interval.
+- `certification_period`: Due when the associated certification expires. Tied to the certification's expiration date.
+- `fixed_date`: Due by a specific fixed date. Used for one-time requirements with hard deadlines.
+
+**Example Usage:**
+```python
+# Annual training due by calendar year end
+requirement.due_date_type = DueDateType.CALENDAR_PERIOD
+requirement.period_start_month = 1   # January
+requirement.period_start_day = 1     # 1st
+
+# CPR recertification every 2 years from last completion
+requirement.due_date_type = DueDateType.ROLLING
+requirement.rolling_period_months = 24
+
+# Certification-based (expires with cert)
+requirement.due_date_type = DueDateType.CERTIFICATION_PERIOD
+```
+
+### TrainingCategory
+
+Hierarchical categories for organizing training courses and requirements. Categories allow grouping of related training topics and can be nested for sub-categories.
+
+**Fields:**
+- `id`: UUID primary key
+- `organization_id`: Organization this category belongs to (FK to organizations)
+- `name`: Category name (required, max 255 chars)
+- `code`: Short code for the category (optional, max 50 chars, e.g., "FF", "EMS", "HAZ")
+- `description`: Detailed description of the category (optional, text)
+- `color`: Hex color code for UI display (optional, max 7 chars, e.g., "#FF5733")
+- `parent_category_id`: Parent category for hierarchical structure (FK to training_categories, nullable)
+- `sort_order`: Display order within parent (integer, default 0)
+- `icon`: Icon identifier for UI (optional, max 50 chars, e.g., "fire", "medical", "hazmat")
+- `active`: Whether category is currently active (boolean, default true)
+- `created_at`: Creation timestamp
+- `updated_at`: Last update timestamp
+- `created_by`: User who created the category (FK to users)
+
+**Relationships:**
+- `parent`: Self-referential relationship to parent category
+- `children`: Self-referential relationship to child categories
+- `courses`: Many-to-many with TrainingCourse via category_ids JSON field
+- `requirements`: Many-to-many with TrainingRequirement via category_ids JSON field
+
+**Example Category Hierarchy:**
+```
+Firefighting (parent)
+├── Structural Firefighting
+├── Wildland Firefighting
+└── Fire Prevention
+
+EMS (parent)
+├── Basic Life Support
+├── Advanced Cardiac Life Support
+└── Pediatric Care
+
+Hazardous Materials (parent)
+├── Awareness Level
+├── Operations Level
+└── Technician Level
+```
+
 ### TrainingCourse
 Basic training course catalog.
 
@@ -38,6 +106,7 @@ Basic training course catalog.
 - `credit_hours`: Credit hours awarded
 - `prerequisites`: Array of prerequisite course IDs
 - `expiration_months`: Certification expiration period
+- `category_ids`: Array of category UUIDs this course belongs to (JSONB)
 
 ### TrainingRecord
 Individual member training history.
@@ -71,6 +140,48 @@ Requirements that members must complete.
 - `frequency`: annual | biannual | quarterly | monthly | one_time
 - `time_limit_days`: Days to complete from enrollment
 - `required_positions`: Array of positions this applies to
+
+**Due Date Configuration Fields:**
+- `due_date_type`: How the due date is calculated (see DueDateType enum above)
+  - `calendar_period`: Due by end of calendar period (default)
+  - `rolling`: Due X months from last completion
+  - `certification_period`: Due when certification expires
+  - `fixed_date`: Due by specific date
+- `rolling_period_months`: Number of months for rolling due dates (e.g., 12 for annual, 24 for biennial)
+- `period_start_month`: Month when calendar period starts (1-12, default 1 for January)
+- `period_start_day`: Day when calendar period starts (1-31, default 1)
+- `category_ids`: Array of category UUIDs that can satisfy this requirement (JSONB)
+
+**Due Date Calculation Examples:**
+
+1. **Calendar Period (Annual by Calendar Year)**
+   ```python
+   due_date_type = "calendar_period"
+   period_start_month = 1  # January
+   period_start_day = 1    # 1st
+   # Training is due December 31st each year
+   ```
+
+2. **Calendar Period (Fiscal Year - July to June)**
+   ```python
+   due_date_type = "calendar_period"
+   period_start_month = 7  # July
+   period_start_day = 1    # 1st
+   # Training is due June 30th each fiscal year
+   ```
+
+3. **Rolling (Every 12 months from completion)**
+   ```python
+   due_date_type = "rolling"
+   rolling_period_months = 12
+   # If completed Jan 15, 2026, due Jan 15, 2027
+   ```
+
+4. **Certification Period**
+   ```python
+   due_date_type = "certification_period"
+   # Due date matches the associated certification's expiration
+   ```
 
 ### TrainingProgram
 Structured training pathways.
@@ -348,6 +459,53 @@ async def import_registry_requirements(
 
 ## API Endpoints
 
+### Categories
+
+Training categories for organizing courses and requirements.
+
+```
+GET    /api/v1/training/categories              # List all categories
+POST   /api/v1/training/categories              # Create new category
+GET    /api/v1/training/categories/{id}         # Get category by ID
+PATCH  /api/v1/training/categories/{id}         # Update category
+DELETE /api/v1/training/categories/{id}         # Delete category (soft delete)
+```
+
+**List Categories Query Parameters:**
+- `active_only`: Boolean, filter to active categories only (default: true)
+
+**Create/Update Category Request:**
+```json
+{
+  "name": "Firefighting",
+  "code": "FF",
+  "description": "All firefighting-related training",
+  "color": "#FF5733",
+  "parent_category_id": null,
+  "sort_order": 1,
+  "icon": "fire"
+}
+```
+
+**Category Response:**
+```json
+{
+  "id": "uuid",
+  "organization_id": "uuid",
+  "name": "Firefighting",
+  "code": "FF",
+  "description": "All firefighting-related training",
+  "color": "#FF5733",
+  "parent_category_id": null,
+  "sort_order": 1,
+  "icon": "fire",
+  "active": true,
+  "created_at": "2026-02-05T00:00:00Z",
+  "updated_at": "2026-02-05T00:00:00Z",
+  "created_by": "uuid"
+}
+```
+
 ### Requirements
 
 ```
@@ -355,7 +513,34 @@ GET    /api/v1/training/programs/requirements
 POST   /api/v1/training/programs/requirements
 GET    /api/v1/training/programs/requirements/{id}
 PATCH  /api/v1/training/programs/requirements/{id}
+DELETE /api/v1/training/programs/requirements/{id}   # Soft delete (sets active=false)
 POST   /api/v1/training/programs/requirements/import/{registry_name}
+```
+
+**Create Requirement with Due Date Type:**
+```json
+{
+  "name": "Annual Fire Training",
+  "requirement_type": "hours",
+  "required_hours": 24,
+  "source": "department",
+  "due_date_type": "calendar_period",
+  "period_start_month": 1,
+  "period_start_day": 1,
+  "category_ids": ["uuid1", "uuid2"]
+}
+```
+
+```json
+{
+  "name": "CPR Recertification",
+  "requirement_type": "certification",
+  "source": "national",
+  "registry_name": "AHA",
+  "due_date_type": "rolling",
+  "rolling_period_months": 24,
+  "category_ids": ["ems-category-uuid"]
+}
 ```
 
 ### Programs
@@ -439,6 +624,25 @@ Adds:
 - Renames `is_mandatory` to `is_required`
 - Renames `order` to `sort_order`
 - Adds `is_prerequisite` to program_requirements
+
+### Training Categories and Due Date Types
+**File:** `20260205_0100_add_training_categories_and_due_date_type.py`
+
+Creates:
+- `training_categories` table with hierarchical structure support
+  - `parent_category_id` for nested categories
+  - `color`, `icon`, `sort_order` for UI display
+  - Indexes on `organization_id`, `code`, and `parent_category_id`
+
+Adds to `training_courses`:
+- `category_ids` (JSON): Array of category UUIDs the course belongs to
+
+Adds to `training_requirements`:
+- `due_date_type` (String): How due date is calculated (calendar_period, rolling, certification_period, fixed_date)
+- `rolling_period_months` (Integer): Months between completions for rolling requirements
+- `period_start_month` (Integer): Start month for calendar period (1-12)
+- `period_start_day` (Integer): Start day for calendar period (1-31)
+- `category_ids` (JSON): Array of category UUIDs that satisfy this requirement
 
 ## Registry Data Files
 
@@ -579,6 +783,273 @@ Recommended for:
 - Deadline reminder emails
 - Progress recalculation for large programs
 - Batch imports from registries
+- External training sync operations
+
+## External Training Integration
+
+### Overview
+
+The external training integration system allows organizations to connect to external training platforms (Vector Solutions, Target Solutions, Lexipol, etc.) and automatically import completed training records into The Logbook.
+
+### Supported Providers
+
+| Provider | Type | Description |
+|----------|------|-------------|
+| Vector Solutions | `vector_solutions` | Fire and EMS online training platform |
+| Target Solutions | `target_solutions` | Public safety training and compliance |
+| Lexipol | `lexipol` | Policy acknowledgment and training |
+| I Am Responding | `i_am_responding` | Response tracking with training features |
+| Custom API | `custom_api` | Generic adapter for any compatible API |
+
+### Models
+
+#### ExternalTrainingProvider
+
+Configuration for connecting to external training platforms.
+
+**Fields:**
+- `id`: UUID primary key
+- `organization_id`: Organization this provider belongs to
+- `name`: Display name (e.g., "Vector Solutions - Main Account")
+- `provider_type`: One of the supported provider types
+- `api_base_url`: Base URL for API calls
+- `api_key`: API key (encrypted)
+- `api_secret`: API secret for basic auth (encrypted)
+- `client_id`: OAuth client ID (if applicable)
+- `client_secret`: OAuth client secret (encrypted)
+- `auth_type`: `api_key`, `basic`, or `oauth2`
+- `config`: JSON configuration for provider-specific settings
+- `auto_sync_enabled`: Enable automatic sync on schedule
+- `sync_interval_hours`: Hours between auto-syncs (default: 24)
+- `last_sync_at`: Timestamp of last sync
+- `next_sync_at`: Scheduled time for next auto-sync
+- `default_category_id`: Default category for unmapped imports
+- `connection_verified`: Whether connection has been tested successfully
+- `connection_error`: Last connection error message
+
+#### ExternalCategoryMapping
+
+Maps external training categories to internal TrainingCategories.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `external_category_id`: Category ID in external system
+- `external_category_name`: Category name from external system
+- `external_category_code`: Optional category code
+- `internal_category_id`: Mapped TrainingCategory (nullable)
+- `is_mapped`: Whether mapping has been established
+- `auto_mapped`: Whether mapping was automatic (by name match)
+
+#### ExternalUserMapping
+
+Maps external users to internal Users.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `external_user_id`: User ID in external system
+- `external_username`: Username from external system
+- `external_email`: Email from external system
+- `external_name`: Full name from external system
+- `internal_user_id`: Mapped User (nullable)
+- `is_mapped`: Whether mapping has been established
+- `auto_mapped`: Whether mapping was automatic (by email match)
+
+#### ExternalTrainingSyncLog
+
+Tracks sync operations for auditing and debugging.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `sync_type`: `full`, `incremental`, or `manual`
+- `status`: `pending`, `in_progress`, `completed`, `failed`, `partial`
+- `started_at`, `completed_at`: Timing information
+- `records_fetched`: Number of records retrieved
+- `records_imported`: New records created
+- `records_updated`: Existing records updated
+- `records_skipped`: Duplicates or unmappable records
+- `records_failed`: Records that couldn't be imported
+- `error_message`: Error details if sync failed
+- `sync_from_date`, `sync_to_date`: Date range that was synced
+
+#### ExternalTrainingImport
+
+Stores imported training records before they become TrainingRecords.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `sync_log_id`: Reference to the sync operation
+- `external_record_id`: Unique ID from external system
+- `external_user_id`: User ID from external system
+- `external_course_id`: Course ID from external system
+- `external_category_id`: Category ID from external system
+- `course_title`: Title of the training
+- `course_code`: Course code (if available)
+- `description`: Course description
+- `duration_minutes`: Length of training in minutes
+- `completion_date`: When training was completed
+- `score`: Test score (if applicable)
+- `passed`: Pass/fail status
+- `raw_data`: Complete JSON response from external API
+- `training_record_id`: Created TrainingRecord (after import)
+- `user_id`: Mapped internal user
+- `import_status`: `pending`, `imported`, `failed`, `skipped`, `duplicate`
+- `import_error`: Error message if import failed
+
+### Services
+
+#### ExternalTrainingSyncService
+
+Main service for sync operations.
+
+**Methods:**
+
+```python
+async def test_connection(
+    provider: ExternalTrainingProvider
+) -> Tuple[bool, str]
+```
+Tests connection to an external provider. Returns success flag and message.
+
+```python
+async def sync_training_records(
+    provider: ExternalTrainingProvider,
+    sync_type: str = "incremental",
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    user_id: Optional[str] = None
+) -> ExternalTrainingSyncLog
+```
+Synchronizes training records from an external provider. Returns sync log with results.
+
+```python
+async def import_single_record(
+    import_record: ExternalTrainingImport,
+    user_id: Optional[str] = None,
+    category_id: Optional[str] = None
+) -> TrainingRecord
+```
+Creates a TrainingRecord from an imported external record.
+
+```python
+async def bulk_import_records(
+    provider_id: str,
+    import_ids: Optional[List[str]] = None,
+    import_all_pending: bool = False
+) -> Dict[str, int]
+```
+Bulk imports multiple external training records. Returns counts of imported, failed, and skipped.
+
+### API Endpoints
+
+#### Providers
+
+```
+GET    /api/v1/training/external/providers              # List providers
+POST   /api/v1/training/external/providers              # Create provider
+GET    /api/v1/training/external/providers/{id}         # Get provider
+PATCH  /api/v1/training/external/providers/{id}         # Update provider
+DELETE /api/v1/training/external/providers/{id}         # Delete provider
+POST   /api/v1/training/external/providers/{id}/test    # Test connection
+POST   /api/v1/training/external/providers/{id}/sync    # Trigger sync
+GET    /api/v1/training/external/providers/{id}/sync-logs  # Sync history
+```
+
+#### Mappings
+
+```
+GET    /api/v1/training/external/providers/{id}/category-mappings
+PATCH  /api/v1/training/external/providers/{id}/category-mappings/{mapping_id}
+GET    /api/v1/training/external/providers/{id}/user-mappings
+PATCH  /api/v1/training/external/providers/{id}/user-mappings/{mapping_id}
+```
+
+#### Imports
+
+```
+GET    /api/v1/training/external/providers/{id}/imports
+POST   /api/v1/training/external/providers/{id}/imports/{import_id}/import
+POST   /api/v1/training/external/providers/{id}/imports/bulk
+```
+
+### Sync Workflow
+
+1. **Configure Provider**: Admin creates provider with API credentials
+2. **Test Connection**: System verifies API connectivity
+3. **Trigger Sync**: Manual or automatic sync fetches records
+4. **Process Records**: Each record is normalized and stored as ExternalTrainingImport
+5. **Auto-Map Users**: System attempts to match external users by email
+6. **Auto-Map Categories**: System attempts to match categories by name
+7. **Review Mappings**: Admin reviews and fixes unmapped users/categories
+8. **Import Records**: Records are imported as TrainingRecords
+
+### Provider Configuration
+
+#### Vector Solutions Example
+
+```json
+{
+  "name": "Vector Solutions",
+  "provider_type": "vector_solutions",
+  "api_base_url": "https://api.vectorsolutions.com",
+  "api_key": "your-api-key",
+  "auth_type": "api_key",
+  "auto_sync_enabled": true,
+  "sync_interval_hours": 24,
+  "config": {
+    "records_endpoint": "/api/v1/completions",
+    "headers": {
+      "X-Client-ID": "your-client-id"
+    }
+  }
+}
+```
+
+#### Custom API Example
+
+```json
+{
+  "name": "Custom Training System",
+  "provider_type": "custom_api",
+  "api_base_url": "https://training.example.com",
+  "api_key": "your-api-key",
+  "auth_type": "api_key",
+  "config": {
+    "records_endpoint": "/api/training/completions",
+    "test_endpoint": "/api/health",
+    "records_path": "data.records",
+    "param_mapping": {
+      "start_date": "from",
+      "end_date": "to"
+    },
+    "field_mapping": {
+      "external_record_id": "id",
+      "course_title": "training_name",
+      "duration_minutes": "time_spent",
+      "completion_date": "completed_at",
+      "external_user_id": "employee_id"
+    }
+  }
+}
+```
+
+### Database Migration
+
+**File:** `20260205_0200_add_external_training_integration.py`
+
+Creates:
+- `external_training_providers` table
+- `external_category_mappings` table
+- `external_user_mappings` table
+- `external_training_sync_logs` table
+- `external_training_imports` table
+
+Indexes for performance:
+- `idx_ext_provider_org`: Provider lookup by organization
+- `idx_ext_provider_type`: Filter by provider type
+- `idx_ext_mapping_external`: Quick category mapping lookup
+- `idx_ext_user_internal`: Find user mappings by internal user
+- `idx_sync_log_provider`: Sync history by provider
+- `idx_ext_import_provider`: Import queue by provider
 
 ## Security
 
@@ -609,4 +1080,4 @@ Using SQLAlchemy ORM:
 
 ---
 
-*Last Updated: January 22, 2026*
+*Last Updated: February 5, 2026*

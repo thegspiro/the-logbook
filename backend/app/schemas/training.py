@@ -8,6 +8,57 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
+from enum import Enum
+
+
+class DueDateType(str, Enum):
+    """How the due date for a requirement is calculated"""
+    CALENDAR_PERIOD = "calendar_period"  # Due by end of calendar period (e.g., Dec 31st)
+    ROLLING = "rolling"  # Due X months from last completion
+    CERTIFICATION_PERIOD = "certification_period"  # Due when certification expires
+    FIXED_DATE = "fixed_date"  # Due by a specific fixed date
+
+
+# Training Category Schemas
+
+class TrainingCategoryBase(BaseModel):
+    """Base training category schema"""
+    name: str = Field(..., min_length=1, max_length=255)
+    code: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
+    color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    parent_category_id: Optional[UUID] = None
+    sort_order: int = 0
+    icon: Optional[str] = Field(None, max_length=50)
+
+
+class TrainingCategoryCreate(TrainingCategoryBase):
+    """Schema for creating a new training category"""
+    pass
+
+
+class TrainingCategoryUpdate(BaseModel):
+    """Schema for updating a training category"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
+    color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
+    parent_category_id: Optional[UUID] = None
+    sort_order: Optional[int] = None
+    icon: Optional[str] = Field(None, max_length=50)
+    active: Optional[bool] = None
+
+
+class TrainingCategoryResponse(TrainingCategoryBase):
+    """Schema for training category response"""
+    id: UUID
+    organization_id: UUID
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Training Course Schemas
@@ -25,6 +76,7 @@ class TrainingCourseBase(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
+    category_ids: Optional[List[UUID]] = None  # Categories this course belongs to
 
 
 class TrainingCourseCreate(TrainingCourseBase):
@@ -45,6 +97,7 @@ class TrainingCourseUpdate(BaseModel):
     instructor: Optional[str] = Field(None, max_length=255)
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
+    category_ids: Optional[List[UUID]] = None
     active: Optional[bool] = None
 
 
@@ -56,6 +109,7 @@ class TrainingCourseResponse(TrainingCourseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Note: category_ids is inherited from TrainingCourseBase
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -140,6 +194,13 @@ class TrainingRequirementBase(BaseModel):
     required_roles: Optional[List[UUID]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    # Due date calculation fields
+    due_date_type: DueDateType = DueDateType.CALENDAR_PERIOD
+    rolling_period_months: Optional[int] = Field(None, ge=1, le=120)  # 1-10 years
+    period_start_month: int = Field(1, ge=1, le=12)  # Month period starts (1=January)
+    period_start_day: int = Field(1, ge=1, le=31)  # Day period starts
+    # Category requirements - training in these categories satisfies this requirement
+    category_ids: Optional[List[UUID]] = None
 
 
 class TrainingRequirementCreate(TrainingRequirementBase):
@@ -160,6 +221,12 @@ class TrainingRequirementUpdate(BaseModel):
     required_roles: Optional[List[UUID]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    # Due date calculation fields
+    due_date_type: Optional[DueDateType] = None
+    rolling_period_months: Optional[int] = Field(None, ge=1, le=120)
+    period_start_month: Optional[int] = Field(None, ge=1, le=12)
+    period_start_day: Optional[int] = Field(None, ge=1, le=31)
+    category_ids: Optional[List[UUID]] = None
     active: Optional[bool] = None
 
 
@@ -217,3 +284,283 @@ class RequirementProgress(BaseModel):
     percentage_complete: float
     is_complete: bool
     due_date: Optional[date]
+    due_date_type: Optional[DueDateType] = None
+    days_until_due: Optional[int] = None  # Negative if overdue
+
+
+# ============================================
+# External Training Integration Schemas
+# ============================================
+
+
+class ExternalProviderType(str, Enum):
+    """Supported external training providers"""
+    VECTOR_SOLUTIONS = "vector_solutions"
+    TARGET_SOLUTIONS = "target_solutions"
+    LEXIPOL = "lexipol"
+    I_AM_RESPONDING = "i_am_responding"
+    CUSTOM_API = "custom_api"
+
+
+class SyncStatus(str, Enum):
+    """Status of sync operations"""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIAL = "partial"
+
+
+class ImportStatus(str, Enum):
+    """Status of individual record imports"""
+    PENDING = "pending"
+    IMPORTED = "imported"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    DUPLICATE = "duplicate"
+
+
+# External Training Provider Schemas
+
+class ExternalProviderConfig(BaseModel):
+    """Provider-specific configuration"""
+    records_endpoint: Optional[str] = None  # Endpoint for fetching records
+    users_endpoint: Optional[str] = None  # Endpoint for fetching users
+    categories_endpoint: Optional[str] = None  # Endpoint for fetching categories
+    additional_headers: Optional[dict] = None
+    date_format: Optional[str] = None  # Date format used by the API
+
+
+class ExternalTrainingProviderBase(BaseModel):
+    """Base external training provider schema"""
+    name: str = Field(..., min_length=1, max_length=255)
+    provider_type: ExternalProviderType
+    description: Optional[str] = None
+    api_base_url: Optional[str] = Field(None, max_length=500)
+    auth_type: str = Field("api_key", pattern=r'^(api_key|oauth2|basic)$')
+    config: Optional[ExternalProviderConfig] = None
+    auto_sync_enabled: bool = False
+    sync_interval_hours: int = Field(24, ge=1, le=168)  # 1 hour to 1 week
+    default_category_id: Optional[UUID] = None
+
+
+class ExternalTrainingProviderCreate(ExternalTrainingProviderBase):
+    """Schema for creating a new external training provider"""
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
+    client_id: Optional[str] = Field(None, max_length=255)
+    client_secret: Optional[str] = None
+
+
+class ExternalTrainingProviderUpdate(BaseModel):
+    """Schema for updating an external training provider"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    api_base_url: Optional[str] = Field(None, max_length=500)
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
+    client_id: Optional[str] = Field(None, max_length=255)
+    client_secret: Optional[str] = None
+    auth_type: Optional[str] = Field(None, pattern=r'^(api_key|oauth2|basic)$')
+    config: Optional[ExternalProviderConfig] = None
+    auto_sync_enabled: Optional[bool] = None
+    sync_interval_hours: Optional[int] = Field(None, ge=1, le=168)
+    default_category_id: Optional[UUID] = None
+    active: Optional[bool] = None
+
+
+class ExternalTrainingProviderResponse(ExternalTrainingProviderBase):
+    """Schema for external training provider response"""
+    id: UUID
+    organization_id: UUID
+    active: bool
+    connection_verified: bool
+    last_connection_test: Optional[datetime] = None
+    connection_error: Optional[str] = None
+    last_sync_at: Optional[datetime] = None
+    next_sync_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+    # Note: api_key, api_secret, client_secret are never returned for security
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# External Category Mapping Schemas
+
+class ExternalCategoryMappingBase(BaseModel):
+    """Base external category mapping schema"""
+    external_category_id: str = Field(..., max_length=255)
+    external_category_name: str = Field(..., max_length=255)
+    external_category_code: Optional[str] = Field(None, max_length=100)
+    internal_category_id: Optional[UUID] = None
+
+
+class ExternalCategoryMappingCreate(ExternalCategoryMappingBase):
+    """Schema for creating a new external category mapping"""
+    pass
+
+
+class ExternalCategoryMappingUpdate(BaseModel):
+    """Schema for updating an external category mapping"""
+    internal_category_id: Optional[UUID] = None
+    is_mapped: Optional[bool] = None
+
+
+class ExternalCategoryMappingResponse(ExternalCategoryMappingBase):
+    """Schema for external category mapping response"""
+    id: UUID
+    provider_id: UUID
+    organization_id: UUID
+    is_mapped: bool
+    auto_mapped: bool
+    created_at: datetime
+    updated_at: datetime
+    mapped_by: Optional[UUID] = None
+    # Include internal category details for convenience
+    internal_category_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# External User Mapping Schemas
+
+class ExternalUserMappingBase(BaseModel):
+    """Base external user mapping schema"""
+    external_user_id: str = Field(..., max_length=255)
+    external_username: Optional[str] = Field(None, max_length=255)
+    external_email: Optional[str] = Field(None, max_length=255)
+    external_name: Optional[str] = Field(None, max_length=255)
+    internal_user_id: Optional[UUID] = None
+
+
+class ExternalUserMappingCreate(ExternalUserMappingBase):
+    """Schema for creating a new external user mapping"""
+    pass
+
+
+class ExternalUserMappingUpdate(BaseModel):
+    """Schema for updating an external user mapping"""
+    internal_user_id: Optional[UUID] = None
+    is_mapped: Optional[bool] = None
+
+
+class ExternalUserMappingResponse(ExternalUserMappingBase):
+    """Schema for external user mapping response"""
+    id: UUID
+    provider_id: UUID
+    organization_id: UUID
+    is_mapped: bool
+    auto_mapped: bool
+    created_at: datetime
+    updated_at: datetime
+    mapped_by: Optional[UUID] = None
+    # Include internal user details for convenience
+    internal_user_name: Optional[str] = None
+    internal_user_email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Sync Log Schemas
+
+class ExternalTrainingSyncLogResponse(BaseModel):
+    """Schema for external training sync log response"""
+    id: UUID
+    provider_id: UUID
+    organization_id: UUID
+    sync_type: str
+    status: SyncStatus
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    records_fetched: int
+    records_imported: int
+    records_updated: int
+    records_skipped: int
+    records_failed: int
+    error_message: Optional[str] = None
+    sync_from_date: Optional[date] = None
+    sync_to_date: Optional[date] = None
+    created_at: datetime
+    initiated_by: Optional[UUID] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# External Training Import Schemas
+
+class ExternalTrainingImportResponse(BaseModel):
+    """Schema for external training import response"""
+    id: UUID
+    provider_id: UUID
+    organization_id: UUID
+    sync_log_id: Optional[UUID] = None
+    external_record_id: str
+    external_user_id: Optional[str] = None
+    course_title: str
+    course_code: Optional[str] = None
+    description: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    completion_date: Optional[datetime] = None
+    score: Optional[float] = None
+    passed: Optional[bool] = None
+    external_category_name: Optional[str] = None
+    training_record_id: Optional[UUID] = None
+    user_id: Optional[UUID] = None
+    import_status: str
+    import_error: Optional[str] = None
+    imported_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Sync Request/Response Schemas
+
+class SyncRequest(BaseModel):
+    """Request to trigger a sync operation"""
+    sync_type: str = Field("incremental", pattern=r'^(full|incremental)$')
+    from_date: Optional[date] = None  # For incremental sync
+    to_date: Optional[date] = None
+
+
+class SyncResponse(BaseModel):
+    """Response after initiating a sync"""
+    sync_log_id: Optional[UUID] = None  # May be None for background tasks
+    status: SyncStatus
+    message: str
+    records_fetched: int = 0
+    records_imported: int = 0
+    records_failed: int = 0
+
+
+class TestConnectionResponse(BaseModel):
+    """Response after testing provider connection"""
+    success: bool
+    message: str
+    details: Optional[dict] = None
+
+
+class ImportRecordRequest(BaseModel):
+    """Request to import a specific external record"""
+    external_import_id: UUID
+    user_id: UUID  # Internal user to assign record to
+    category_id: Optional[UUID] = None  # Override category
+
+
+class BulkImportRequest(BaseModel):
+    """Request to bulk import external records"""
+    external_import_ids: List[UUID]
+    auto_map_users: bool = True  # Try to match users by email
+    default_category_id: Optional[UUID] = None
+
+
+class BulkImportResponse(BaseModel):
+    """Response after bulk import"""
+    total: int
+    imported: int
+    skipped: int
+    failed: int
+    errors: List[str]

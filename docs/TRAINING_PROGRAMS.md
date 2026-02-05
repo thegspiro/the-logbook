@@ -9,13 +9,16 @@ The Training Programs module provides a comprehensive system for managing member
 1. [Core Concepts](#core-concepts)
 2. [User Roles](#user-roles)
 3. [Features](#features)
-4. [Training Requirements](#training-requirements)
-5. [Training Programs](#training-programs)
-6. [Enrollment & Progress](#enrollment--progress)
-7. [Member Experience](#member-experience)
-8. [Training Officer Workflow](#training-officer-workflow)
-9. [API Reference](#api-reference)
-10. [Database Schema](#database-schema)
+4. [External Training Integration](#external-training-integration)
+5. [Training Categories](#training-categories)
+6. [Training Requirements](#training-requirements)
+7. [Due Date Types](#due-date-types)
+8. [Training Programs](#training-programs)
+9. [Enrollment & Progress](#enrollment--progress)
+10. [Member Experience](#member-experience)
+11. [Training Officer Workflow](#training-officer-workflow)
+12. [API Reference](#api-reference)
+13. [Database Schema](#database-schema)
 
 ---
 
@@ -127,6 +130,274 @@ Members are enrolled in training programs to track their progress toward complet
 - Upcoming deadline warnings
 - Click-through to detailed progress page
 
+#### External Training Integration
+- Connect to external training platforms (Vector Solutions, Target Solutions, Lexipol, I Am Responding)
+- Automatic sync of completed training records
+- Category and user mapping between systems
+- Import external records as TrainingRecords
+- Sync history and audit logging
+- Configurable sync schedules
+
+---
+
+## External Training Integration
+
+The External Training Integration feature allows organizations to connect to external training platforms and automatically import completed training records into The Logbook.
+
+### Supported Providers
+
+| Provider | Description |
+|----------|-------------|
+| **Vector Solutions** | Fire and EMS online training platform with comprehensive course library |
+| **Target Solutions** | Public safety training, compliance tracking, and recordkeeping |
+| **Lexipol** | Policy acknowledgment, training bulletins, and compliance training |
+| **I Am Responding** | Response tracking with integrated training documentation |
+| **Custom API** | Connect to any training platform with a compatible REST API |
+
+### Setting Up an Integration
+
+1. Navigate to **Training** → **Integrations** tab
+2. Click **Add Provider**
+3. Select the provider type
+4. Enter connection details:
+   - **Display Name**: Friendly name for this integration
+   - **API Base URL**: The API endpoint URL
+   - **API Key**: Your API credentials
+   - **Authentication Type**: API Key, Basic Auth, or OAuth 2.0
+5. Configure sync settings:
+   - **Auto-Sync**: Enable/disable automatic synchronization
+   - **Sync Interval**: How often to sync (6h, 12h, 24h, 48h, weekly)
+6. Click **Test Connection** to verify
+7. Save the provider
+
+### Sync Workflow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Configure Provider with API credentials                 │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  2. Test Connection to verify API access                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  3. Trigger Sync (manual or automatic)                      │
+│     - Full: All records from past year                      │
+│     - Incremental: Only new records since last sync         │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  4. Records fetched and stored as External Training Imports │
+│     - Course title, duration, completion date               │
+│     - External user and category information                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  5. Auto-Mapping attempts to match:                         │
+│     - Users by email address                                │
+│     - Categories by name                                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  6. Review and fix unmapped users/categories                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  7. Import records as Training Records                      │
+│     - Creates official training history                     │
+│     - Links to mapped user and category                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Managing Mappings
+
+After syncing, you may need to map external users and categories to your internal records.
+
+#### User Mapping
+- External users are auto-mapped by email when possible
+- Unmapped users appear in the "Users" tab under Mappings
+- Click "Map User" to select the corresponding internal member
+- Once mapped, all training for that external user will apply to the member
+
+#### Category Mapping
+- External categories are auto-mapped by name when possible
+- Unmapped categories appear in the "Categories" tab under Mappings
+- Click "Map Category" to select the corresponding internal category
+- Categories determine how imported training counts toward requirements
+
+### Import Queue
+
+The Import Queue shows all fetched records pending import:
+- **Pending**: Ready to import (user mapped)
+- **Skipped**: No user mapping available
+- **Imported**: Successfully created TrainingRecord
+- **Failed**: Error during import
+
+Use **Bulk Import** to import all pending records at once, or import individual records selectively.
+
+### Sync History
+
+View sync history for each provider:
+- Sync type (full, incremental, manual)
+- Records fetched, imported, updated, skipped, failed
+- Start and end times
+- Error messages if sync failed
+
+---
+
+## Training Categories
+
+Training categories provide a hierarchical way to organize training courses and requirements. Categories help training officers group related training topics and allow requirements to be satisfied by any training within specified categories.
+
+### Category Features
+
+- **Hierarchical Structure**: Categories can have parent-child relationships for nested organization
+- **Visual Customization**: Each category can have a color and icon for easy identification in the UI
+- **Flexible Assignment**: Courses and requirements can belong to multiple categories
+- **Category-Based Requirements**: Requirements can accept training from any course in specified categories
+
+### Example Category Structure
+
+```
+🔥 Firefighting
+   ├── Structural Firefighting
+   ├── Wildland Firefighting
+   └── Fire Prevention/Investigation
+
+🏥 Emergency Medical Services
+   ├── Basic Life Support (BLS)
+   ├── Advanced Life Support (ALS)
+   └── Pediatric/Specialty Care
+
+☢️ Hazardous Materials
+   ├── Awareness Level
+   ├── Operations Level
+   └── Technician Level
+
+🚒 Apparatus Operations
+   ├── Pumper Operations
+   ├── Aerial Operations
+   └── Specialized Vehicles
+```
+
+### Creating Categories
+
+1. Navigate to **Training** → **Requirements** tab
+2. Click the **Categories** section
+3. Click **Add Category**
+4. Fill in category details:
+   - **Name**: Display name for the category
+   - **Code**: Short code (e.g., "FF", "EMS", "HAZ")
+   - **Description**: Detailed description
+   - **Color**: Hex color for UI display
+   - **Icon**: Icon identifier
+   - **Parent Category**: For nested categories (optional)
+   - **Sort Order**: Display order within parent
+
+### Using Categories with Requirements
+
+When creating a requirement, you can specify which categories satisfy the requirement:
+
+```
+Requirement: Annual Fire Training (24 hours)
+Categories: Firefighting, Apparatus Operations
+
+→ Any training hours logged in courses belonging to "Firefighting"
+  or "Apparatus Operations" categories count toward this requirement
+```
+
+This allows flexible tracking where members can complete various courses that all contribute to meeting a single requirement.
+
+---
+
+## Due Date Types
+
+Training requirements support flexible due date calculations to match different organizational needs. The system supports four due date types:
+
+### 1. Calendar Period (Default)
+
+Training is due by the end of a specified calendar period. This is ideal for annual requirements that align with calendar or fiscal years.
+
+**Configuration:**
+- `period_start_month`: Month when the period starts (1-12)
+- `period_start_day`: Day when the period starts (1-31)
+
+**Examples:**
+
+| Use Case | Start Month | Start Day | Due Date |
+|----------|-------------|-----------|----------|
+| Calendar Year | January (1) | 1 | December 31 |
+| Fiscal Year (July-June) | July (7) | 1 | June 30 |
+| Academic Year (Sept-Aug) | September (9) | 1 | August 31 |
+| Q1 Deadline | January (1) | 1 | March 31 |
+
+**How it works:**
+- If current date is before the period start, due date is end of current period
+- If current date is after period start, due date is end of next period
+- Completion resets the cycle for the next period
+
+### 2. Rolling
+
+Training is due X months from the date of last completion. This is ideal for certifications that must be renewed at regular intervals regardless of when they were obtained.
+
+**Configuration:**
+- `rolling_period_months`: Number of months between required completions
+
+**Examples:**
+
+| Certification | Rolling Period | If Completed Jan 15, 2026 |
+|--------------|----------------|---------------------------|
+| CPR/BLS | 24 months | Due: Jan 15, 2028 |
+| ACLS | 24 months | Due: Jan 15, 2028 |
+| Annual Physical | 12 months | Due: Jan 15, 2027 |
+| Quarterly Drill | 3 months | Due: Apr 15, 2026 |
+
+**How it works:**
+- Due date = Last completion date + Rolling period months
+- If never completed, due date is immediate (or based on enrollment date)
+- Each completion resets the countdown from the new completion date
+
+### 3. Certification Period
+
+Training is due when the associated certification expires. This ties the requirement directly to an external certification's validity period.
+
+**Use Cases:**
+- EMT certification renewal
+- Paramedic license renewal
+- State firefighter certification
+- CDL medical card renewal
+
+**How it works:**
+- Due date matches the expiration date of the linked certification
+- When certification is renewed, due date automatically updates
+- Useful for requirements that must match external regulatory timelines
+
+### 4. Fixed Date
+
+Training is due by a specific, unchanging date. This is ideal for one-time requirements or requirements with hard external deadlines.
+
+**Use Cases:**
+- Grant-mandated training deadlines
+- New regulation compliance dates
+- Probationary period milestones
+- Specific event preparation
+
+**How it works:**
+- Due date is set once and does not change
+- Typically used for non-recurring requirements
+
+### Choosing the Right Due Date Type
+
+| Scenario | Recommended Type | Why |
+|----------|------------------|-----|
+| "Complete 24 hours by year end" | Calendar Period | Aligns with reporting cycles |
+| "Recertify CPR every 2 years" | Rolling | Based on individual completion dates |
+| "Keep EMT cert current" | Certification Period | Matches external cert expiration |
+| "Complete by grant deadline" | Fixed Date | Hard external deadline |
+| "Quarterly training drills" | Calendar Period | Recurring calendar-based |
+| "Physical fitness test annually" | Rolling | Individual anniversary dates |
+
 ---
 
 ## Training Requirements
@@ -140,7 +411,20 @@ Track cumulative training hours.
 {
   "requirement_type": "hours",
   "required_hours": 100,
-  "time_limit_days": 365
+  "due_date_type": "calendar_period",
+  "period_start_month": 1,
+  "period_start_day": 1,
+  "category_ids": ["firefighting-uuid", "ems-uuid"]
+}
+```
+
+**With Rolling Due Date:**
+```json
+{
+  "requirement_type": "hours",
+  "required_hours": 24,
+  "due_date_type": "rolling",
+  "rolling_period_months": 12
 }
 ```
 
@@ -162,7 +446,19 @@ Require obtaining certifications.
 ```json
 {
   "requirement_type": "certification",
-  "required_certifications": ["CPR", "EMT"]
+  "required_certifications": ["CPR", "EMT"],
+  "due_date_type": "certification_period"
+}
+```
+
+**With Rolling Recertification:**
+```json
+{
+  "requirement_type": "certification",
+  "required_certifications": ["CPR"],
+  "due_date_type": "rolling",
+  "rolling_period_months": 24,
+  "category_ids": ["bls-uuid"]
 }
 ```
 
@@ -433,13 +729,25 @@ The full progress page shows:
 
 ## Training Officer Workflow
 
-### 1. Set Up Requirements
+### 1. Set Up Categories (Optional but Recommended)
+
+Categories help organize your training and allow flexible requirement satisfaction.
+
+1. Navigate to **Training** → **Requirements** tab
+2. Click **Manage Categories**
+3. Create your category hierarchy:
+   - Start with top-level categories (Firefighting, EMS, HazMat)
+   - Add sub-categories as needed
+   - Assign colors and icons for visual identification
+4. Categories can be assigned to courses and requirements
+
+### 2. Set Up Requirements
 
 #### Option A: Import from Registry
 1. Navigate to Training Programs → Requirements tab
 2. Click "Import NFPA", "Import NREMT", or "Import Pro Board"
 3. System imports standard requirements
-4. Customize as needed
+4. Customize as needed (including due date types)
 
 #### Option B: Create Custom Requirement
 1. Click "Create Requirement"
@@ -447,8 +755,21 @@ The full progress page shows:
    - Name and description
    - Requirement type (hours, shifts, etc.)
    - Source (department)
-   - Time limits
+   - **Due Date Type** (Calendar Period, Rolling, Certification Period, or Fixed Date)
+   - **Due Date Configuration**:
+     - For Calendar Period: Set period start month and day
+     - For Rolling: Set rolling period in months
+   - **Categories** (optional): Select categories that satisfy this requirement
    - Applicability (positions/roles)
+
+#### Option C: Use Requirement Templates
+1. Click "Use Template" when creating a requirement
+2. Choose from common requirement templates:
+   - **Annual Fire Training** (24 hrs, calendar period)
+   - **CPR/BLS Certification** (rolling, 24 months)
+   - **Hazmat Awareness** (one-time certification)
+   - **Monthly Drills** (calendar period, monthly)
+3. Customize the template values as needed
 
 ### 2. Create Training Program
 
@@ -633,6 +954,13 @@ Content-Type: application/json
 
 ### Key Tables
 
+#### `training_categories`
+- id, organization_id, name, code
+- description, color, icon
+- parent_category_id (self-referential for hierarchy)
+- sort_order, active
+- created_at, updated_at, created_by
+
 #### `training_programs`
 - id, organization_id, name, description
 - version, code
@@ -658,6 +986,17 @@ Content-Type: application/json
 - required_hours, required_shifts, required_calls, etc.
 - frequency, time_limit_days
 - applies_to_all, required_positions, required_roles
+- **due_date_type** (calendar_period, rolling, certification_period, fixed_date)
+- **rolling_period_months** (for rolling due dates)
+- **period_start_month** (1-12, for calendar period)
+- **period_start_day** (1-31, for calendar period)
+- **category_ids** (JSONB array of category UUIDs)
+
+#### `training_courses`
+- id, organization_id, name, code
+- training_type, duration_hours, credit_hours
+- prerequisites, expiration_months
+- **category_ids** (JSONB array of category UUIDs)
 
 #### `program_requirements`
 - id, program_id, phase_id, requirement_id
@@ -747,6 +1086,50 @@ Content-Type: application/json
 - Verify all prerequisites completed
 - Ensure previous phase is 100% complete
 
+### Category Issues
+
+**Q: Category not appearing in dropdown**
+- Verify category is marked as active
+- Check that category belongs to your organization
+- Refresh the page to load latest categories
+
+**Q: Training not counting toward category-based requirement**
+- Verify the course is assigned to one of the requirement's categories
+- Check that the training record status is "completed"
+- Ensure the training date is within the current requirement period
+
+**Q: Can't delete a category**
+- Categories with assigned courses or requirements cannot be deleted
+- Remove category assignments first, or deactivate the category instead
+- Child categories must be removed or reassigned before deleting parent
+
+### Due Date Issues
+
+**Q: Due date showing wrong date for calendar period**
+- Verify `period_start_month` and `period_start_day` are set correctly
+- Remember: period start defines when the NEW period begins, not when it ends
+- Example: January 1 start means due December 31
+
+**Q: Rolling due date not updating after completion**
+- Ensure the training record has a `completion_date` set
+- Verify the record status is "completed"
+- Check that `rolling_period_months` is configured on the requirement
+
+**Q: Member shows compliant but due date is past**
+- For rolling requirements, the due date is calculated from last completion
+- If never completed, member is immediately non-compliant
+- Check if there's a grace period configured
+
+**Q: Calendar period requirement due date is in the past**
+- If current date is past the period end, member is non-compliant for the current period
+- They need to complete training to become compliant for the next period
+- Due date will update to next period after completion
+
+**Q: Certification period requirement has no due date**
+- Ensure the member has an associated certification record
+- The certification must have an expiration date
+- Link the training record to the certification if not auto-linked
+
 ---
 
 ## Future Enhancements
@@ -772,4 +1155,4 @@ For questions or issues with the Training Programs module:
 
 ---
 
-*Last Updated: January 22, 2026*
+*Last Updated: February 5, 2026*

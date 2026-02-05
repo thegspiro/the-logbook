@@ -133,13 +133,24 @@ async def create_member(
         email=user_data.email,
         password_hash=hash_password(temp_password),
         first_name=user_data.first_name,
+        middle_name=user_data.middle_name,
         last_name=user_data.last_name,
         badge_number=user_data.badge_number,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
         hire_date=user_data.hire_date,
-        is_active=True,
+        # Department info
+        rank=user_data.rank,
+        station=user_data.station,
+        # Address
+        address_street=user_data.address_street,
+        address_city=user_data.address_city,
+        address_state=user_data.address_state,
+        address_zip=user_data.address_zip,
+        address_country=user_data.address_country,
+        # Emergency contacts (stored as JSON)
+        emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
         status="active",
     )

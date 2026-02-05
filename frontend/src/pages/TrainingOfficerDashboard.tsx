@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap,
@@ -12,81 +12,216 @@ import {
   TrendingUp,
   Calendar,
   Award,
+  RefreshCw,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout';
+import { trainingService, userService } from '../services/api';
+import type { TrainingRecord, TrainingRequirement } from '../types/training';
 
-interface DashboardWidget {
+interface DashboardStats {
+  totalMembers: number;
+  compliantMembers: number;
+  compliancePercentage: number;
+  expiringCount: number;
+  completionsThisMonth: number;
+  totalHoursThisYear: number;
+  avgHoursPerMember: number;
+}
+
+interface MemberSummary {
   id: string;
-  title: string;
-  icon: React.ElementType;
-  enabled: boolean;
-  component: React.ReactNode;
+  name: string;
+  username: string;
+}
+
+interface ExpirationItem {
+  id: string;
+  memberName: string;
+  memberId: string;
+  courseName: string;
+  daysLeft: number;
+  expirationDate: string;
+}
+
+interface CompletionItem {
+  id: string;
+  memberName: string;
+  memberId: string;
+  courseName: string;
+  completionDate: string;
+  hoursCompleted: number;
 }
 
 /**
  * Training Officer Dashboard
  *
- * Main hub for training management with customizable widgets.
+ * Main hub for training management with real-time data from APIs.
  * Officers can toggle which metrics and tools they want visible.
  */
 const TrainingOfficerDashboard: React.FC = () => {
   const navigate = useNavigate();
 
-  // Widget visibility preferences (would be saved to user preferences in production)
-  const [widgets, setWidgets] = useState<DashboardWidget[]>([
-    {
-      id: 'compliance-overview',
-      title: 'Compliance Overview',
-      icon: CheckCircle,
-      enabled: true,
-      component: <ComplianceOverviewWidget />,
-    },
-    {
-      id: 'upcoming-expirations',
-      title: 'Upcoming Expirations',
-      icon: AlertTriangle,
-      enabled: true,
-      component: <UpcomingExpirationsWidget />,
-    },
-    {
-      id: 'recent-completions',
-      title: 'Recent Completions',
-      icon: Award,
-      enabled: true,
-      component: <RecentCompletionsWidget />,
-    },
-    {
-      id: 'training-hours',
-      title: 'Training Hours Summary',
-      icon: Clock,
-      enabled: true,
-      component: <TrainingHoursSummaryWidget />,
-    },
-    {
-      id: 'upcoming-sessions',
-      title: 'Upcoming Training Sessions',
-      icon: Calendar,
-      enabled: true,
-      component: <UpcomingSessionsWidget />,
-    },
-    {
-      id: 'requirements-status',
-      title: 'Requirements Status',
-      icon: FileText,
-      enabled: true,
-      component: <RequirementsStatusWidget />,
-    },
-  ]);
+  // Data states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalMembers: 0,
+    compliantMembers: 0,
+    compliancePercentage: 0,
+    expiringCount: 0,
+    completionsThisMonth: 0,
+    totalHoursThisYear: 0,
+    avgHoursPerMember: 0,
+  });
+  const [expiringCertifications, setExpiringCertifications] = useState<ExpirationItem[]>([]);
+  const [recentCompletions, setRecentCompletions] = useState<CompletionItem[]>([]);
+  const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
+  const [memberMap, setMemberMap] = useState<Map<string, MemberSummary>>(new Map());
 
+  // Widget visibility preferences
   const [showSettings, setShowSettings] = useState(false);
+  const [enabledWidgets, setEnabledWidgets] = useState({
+    'compliance-overview': true,
+    'upcoming-expirations': true,
+    'recent-completions': true,
+    'training-hours': true,
+    'requirements-status': true,
+  });
 
-  const toggleWidget = (widgetId: string) => {
-    setWidgets(widgets.map(w =>
-      w.id === widgetId ? { ...w, enabled: !w.enabled } : w
-    ));
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch all data in parallel
+      const [members, expiring, allRecords, reqs] = await Promise.all([
+        userService.getUsers(),
+        trainingService.getExpiringCertifications(90),
+        trainingService.getRecords(),
+        trainingService.getRequirements({ active_only: true }),
+      ]);
+
+      // Build member map for lookups
+      const memberMapData = new Map<string, MemberSummary>();
+      members.forEach((m) => {
+        memberMapData.set(m.id, {
+          id: m.id,
+          name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username,
+          username: m.username,
+        });
+      });
+      setMemberMap(memberMapData);
+
+      // Process expiring certifications
+      const expiringItems: ExpirationItem[] = expiring.map((record) => {
+        const member = memberMapData.get(record.user_id);
+        const expDate = new Date(record.expiration_date!);
+        const now = new Date();
+        const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          id: record.id,
+          memberName: member?.name || 'Unknown',
+          memberId: record.user_id,
+          courseName: record.course_name,
+          daysLeft: Math.max(0, daysLeft),
+          expirationDate: record.expiration_date!,
+        };
+      }).sort((a, b) => a.daysLeft - b.daysLeft);
+      setExpiringCertifications(expiringItems);
+
+      // Process recent completions (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const recentRecords = allRecords
+        .filter((r) => r.status === 'completed' && r.completion_date)
+        .filter((r) => new Date(r.completion_date!) >= thirtyDaysAgo)
+        .sort((a, b) => new Date(b.completion_date!).getTime() - new Date(a.completion_date!).getTime());
+
+      const completionItems: CompletionItem[] = recentRecords.slice(0, 10).map((record) => {
+        const member = memberMapData.get(record.user_id);
+        return {
+          id: record.id,
+          memberName: member?.name || 'Unknown',
+          memberId: record.user_id,
+          courseName: record.course_name,
+          completionDate: record.completion_date!,
+          hoursCompleted: record.hours_completed || 0,
+        };
+      });
+      setRecentCompletions(completionItems);
+
+      // Calculate stats
+      const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+      const completedThisYear = allRecords.filter(
+        (r) => r.status === 'completed' && r.completion_date && new Date(r.completion_date) >= startOfYear
+      );
+      const totalHours = completedThisYear.reduce((sum, r) => sum + (r.hours_completed || 0), 0);
+
+      // Calculate compliance (members with no expired required training)
+      const expiredByMember = new Map<string, number>();
+      allRecords.forEach((r) => {
+        if (r.expiration_date && new Date(r.expiration_date) < new Date()) {
+          expiredByMember.set(r.user_id, (expiredByMember.get(r.user_id) || 0) + 1);
+        }
+      });
+      const compliantCount = members.filter((m) => !expiredByMember.has(m.id)).length;
+
+      setStats({
+        totalMembers: members.length,
+        compliantMembers: compliantCount,
+        compliancePercentage: members.length > 0 ? Math.round((compliantCount / members.length) * 100) : 0,
+        expiringCount: expiringItems.length,
+        completionsThisMonth: recentRecords.length,
+        totalHoursThisYear: totalHours,
+        avgHoursPerMember: members.length > 0 ? Math.round((totalHours / members.length) * 10) / 10 : 0,
+      });
+
+      setRequirements(reqs);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError('Failed to load training data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const enabledWidgets = widgets.filter(w => w.enabled);
+  const toggleWidget = (widgetId: keyof typeof enabledWidgets) => {
+    setEnabledWidgets((prev) => ({
+      ...prev,
+      [widgetId]: !prev[widgetId],
+    }));
+  };
+
+  const formatRelativeDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffDays = Math.ceil((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="flex items-center space-x-3 text-white">
+              <RefreshCw className="w-6 h-6 animate-spin" />
+              <span>Loading training dashboard...</span>
+            </div>
+          </div>
+        </main>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -104,6 +239,15 @@ const TrainingOfficerDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Refresh Button */}
+            <button
+              onClick={fetchDashboardData}
+              className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              title="Refresh Data"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+
             {/* Quick Actions */}
             <button
               onClick={() => navigate('/training/sessions/new')}
@@ -123,12 +267,25 @@ const TrainingOfficerDashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
+            <p className="text-red-400">{error}</p>
+          </div>
+        )}
+
         {/* Dashboard Settings Panel */}
         {showSettings && (
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 mb-6">
             <h3 className="text-white font-semibold mb-4">Customize Dashboard</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {widgets.map(widget => {
+              {[
+                { id: 'compliance-overview', title: 'Compliance Overview', icon: CheckCircle },
+                { id: 'upcoming-expirations', title: 'Upcoming Expirations', icon: AlertTriangle },
+                { id: 'recent-completions', title: 'Recent Completions', icon: Award },
+                { id: 'training-hours', title: 'Training Hours Summary', icon: Clock },
+                { id: 'requirements-status', title: 'Requirements Status', icon: FileText },
+              ].map((widget) => {
                 const Icon = widget.icon;
                 return (
                   <label
@@ -137,8 +294,8 @@ const TrainingOfficerDashboard: React.FC = () => {
                   >
                     <input
                       type="checkbox"
-                      checked={widget.enabled}
-                      onChange={() => toggleWidget(widget.id)}
+                      checked={enabledWidgets[widget.id as keyof typeof enabledWidgets]}
+                      onChange={() => toggleWidget(widget.id as keyof typeof enabledWidgets)}
                       className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500"
                     />
                     <Icon className="w-5 h-5 text-slate-400" />
@@ -155,22 +312,22 @@ const TrainingOfficerDashboard: React.FC = () => {
           <StatCard
             icon={Users}
             label="Total Members"
-            value="45"
+            value={stats.totalMembers.toString()}
             color="blue"
             onClick={() => navigate('/training/members')}
           />
           <StatCard
             icon={CheckCircle}
             label="Compliant"
-            value="38"
-            subtitle="84%"
+            value={stats.compliantMembers.toString()}
+            subtitle={`${stats.compliancePercentage}%`}
             color="green"
             onClick={() => navigate('/training/compliance')}
           />
           <StatCard
             icon={AlertTriangle}
             label="Need Attention"
-            value="7"
+            value={stats.expiringCount.toString()}
             subtitle="Expiring Soon"
             color="yellow"
             onClick={() => navigate('/training/expirations')}
@@ -178,7 +335,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           <StatCard
             icon={Award}
             label="This Month"
-            value="23"
+            value={stats.completionsThisMonth.toString()}
             subtitle="Completions"
             color="purple"
           />
@@ -232,14 +389,37 @@ const TrainingOfficerDashboard: React.FC = () => {
 
         {/* Customizable Widget Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {enabledWidgets.map(widget => (
-            <div
-              key={widget.id}
-              className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20"
-            >
-              {widget.component}
+          {enabledWidgets['compliance-overview'] && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+              <ComplianceOverviewWidget stats={stats} />
             </div>
-          ))}
+          )}
+          {enabledWidgets['upcoming-expirations'] && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+              <UpcomingExpirationsWidget
+                expirations={expiringCertifications.slice(0, 5)}
+                onViewMember={(memberId) => navigate(`/members/${memberId}/training`)}
+              />
+            </div>
+          )}
+          {enabledWidgets['recent-completions'] && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+              <RecentCompletionsWidget
+                completions={recentCompletions.slice(0, 5)}
+                formatDate={formatRelativeDate}
+              />
+            </div>
+          )}
+          {enabledWidgets['training-hours'] && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+              <TrainingHoursSummaryWidget stats={stats} />
+            </div>
+          )}
+          {enabledWidgets['requirements-status'] && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+              <RequirementsStatusWidget requirements={requirements} />
+            </div>
+          )}
         </div>
       </main>
     </AppLayout>
@@ -322,91 +502,173 @@ const NavigationCard: React.FC<NavigationCardProps> = ({ icon: Icon, title, desc
   );
 };
 
-// Widget Components (Placeholders - will be implemented with real data)
-const ComplianceOverviewWidget: React.FC = () => (
+// Widget Components with Real Data
+
+interface ComplianceOverviewWidgetProps {
+  stats: DashboardStats;
+}
+
+const ComplianceOverviewWidget: React.FC<ComplianceOverviewWidgetProps> = ({ stats }) => (
   <div className="p-6">
     <h3 className="text-white font-semibold mb-4">Department Compliance</h3>
     <div className="space-y-3">
-      <ComplianceBar label="Annual Hours Requirement" percentage={84} />
-      <ComplianceBar label="State Registry Current" percentage={92} />
-      <ComplianceBar label="Certification Status" percentage={78} />
+      <ComplianceBar
+        label="Member Compliance"
+        percentage={stats.compliancePercentage}
+        detail={`${stats.compliantMembers} of ${stats.totalMembers} members`}
+      />
+      <ComplianceBar
+        label="Training Hours Goal"
+        percentage={Math.min(100, Math.round((stats.totalHoursThisYear / Math.max(1, stats.totalMembers * 40)) * 100))}
+        detail={`${stats.totalHoursThisYear} total hours this year`}
+      />
     </div>
   </div>
 );
 
-const UpcomingExpirationsWidget: React.FC = () => (
+interface UpcomingExpirationsWidgetProps {
+  expirations: ExpirationItem[];
+  onViewMember: (memberId: string) => void;
+}
+
+const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ expirations, onViewMember }) => (
   <div className="p-6">
     <h3 className="text-white font-semibold mb-4">Upcoming Expirations</h3>
-    <div className="space-y-3">
-      <ExpirationItem member="John Smith" cert="EMT-B" daysLeft={14} />
-      <ExpirationItem member="Jane Doe" cert="FF1" daysLeft={28} />
-      <ExpirationItem member="Mike Johnson" cert="CPR" daysLeft={45} />
-    </div>
+    {expirations.length === 0 ? (
+      <p className="text-slate-400 text-sm">No certifications expiring soon!</p>
+    ) : (
+      <div className="space-y-3">
+        {expirations.map((item) => (
+          <div
+            key={item.id}
+            onClick={() => onViewMember(item.memberId)}
+            className="flex items-center justify-between p-3 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 transition-colors"
+          >
+            <div>
+              <p className="text-white text-sm font-medium">{item.memberName}</p>
+              <p className="text-slate-400 text-xs">{item.courseName}</p>
+            </div>
+            <span
+              className={`text-xs font-semibold px-2 py-1 rounded ${
+                item.daysLeft <= 14 ? 'bg-red-600 text-white' : item.daysLeft <= 30 ? 'bg-orange-600 text-white' : 'bg-yellow-600 text-white'
+              }`}
+            >
+              {item.daysLeft} days
+            </span>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 );
 
-const RecentCompletionsWidget: React.FC = () => (
+interface RecentCompletionsWidgetProps {
+  completions: CompletionItem[];
+  formatDate: (date: string) => string;
+}
+
+const RecentCompletionsWidget: React.FC<RecentCompletionsWidgetProps> = ({ completions, formatDate }) => (
   <div className="p-6">
     <h3 className="text-white font-semibold mb-4">Recent Completions</h3>
-    <div className="space-y-3">
-      <CompletionItem member="Sarah Wilson" course="Hazmat Ops" date="2 days ago" />
-      <CompletionItem member="Tom Brown" course="Pump Operations" date="1 week ago" />
-      <CompletionItem member="Lisa Davis" course="Vehicle Rescue" date="1 week ago" />
-    </div>
+    {completions.length === 0 ? (
+      <p className="text-slate-400 text-sm">No recent completions.</p>
+    ) : (
+      <div className="space-y-3">
+        {completions.map((item) => (
+          <div key={item.id} className="flex items-center space-x-3 p-3 bg-slate-800/50 rounded">
+            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-medium truncate">{item.memberName}</p>
+              <p className="text-slate-400 text-xs">{item.courseName}</p>
+            </div>
+            <span className="text-slate-500 text-xs whitespace-nowrap">{formatDate(item.completionDate)}</span>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 );
 
-const TrainingHoursSummaryWidget: React.FC = () => (
-  <div className="p-6">
-    <h3 className="text-white font-semibold mb-4">Training Hours (This Year)</h3>
-    <div className="space-y-4">
-      <div>
-        <div className="flex justify-between text-sm mb-1">
-          <span className="text-slate-400">Department Total</span>
-          <span className="text-white font-semibold">1,247 hrs</span>
+interface TrainingHoursSummaryWidgetProps {
+  stats: DashboardStats;
+}
+
+const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({ stats }) => {
+  const yearGoal = Math.max(1, stats.totalMembers * 40); // Assuming 40 hours/year goal per member
+  const progressPercent = Math.min(100, Math.round((stats.totalHoursThisYear / yearGoal) * 100));
+
+  return (
+    <div className="p-6">
+      <h3 className="text-white font-semibold mb-4">Training Hours (This Year)</h3>
+      <div className="space-y-4">
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-slate-400">Department Total</span>
+            <span className="text-white font-semibold">{stats.totalHoursThisYear.toLocaleString()} hrs</span>
+          </div>
+          <div className="w-full bg-slate-800 rounded-full h-2">
+            <div className="bg-green-600 h-2 rounded-full" style={{ width: `${progressPercent}%` }}></div>
+          </div>
         </div>
-        <div className="w-full bg-slate-800 rounded-full h-2">
-          <div className="bg-green-600 h-2 rounded-full" style={{ width: '78%' }}></div>
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="bg-slate-800/50 rounded p-3">
+            <p className="text-slate-400 text-xs">Average per Member</p>
+            <p className="text-white font-bold text-xl">{stats.avgHoursPerMember} hrs</p>
+          </div>
+          <div className="bg-slate-800/50 rounded p-3">
+            <p className="text-slate-400 text-xs">Goal Progress</p>
+            <p className="text-white font-bold text-xl">{progressPercent}%</p>
+          </div>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 pt-2">
-        <div className="bg-slate-800/50 rounded p-3">
-          <p className="text-slate-400 text-xs">Average per Member</p>
-          <p className="text-white font-bold text-xl">27.7 hrs</p>
-        </div>
-        <div className="bg-slate-800/50 rounded p-3">
-          <p className="text-slate-400 text-xs">Goal Progress</p>
-          <p className="text-white font-bold text-xl">78%</p>
-        </div>
-      </div>
     </div>
-  </div>
-);
+  );
+};
 
-const UpcomingSessionsWidget: React.FC = () => (
-  <div className="p-6">
-    <h3 className="text-white font-semibold mb-4">Upcoming Sessions</h3>
-    <div className="space-y-3">
-      <SessionItem title="CPR/AED Renewal" date="Jan 25" attendees={12} />
-      <SessionItem title="Hazmat Awareness" date="Jan 28" attendees={8} />
-      <SessionItem title="Pump Operations" date="Feb 2" attendees={15} />
-    </div>
-  </div>
-);
+interface RequirementsStatusWidgetProps {
+  requirements: TrainingRequirement[];
+}
 
-const RequirementsStatusWidget: React.FC = () => (
-  <div className="p-6">
-    <h3 className="text-white font-semibold mb-4">Requirements Status</h3>
-    <div className="space-y-3">
-      <RequirementStatus name="Annual Training Hours" status="on-track" progress={84} />
-      <RequirementStatus name="State Certifications" status="needs-attention" progress={78} />
-      <RequirementStatus name="Department Certifications" status="complete" progress={100} />
+const RequirementsStatusWidget: React.FC<RequirementsStatusWidgetProps> = ({ requirements }) => {
+  const now = new Date();
+
+  const getRequirementStatus = (req: TrainingRequirement): 'complete' | 'on-track' | 'needs-attention' => {
+    if (!req.due_date) return 'on-track';
+    const dueDate = new Date(req.due_date);
+    const daysUntilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysUntilDue < 0) return 'needs-attention';
+    if (daysUntilDue < 30) return 'needs-attention';
+    return 'on-track';
+  };
+
+  return (
+    <div className="p-6">
+      <h3 className="text-white font-semibold mb-4">Requirements Status</h3>
+      {requirements.length === 0 ? (
+        <p className="text-slate-400 text-sm">No active requirements.</p>
+      ) : (
+        <div className="space-y-3">
+          {requirements.slice(0, 5).map((req) => {
+            const status = getRequirementStatus(req);
+            return (
+              <RequirementStatusItem key={req.id} name={req.name} status={status} />
+            );
+          })}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // Helper Components
-const ComplianceBar: React.FC<{ label: string; percentage: number }> = ({ label, percentage }) => (
+
+interface ComplianceBarProps {
+  label: string;
+  percentage: number;
+  detail?: string;
+}
+
+const ComplianceBar: React.FC<ComplianceBarProps> = ({ label, percentage, detail }) => (
   <div>
     <div className="flex justify-between text-sm mb-1">
       <span className="text-slate-400">{label}</span>
@@ -418,50 +680,16 @@ const ComplianceBar: React.FC<{ label: string; percentage: number }> = ({ label,
         style={{ width: `${percentage}%` }}
       ></div>
     </div>
+    {detail && <p className="text-slate-500 text-xs mt-1">{detail}</p>}
   </div>
 );
 
-const ExpirationItem: React.FC<{ member: string; cert: string; daysLeft: number }> = ({ member, cert, daysLeft }) => (
-  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded">
-    <div>
-      <p className="text-white text-sm font-medium">{member}</p>
-      <p className="text-slate-400 text-xs">{cert}</p>
-    </div>
-    <span className={`text-xs font-semibold px-2 py-1 rounded ${daysLeft <= 30 ? 'bg-red-600 text-white' : 'bg-yellow-600 text-white'}`}>
-      {daysLeft} days
-    </span>
-  </div>
-);
+interface RequirementStatusItemProps {
+  name: string;
+  status: 'complete' | 'on-track' | 'needs-attention';
+}
 
-const CompletionItem: React.FC<{ member: string; course: string; date: string }> = ({ member, course, date }) => (
-  <div className="flex items-center space-x-3 p-3 bg-slate-800/50 rounded">
-    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-    <div className="flex-1 min-w-0">
-      <p className="text-white text-sm font-medium truncate">{member}</p>
-      <p className="text-slate-400 text-xs">{course}</p>
-    </div>
-    <span className="text-slate-500 text-xs whitespace-nowrap">{date}</span>
-  </div>
-);
-
-const SessionItem: React.FC<{ title: string; date: string; attendees: number }> = ({ title, date, attendees }) => (
-  <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded">
-    <div>
-      <p className="text-white text-sm font-medium">{title}</p>
-      <p className="text-slate-400 text-xs">{date}</p>
-    </div>
-    <div className="flex items-center space-x-1 text-slate-400">
-      <Users className="w-4 h-4" />
-      <span className="text-xs">{attendees}</span>
-    </div>
-  </div>
-);
-
-const RequirementStatus: React.FC<{ name: string; status: 'complete' | 'on-track' | 'needs-attention'; progress: number }> = ({
-  name,
-  status,
-  progress,
-}) => {
+const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, status }) => {
   const statusConfig = {
     complete: { color: 'bg-green-600', label: 'Complete' },
     'on-track': { color: 'bg-blue-600', label: 'On Track' },
@@ -470,14 +698,11 @@ const RequirementStatus: React.FC<{ name: string; status: 'complete' | 'on-track
 
   return (
     <div className="p-3 bg-slate-800/50 rounded">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-white text-sm font-medium">{name}</span>
-        <span className={`text-xs font-semibold px-2 py-1 rounded ${statusConfig[status].color} text-white`}>
+      <div className="flex items-center justify-between">
+        <span className="text-white text-sm font-medium truncate flex-1 mr-2">{name}</span>
+        <span className={`text-xs font-semibold px-2 py-1 rounded ${statusConfig[status].color} text-white whitespace-nowrap`}>
           {statusConfig[status].label}
         </span>
-      </div>
-      <div className="w-full bg-slate-700 rounded-full h-1.5">
-        <div className={`h-1.5 rounded-full ${statusConfig[status].color}`} style={{ width: `${progress}%` }}></div>
       </div>
     </div>
   );

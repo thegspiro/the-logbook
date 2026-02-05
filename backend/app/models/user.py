@@ -156,6 +156,7 @@ class User(Base):
     email = Column(String(255), nullable=False, index=True)
     password_hash = Column(String(255))
     first_name = Column(String(100))
+    middle_name = Column(String(100))
     last_name = Column(String(100))
     badge_number = Column(String(50))
     phone = Column(String(20))
@@ -165,6 +166,21 @@ class User(Base):
     photo_url = Column(Text)
     date_of_birth = Column(Date)
     hire_date = Column(Date)
+
+    # Department/Rank Info
+    rank = Column(String(100))  # e.g., "Captain", "Lieutenant", "Firefighter"
+    station = Column(String(100))  # e.g., "Station 1", "Headquarters"
+
+    # Address
+    address_street = Column(String(255))
+    address_city = Column(String(100))
+    address_state = Column(String(50))
+    address_zip = Column(String(20))
+    address_country = Column(String(100), default="USA")
+
+    # Emergency Contacts (stored as JSON array)
+    # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
+    emergency_contacts = Column(JSON, default=[])
 
     # Status
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVE, index=True)

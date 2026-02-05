@@ -16,16 +16,17 @@ This guide covers common issues and their solutions for The Logbook deployment.
 10. [Authentication & Login Issues](#authentication--login-issues)
 11. [Session Management Issues](#session-management-issues)
 12. [Role & Permission Issues](#role--permission-issues)
-13. [API Debugging Guide](#api-debugging-guide)
-14. [Common Error Codes Reference](#common-error-codes-reference)
-15. [Development Environment Issues](#development-environment-issues)
-16. [Performance Issues](#performance-issues)
-17. [Security & SSL Issues](#security--ssl-issues)
-18. [Backup & Recovery](#backup--recovery)
-19. [File Upload Issues](#file-upload-issues)
-20. [Email & Notification Issues](#email--notification-issues)
-21. [Security Configuration Issues](#security-configuration-issues)
-22. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
+13. [Training Module Issues](#training-module-issues)
+14. [API Debugging Guide](#api-debugging-guide)
+15. [Common Error Codes Reference](#common-error-codes-reference)
+16. [Development Environment Issues](#development-environment-issues)
+17. [Performance Issues](#performance-issues)
+18. [Security & SSL Issues](#security--ssl-issues)
+19. [Backup & Recovery](#backup--recovery)
+20. [File Upload Issues](#file-upload-issues)
+21. [Email & Notification Issues](#email--notification-issues)
+22. [Security Configuration Issues](#security-configuration-issues)
+23. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
 
 ---
 
@@ -1095,6 +1096,310 @@ location.reload();
 # If wrong organization:
 > UPDATE roles SET organization_id = CORRECT_ORG_ID WHERE slug = 'your_role_slug';
 ```
+
+---
+
+## Training Module Issues
+
+### Problem: Training categories not loading
+**Symptom:** Category dropdown is empty or shows error
+
+### Root Cause
+- Categories not created for the organization
+- API endpoint returning error
+- Categories marked as inactive
+
+### Solution
+1. **Check if categories exist:**
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SELECT id, name, code, active FROM training_categories WHERE organization_id = 'YOUR_ORG_ID';
+```
+
+2. **Create initial categories if none exist:**
+```sql
+> INSERT INTO training_categories (id, organization_id, name, code, active, created_at)
+  VALUES (UUID(), 'YOUR_ORG_ID', 'Firefighting', 'FF', 1, NOW());
+```
+
+3. **Check API response:**
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://YOUR-IP:7881/api/v1/training/categories
+```
+
+4. **Verify user has training permissions:**
+```sql
+> SELECT rp.permission FROM role_permissions rp
+  JOIN user_roles ur ON ur.role_id = rp.role_id
+  WHERE ur.user_id = 'YOUR_USER_ID' AND rp.permission LIKE 'training%';
+```
+
+---
+
+### Problem: Training requirement due date calculation incorrect
+**Symptom:** Due dates show wrong values or don't update after completion
+
+### Root Cause
+- Incorrect `due_date_type` configuration
+- Missing `rolling_period_months` for rolling requirements
+- Incorrect `period_start_month`/`period_start_day` for calendar period
+
+### Solution
+1. **Check requirement configuration:**
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SELECT name, due_date_type, rolling_period_months, period_start_month, period_start_day
+  FROM training_requirements WHERE id = 'REQUIREMENT_ID';
+```
+
+2. **Verify due date type values:**
+Valid values are:
+- `calendar_period` (default) - Due by end of calendar period
+- `rolling` - Due X months from last completion
+- `certification_period` - Due when certification expires
+- `fixed_date` - Due by specific date
+
+3. **For calendar period issues:**
+```sql
+-- Example: Annual requirement due Dec 31
+> UPDATE training_requirements
+  SET due_date_type = 'calendar_period',
+      period_start_month = 1,
+      period_start_day = 1
+  WHERE id = 'REQUIREMENT_ID';
+```
+
+4. **For rolling period issues:**
+```sql
+-- Example: CPR every 2 years (24 months)
+> UPDATE training_requirements
+  SET due_date_type = 'rolling',
+      rolling_period_months = 24
+  WHERE id = 'REQUIREMENT_ID';
+```
+
+---
+
+### Problem: Training records not counting toward category-based requirement
+**Symptom:** Completed training not showing progress on requirement
+
+### Root Cause
+- Course not assigned to required category
+- Requirement's `category_ids` not configured
+- Training record status not "completed"
+
+### Solution
+1. **Check requirement's category configuration:**
+```bash
+docker exec -it intranet-mysql mysql -u root -p
+> USE the_logbook;
+> SELECT name, category_ids FROM training_requirements WHERE id = 'REQUIREMENT_ID';
+```
+
+2. **Check course's category assignment:**
+```sql
+> SELECT name, category_ids FROM training_courses WHERE id = 'COURSE_ID';
+```
+
+3. **Verify categories match:**
+The course's `category_ids` must include at least one category from the requirement's `category_ids`.
+
+4. **Update course categories if needed:**
+```sql
+> UPDATE training_courses
+  SET category_ids = '["category-uuid-1", "category-uuid-2"]'
+  WHERE id = 'COURSE_ID';
+```
+
+5. **Verify training record is completed:**
+```sql
+> SELECT status, completion_date FROM training_records
+  WHERE user_id = 'USER_ID' AND course_id = 'COURSE_ID';
+```
+
+---
+
+### Problem: Training officer dashboard not showing data
+**Symptom:** Dashboard widgets empty or showing loading forever
+
+### Root Cause
+- API endpoints not responding
+- User lacks training officer permissions
+- No training data exists yet
+
+### Solution
+1. **Check API health:**
+```bash
+curl http://YOUR-IP:7881/api/v1/training/requirements
+curl http://YOUR-IP:7881/api/v1/training/records
+```
+
+2. **Verify training officer role:**
+```sql
+> SELECT r.name, r.slug FROM roles r
+  JOIN user_roles ur ON ur.role_id = r.id
+  WHERE ur.user_id = 'YOUR_USER_ID';
+-- Should include 'training_officer' or similar role
+```
+
+3. **Check for required permissions:**
+```sql
+> SELECT permission, access_level FROM role_permissions
+  WHERE role_id IN (SELECT role_id FROM user_roles WHERE user_id = 'YOUR_USER_ID')
+  AND permission LIKE 'training%';
+```
+
+4. **Verify backend logs for errors:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "training\|error"
+```
+
+---
+
+### Problem: Cannot create training category - validation error
+**Error:** `Invalid color format` or `Parent category not found`
+
+### Solution
+1. **Color validation:**
+   - Color must be a valid hex code: `#RRGGBB`
+   - Example: `#FF5733` (valid), `FF5733` (invalid - missing #)
+
+2. **Parent category:**
+   - If specifying `parent_category_id`, it must be an existing, active category
+   - Parent must belong to the same organization
+
+3. **Code uniqueness:**
+   - Category `code` must be unique within the organization
+   - Check existing codes:
+   ```sql
+   > SELECT code FROM training_categories WHERE organization_id = 'YOUR_ORG_ID';
+   ```
+
+---
+
+### Problem: Training requirement deletion fails
+**Error:** `Cannot delete requirement with active enrollments`
+
+### Root Cause
+The requirement is linked to active program enrollments or has progress records.
+
+### Solution
+1. **Check for linked enrollments:**
+```sql
+> SELECT pe.id, pe.status, u.email
+  FROM program_enrollments pe
+  JOIN requirement_progress rp ON rp.enrollment_id = pe.id
+  JOIN users u ON u.id = pe.user_id
+  WHERE rp.requirement_id = 'REQUIREMENT_ID' AND pe.status = 'active';
+```
+
+2. **Option A: Soft delete (recommended):**
+Instead of deleting, deactivate the requirement:
+```sql
+> UPDATE training_requirements SET active = 0 WHERE id = 'REQUIREMENT_ID';
+```
+
+3. **Option B: Complete or withdraw enrollments first:**
+```sql
+-- Mark enrollments as completed or withdrawn before deleting
+> UPDATE program_enrollments SET status = 'withdrawn'
+  WHERE id IN (
+    SELECT DISTINCT pe.id FROM program_enrollments pe
+    JOIN requirement_progress rp ON rp.enrollment_id = pe.id
+    WHERE rp.requirement_id = 'REQUIREMENT_ID'
+  );
+```
+
+---
+
+### Problem: Alembic migration fails for training tables
+**Error:** `Can't locate revision` or `Table already exists`
+
+### Solution
+1. **Check current migration state:**
+```bash
+docker exec intranet-backend alembic current
+docker exec intranet-backend alembic history
+```
+
+2. **If training_categories table missing:**
+```bash
+docker exec intranet-backend alembic upgrade head
+```
+
+3. **If migration conflicts:**
+```bash
+# Check for the specific training migration
+docker exec intranet-backend alembic history | grep training
+
+# Stamp to specific revision if needed
+docker exec intranet-backend alembic stamp 20260205_0100
+```
+
+4. **Manual table creation (emergency only):**
+```sql
+-- Only use if migration system is broken
+CREATE TABLE training_categories (
+  id VARCHAR(36) PRIMARY KEY,
+  organization_id VARCHAR(36) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  code VARCHAR(50),
+  description TEXT,
+  color VARCHAR(7),
+  parent_category_id VARCHAR(36),
+  sort_order INT DEFAULT 0,
+  icon VARCHAR(50),
+  active BOOLEAN DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_by VARCHAR(36),
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_category_id) REFERENCES training_categories(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE INDEX idx_category_org_code ON training_categories(organization_id, code);
+CREATE INDEX idx_category_parent ON training_categories(parent_category_id);
+```
+
+---
+
+### Problem: Training hours not accumulating correctly
+**Symptom:** Total hours in dashboard don't match expected values
+
+### Root Cause
+- Training records missing `hours_completed` field
+- Records with wrong status (not "completed")
+- Date filtering excluding relevant records
+
+### Solution
+1. **Check training records:**
+```sql
+> SELECT id, course_name, hours_completed, status, completion_date
+  FROM training_records
+  WHERE user_id = 'USER_ID'
+  ORDER BY completion_date DESC;
+```
+
+2. **Verify hours are set:**
+```sql
+-- Records without hours
+> SELECT id, course_name FROM training_records
+  WHERE user_id = 'USER_ID' AND (hours_completed IS NULL OR hours_completed = 0);
+```
+
+3. **Check status values:**
+```sql
+-- Should be 'completed' to count
+> SELECT status, COUNT(*) FROM training_records
+  WHERE user_id = 'USER_ID' GROUP BY status;
+```
+
+4. **Verify date range:**
+For period-based requirements, ensure records fall within the current period.
 
 ---
 

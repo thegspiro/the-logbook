@@ -14,6 +14,8 @@ import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
 import AddMember from './pages/AddMember';
 import ImportMembers from './pages/ImportMembers';
+import { MemberProfilePage } from './pages/MemberProfilePage';
+import { MemberTrainingHistoryPage } from './pages/MemberTrainingHistoryPage';
 import { EventsPage } from './pages/EventsPage';
 import { EventDetailPage } from './pages/EventDetailPage';
 import EventQRCodePage from './pages/EventQRCodePage';
@@ -24,6 +26,13 @@ import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage';
 import { RoleManagementPage } from './pages/RoleManagementPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { MembersAdminPage } from './pages/MembersAdminPage';
+import TrainingOfficerDashboard from './pages/TrainingOfficerDashboard';
+import TrainingRequirementsPage from './pages/TrainingRequirementsPage';
+import TrainingDashboardPage from './pages/TrainingDashboardPage';
+import TrainingProgramsPage from './pages/TrainingProgramsPage';
+import CreateTrainingSessionPage from './pages/CreateTrainingSessionPage';
+import ExternalTrainingPage from './pages/ExternalTrainingPage';
+import { LoginPage } from './pages/LoginPage';
 
 /**
  * Main Application Component
@@ -66,6 +75,8 @@ function App() {
           <Route path="/members" element={<Members />} />
           <Route path="/members/add" element={<AddMember />} />
           <Route path="/members/import" element={<ImportMembers />} />
+          <Route path="/members/:userId" element={<MemberProfilePage />} />
+          <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
 
           {/* Events Module */}
           <Route path="/events" element={<EventsPage />} />
@@ -74,6 +85,14 @@ function App() {
           <Route path="/events/:id/check-in" element={<EventSelfCheckInPage />} />
           <Route path="/events/:id/monitoring" element={<EventCheckInMonitoringPage />} />
           <Route path="/events/:id/analytics" element={<AnalyticsDashboardPage />} />
+
+          {/* Training Module */}
+          <Route path="/training" element={<TrainingDashboardPage />} />
+          <Route path="/training/officer" element={<TrainingOfficerDashboard />} />
+          <Route path="/training/requirements" element={<TrainingRequirementsPage />} />
+          <Route path="/training/programs" element={<TrainingProgramsPage />} />
+          <Route path="/training/sessions/new" element={<CreateTrainingSessionPage />} />
+          <Route path="/training/integrations" element={<ExternalTrainingPage />} />
 
           {/* Admin/Monitoring Routes */}
           <Route path="/admin/errors" element={<ErrorMonitoringPage />} />
@@ -85,21 +104,7 @@ function App() {
           <Route path="/settings/roles" element={<RoleManagementPage />} />
 
           {/* Login Page */}
-          <Route
-            path="/login"
-            element={
-              <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
-                  <h2 className="text-3xl font-bold text-white mb-4">
-                    Login Page
-                  </h2>
-                  <p className="text-slate-300">
-                    Login functionality is under development.
-                  </p>
-                </div>
-              </div>
-            }
-          />
+          <Route path="/login" element={<LoginPage />} />
 
           {/* Catch all - redirect to welcome */}
           <Route path="*" element={<Navigate to="/" replace />} />

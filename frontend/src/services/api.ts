@@ -31,6 +31,9 @@ import type {
   TrainingRequirement,
   TrainingRequirementCreate,
   TrainingRequirementUpdate,
+  TrainingCategory,
+  TrainingCategoryCreate,
+  TrainingCategoryUpdate,
   UserTrainingStats,
   TrainingReport,
   RequirementProgress,
@@ -54,6 +57,22 @@ import type {
   RegistryImportResult,
   BulkEnrollmentRequest,
   BulkEnrollmentResponse,
+  // External Training Integration types
+  ExternalTrainingProvider,
+  ExternalTrainingProviderCreate,
+  ExternalTrainingProviderUpdate,
+  ExternalCategoryMapping,
+  ExternalCategoryMappingUpdate,
+  ExternalUserMapping,
+  ExternalUserMappingUpdate,
+  ExternalTrainingSyncLog,
+  ExternalTrainingImport,
+  SyncRequest,
+  SyncResponse,
+  TestConnectionResponse,
+  ImportRecordRequest,
+  BulkImportRequest,
+  BulkImportResponse,
 } from '../types/training';
 import type {
   Event,
@@ -208,14 +227,29 @@ export const userService = {
     username: string;
     email: string;
     first_name: string;
+    middle_name?: string;
     last_name: string;
     badge_number?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
     hire_date?: string;
-    role_ids: string[];
-    send_welcome_email: boolean;
+    rank?: string;
+    station?: string;
+    address_street?: string;
+    address_city?: string;
+    address_state?: string;
+    address_zip?: string;
+    address_country?: string;
+    emergency_contacts?: Array<{
+      name: string;
+      relationship: string;
+      phone: string;
+      email?: string;
+      is_primary: boolean;
+    }>;
+    role_ids?: string[];
+    send_welcome_email?: boolean;
   }): Promise<UserWithRoles> {
     const response = await api.post<UserWithRoles>('/users', memberData);
     return response.data;
@@ -481,6 +515,62 @@ export const trainingService = {
   },
 
   /**
+   * Delete a training requirement (soft delete)
+   */
+  async deleteRequirement(requirementId: string): Promise<void> {
+    await api.delete(`/training/requirements/${requirementId}`);
+  },
+
+  // ==================== Training Categories ====================
+
+  /**
+   * Get all training categories
+   */
+  async getCategories(activeOnly: boolean = true): Promise<TrainingCategory[]> {
+    const response = await api.get<TrainingCategory[]>('/training/categories', {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get a specific category
+   */
+  async getCategory(categoryId: string): Promise<TrainingCategory> {
+    const response = await api.get<TrainingCategory>(`/training/categories/${categoryId}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new training category
+   */
+  async createCategory(category: TrainingCategoryCreate): Promise<TrainingCategory> {
+    const response = await api.post<TrainingCategory>('/training/categories', category);
+    return response.data;
+  },
+
+  /**
+   * Update a training category
+   */
+  async updateCategory(
+    categoryId: string,
+    updates: TrainingCategoryUpdate
+  ): Promise<TrainingCategory> {
+    const response = await api.patch<TrainingCategory>(
+      `/training/categories/${categoryId}`,
+      updates
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a training category (soft delete)
+   */
+  async deleteCategory(categoryId: string): Promise<void> {
+    await api.delete(`/training/categories/${categoryId}`);
+  },
+
+  /**
    * Get training statistics for a user
    */
   async getUserStats(userId: string): Promise<UserTrainingStats> {
@@ -523,6 +613,201 @@ export const trainingService = {
     const response = await api.get<TrainingRecord[]>('/training/certifications/expiring', {
       params: { days_ahead: daysAhead },
     });
+    return response.data;
+  },
+};
+
+// ==================== External Training Integration Service ====================
+
+export const externalTrainingService = {
+  // ==================== Providers ====================
+
+  /**
+   * Get all external training providers
+   */
+  async getProviders(activeOnly: boolean = true): Promise<ExternalTrainingProvider[]> {
+    const response = await api.get<ExternalTrainingProvider[]>('/training/external/providers', {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get a specific provider
+   */
+  async getProvider(providerId: string): Promise<ExternalTrainingProvider> {
+    const response = await api.get<ExternalTrainingProvider>(`/training/external/providers/${providerId}`);
+    return response.data;
+  },
+
+  /**
+   * Create a new external training provider
+   */
+  async createProvider(provider: ExternalTrainingProviderCreate): Promise<ExternalTrainingProvider> {
+    const response = await api.post<ExternalTrainingProvider>('/training/external/providers', provider);
+    return response.data;
+  },
+
+  /**
+   * Update an external training provider
+   */
+  async updateProvider(
+    providerId: string,
+    updates: ExternalTrainingProviderUpdate
+  ): Promise<ExternalTrainingProvider> {
+    const response = await api.patch<ExternalTrainingProvider>(
+      `/training/external/providers/${providerId}`,
+      updates
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete an external training provider (soft delete)
+   */
+  async deleteProvider(providerId: string): Promise<void> {
+    await api.delete(`/training/external/providers/${providerId}`);
+  },
+
+  /**
+   * Test provider connection
+   */
+  async testConnection(providerId: string): Promise<TestConnectionResponse> {
+    const response = await api.post<TestConnectionResponse>(
+      `/training/external/providers/${providerId}/test`
+    );
+    return response.data;
+  },
+
+  // ==================== Sync Operations ====================
+
+  /**
+   * Trigger a sync operation
+   */
+  async triggerSync(providerId: string, request: SyncRequest): Promise<SyncResponse> {
+    const response = await api.post<SyncResponse>(
+      `/training/external/providers/${providerId}/sync`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Get sync logs for a provider
+   */
+  async getSyncLogs(providerId: string, limit: number = 20): Promise<ExternalTrainingSyncLog[]> {
+    const response = await api.get<ExternalTrainingSyncLog[]>(
+      `/training/external/providers/${providerId}/sync-logs`,
+      { params: { limit } }
+    );
+    return response.data;
+  },
+
+  // ==================== Category Mappings ====================
+
+  /**
+   * Get category mappings for a provider
+   */
+  async getCategoryMappings(
+    providerId: string,
+    unmappedOnly: boolean = false
+  ): Promise<ExternalCategoryMapping[]> {
+    const response = await api.get<ExternalCategoryMapping[]>(
+      `/training/external/providers/${providerId}/category-mappings`,
+      { params: { unmapped_only: unmappedOnly } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Update a category mapping
+   */
+  async updateCategoryMapping(
+    providerId: string,
+    mappingId: string,
+    updates: ExternalCategoryMappingUpdate
+  ): Promise<ExternalCategoryMapping> {
+    const response = await api.patch<ExternalCategoryMapping>(
+      `/training/external/providers/${providerId}/category-mappings/${mappingId}`,
+      updates
+    );
+    return response.data;
+  },
+
+  // ==================== User Mappings ====================
+
+  /**
+   * Get user mappings for a provider
+   */
+  async getUserMappings(
+    providerId: string,
+    unmappedOnly: boolean = false
+  ): Promise<ExternalUserMapping[]> {
+    const response = await api.get<ExternalUserMapping[]>(
+      `/training/external/providers/${providerId}/user-mappings`,
+      { params: { unmapped_only: unmappedOnly } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Update a user mapping
+   */
+  async updateUserMapping(
+    providerId: string,
+    mappingId: string,
+    updates: ExternalUserMappingUpdate
+  ): Promise<ExternalUserMapping> {
+    const response = await api.patch<ExternalUserMapping>(
+      `/training/external/providers/${providerId}/user-mappings/${mappingId}`,
+      updates
+    );
+    return response.data;
+  },
+
+  // ==================== Imported Records ====================
+
+  /**
+   * Get imported records for a provider
+   */
+  async getImportedRecords(
+    providerId: string,
+    params?: {
+      status?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<ExternalTrainingImport[]> {
+    const response = await api.get<ExternalTrainingImport[]>(
+      `/training/external/providers/${providerId}/imports`,
+      { params }
+    );
+    return response.data;
+  },
+
+  /**
+   * Import a single record
+   */
+  async importRecord(
+    providerId: string,
+    importId: string,
+    request: ImportRecordRequest
+  ): Promise<ExternalTrainingImport> {
+    const response = await api.post<ExternalTrainingImport>(
+      `/training/external/providers/${providerId}/imports/${importId}/import`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Bulk import records
+   */
+  async bulkImport(providerId: string, request: BulkImportRequest): Promise<BulkImportResponse> {
+    const response = await api.post<BulkImportResponse>(
+      `/training/external/providers/${providerId}/imports/bulk`,
+      request
+    );
     return response.data;
   },
 };

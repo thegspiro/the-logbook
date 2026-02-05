@@ -10,7 +10,13 @@ from sqlalchemy import select
 from uuid import UUID
 
 from app.models.user import Organization
-from app.schemas.organization import OrganizationSettings, ContactInfoSettings, EnabledModulesResponse
+from app.schemas.organization import (
+    OrganizationSettings,
+    ContactInfoSettings,
+    EnabledModulesResponse,
+    ModuleSettings,
+    EmailServiceSettings,
+)
 
 
 class OrganizationService:
@@ -52,9 +58,38 @@ class OrganizationService:
             show_mobile=contact_info.get("show_mobile", True),
         )
 
+        # Parse email service settings
+        email_service = settings_dict.get("email_service", {})
+        email_settings = EmailServiceSettings(
+            enabled=email_service.get("enabled", False),
+            smtp_host=email_service.get("smtp_host"),
+            smtp_port=email_service.get("smtp_port", 587),
+            smtp_user=email_service.get("smtp_user"),
+            smtp_password=email_service.get("smtp_password"),
+            from_email=email_service.get("from_email"),
+            from_name=email_service.get("from_name"),
+            use_tls=email_service.get("use_tls", True),
+        )
+
+        # Parse module settings
+        modules = settings_dict.get("modules", {})
+        module_settings = ModuleSettings(
+            training=modules.get("training", False),
+            inventory=modules.get("inventory", False),
+            scheduling=modules.get("scheduling", False),
+            elections=modules.get("elections", False),
+            minutes=modules.get("minutes", False),
+            reports=modules.get("reports", False),
+            notifications=modules.get("notifications", False),
+            mobile=modules.get("mobile", False),
+            forms=modules.get("forms", False),
+            integrations=modules.get("integrations", False),
+        )
+
         return OrganizationSettings(
             contact_info_visibility=contact_settings,
-            **{k: v for k, v in settings_dict.items() if k != "contact_info_visibility"}
+            email_service=email_settings,
+            modules=module_settings,
         )
 
     async def update_organization_settings(
@@ -102,12 +137,69 @@ class OrganizationService:
         Get enabled modules for an organization
 
         Returns the list of enabled module IDs from organization settings.
+        Uses the ModuleSettings schema to determine which modules are enabled.
         """
         org = await self.get_organization(organization_id)
         if not org:
-            return EnabledModulesResponse(enabled_modules=[])
+            # Return default (essential modules only)
+            default_modules = ModuleSettings()
+            return EnabledModulesResponse(
+                enabled_modules=default_modules.get_enabled_modules(),
+                module_settings=default_modules
+            )
 
         settings_dict = org.settings or {}
-        enabled_modules = settings_dict.get("enabled_modules", [])
+        modules = settings_dict.get("modules", {})
 
-        return EnabledModulesResponse(enabled_modules=enabled_modules)
+        module_settings = ModuleSettings(
+            training=modules.get("training", False),
+            inventory=modules.get("inventory", False),
+            scheduling=modules.get("scheduling", False),
+            elections=modules.get("elections", False),
+            minutes=modules.get("minutes", False),
+            reports=modules.get("reports", False),
+            notifications=modules.get("notifications", False),
+            mobile=modules.get("mobile", False),
+            forms=modules.get("forms", False),
+            integrations=modules.get("integrations", False),
+        )
+
+        return EnabledModulesResponse(
+            enabled_modules=module_settings.get_enabled_modules(),
+            module_settings=module_settings
+        )
+
+    async def update_module_settings(
+        self,
+        organization_id: UUID,
+        module_updates: Dict[str, bool]
+    ) -> EnabledModulesResponse:
+        """
+        Update module settings for an organization
+
+        Args:
+            organization_id: The organization ID
+            module_updates: Dictionary of module_id -> enabled status
+
+        Returns:
+            Updated EnabledModulesResponse
+        """
+        org = await self.get_organization(organization_id)
+        if not org:
+            raise ValueError("Organization not found")
+
+        # Get current settings
+        current_settings = org.settings or {}
+        current_modules = current_settings.get("modules", {})
+
+        # Update with new module settings
+        updated_modules = {**current_modules, **module_updates}
+        current_settings["modules"] = updated_modules
+
+        # Update in database
+        org.settings = current_settings
+        await self.db.commit()
+        await self.db.refresh(org)
+
+        # Return updated enabled modules
+        return await self.get_enabled_modules(organization_id)
