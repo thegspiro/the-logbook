@@ -93,7 +93,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         <div className="flex items-center justify-between h-16 px-4">
           <div className="flex items-center">
             {logoPreview ? (
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src={logoPreview}
                   alt={`${departmentName} logo`}
@@ -140,7 +140,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center overflow-hidden">
                 {logoPreview ? (
-                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                     <img
                       src={logoPreview}
                       alt={`${departmentName} logo`}

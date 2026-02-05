@@ -41,7 +41,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           {/* Logo and Department Name */}
           <div className="flex items-center">
             {logoPreview ? (
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src={logoPreview}
                   alt={`${departmentName} logo`}
