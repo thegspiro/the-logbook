@@ -783,6 +783,273 @@ Recommended for:
 - Deadline reminder emails
 - Progress recalculation for large programs
 - Batch imports from registries
+- External training sync operations
+
+## External Training Integration
+
+### Overview
+
+The external training integration system allows organizations to connect to external training platforms (Vector Solutions, Target Solutions, Lexipol, etc.) and automatically import completed training records into The Logbook.
+
+### Supported Providers
+
+| Provider | Type | Description |
+|----------|------|-------------|
+| Vector Solutions | `vector_solutions` | Fire and EMS online training platform |
+| Target Solutions | `target_solutions` | Public safety training and compliance |
+| Lexipol | `lexipol` | Policy acknowledgment and training |
+| I Am Responding | `i_am_responding` | Response tracking with training features |
+| Custom API | `custom_api` | Generic adapter for any compatible API |
+
+### Models
+
+#### ExternalTrainingProvider
+
+Configuration for connecting to external training platforms.
+
+**Fields:**
+- `id`: UUID primary key
+- `organization_id`: Organization this provider belongs to
+- `name`: Display name (e.g., "Vector Solutions - Main Account")
+- `provider_type`: One of the supported provider types
+- `api_base_url`: Base URL for API calls
+- `api_key`: API key (encrypted)
+- `api_secret`: API secret for basic auth (encrypted)
+- `client_id`: OAuth client ID (if applicable)
+- `client_secret`: OAuth client secret (encrypted)
+- `auth_type`: `api_key`, `basic`, or `oauth2`
+- `config`: JSON configuration for provider-specific settings
+- `auto_sync_enabled`: Enable automatic sync on schedule
+- `sync_interval_hours`: Hours between auto-syncs (default: 24)
+- `last_sync_at`: Timestamp of last sync
+- `next_sync_at`: Scheduled time for next auto-sync
+- `default_category_id`: Default category for unmapped imports
+- `connection_verified`: Whether connection has been tested successfully
+- `connection_error`: Last connection error message
+
+#### ExternalCategoryMapping
+
+Maps external training categories to internal TrainingCategories.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `external_category_id`: Category ID in external system
+- `external_category_name`: Category name from external system
+- `external_category_code`: Optional category code
+- `internal_category_id`: Mapped TrainingCategory (nullable)
+- `is_mapped`: Whether mapping has been established
+- `auto_mapped`: Whether mapping was automatic (by name match)
+
+#### ExternalUserMapping
+
+Maps external users to internal Users.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `external_user_id`: User ID in external system
+- `external_username`: Username from external system
+- `external_email`: Email from external system
+- `external_name`: Full name from external system
+- `internal_user_id`: Mapped User (nullable)
+- `is_mapped`: Whether mapping has been established
+- `auto_mapped`: Whether mapping was automatic (by email match)
+
+#### ExternalTrainingSyncLog
+
+Tracks sync operations for auditing and debugging.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `sync_type`: `full`, `incremental`, or `manual`
+- `status`: `pending`, `in_progress`, `completed`, `failed`, `partial`
+- `started_at`, `completed_at`: Timing information
+- `records_fetched`: Number of records retrieved
+- `records_imported`: New records created
+- `records_updated`: Existing records updated
+- `records_skipped`: Duplicates or unmappable records
+- `records_failed`: Records that couldn't be imported
+- `error_message`: Error details if sync failed
+- `sync_from_date`, `sync_to_date`: Date range that was synced
+
+#### ExternalTrainingImport
+
+Stores imported training records before they become TrainingRecords.
+
+**Fields:**
+- `provider_id`: Reference to ExternalTrainingProvider
+- `sync_log_id`: Reference to the sync operation
+- `external_record_id`: Unique ID from external system
+- `external_user_id`: User ID from external system
+- `external_course_id`: Course ID from external system
+- `external_category_id`: Category ID from external system
+- `course_title`: Title of the training
+- `course_code`: Course code (if available)
+- `description`: Course description
+- `duration_minutes`: Length of training in minutes
+- `completion_date`: When training was completed
+- `score`: Test score (if applicable)
+- `passed`: Pass/fail status
+- `raw_data`: Complete JSON response from external API
+- `training_record_id`: Created TrainingRecord (after import)
+- `user_id`: Mapped internal user
+- `import_status`: `pending`, `imported`, `failed`, `skipped`, `duplicate`
+- `import_error`: Error message if import failed
+
+### Services
+
+#### ExternalTrainingSyncService
+
+Main service for sync operations.
+
+**Methods:**
+
+```python
+async def test_connection(
+    provider: ExternalTrainingProvider
+) -> Tuple[bool, str]
+```
+Tests connection to an external provider. Returns success flag and message.
+
+```python
+async def sync_training_records(
+    provider: ExternalTrainingProvider,
+    sync_type: str = "incremental",
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    user_id: Optional[str] = None
+) -> ExternalTrainingSyncLog
+```
+Synchronizes training records from an external provider. Returns sync log with results.
+
+```python
+async def import_single_record(
+    import_record: ExternalTrainingImport,
+    user_id: Optional[str] = None,
+    category_id: Optional[str] = None
+) -> TrainingRecord
+```
+Creates a TrainingRecord from an imported external record.
+
+```python
+async def bulk_import_records(
+    provider_id: str,
+    import_ids: Optional[List[str]] = None,
+    import_all_pending: bool = False
+) -> Dict[str, int]
+```
+Bulk imports multiple external training records. Returns counts of imported, failed, and skipped.
+
+### API Endpoints
+
+#### Providers
+
+```
+GET    /api/v1/training/external/providers              # List providers
+POST   /api/v1/training/external/providers              # Create provider
+GET    /api/v1/training/external/providers/{id}         # Get provider
+PATCH  /api/v1/training/external/providers/{id}         # Update provider
+DELETE /api/v1/training/external/providers/{id}         # Delete provider
+POST   /api/v1/training/external/providers/{id}/test    # Test connection
+POST   /api/v1/training/external/providers/{id}/sync    # Trigger sync
+GET    /api/v1/training/external/providers/{id}/sync-logs  # Sync history
+```
+
+#### Mappings
+
+```
+GET    /api/v1/training/external/providers/{id}/category-mappings
+PATCH  /api/v1/training/external/providers/{id}/category-mappings/{mapping_id}
+GET    /api/v1/training/external/providers/{id}/user-mappings
+PATCH  /api/v1/training/external/providers/{id}/user-mappings/{mapping_id}
+```
+
+#### Imports
+
+```
+GET    /api/v1/training/external/providers/{id}/imports
+POST   /api/v1/training/external/providers/{id}/imports/{import_id}/import
+POST   /api/v1/training/external/providers/{id}/imports/bulk
+```
+
+### Sync Workflow
+
+1. **Configure Provider**: Admin creates provider with API credentials
+2. **Test Connection**: System verifies API connectivity
+3. **Trigger Sync**: Manual or automatic sync fetches records
+4. **Process Records**: Each record is normalized and stored as ExternalTrainingImport
+5. **Auto-Map Users**: System attempts to match external users by email
+6. **Auto-Map Categories**: System attempts to match categories by name
+7. **Review Mappings**: Admin reviews and fixes unmapped users/categories
+8. **Import Records**: Records are imported as TrainingRecords
+
+### Provider Configuration
+
+#### Vector Solutions Example
+
+```json
+{
+  "name": "Vector Solutions",
+  "provider_type": "vector_solutions",
+  "api_base_url": "https://api.vectorsolutions.com",
+  "api_key": "your-api-key",
+  "auth_type": "api_key",
+  "auto_sync_enabled": true,
+  "sync_interval_hours": 24,
+  "config": {
+    "records_endpoint": "/api/v1/completions",
+    "headers": {
+      "X-Client-ID": "your-client-id"
+    }
+  }
+}
+```
+
+#### Custom API Example
+
+```json
+{
+  "name": "Custom Training System",
+  "provider_type": "custom_api",
+  "api_base_url": "https://training.example.com",
+  "api_key": "your-api-key",
+  "auth_type": "api_key",
+  "config": {
+    "records_endpoint": "/api/training/completions",
+    "test_endpoint": "/api/health",
+    "records_path": "data.records",
+    "param_mapping": {
+      "start_date": "from",
+      "end_date": "to"
+    },
+    "field_mapping": {
+      "external_record_id": "id",
+      "course_title": "training_name",
+      "duration_minutes": "time_spent",
+      "completion_date": "completed_at",
+      "external_user_id": "employee_id"
+    }
+  }
+}
+```
+
+### Database Migration
+
+**File:** `20260205_0200_add_external_training_integration.py`
+
+Creates:
+- `external_training_providers` table
+- `external_category_mappings` table
+- `external_user_mappings` table
+- `external_training_sync_logs` table
+- `external_training_imports` table
+
+Indexes for performance:
+- `idx_ext_provider_org`: Provider lookup by organization
+- `idx_ext_provider_type`: Filter by provider type
+- `idx_ext_mapping_external`: Quick category mapping lookup
+- `idx_ext_user_internal`: Find user mappings by internal user
+- `idx_sync_log_provider`: Sync history by provider
+- `idx_ext_import_provider`: Import queue by provider
 
 ## Security
 

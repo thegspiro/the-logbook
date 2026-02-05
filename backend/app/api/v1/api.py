@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     training_sessions,
     elections,
     inventory,
+    external_training,
 )
 
 api_router = APIRouter()
@@ -41,6 +42,7 @@ api_router.include_router(training_programs.router, prefix="/training/programs",
 api_router.include_router(training_sessions.router, prefix="/training/sessions", tags=["training-sessions"])
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
 
 # Placeholder routes
 @api_router.get("/")
@@ -62,6 +64,7 @@ async def api_root():
             "training_courses": "/api/v1/training/courses",
             "training_sessions": "/api/v1/training/sessions",
             "training_programs": "/api/v1/training/programs",
+            "training_external": "/api/v1/training/external",
             "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory",
             "apparatus": "/api/v1/apparatus",

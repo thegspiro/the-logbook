@@ -31,6 +31,7 @@ import TrainingRequirementsPage from './pages/TrainingRequirementsPage';
 import TrainingDashboardPage from './pages/TrainingDashboardPage';
 import TrainingProgramsPage from './pages/TrainingProgramsPage';
 import CreateTrainingSessionPage from './pages/CreateTrainingSessionPage';
+import ExternalTrainingPage from './pages/ExternalTrainingPage';
 
 /**
  * Main Application Component
@@ -90,6 +91,7 @@ function App() {
           <Route path="/training/requirements" element={<TrainingRequirementsPage />} />
           <Route path="/training/programs" element={<TrainingProgramsPage />} />
           <Route path="/training/sessions/new" element={<CreateTrainingSessionPage />} />
+          <Route path="/training/integrations" element={<ExternalTrainingPage />} />
 
           {/* Admin/Monitoring Routes */}
           <Route path="/admin/errors" element={<ErrorMonitoringPage />} />

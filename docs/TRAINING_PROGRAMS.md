@@ -9,15 +9,16 @@ The Training Programs module provides a comprehensive system for managing member
 1. [Core Concepts](#core-concepts)
 2. [User Roles](#user-roles)
 3. [Features](#features)
-4. [Training Categories](#training-categories)
-5. [Training Requirements](#training-requirements)
-6. [Due Date Types](#due-date-types)
-7. [Training Programs](#training-programs)
-8. [Enrollment & Progress](#enrollment--progress)
-9. [Member Experience](#member-experience)
-10. [Training Officer Workflow](#training-officer-workflow)
-11. [API Reference](#api-reference)
-12. [Database Schema](#database-schema)
+4. [External Training Integration](#external-training-integration)
+5. [Training Categories](#training-categories)
+6. [Training Requirements](#training-requirements)
+7. [Due Date Types](#due-date-types)
+8. [Training Programs](#training-programs)
+9. [Enrollment & Progress](#enrollment--progress)
+10. [Member Experience](#member-experience)
+11. [Training Officer Workflow](#training-officer-workflow)
+12. [API Reference](#api-reference)
+13. [Database Schema](#database-schema)
 
 ---
 
@@ -128,6 +129,120 @@ Members are enrolled in training programs to track their progress toward complet
 - Next steps displayed
 - Upcoming deadline warnings
 - Click-through to detailed progress page
+
+#### External Training Integration
+- Connect to external training platforms (Vector Solutions, Target Solutions, Lexipol, I Am Responding)
+- Automatic sync of completed training records
+- Category and user mapping between systems
+- Import external records as TrainingRecords
+- Sync history and audit logging
+- Configurable sync schedules
+
+---
+
+## External Training Integration
+
+The External Training Integration feature allows organizations to connect to external training platforms and automatically import completed training records into The Logbook.
+
+### Supported Providers
+
+| Provider | Description |
+|----------|-------------|
+| **Vector Solutions** | Fire and EMS online training platform with comprehensive course library |
+| **Target Solutions** | Public safety training, compliance tracking, and recordkeeping |
+| **Lexipol** | Policy acknowledgment, training bulletins, and compliance training |
+| **I Am Responding** | Response tracking with integrated training documentation |
+| **Custom API** | Connect to any training platform with a compatible REST API |
+
+### Setting Up an Integration
+
+1. Navigate to **Training** → **Integrations** tab
+2. Click **Add Provider**
+3. Select the provider type
+4. Enter connection details:
+   - **Display Name**: Friendly name for this integration
+   - **API Base URL**: The API endpoint URL
+   - **API Key**: Your API credentials
+   - **Authentication Type**: API Key, Basic Auth, or OAuth 2.0
+5. Configure sync settings:
+   - **Auto-Sync**: Enable/disable automatic synchronization
+   - **Sync Interval**: How often to sync (6h, 12h, 24h, 48h, weekly)
+6. Click **Test Connection** to verify
+7. Save the provider
+
+### Sync Workflow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. Configure Provider with API credentials                 │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  2. Test Connection to verify API access                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  3. Trigger Sync (manual or automatic)                      │
+│     - Full: All records from past year                      │
+│     - Incremental: Only new records since last sync         │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  4. Records fetched and stored as External Training Imports │
+│     - Course title, duration, completion date               │
+│     - External user and category information                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  5. Auto-Mapping attempts to match:                         │
+│     - Users by email address                                │
+│     - Categories by name                                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  6. Review and fix unmapped users/categories                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  7. Import records as Training Records                      │
+│     - Creates official training history                     │
+│     - Links to mapped user and category                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Managing Mappings
+
+After syncing, you may need to map external users and categories to your internal records.
+
+#### User Mapping
+- External users are auto-mapped by email when possible
+- Unmapped users appear in the "Users" tab under Mappings
+- Click "Map User" to select the corresponding internal member
+- Once mapped, all training for that external user will apply to the member
+
+#### Category Mapping
+- External categories are auto-mapped by name when possible
+- Unmapped categories appear in the "Categories" tab under Mappings
+- Click "Map Category" to select the corresponding internal category
+- Categories determine how imported training counts toward requirements
+
+### Import Queue
+
+The Import Queue shows all fetched records pending import:
+- **Pending**: Ready to import (user mapped)
+- **Skipped**: No user mapping available
+- **Imported**: Successfully created TrainingRecord
+- **Failed**: Error during import
+
+Use **Bulk Import** to import all pending records at once, or import individual records selectively.
+
+### Sync History
+
+View sync history for each provider:
+- Sync type (full, incremental, manual)
+- Records fetched, imported, updated, skipped, failed
+- Start and end times
+- Error messages if sync failed
 
 ---
 

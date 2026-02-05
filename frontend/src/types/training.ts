@@ -662,3 +662,215 @@ export interface BulkEnrollmentResponse {
   enrolled_users: string[];
   errors: string[];
 }
+
+// ==================== External Training Integration Types ====================
+
+export type ExternalProviderType =
+  | 'vector_solutions'
+  | 'target_solutions'
+  | 'lexipol'
+  | 'i_am_responding'
+  | 'custom_api';
+
+export type SyncStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'partial';
+
+export type ImportStatus =
+  | 'pending'
+  | 'imported'
+  | 'failed'
+  | 'skipped'
+  | 'duplicate';
+
+export interface ExternalProviderConfig {
+  records_endpoint?: string;
+  users_endpoint?: string;
+  categories_endpoint?: string;
+  additional_headers?: Record<string, string>;
+  date_format?: string;
+}
+
+export interface ExternalTrainingProvider {
+  id: string;
+  organization_id: string;
+  name: string;
+  provider_type: ExternalProviderType;
+  description?: string;
+  api_base_url?: string;
+  auth_type: 'api_key' | 'oauth2' | 'basic';
+  config?: ExternalProviderConfig;
+  auto_sync_enabled: boolean;
+  sync_interval_hours: number;
+  default_category_id?: string;
+  active: boolean;
+  connection_verified: boolean;
+  last_connection_test?: string;
+  connection_error?: string;
+  last_sync_at?: string;
+  next_sync_at?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface ExternalTrainingProviderCreate {
+  name: string;
+  provider_type: ExternalProviderType;
+  description?: string;
+  api_base_url?: string;
+  api_key?: string;
+  api_secret?: string;
+  client_id?: string;
+  client_secret?: string;
+  auth_type?: 'api_key' | 'oauth2' | 'basic';
+  config?: ExternalProviderConfig;
+  auto_sync_enabled?: boolean;
+  sync_interval_hours?: number;
+  default_category_id?: string;
+}
+
+export interface ExternalTrainingProviderUpdate {
+  name?: string;
+  description?: string;
+  api_base_url?: string;
+  api_key?: string;
+  api_secret?: string;
+  client_id?: string;
+  client_secret?: string;
+  auth_type?: 'api_key' | 'oauth2' | 'basic';
+  config?: ExternalProviderConfig;
+  auto_sync_enabled?: boolean;
+  sync_interval_hours?: number;
+  default_category_id?: string;
+  active?: boolean;
+}
+
+export interface ExternalCategoryMapping {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  external_category_id: string;
+  external_category_name: string;
+  external_category_code?: string;
+  internal_category_id?: string;
+  is_mapped: boolean;
+  auto_mapped: boolean;
+  created_at: string;
+  updated_at: string;
+  mapped_by?: string;
+  internal_category_name?: string;
+}
+
+export interface ExternalCategoryMappingUpdate {
+  internal_category_id?: string;
+  is_mapped?: boolean;
+}
+
+export interface ExternalUserMapping {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  external_user_id: string;
+  external_username?: string;
+  external_email?: string;
+  external_name?: string;
+  internal_user_id?: string;
+  is_mapped: boolean;
+  auto_mapped: boolean;
+  created_at: string;
+  updated_at: string;
+  mapped_by?: string;
+  internal_user_name?: string;
+  internal_user_email?: string;
+}
+
+export interface ExternalUserMappingUpdate {
+  internal_user_id?: string;
+  is_mapped?: boolean;
+}
+
+export interface ExternalTrainingSyncLog {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  sync_type: 'full' | 'incremental' | 'manual';
+  status: SyncStatus;
+  started_at: string;
+  completed_at?: string;
+  records_fetched: number;
+  records_imported: number;
+  records_updated: number;
+  records_skipped: number;
+  records_failed: number;
+  error_message?: string;
+  sync_from_date?: string;
+  sync_to_date?: string;
+  created_at: string;
+  initiated_by?: string;
+}
+
+export interface ExternalTrainingImport {
+  id: string;
+  provider_id: string;
+  organization_id: string;
+  sync_log_id?: string;
+  external_record_id: string;
+  external_user_id?: string;
+  course_title: string;
+  course_code?: string;
+  description?: string;
+  duration_minutes?: number;
+  completion_date?: string;
+  score?: number;
+  passed?: boolean;
+  external_category_name?: string;
+  training_record_id?: string;
+  user_id?: string;
+  import_status: ImportStatus;
+  import_error?: string;
+  imported_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyncRequest {
+  sync_type: 'full' | 'incremental';
+  from_date?: string;
+  to_date?: string;
+}
+
+export interface SyncResponse {
+  sync_log_id: string;
+  status: SyncStatus;
+  message: string;
+}
+
+export interface TestConnectionResponse {
+  success: boolean;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ImportRecordRequest {
+  external_import_id: string;
+  user_id: string;
+  category_id?: string;
+}
+
+export interface BulkImportRequest {
+  external_import_ids: string[];
+  auto_map_users?: boolean;
+  default_category_id?: string;
+}
+
+export interface BulkImportResponse {
+  total: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+}

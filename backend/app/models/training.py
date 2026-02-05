@@ -833,6 +833,294 @@ class SkillCheckoff(Base):
 
 
 # ============================================
+# External Training Integration
+# ============================================
+
+
+class ExternalProviderType(str, enum.Enum):
+    """Supported external training providers"""
+    VECTOR_SOLUTIONS = "vector_solutions"
+    TARGET_SOLUTIONS = "target_solutions"
+    LEXIPOL = "lexipol"
+    I_AM_RESPONDING = "i_am_responding"
+    CUSTOM_API = "custom_api"
+
+
+class SyncStatus(str, enum.Enum):
+    """Status of sync operations"""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIAL = "partial"  # Some records synced, some failed
+
+
+class ExternalTrainingProvider(Base):
+    """
+    External Training Provider model
+
+    Configuration for connecting to external training platforms like
+    Vector Solutions, Target Solutions, Lexipol, etc.
+    """
+
+    __tablename__ = "external_training_providers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Provider Details
+    name = Column(String(255), nullable=False)  # Display name: "Vector Solutions", "Target Solutions"
+    provider_type = Column(Enum(ExternalProviderType), nullable=False)
+    description = Column(Text)
+
+    # API Configuration (encrypted)
+    api_base_url = Column(String(500))  # Base URL for API calls
+    api_key = Column(Text)  # Encrypted API key
+    api_secret = Column(Text)  # Encrypted API secret (if needed)
+    client_id = Column(String(255))  # OAuth client ID (if needed)
+    client_secret = Column(Text)  # Encrypted OAuth client secret (if needed)
+
+    # Authentication Type
+    auth_type = Column(String(50), default="api_key")  # api_key, oauth2, basic
+
+    # Additional Configuration (JSON)
+    config = Column(JSON)  # Provider-specific config like endpoints, headers, etc.
+    # Example: {"records_endpoint": "/api/v1/records", "users_endpoint": "/api/v1/users"}
+
+    # Sync Settings
+    auto_sync_enabled = Column(Boolean, default=False)
+    sync_interval_hours = Column(Integer, default=24)  # How often to auto-sync
+    last_sync_at = Column(DateTime(timezone=True))
+    next_sync_at = Column(DateTime(timezone=True))
+
+    # Default Category Mapping
+    default_category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"))
+
+    # Status
+    active = Column(Boolean, default=True, index=True)
+    connection_verified = Column(Boolean, default=False)
+    last_connection_test = Column(DateTime(timezone=True))
+    connection_error = Column(Text)  # Last connection error message
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    category_mappings = relationship("ExternalCategoryMapping", back_populates="provider", cascade="all, delete-orphan")
+    sync_history = relationship("ExternalTrainingSyncLog", back_populates="provider", cascade="all, delete-orphan")
+    imported_records = relationship("ExternalTrainingImport", back_populates="provider", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_ext_provider_org', 'organization_id', 'active'),
+        Index('idx_ext_provider_type', 'provider_type'),
+    )
+
+    def __repr__(self):
+        return f"<ExternalTrainingProvider(name={self.name}, type={self.provider_type})>"
+
+
+class ExternalCategoryMapping(Base):
+    """
+    External Category Mapping model
+
+    Maps categories from external training platforms to internal TrainingCategories.
+    """
+
+    __tablename__ = "external_category_mappings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    provider_id = Column(String(36), ForeignKey("external_training_providers.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # External Category Info
+    external_category_id = Column(String(255), nullable=False)  # ID from external system
+    external_category_name = Column(String(255), nullable=False)  # Name from external system
+    external_category_code = Column(String(100))  # Code from external system (if available)
+
+    # Internal Category Mapping
+    internal_category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"))
+
+    # Mapping Status
+    is_mapped = Column(Boolean, default=False)  # Has been mapped to internal category
+    auto_mapped = Column(Boolean, default=False)  # Was mapped automatically vs manually
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    mapped_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    provider = relationship("ExternalTrainingProvider", back_populates="category_mappings")
+    internal_category = relationship("TrainingCategory")
+
+    __table_args__ = (
+        Index('idx_ext_mapping_provider', 'provider_id'),
+        Index('idx_ext_mapping_external', 'provider_id', 'external_category_id'),
+    )
+
+    def __repr__(self):
+        return f"<ExternalCategoryMapping(external={self.external_category_name}, internal_id={self.internal_category_id})>"
+
+
+class ExternalUserMapping(Base):
+    """
+    External User Mapping model
+
+    Maps users from external training platforms to internal Users.
+    """
+
+    __tablename__ = "external_user_mappings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    provider_id = Column(String(36), ForeignKey("external_training_providers.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # External User Info
+    external_user_id = Column(String(255), nullable=False)  # ID from external system
+    external_username = Column(String(255))  # Username from external system
+    external_email = Column(String(255))  # Email from external system
+    external_name = Column(String(255))  # Full name from external system
+
+    # Internal User Mapping
+    internal_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
+    # Mapping Status
+    is_mapped = Column(Boolean, default=False)
+    auto_mapped = Column(Boolean, default=False)  # Mapped automatically by email match
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    mapped_by = Column(String(36), ForeignKey("users.id"))
+
+    __table_args__ = (
+        Index('idx_ext_user_provider', 'provider_id'),
+        Index('idx_ext_user_external', 'provider_id', 'external_user_id'),
+        Index('idx_ext_user_internal', 'internal_user_id'),
+    )
+
+    def __repr__(self):
+        return f"<ExternalUserMapping(external={self.external_username}, internal_id={self.internal_user_id})>"
+
+
+class ExternalTrainingSyncLog(Base):
+    """
+    External Training Sync Log model
+
+    Tracks sync operations with external training providers.
+    """
+
+    __tablename__ = "external_training_sync_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    provider_id = Column(String(36), ForeignKey("external_training_providers.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Sync Details
+    sync_type = Column(String(50), nullable=False)  # full, incremental, manual
+    status = Column(Enum(SyncStatus), default=SyncStatus.PENDING, index=True)
+
+    # Timing
+    started_at = Column(DateTime(timezone=True), default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+
+    # Results
+    records_fetched = Column(Integer, default=0)  # Records retrieved from external system
+    records_imported = Column(Integer, default=0)  # Records successfully imported
+    records_updated = Column(Integer, default=0)  # Existing records updated
+    records_skipped = Column(Integer, default=0)  # Records skipped (duplicates, etc.)
+    records_failed = Column(Integer, default=0)  # Records that failed to import
+
+    # Error Information
+    error_message = Column(Text)
+    error_details = Column(JSON)  # Detailed error info for debugging
+
+    # Date Range Synced
+    sync_from_date = Column(Date)  # Records from this date
+    sync_to_date = Column(Date)  # Records to this date
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    initiated_by = Column(String(36), ForeignKey("users.id"))  # Null for auto-sync
+
+    # Relationships
+    provider = relationship("ExternalTrainingProvider", back_populates="sync_history")
+
+    __table_args__ = (
+        Index('idx_sync_log_provider', 'provider_id', 'status'),
+        Index('idx_sync_log_date', 'started_at'),
+    )
+
+    def __repr__(self):
+        return f"<ExternalTrainingSyncLog(provider_id={self.provider_id}, status={self.status})>"
+
+
+class ExternalTrainingImport(Base):
+    """
+    External Training Import model
+
+    Stores imported training records from external providers.
+    Links external records to internal TrainingRecords.
+    """
+
+    __tablename__ = "external_training_imports"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    provider_id = Column(String(36), ForeignKey("external_training_providers.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    sync_log_id = Column(String(36), ForeignKey("external_training_sync_logs.id", ondelete="SET NULL"), index=True)
+
+    # External Record Data
+    external_record_id = Column(String(255), nullable=False)  # ID from external system
+    external_user_id = Column(String(255))  # User ID from external system
+    external_course_id = Column(String(255))  # Course ID from external system
+    external_category_id = Column(String(255))  # Category ID from external system
+
+    # Training Details (from external system)
+    course_title = Column(String(500), nullable=False)  # Title/name of the training
+    course_code = Column(String(100))
+    description = Column(Text)
+    duration_minutes = Column(Integer)  # Duration in minutes
+    completion_date = Column(DateTime(timezone=True))  # When completed
+    score = Column(Float)  # Score if applicable
+    passed = Column(Boolean)
+
+    # External Category Info
+    external_category_name = Column(String(255))
+
+    # Raw Data (JSON) - Store complete response for reference
+    raw_data = Column(JSON)
+
+    # Internal Record Link
+    training_record_id = Column(String(36), ForeignKey("training_records.id", ondelete="SET NULL"), index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True)  # Mapped internal user
+
+    # Import Status
+    import_status = Column(String(50), default="pending", index=True)  # pending, imported, failed, skipped, duplicate
+    import_error = Column(Text)
+    imported_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    provider = relationship("ExternalTrainingProvider", back_populates="imported_records")
+    training_record = relationship("TrainingRecord")
+
+    __table_args__ = (
+        Index('idx_ext_import_provider', 'provider_id', 'import_status'),
+        Index('idx_ext_import_external', 'provider_id', 'external_record_id'),
+        Index('idx_ext_import_user', 'user_id'),
+    )
+
+    def __repr__(self):
+        return f"<ExternalTrainingImport(title={self.course_title}, status={self.import_status})>"
+
+
+# ============================================
 # Shift Module (Framework Only)
 # ============================================
 
