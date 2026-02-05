@@ -153,6 +153,63 @@ docker ps
 
 ---
 
+### Problem: Database migrations fail with version error
+
+**Error:** `Can't locate revision identified by '0001'` or `alembic.util.exc.CommandError`
+
+### Root Cause
+Alembic version tracking mismatch. The database has an old or invalid version ID in the `alembic_version` table.
+
+### Solution
+
+**1. Check current Alembic version:**
+```bash
+docker compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD intranet_db -e "SELECT * FROM alembic_version;"
+```
+
+**2. Update to correct version if needed:**
+```bash
+# The correct first migration ID is '20260118_0001'
+docker compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD intranet_db -e "UPDATE alembic_version SET version_num='20260118_0001';"
+```
+
+**3. Restart backend to run migrations:**
+```bash
+docker compose restart backend
+```
+
+---
+
+### Problem: Backend crashes with "Database not initialized"
+
+**Error:** `RuntimeError: Database not initialized. Call database_manager.connect() first.`
+
+### Root Cause
+The backend tried to use the database before it was connected, typically during startup checks or middleware initialization.
+
+### Solution
+
+**1. Ensure MySQL is healthy before backend starts:**
+```bash
+docker compose ps
+# MySQL should show "healthy" status
+```
+
+**2. Check MySQL logs for errors:**
+```bash
+docker compose logs mysql
+```
+
+**3. Restart services in correct order:**
+```bash
+docker compose down
+docker compose up -d mysql
+# Wait for MySQL to be healthy
+docker compose up -d backend frontend
+```
+
+---
+
 ## Onboarding Failures
 
 ### Problem: Onboarding fails at first step
