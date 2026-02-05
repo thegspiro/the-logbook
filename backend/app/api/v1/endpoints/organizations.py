@@ -13,6 +13,7 @@ from app.schemas.organization import (
     OrganizationSettingsUpdate,
     ContactInfoSettings,
     EnabledModulesResponse,
+    ModuleSettingsUpdate,
 )
 from app.services.organization_service import OrganizationService
 from app.api.dependencies import get_current_user, require_permission
@@ -138,3 +139,46 @@ async def get_enabled_modules(
     """
     org_service = OrganizationService(db)
     return await org_service.get_enabled_modules(current_user.organization_id)
+
+
+@router.patch("/modules", response_model=EnabledModulesResponse)
+async def update_module_settings(
+    module_update: ModuleSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
+):
+    """
+    Update module settings for the current organization
+
+    Enable or disable optional modules. Essential modules (members, events,
+    documents, roles, settings) are always enabled and cannot be disabled.
+
+    Configurable modules:
+    - training: Training & Certifications
+    - inventory: Equipment & Inventory
+    - scheduling: Scheduling & Shifts
+    - elections: Elections & Voting
+    - minutes: Meeting Minutes
+    - reports: Reports & Analytics
+    - notifications: Email Notifications
+    - mobile: Mobile App Access
+    - forms: Custom Forms
+    - integrations: External Integrations
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+
+    # Convert to dict, excluding unset values
+    module_updates = module_update.model_dump(exclude_unset=True)
+
+    try:
+        return await org_service.update_module_settings(
+            current_user.organization_id,
+            module_updates
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )

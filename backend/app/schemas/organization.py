@@ -81,6 +81,71 @@ class EmailServiceSettings(BaseModel):
     use_tls: bool = Field(default=True, description="Use TLS encryption")
 
 
+class ModuleSettings(BaseModel):
+    """Settings for module enablement across the organization"""
+    # Essential modules are always enabled
+    # members, events, documents, roles, settings
+
+    # Configurable modules - can be enabled/disabled
+    training: bool = Field(default=False, description="Training & Certifications module")
+    inventory: bool = Field(default=False, description="Equipment & Inventory module")
+    scheduling: bool = Field(default=False, description="Scheduling & Shifts module")
+    elections: bool = Field(default=False, description="Elections & Voting module")
+    minutes: bool = Field(default=False, description="Meeting Minutes module")
+    reports: bool = Field(default=False, description="Reports & Analytics module")
+    notifications: bool = Field(default=False, description="Email Notifications module")
+    mobile: bool = Field(default=False, description="Mobile App Access module")
+    forms: bool = Field(default=False, description="Custom Forms module")
+    integrations: bool = Field(default=False, description="External Integrations module")
+
+    def get_enabled_modules(self) -> list[str]:
+        """Get list of all enabled module IDs including essential modules"""
+        # Essential modules are always enabled
+        enabled = ['members', 'events', 'documents', 'roles', 'settings']
+
+        # Add configurable modules that are enabled
+        if self.training:
+            enabled.append('training')
+        if self.inventory:
+            enabled.append('inventory')
+        if self.scheduling:
+            enabled.append('scheduling')
+        if self.elections:
+            enabled.append('elections')
+        if self.minutes:
+            enabled.append('minutes')
+        if self.reports:
+            enabled.append('reports')
+        if self.notifications:
+            enabled.append('notifications')
+        if self.mobile:
+            enabled.append('mobile')
+        if self.forms:
+            enabled.append('forms')
+        if self.integrations:
+            enabled.append('integrations')
+
+        return enabled
+
+    def is_module_enabled(self, module_id: str) -> bool:
+        """Check if a specific module is enabled"""
+        return module_id in self.get_enabled_modules()
+
+
+class ModuleSettingsUpdate(BaseModel):
+    """Schema for updating module settings"""
+    training: Optional[bool] = None
+    inventory: Optional[bool] = None
+    scheduling: Optional[bool] = None
+    elections: Optional[bool] = None
+    minutes: Optional[bool] = None
+    reports: Optional[bool] = None
+    notifications: Optional[bool] = None
+    mobile: Optional[bool] = None
+    forms: Optional[bool] = None
+    integrations: Optional[bool] = None
+
+
 class OrganizationSettings(BaseModel):
     """
     Organization-wide settings
@@ -94,6 +159,10 @@ class OrganizationSettings(BaseModel):
     email_service: EmailServiceSettings = Field(
         default_factory=EmailServiceSettings,
         description="Email service configuration"
+    )
+    modules: ModuleSettings = Field(
+        default_factory=ModuleSettings,
+        description="Module enablement settings"
     )
 
     # Allow additional settings
@@ -125,6 +194,7 @@ class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
     contact_info_visibility: Optional[ContactInfoSettings] = None
     email_service: Optional[EmailServiceSettings] = None
+    modules: Optional[ModuleSettingsUpdate] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -145,6 +215,7 @@ class OrganizationSettingsResponse(BaseModel):
     """Schema for organization settings response"""
     contact_info_visibility: ContactInfoSettings
     email_service: EmailServiceSettings
+    modules: ModuleSettings = Field(default_factory=ModuleSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')
 
@@ -154,6 +225,10 @@ class EnabledModulesResponse(BaseModel):
     enabled_modules: list[str] = Field(
         default_factory=list,
         description="List of enabled module IDs for this organization"
+    )
+    module_settings: ModuleSettings = Field(
+        default_factory=ModuleSettings,
+        description="Detailed module enablement settings"
     )
 
     def is_module_enabled(self, module_id: str) -> bool:
