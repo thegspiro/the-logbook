@@ -28,6 +28,11 @@ def generate_encryption_key():
     return secrets.token_hex(32)
 
 
+def generate_encryption_salt():
+    """Generate a secure ENCRYPTION_SALT (16 bytes hex)"""
+    return secrets.token_hex(16)
+
+
 def generate_password(length=32):
     """Generate a secure password"""
     return secrets.token_urlsafe(length)
@@ -95,6 +100,7 @@ def main():
     config = {
         "SECRET_KEY": generate_secret_key(),
         "ENCRYPTION_KEY": generate_encryption_key(),
+        "ENCRYPTION_SALT": generate_encryption_salt(),
         "MYSQL_ROOT_PASSWORD": generate_password(),
         "DB_PASSWORD": generate_password(),
         "REDIS_PASSWORD": generate_password(),

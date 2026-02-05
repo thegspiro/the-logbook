@@ -230,6 +230,7 @@ generate_env() {
     # Generate secrets
     SECRET_KEY=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -hex 32)
+    ENCRYPTION_SALT=$(openssl rand -hex 16)
     MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
     DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
     REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
@@ -244,6 +245,7 @@ generate_env() {
 # Application Secrets (auto-generated)
 SECRET_KEY=$SECRET_KEY
 ENCRYPTION_KEY=$ENCRYPTION_KEY
+ENCRYPTION_SALT=$ENCRYPTION_SALT
 
 # Database Passwords (auto-generated)
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD

@@ -172,6 +172,10 @@ setup_environment() {
     ENCRYPTION_KEY=$(openssl rand -hex 32)
     sed -i "s|ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$ENCRYPTION_KEY|" "$SCRIPT_DIR/.env"
 
+    # Generate ENCRYPTION_SALT (16 bytes hex = 32 characters)
+    ENCRYPTION_SALT=$(openssl rand -hex 16)
+    sed -i "s|ENCRYPTION_SALT=.*|ENCRYPTION_SALT=$ENCRYPTION_SALT|" "$SCRIPT_DIR/.env"
+
     # Generate DB_PASSWORD
     DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
     sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" "$SCRIPT_DIR/.env"
