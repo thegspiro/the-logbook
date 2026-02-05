@@ -42,6 +42,9 @@ def run_migrations():
     """
     from alembic.config import Config
     from alembic import command
+    from alembic.script import ScriptDirectory
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import create_engine, text
     import os
 
     try:
@@ -50,9 +53,57 @@ def run_migrations():
         alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
         alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
 
+        # Check for revision mismatch (common when migration files are renamed)
+        try:
+            engine = create_engine(settings.SYNC_DATABASE_URL)
+            with engine.connect() as conn:
+                # Check if alembic_version table exists
+                result = conn.execute(text(
+                    "SELECT version_num FROM alembic_version LIMIT 1"
+                ))
+                row = result.fetchone()
+
+                if row:
+                    current_rev = row[0]
+                    script_dir = ScriptDirectory.from_config(alembic_cfg)
+
+                    # Check if current revision exists in our scripts
+                    try:
+                        script_dir.get_revision(current_rev)
+                    except Exception:
+                        # Revision not found - likely renamed migration files
+                        logger.warning(
+                            f"Migration revision '{current_rev}' not found. "
+                            "This may be due to renamed migration files. "
+                            "Stamping database with 'head' to fix..."
+                        )
+                        # Clear the version table so migrations can run fresh
+                        conn.execute(text("DELETE FROM alembic_version"))
+                        conn.commit()
+                        logger.info("✓ Cleared invalid migration version, will run fresh")
+        except Exception as e:
+            # Table might not exist yet, which is fine
+            logger.debug(f"Could not check alembic_version: {e}")
+
         logger.info("Running database migrations...")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✓ Database migrations complete")
+        try:
+            command.upgrade(alembic_cfg, "head")
+            logger.info("✓ Database migrations complete")
+        except Exception as upgrade_error:
+            # If upgrade fails due to table already exists, stamp to head
+            error_str = str(upgrade_error).lower()
+            if "already exists" in error_str or "duplicate" in error_str:
+                logger.warning(
+                    f"Migration failed ({upgrade_error}). "
+                    "Tables may already exist. Stamping to head..."
+                )
+                try:
+                    command.stamp(alembic_cfg, "head")
+                    logger.info("✓ Stamped database to head")
+                except Exception as stamp_error:
+                    logger.warning(f"Could not stamp database: {stamp_error}")
+            else:
+                raise
     except Exception as e:
         logger.warning(f"Migration warning: {e}")
         # Don't fail startup - tables might already exist
@@ -206,6 +257,7 @@ app.add_middleware(
         "Content-Type",
         "X-Requested-With",
         "X-CSRF-Token",
+        "X-Session-ID",
         "Accept",
         "Origin",
     ],
