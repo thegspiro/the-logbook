@@ -14,6 +14,8 @@ import Dashboard from './pages/Dashboard';
 import Members from './pages/Members';
 import AddMember from './pages/AddMember';
 import ImportMembers from './pages/ImportMembers';
+import { MemberProfilePage } from './pages/MemberProfilePage';
+import { MemberTrainingHistoryPage } from './pages/MemberTrainingHistoryPage';
 import { EventsPage } from './pages/EventsPage';
 import { EventDetailPage } from './pages/EventDetailPage';
 import EventQRCodePage from './pages/EventQRCodePage';
@@ -66,6 +68,8 @@ function App() {
           <Route path="/members" element={<Members />} />
           <Route path="/members/add" element={<AddMember />} />
           <Route path="/members/import" element={<ImportMembers />} />
+          <Route path="/members/:userId" element={<MemberProfilePage />} />
+          <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
 
           {/* Events Module */}
           <Route path="/events" element={<EventsPage />} />
