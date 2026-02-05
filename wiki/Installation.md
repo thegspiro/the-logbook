@@ -59,6 +59,7 @@ cp .env.example .env
 # Generate secure keys
 openssl rand -hex 32  # Copy to SECRET_KEY
 openssl rand -hex 32  # Copy to ENCRYPTION_KEY
+openssl rand -hex 16  # Copy to ENCRYPTION_SALT
 openssl rand -base64 32  # Copy to DB_PASSWORD
 
 # Edit .env with your settings
@@ -85,6 +86,7 @@ Edit `.env` file:
 # REQUIRED: Generate these!
 SECRET_KEY=your_generated_secret_key_here
 ENCRYPTION_KEY=your_generated_encryption_key_here
+ENCRYPTION_SALT=your_generated_encryption_salt_here
 DB_PASSWORD=your_generated_db_password_here
 REDIS_PASSWORD=your_generated_redis_password_here
 

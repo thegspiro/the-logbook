@@ -91,6 +91,7 @@ cp .env.example .env
 # Generate secure keys and update .env
 python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))"
 python3 -c "import secrets; print('ENCRYPTION_KEY=' + secrets.token_hex(32))"
+python3 -c "import secrets; print('ENCRYPTION_SALT=' + secrets.token_hex(16))"
 python3 -c "import secrets; print('DB_PASSWORD=' + secrets.token_urlsafe(32))"
 python3 -c "import secrets; print('REDIS_PASSWORD=' + secrets.token_urlsafe(32))"
 

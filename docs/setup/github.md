@@ -76,6 +76,7 @@ DB_PASSWORD=<strong-random-password>
 ```
 SECRET_KEY=<64-character-random-string>
 ENCRYPTION_KEY=<32-byte-hex-string>
+ENCRYPTION_SALT=<16-byte-hex-string>
 ```
 
 #### Email Configuration (if using SMTP)
@@ -104,6 +105,9 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 # Generate ENCRYPTION_KEY (32 bytes hex)
 python -c "import secrets; print(secrets.token_hex(32))"
+
+# Generate ENCRYPTION_SALT (16 bytes hex, unique per installation)
+python -c "import secrets; print(secrets.token_hex(16))"
 
 # Generate a strong password
 python -c "import secrets, string; chars = string.ascii_letters + string.digits + string.punctuation; print(''.join(secrets.choice(chars) for _ in range(32)))"
