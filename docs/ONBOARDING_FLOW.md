@@ -860,6 +860,17 @@ The API client maps HTTP status codes to user-friendly messages:
 - **500**: "A server error occurred. Please try again or check the server logs."
 - **503**: "The server is temporarily unavailable. It may still be starting up — please try again shortly."
 - **Network errors**: "Unable to reach the server. Please verify the backend is running and check your network connection."
+- **Email test timeout**: "Email connection test timed out after 30 seconds." (returned when mail server is unreachable)
+
+### Backend Security Notes
+
+The following middleware and security features affect onboarding:
+
+- **GeoIP Blocking**: The `IPBlockingMiddleware` blocks requests from countries in the `BLOCKED_COUNTRIES` configuration. Onboarding endpoints (`/api/v1/onboarding/*`) are **exempt** from geo-blocking since first-time setup must be accessible before any configuration exists. Other API endpoints remain subject to geo-blocking.
+- **CSRF Protection**: Session endpoints require a valid `X-CSRF-Token` header that matches the token stored in the server-side session. The token is generated during `POST /start` and returned in the response header.
+- **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only the platform type is stored in plain text.
+- **Email Test Timeout**: SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable or firewalled.
+- **Reset Protection**: The `POST /reset` endpoint is blocked after onboarding completes. It only works while onboarding is still in progress (`needs_onboarding` returns `True`).
 
 ---
 

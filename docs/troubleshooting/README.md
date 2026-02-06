@@ -628,6 +628,72 @@ docker compose up -d
 
 ---
 
+### Problem: Onboarding returns 403 "Access denied from your location"
+**Symptom:** All onboarding API calls fail with a 403 status code and the message "Access denied from your location" / error code `GEO_BLOCKED`.
+
+### Root Cause
+The GeoIP middleware (`IPBlockingMiddleware`) was blocking ALL API requests from countries in the `BLOCKED_COUNTRIES` list — including onboarding endpoints. Since onboarding runs before any configuration exists, there's no way for a blocked user to allowlist their IP or disable geo-blocking.
+
+### Solution
+This has been fixed in the codebase. Onboarding endpoints (`/api/v1/onboarding/*`) are now exempt from GeoIP blocking. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+**If you need to disable GeoIP blocking entirely:**
+```bash
+# In your .env file:
+GEOIP_ENABLED=false
+```
+
+**If you want to customize blocked countries:**
+```bash
+# In your .env file (comma-separated ISO 3166-1 alpha-2 codes):
+BLOCKED_COUNTRIES=KP,IR,SY,CU
+```
+
+---
+
+### Problem: Email configuration test hangs indefinitely
+**Symptom:** Clicking "Test Connection" on the email configuration page causes the UI to spin forever with no response. The browser may eventually show a timeout or the request stays pending.
+
+### Root Cause
+The email test endpoint (`POST /api/v1/onboarding/test/email`) runs SMTP connection tests in a thread pool without a timeout. If the mail server is unreachable, firewalled, or slow, the connection attempt can hang for minutes (limited only by OS TCP timeout).
+
+### Solution
+This has been fixed in the codebase. Email tests now have a 30-second timeout. If the server doesn't respond within 30 seconds, the user gets a clear timeout message. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+**If you see timeouts consistently:** Your network may be blocking outbound SMTP traffic (ports 25, 465, 587). Check with your network administrator or cloud provider.
+
+---
+
+### Problem: Onboarding reset endpoint accessible without authentication
+**Symptom:** Security concern — the `POST /api/v1/onboarding/reset` endpoint could be called by anyone, even without a valid session, potentially wiping all data.
+
+### Root Cause
+The reset endpoint was catching and ignoring session validation errors to handle the case where a session expired during a failed onboarding attempt. However, this also allowed unauthenticated callers to trigger a full data wipe.
+
+### Solution
+This has been fixed in the codebase. The reset endpoint now:
+1. Checks if onboarding has been completed — if so, reset is blocked entirely
+2. Only allows reset without a session if onboarding is still in progress (needs_onboarding returns True)
+3. After onboarding is complete, system data can only be managed through the admin panel
+
+Pull the latest changes:
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
 ## Build Errors
 
 ### Problem: TypeScript errors during Docker build
@@ -1606,6 +1672,8 @@ Should include:
 | 502 | Bad Gateway | Backend not running | "An unexpected error occurred" | Restart backend container |
 | 503 | Service Unavailable | Database/Redis down, still starting up | "The server is temporarily unavailable. It may still be starting up — please try again shortly." | Check dependency containers |
 | 0 | Network Error | Backend unreachable, DNS failure | "Unable to reach the server. Please verify the backend is running and check your network connection." | Check Docker containers and network |
+| 403 (GEO_BLOCKED) | Geo-Blocked | Request from blocked country | "Access denied from your location" | Onboarding endpoints bypass geo-blocking; for other endpoints, add IP to allowlist or set GEOIP_ENABLED=false |
+| N/A | Email Test Timeout | SMTP server unreachable or firewalled | "Email connection test timed out after 30 seconds." | Check outbound SMTP ports (25, 465, 587) are not blocked |
 
 ---
 

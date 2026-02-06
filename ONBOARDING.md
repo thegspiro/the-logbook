@@ -566,10 +566,14 @@ Stores post-onboarding tasks:
 ## Security Considerations
 
 1. **No Authentication Required** - Onboarding endpoints don't require authentication since no users exist yet
-2. **One-Time Use** - Once completed, can't be rerun without database changes
-3. **Audit Logging** - All onboarding actions are logged
-4. **IP Tracking** - Setup IP address is recorded
-5. **Password Requirements** - Enforced at API level and client level
+2. **GeoIP Bypass** - Onboarding endpoints are exempt from GeoIP country blocking, since first-time setup must be accessible before any configuration exists
+3. **One-Time Use** - Once completed, can't be rerun without database changes
+4. **Reset Protection** - The reset endpoint is blocked after onboarding completes; it only works while onboarding is still in progress
+5. **Sensitive Data Encryption** - Email passwords, API keys, and file storage credentials entered during onboarding are encrypted (AES-256) before being stored in the session database
+6. **Email Test Timeout** - SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable
+7. **Audit Logging** - All onboarding actions are logged
+8. **IP Tracking** - Setup IP address is recorded
+9. **Password Requirements** - Enforced at API level and client level
 
 ## Troubleshooting
 

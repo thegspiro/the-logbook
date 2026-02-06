@@ -507,8 +507,11 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
     - Integrates with GeoIP service for country lookup
     """
 
-    # Paths that bypass IP blocking (health checks, etc.)
+    # Paths that bypass IP blocking (health checks, onboarding, etc.)
+    # Onboarding must be accessible from any location since it's the
+    # first-time setup process before any configuration exists.
     BYPASS_PATHS = {"/health", "/health/detailed", "/"}
+    BYPASS_PREFIXES = ("/api/v1/onboarding",)
 
     def __init__(
         self,
@@ -531,8 +534,12 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         if not self.enabled:
             return await call_next(request)
 
-        # Skip health check endpoints
+        # Skip health check and onboarding endpoints
         if request.url.path in self.BYPASS_PATHS:
+            return await call_next(request)
+
+        # Skip paths with bypass prefixes (e.g., onboarding)
+        if any(request.url.path.startswith(prefix) for prefix in self.BYPASS_PREFIXES):
             return await call_next(request)
 
         # Get client IP
