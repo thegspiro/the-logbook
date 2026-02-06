@@ -679,9 +679,8 @@ const ExternalTrainingPage: React.FC = () => {
     }
   };
 
-  const handleEdit = (provider: ExternalTrainingProvider) => {
+  const handleEdit = (_provider: ExternalTrainingProvider) => {
     // TODO: Implement edit modal
-    console.log('Edit provider:', provider);
   };
 
   const handleDelete = async (providerId: string) => {

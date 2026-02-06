@@ -1326,7 +1326,7 @@ async def save_session_organization(
         logger.error(f"Error creating organization during onboarding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create organization: {str(e)}"
+            detail="Failed to create organization. Please check the server logs for details."
         )
 
 
@@ -1623,7 +1623,8 @@ async def reset_onboarding(
 
     except Exception as e:
         await db.rollback()
+        logger.error(f"Failed to reset onboarding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reset onboarding: {str(e)}"
+            detail="Failed to reset onboarding. Please check the server logs for details."
         )

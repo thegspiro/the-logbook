@@ -57,11 +57,11 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
-            logger.warning(f"Authentication failed: user not found - {username}")
+            logger.warning("Authentication failed for login attempt")
             return None
 
         if not user.password_hash:
-            logger.warning(f"Authentication failed: no password set - {username}")
+            logger.warning("Authentication failed for login attempt")
             return None
 
         # Check if account is locked
@@ -80,7 +80,7 @@ class AuthService:
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
             await self.db.commit()
-            logger.warning(f"Authentication failed: invalid password - {username}")
+            logger.warning("Authentication failed: invalid credentials")
             return None
 
         # Reset failed login attempts on successful login

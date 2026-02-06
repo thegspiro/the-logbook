@@ -179,13 +179,12 @@ async def create_member(
     await db.commit()
     await db.refresh(new_user, ["roles"])
 
-    # TODO: Send welcome email with temporary password if send_welcome_email is True
-    # This should be implemented with an email service
-    # For now, log the temporary password (REMOVE IN PRODUCTION)
+    # TODO: Send welcome email with temporary password via secure email service
     if user_data.send_welcome_email:
         from loguru import logger
-        logger.info(f"Temporary password for {user_data.username}: {temp_password}")
-        # In production: send email with password reset link
+        logger.info(f"Welcome email requested for new user: {user_data.username}")
+        # SECURITY: Never log passwords. Send via email service only.
+        # Implementation: use app.services.email_service to send password reset link
 
     return new_user
 

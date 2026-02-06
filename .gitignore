@@ -29,6 +29,13 @@ htmlcov/
 *.cover
 *.log
 
+# Environment files (contain secrets - NEVER commit these)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
 # Virtual Environments
 venv/
 ENV/

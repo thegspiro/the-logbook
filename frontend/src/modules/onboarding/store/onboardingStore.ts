@@ -148,24 +148,22 @@ const initialState: OnboardingState = {
 
 /**
  * Structured error logging to console
+ * SECURITY: Only log non-sensitive fields. Never log userContext (may contain
+ * emails, usernames) or errorDetails (may contain API response bodies).
  */
 const logErrorToConsole = (error: OnboardingError) => {
-  console.group(`🚨 ONBOARDING ERROR - ${error.step}`);
-  console.error('Action:', error.action);
-  console.error('Message:', error.errorMessage);
-  console.error('Timestamp:', error.timestamp);
-
-  if (error.errorDetails) {
-    console.error('Details:', error.errorDetails);
+  if (import.meta.env.DEV) {
+    // Development: show full details for debugging
+    console.group(`ONBOARDING ERROR - ${error.step}`);
+    console.error('Action:', error.action);
+    console.error('Message:', error.errorMessage);
+    if (error.errorDetails) console.error('Details:', error.errorDetails);
+    if (error.userContext) console.info('User Context:', error.userContext);
+    console.groupEnd();
+  } else {
+    // Production: log only non-sensitive fields
+    console.error(`Onboarding error at step "${error.step}": ${error.errorMessage}`);
   }
-
-  if (error.userContext) {
-    console.info('User Context:', error.userContext);
-  }
-
-  console.error('Impact: This error may have prevented the user from progressing to the next step.');
-  console.info('Recovery Status:', error.recovered ? '✓ Recovered' : '✗ Not recovered');
-  console.groupEnd();
 };
 
 /**
