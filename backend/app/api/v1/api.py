@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     elections,
     inventory,
     external_training,
+    email_templates,
 )
 
 api_router = APIRouter()
@@ -43,6 +44,7 @@ api_router.include_router(training_sessions.router, prefix="/training/sessions",
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
+api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
 
 # Placeholder routes
 @api_router.get("/")
@@ -68,6 +70,7 @@ async def api_root():
             "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory",
             "apparatus": "/api/v1/apparatus",
-            "security": "/api/v1/security"
+            "security": "/api/v1/security",
+            "email_templates": "/api/v1/email-templates"
         }
     }

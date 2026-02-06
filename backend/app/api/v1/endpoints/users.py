@@ -5,7 +5,7 @@ Endpoints for user management and listing.
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -24,6 +24,7 @@ from app.services.user_service import UserService
 from app.services.organization_service import OrganizationService
 from app.models.user import User, Role, UserStatus, user_roles
 from app.api.dependencies import get_current_user, require_permission
+from app.core.config import settings
 # NOTE: Authentication is now implemented
 # from app.api.dependencies import get_current_active_user, get_user_organization
 # from app.models.user import Organization
@@ -78,6 +79,7 @@ async def list_users(
 @router.post("/", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
 async def create_member(
     user_data: AdminUserCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create")),
 ):
@@ -179,12 +181,40 @@ async def create_member(
     await db.commit()
     await db.refresh(new_user, ["roles"])
 
-    # TODO: Send welcome email with temporary password via secure email service
+    # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
         from loguru import logger
+        from app.services.email_service import EmailService
+        from app.models.user import Organization as OrgModel
+
         logger.info(f"Welcome email requested for new user: {user_data.username}")
-        # SECURITY: Never log passwords. Send via email service only.
-        # Implementation: use app.services.email_service to send password reset link
+
+        # Load organization for email config
+        org_result = await db.execute(
+            select(OrgModel).where(OrgModel.id == current_user.organization_id)
+        )
+        organization = org_result.scalar_one_or_none()
+
+        org_name = organization.name if organization else "The Logbook"
+        login_url = f"{settings.FRONTEND_URL}/login" if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL else "/login"
+
+        async def _send_welcome():
+            try:
+                email_svc = EmailService(organization)
+                await email_svc.send_welcome_email(
+                    to_email=new_user.email,
+                    first_name=new_user.first_name,
+                    last_name=new_user.last_name,
+                    username=new_user.username,
+                    temp_password=temp_password,
+                    organization_name=org_name,
+                    login_url=login_url,
+                    organization_id=str(current_user.organization_id),
+                )
+            except Exception as e:
+                logger.error(f"Failed to send welcome email to {new_user.email}: {e}")
+
+        background_tasks.add_task(_send_welcome)
 
     return new_user
 

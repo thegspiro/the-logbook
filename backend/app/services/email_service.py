@@ -5,10 +5,14 @@ Handles sending emails using SMTP or organization-specific email service configu
 """
 
 import smtplib
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import List, Optional, Dict
+from email.mime.base import MIMEBase
+from email import encoders
+from typing import List, Optional, Dict, Any
 from datetime import datetime
+from loguru import logger
 
 from app.core.config import settings
 from app.models.user import Organization
@@ -66,6 +70,7 @@ class EmailService:
         subject: str,
         html_body: str,
         text_body: Optional[str] = None,
+        attachment_paths: Optional[List[str]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -75,14 +80,14 @@ class EmailService:
             subject: Email subject line
             html_body: HTML email body
             text_body: Optional plain text version of email
+            attachment_paths: Optional list of file paths to attach
 
         Returns:
             Tuple of (success_count, failure_count)
         """
         if not settings.EMAIL_ENABLED and not (self.organization and
                                                 self.organization.settings.get('email_service', {}).get('enabled')):
-            # Email not enabled, just log and return
-            print(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
+            logger.info(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
             return 0, len(to_emails)
 
         success_count = 0
@@ -90,19 +95,38 @@ class EmailService:
 
         for to_email in to_emails:
             try:
-                msg = MIMEMultipart('alternative')
+                # Use mixed type when we have attachments, alternative otherwise
+                if attachment_paths:
+                    msg = MIMEMultipart('mixed')
+                    # Create alternative sub-part for text/html
+                    alt_part = MIMEMultipart('alternative')
+                    if text_body:
+                        alt_part.attach(MIMEText(text_body, 'plain'))
+                    alt_part.attach(MIMEText(html_body, 'html'))
+                    msg.attach(alt_part)
+
+                    # Attach files
+                    for filepath in attachment_paths:
+                        if not os.path.isfile(filepath):
+                            logger.warning(f"Attachment not found, skipping: {filepath}")
+                            continue
+                        with open(filepath, 'rb') as f:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(f.read())
+                        encoders.encode_base64(part)
+                        filename = os.path.basename(filepath)
+                        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                        msg.attach(part)
+                else:
+                    msg = MIMEMultipart('alternative')
+                    if text_body:
+                        msg.attach(MIMEText(text_body, 'plain'))
+                    msg.attach(MIMEText(html_body, 'html'))
+
                 msg['From'] = f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
                 msg['To'] = to_email
                 msg['Subject'] = subject
                 msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
-
-                # Attach text and HTML versions
-                if text_body:
-                    part1 = MIMEText(text_body, 'plain')
-                    msg.attach(part1)
-
-                part2 = MIMEText(html_body, 'html')
-                msg.attach(part2)
 
                 # Send email
                 with smtplib.SMTP(self._smtp_config['host'], self._smtp_config['port']) as server:
@@ -117,7 +141,7 @@ class EmailService:
                 success_count += 1
 
             except Exception as e:
-                print(f"Failed to send email to {to_email}: {str(e)}")
+                logger.error(f"Failed to send email to {to_email}: {e}")
                 failure_count += 1
 
         return success_count, failure_count
@@ -347,3 +371,108 @@ Please do not reply to this email.
             html_body=html_body,
             text_body=text_body,
         )
+
+    async def send_welcome_email(
+        self,
+        to_email: str,
+        first_name: str,
+        last_name: str,
+        username: str,
+        temp_password: str,
+        organization_name: str,
+        login_url: str,
+        db: Any = None,
+        organization_id: Optional[str] = None,
+        attachment_paths: Optional[List[str]] = None,
+    ) -> bool:
+        """
+        Send a welcome email to a newly created user.
+
+        If a database session and organization_id are provided, loads the
+        admin-configured template from the database. Otherwise falls back
+        to a default template.
+
+        Args:
+            to_email: New user's email address
+            first_name: New user's first name
+            last_name: New user's last name
+            username: Login username
+            temp_password: Temporary password
+            organization_name: Organization display name
+            login_url: URL to the login page
+            db: Optional async database session (for loading templates)
+            organization_id: Optional org ID (for loading templates)
+            attachment_paths: Optional list of local file paths to attach
+
+        Returns:
+            True if sent successfully
+        """
+        context = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": f"{first_name} {last_name}",
+            "username": username,
+            "temp_password": temp_password,
+            "organization_name": organization_name,
+            "login_url": login_url,
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.services.email_template_service import (
+                    EmailTemplateService,
+                )
+                from app.models.email_template import EmailTemplateType
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.WELCOME
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
+                    # Gather stored attachment paths if template has attachments
+                    if template.allow_attachments and template.attachments:
+                        stored_paths = [a.storage_path for a in template.attachments]
+                        if attachment_paths:
+                            attachment_paths = attachment_paths + stored_paths
+                        else:
+                            attachment_paths = stored_paths
+            except Exception as e:
+                logger.warning(f"Failed to load welcome email template, using default: {e}")
+
+        # Fall back to inline default if no template loaded
+        if not subject:
+            from app.services.email_template_service import (
+                DEFAULT_WELCOME_SUBJECT,
+                DEFAULT_WELCOME_HTML,
+                DEFAULT_WELCOME_TEXT,
+                DEFAULT_CSS,
+            )
+            import re
+
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    return str(context.get(var, match.group(0)))
+                return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+
+            subject = _replace(DEFAULT_WELCOME_SUBJECT)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_WELCOME_HTML)}</body></html>"
+            text_body = _replace(DEFAULT_WELCOME_TEXT)
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            attachment_paths=attachment_paths,
+        )
+
+        return success_count > 0

@@ -24,6 +24,12 @@ from app.models.onboarding import (
     OnboardingChecklistItem
 )
 
+from app.models.email_template import (
+    EmailTemplate,
+    EmailAttachment,
+    EmailTemplateType,
+)
+
 from app.models.location import (
     Location
 )
@@ -68,6 +74,10 @@ __all__ = [
     # Onboarding models
     "OnboardingStatus",
     "OnboardingChecklistItem",
+    # Email template models
+    "EmailTemplate",
+    "EmailAttachment",
+    "EmailTemplateType",
     # Location models
     "Location",
     # Apparatus models
