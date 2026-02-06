@@ -866,11 +866,26 @@ The API client maps HTTP status codes to user-friendly messages:
 
 The following middleware and security features affect onboarding:
 
+**Access & Network:**
 - **GeoIP Blocking**: The `IPBlockingMiddleware` blocks requests from countries in the `BLOCKED_COUNTRIES` configuration. Onboarding endpoints (`/api/v1/onboarding/*`) are **exempt** from geo-blocking since first-time setup must be accessible before any configuration exists. Other API endpoints remain subject to geo-blocking.
 - **CSRF Protection**: Session endpoints require a valid `X-CSRF-Token` header that matches the token stored in the server-side session. The token is generated during `POST /start` and returned in the response header.
-- **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only the platform type is stored in plain text.
-- **Email Test Timeout**: SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable or firewalled.
 - **Reset Protection**: The `POST /reset` endpoint is blocked after onboarding completes. It only works while onboarding is still in progress (`needs_onboarding` returns `True`).
+- **Email Test Timeout**: SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable or firewalled.
+
+**Data Protection:**
+- **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only the platform type is stored in plain text.
+- **No Passwords in Logs**: Temporary passwords are never written to application logs. The `users.py` endpoint only logs that a welcome email was requested.
+- **Sanitized Error Responses**: API 500 errors return generic messages (`"Please check the server logs"`) instead of raw exception strings. This prevents leaking database schema, SQL queries, or internal paths to clients.
+- **Health Endpoint Sanitized**: The `/health` endpoint reports service status (`"connected"`, `"disconnected"`, `"error"`) without exposing raw error messages or infrastructure details.
+
+**Authentication Hardening:**
+- **Uniform Auth Failure Messages**: Authentication failure logs do not reveal whether the failure was due to "user not found", "invalid password", or "no password set". All pre-verification failures log `"Authentication failed for login attempt"` and post-verification failures log `"Authentication failed: invalid credentials"`. This prevents username enumeration via log analysis.
+- **Account lockout events** still log the username (needed for security incident response).
+
+**Frontend Security:**
+- **Production Console Logging**: The onboarding store's error logging is restricted in production — only the step name and error message are logged. Full details (error context, user information) are only visible in development mode (`import.meta.env.DEV`).
+- **Per-Session Obfuscation Key**: The frontend obfuscation utility generates a random per-session key via `crypto.getRandomValues()` instead of using a hardcoded default. This ensures each browser session has a unique key.
+- **Environment File Protection**: `.env` files are excluded from version control via `.gitignore`.
 
 ---
 

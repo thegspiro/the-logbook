@@ -565,15 +565,26 @@ Stores post-onboarding tasks:
 
 ## Security Considerations
 
+### Access Control
 1. **No Authentication Required** - Onboarding endpoints don't require authentication since no users exist yet
 2. **GeoIP Bypass** - Onboarding endpoints are exempt from GeoIP country blocking, since first-time setup must be accessible before any configuration exists
 3. **One-Time Use** - Once completed, can't be rerun without database changes
 4. **Reset Protection** - The reset endpoint is blocked after onboarding completes; it only works while onboarding is still in progress
-5. **Sensitive Data Encryption** - Email passwords, API keys, and file storage credentials entered during onboarding are encrypted (AES-256) before being stored in the session database
-6. **Email Test Timeout** - SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable
-7. **Audit Logging** - All onboarding actions are logged
-8. **IP Tracking** - Setup IP address is recorded
-9. **Password Requirements** - Enforced at API level and client level
+5. **CSRF Protection** - All session-modifying endpoints require a valid `X-CSRF-Token` header
+
+### Data Protection
+6. **Sensitive Data Encryption** - Email passwords, API keys, and file storage credentials entered during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only platform names are stored in plain text.
+7. **No Passwords in Logs** - Temporary passwords are never written to application logs. Only the request for a welcome email is logged.
+8. **Sanitized Error Responses** - API error responses never expose internal exception details, database structure, or stack traces. Full error details are logged internally only.
+9. **Password Requirements** - Enforced at both API and client level (12+ chars, complexity, common password check)
+
+### Monitoring & Hardening
+10. **Audit Logging** - All onboarding actions are logged with IP, user agent, and timestamps
+11. **IP Tracking** - Setup IP address is recorded for each session
+12. **Email Test Timeout** - SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable
+13. **Uniform Auth Failure Messages** - Authentication logs do not reveal whether a username exists or a password was wrong, preventing username enumeration
+14. **Health Endpoint Sanitized** - The `/health` endpoint reports service status without exposing raw error messages or infrastructure details
+15. **Environment File Protection** - `.env` files are excluded from version control via `.gitignore` to prevent accidental secret commits
 
 ## Troubleshooting
 

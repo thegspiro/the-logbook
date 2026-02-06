@@ -847,7 +847,7 @@ INFO:     Uvicorn running on http://0.0.0.0:3001
 ### Browser
 - Welcome page with animated logo loads
 - No errors in console (F12)
-- Auto-redirect to onboarding after 10 seconds
+- Click "Begin Setup" to start onboarding
 
 ### API
 - `http://YOUR-IP:7881/docs` → FastAPI documentation
@@ -984,6 +984,106 @@ backend:
 
 ---
 
+### Problem: 500 error responses show internal exception details
+**Symptom:** API 500 errors return raw Python exception messages like `"detail": "Failed to create organization: IntegrityError(...)"`, which reveals database schema, table names, or query structure.
+
+### Root Cause
+Some error handlers were passing `str(e)` directly into the HTTPException `detail` field, leaking internal error information to clients.
+
+### Solution
+This has been fixed in the codebase. Error handlers now log full details internally (via `logger.error()`) and return generic messages to clients: `"Failed to create organization. Please check the server logs for details."` Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+**If you need to debug a 500 error:** Check the backend container logs instead of the API response:
+```bash
+docker compose logs backend --tail=50
+```
+
+---
+
+### Problem: Temporary passwords visible in application logs
+**Symptom:** When creating a new user with `send_welcome_email: true`, the temporary password was previously written to the application log in plaintext.
+
+### Root Cause
+A development-only logging statement (`logger.info(f"Temporary password for {username}: {temp_password}")`) was left in the user creation endpoint.
+
+### Solution
+This has been fixed in the codebase. Temporary passwords are no longer logged. The email service should be used to deliver temporary passwords or password reset links. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: Health endpoint reveals database/Redis connection error details
+**Symptom:** The `/health` endpoint returns raw exception messages like `"database": "error: (2003, \"Can't connect to MySQL server...\")"`, revealing internal infrastructure details.
+
+### Root Cause
+Exception strings were included directly in the health check response, potentially exposing database hostnames, ports, or connection configuration.
+
+### Solution
+This has been fixed in the codebase. The health endpoint now returns only the status (`"error"`, `"connected"`, `"disconnected"`) without raw exception details. Full errors are logged internally. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: Authentication failure logs reveal whether username exists
+**Symptom:** Backend logs show different messages for different failure modes: `"user not found"` vs `"invalid password"` vs `"no password set"`. An attacker with log access could enumerate valid usernames.
+
+### Root Cause
+Authentication failure logging used distinct messages for each failure type, which is an information disclosure vulnerability.
+
+### Solution
+This has been fixed in the codebase. All authentication failures now log a uniform message: `"Authentication failed for login attempt"` (pre-login) or `"Authentication failed: invalid credentials"` (wrong password). Account lockout events still log the username for security incident response. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: `.env` file accidentally committed to git
+**Symptom:** Secrets (database passwords, encryption keys, API keys) are visible in the git repository history.
+
+### Root Cause
+The `.gitignore` file did not include `.env` entries, so `.env` files could be accidentally committed.
+
+### Solution
+`.env` files are now excluded via `.gitignore`. Pull the latest changes:
+
+```bash
+git pull origin main
+```
+
+If a `.env` file was already committed, remove it from tracking:
+```bash
+git rm --cached .env
+git commit -m "Remove .env from tracking"
+git push
+```
+
+**IMPORTANT:** If secrets were committed, consider them compromised. Rotate all affected secrets immediately:
+```bash
+echo "SECRET_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_SALT=$(openssl rand -hex 16)"
+echo "DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+```
+
+---
+
 ## Quick Diagnostic Checklist
 
 ### Security Configuration
@@ -994,6 +1094,14 @@ backend:
 - [ ] `REDIS_PASSWORD` is set (required in production)
 
 > **Note**: The onboarding security check uses substring matching — any key containing `"INSECURE_DEFAULT"` is flagged as critical. The factory defaults (`INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION` for SECRET_KEY, `INSECURE_DEFAULT_KEY_CHANGE_ME` for ENCRYPTION_KEY) will both be caught. This matches the validation in `backend/app/core/config.py`.
+
+### Secret Handling
+- [ ] `.env` files are in `.gitignore` (never committed to version control)
+- [ ] No passwords logged in application output (temporary passwords are never logged)
+- [ ] Health endpoint does not expose raw error strings (shows only "error" status)
+- [ ] API error responses do not leak internal exception details
+- [ ] Frontend console logging restricted in production mode
+- [ ] Authentication failure logs do not reveal whether username exists or password was wrong
 
 ### Application Configuration
 - [ ] Frontend `.env` exists with correct `VITE_API_URL`

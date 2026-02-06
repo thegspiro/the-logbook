@@ -227,6 +227,8 @@ Regular testing should include:
 - **Salt**: Automatically generated unique salt per password
 - **Work Factor**: Configured for ~500ms hash time
 - **No Plain Text**: Passwords are NEVER stored in plain text
+- **No Passwords in Logs**: Temporary passwords are never written to application logs
+- **Onboarding Encryption**: Email passwords and API keys entered during onboarding are encrypted (AES-256 via Fernet) before database storage
 
 ### Password Policies
 
@@ -261,9 +263,15 @@ Regular testing should include:
 
 **Key Management:**
 - Encryption keys stored in environment variables
-- Never committed to version control
+- Never committed to version control (`.env` files are in `.gitignore`)
 - Rotated regularly (recommended: every 90 days)
 - Consider using a key management service (AWS KMS, Azure Key Vault, HashiCorp Vault)
+
+**Onboarding Session Encryption:**
+- Email configuration (SMTP passwords, OAuth secrets) encrypted before storage
+- File storage configuration (AWS keys, Azure keys) encrypted before storage
+- Only platform type identifiers are stored in plain text
+- Encrypted data uses the same AES-256 Fernet cipher as field-level encryption
 
 ### Encryption in Transit
 
@@ -420,6 +428,37 @@ Examples:
 - `documents.sensitive.view`
 - `training.records.approve`
 - `inventory.equipment.checkout`
+
+---
+
+## Error Handling & Information Disclosure Prevention
+
+### API Error Responses
+
+All API endpoints follow a strict policy of **never exposing internal details** in error responses:
+
+- **500 errors**: Return generic messages (e.g., `"Please check the server logs for details."`) instead of raw exception strings that could reveal database queries, file paths, or system configuration
+- **Validation errors (400/422)**: Return controlled validation messages from the application's business logic, not raw framework errors
+- **Health endpoint**: Reports service status (`"connected"`, `"disconnected"`, `"error"`) without including raw error messages from database or Redis connection failures
+
+### Logging Security
+
+- **No passwords in logs**: Temporary passwords are never logged. User creation only logs that a welcome email was requested.
+- **Uniform authentication failures**: Login failure logs do not distinguish between "user not found", "invalid password", or "no password set", preventing username enumeration via log analysis. All failures log as `"Authentication failed for login attempt"`.
+- **Account lockout events**: These are the exception — they include the username because they are security incidents that require investigation.
+- **Request body sanitization**: The security monitoring middleware reads request bodies for threat detection, but sensitive fields are not persisted to logs.
+
+### Frontend Security
+
+- **Production console logging**: Error details (error context, user information) are only logged to the browser console in development mode. Production builds log only the step name and error message.
+- **Per-session obfuscation keys**: The frontend obfuscation utility generates a random key per browser session instead of using a hardcoded default, ensuring each session has a unique key.
+- **VITE_* variable safety**: Only non-secret values (API URLs, feature flags) are exposed via Vite environment variables. Secrets must never use the `VITE_` prefix.
+
+### Environment & Configuration
+
+- **`.env` files excluded from git**: `.gitignore` includes `.env`, `.env.local`, and `.env.*.local` to prevent accidental secret commits
+- **`.env.example` files**: Contain only placeholder text (`CHANGE_ME_GENERATE_WITH_STEP_2_ABOVE`), never real secrets
+- **Security key validation**: Startup checks flag any `SECRET_KEY` or `ENCRYPTION_KEY` containing `"INSECURE_DEFAULT"` as a critical issue
 
 ---
 
