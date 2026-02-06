@@ -476,3 +476,87 @@ Please do not reply to this email.
         )
 
         return success_count > 0
+
+    async def send_password_reset_email(
+        self,
+        to_email: str,
+        first_name: str,
+        reset_url: str,
+        organization_name: str,
+        expiry_hours: int = 4,
+        db: Any = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Send a password reset email.
+
+        Only used when local authentication is enabled.
+
+        Args:
+            to_email: User's email address
+            first_name: User's first name
+            reset_url: Full URL to the password reset page with token
+            organization_name: Organization display name
+            expiry_hours: Hours until the reset link expires
+            db: Optional async database session (for loading templates)
+            organization_id: Optional org ID (for loading templates)
+
+        Returns:
+            True if sent successfully
+        """
+        context = {
+            "first_name": first_name,
+            "reset_url": reset_url,
+            "organization_name": organization_name,
+            "expiry_hours": str(expiry_hours),
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.services.email_template_service import EmailTemplateService
+                from app.models.email_template import EmailTemplateType
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.PASSWORD_RESET
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to load password reset template, using default: {e}")
+
+        # Fall back to inline default
+        if not subject:
+            from app.services.email_template_service import (
+                DEFAULT_PASSWORD_RESET_SUBJECT,
+                DEFAULT_PASSWORD_RESET_HTML,
+                DEFAULT_PASSWORD_RESET_TEXT,
+                DEFAULT_CSS,
+            )
+            import re
+
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    return str(context.get(var, match.group(0)))
+                return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+
+            subject = _replace(DEFAULT_PASSWORD_RESET_SUBJECT)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_PASSWORD_RESET_HTML)}</body></html>"
+            text_body = _replace(DEFAULT_PASSWORD_RESET_TEXT)
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+        return success_count > 0

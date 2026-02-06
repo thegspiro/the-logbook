@@ -4,7 +4,7 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
@@ -16,8 +16,10 @@ from app.schemas.auth import (
     TokenRefresh,
     CurrentUser,
     PasswordChange,
+    PasswordResetRequest,
+    PasswordReset,
 )
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, RESET_TOKEN_EXPIRY_HOURS
 from app.api.dependencies import get_current_user, get_current_active_user
 from app.models.user import User, Organization
 from app.core.config import settings
@@ -284,3 +286,114 @@ async def check_authentication(
         "user_id": str(current_user.id),
         "username": current_user.username,
     }
+
+
+@router.post("/forgot-password", dependencies=[Depends(check_rate_limit)])
+async def forgot_password(
+    reset_request: PasswordResetRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Request a password reset email.
+
+    Only works when local authentication is enabled for the organization.
+    If the org uses Google, Microsoft, or another OAuth provider, the user
+    is directed to reset via that provider instead.
+
+    Rate limited to prevent abuse. Always returns 200 to avoid email enumeration.
+    """
+    from sqlalchemy import select
+    from app.schemas.organization import AuthSettings
+
+    # Look up the organization (single-org system)
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    organization = org_result.scalar_one_or_none()
+
+    if not organization:
+        # No org — return generic success to avoid leaking info
+        return {"message": "If an account with that email exists, a reset link has been sent."}
+
+    # Check auth provider
+    org_settings = organization.settings or {}
+    auth_config = AuthSettings(**org_settings.get("auth", {}))
+
+    if not auth_config.is_local_auth():
+        provider_names = {
+            "google": "Google",
+            "microsoft": "Microsoft",
+            "authentik": "your SSO provider",
+        }
+        provider_label = provider_names.get(auth_config.provider, auth_config.provider)
+        return {
+            "message": f"This organization uses {provider_label} for authentication. "
+                       f"Please reset your password through {provider_label}.",
+            "auth_provider": auth_config.provider,
+        }
+
+    # Generate reset token
+    auth_service = AuthService(db)
+    user, raw_token = await auth_service.create_password_reset_token(
+        email=reset_request.email,
+        organization_id=str(organization.id),
+    )
+
+    # Send email in background (even if user not found, we don't reveal that)
+    if user and raw_token:
+        from app.services.email_service import EmailService
+
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
+        org_name = organization.name
+
+        async def _send_reset():
+            try:
+                email_svc = EmailService(organization)
+                await email_svc.send_password_reset_email(
+                    to_email=user.email,
+                    first_name=user.first_name or user.username,
+                    reset_url=reset_url,
+                    organization_name=org_name,
+                    expiry_hours=RESET_TOKEN_EXPIRY_HOURS,
+                    db=db,
+                    organization_id=str(organization.id),
+                )
+            except Exception as e:
+                from loguru import logger
+                logger.error(f"Failed to send password reset email: {e}")
+
+        background_tasks.add_task(_send_reset)
+
+    # Always return the same message to prevent email enumeration
+    return {"message": "If an account with that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password", dependencies=[Depends(check_rate_limit)])
+async def reset_password(
+    reset_data: PasswordReset,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reset password using a valid reset token.
+
+    The token was sent via email from the forgot-password endpoint.
+    Requires a new password that meets strength requirements (12+ chars).
+    """
+    auth_service = AuthService(db)
+
+    success, error = await auth_service.reset_password_with_token(
+        raw_token=reset_data.token,
+        new_password=reset_data.new_password,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "Password reset failed"
+        )
+
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}

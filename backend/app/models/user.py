@@ -200,7 +200,9 @@ class User(Base):
     password_changed_at = Column(DateTime(timezone=True))
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime(timezone=True))
-    
+    password_reset_token = Column(String(128), index=True)
+    password_reset_expires_at = Column(DateTime(timezone=True))
+
     # Timestamps
     last_login_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

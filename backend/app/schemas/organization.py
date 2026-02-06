@@ -81,6 +81,18 @@ class EmailServiceSettings(BaseModel):
     use_tls: bool = Field(default=True, description="Use TLS encryption")
 
 
+class AuthSettings(BaseModel):
+    """Settings for organization authentication provider"""
+    provider: str = Field(
+        default="local",
+        description="Authentication provider: local, google, microsoft, authentik"
+    )
+
+    def is_local_auth(self) -> bool:
+        """Check if local password authentication is enabled"""
+        return self.provider == "local"
+
+
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization"""
     # Essential modules are always enabled
@@ -160,6 +172,10 @@ class OrganizationSettings(BaseModel):
         default_factory=EmailServiceSettings,
         description="Email service configuration"
     )
+    auth: AuthSettings = Field(
+        default_factory=AuthSettings,
+        description="Authentication provider configuration"
+    )
     modules: ModuleSettings = Field(
         default_factory=ModuleSettings,
         description="Module enablement settings"
@@ -194,6 +210,7 @@ class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
     contact_info_visibility: Optional[ContactInfoSettings] = None
     email_service: Optional[EmailServiceSettings] = None
+    auth: Optional[AuthSettings] = None
     modules: Optional[ModuleSettingsUpdate] = None
 
     # Allow additional settings
@@ -215,6 +232,7 @@ class OrganizationSettingsResponse(BaseModel):
     """Schema for organization settings response"""
     contact_info_visibility: ContactInfoSettings
     email_service: EmailServiceSettings
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')

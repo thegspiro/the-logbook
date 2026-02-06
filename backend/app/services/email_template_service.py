@@ -99,6 +99,50 @@ Please do not reply to this email."""
 
 DEFAULT_WELCOME_SUBJECT = "Welcome to {{organization_name}} — Your Account is Ready"
 
+# Default password reset email
+DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
+    <div class="header">
+        <h1>Password Reset Request</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{first_name}},</p>
+
+        <p>We received a request to reset your password for <strong>{{organization_name}}</strong>.</p>
+
+        <p>Click the button below to set a new password. This link will expire in <strong>{{expiry_hours}} hours</strong>.</p>
+
+        <p style="text-align: center;">
+            <a href="{{reset_url}}" class="button">Reset Password</a>
+        </p>
+
+        <p><small>If the button doesn't work, copy and paste this URL into your browser:<br/>{{reset_url}}</small></p>
+
+        <p>If you did not request a password reset, you can safely ignore this email. Your password will not be changed.</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_PASSWORD_RESET_TEXT = """Password Reset Request
+
+Hello {{first_name}},
+
+We received a request to reset your password for {{organization_name}}.
+
+Click the link below to set a new password. This link will expire in {{expiry_hours}} hours.
+
+Reset your password: {{reset_url}}
+
+If you did not request a password reset, you can safely ignore this email. Your password will not be changed.
+
+---
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
+
 
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
@@ -294,5 +338,24 @@ class EmailTemplateService:
             )
             created.append(template)
             logger.info(f"Created default welcome email template for org {organization_id}")
+
+        # Check for password reset template
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.PASSWORD_RESET, active_only=False
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.PASSWORD_RESET,
+                name="Password Reset",
+                subject=DEFAULT_PASSWORD_RESET_SUBJECT,
+                html_body=DEFAULT_PASSWORD_RESET_HTML,
+                text_body=DEFAULT_PASSWORD_RESET_TEXT,
+                description="Sent when a member requests a password reset. Only used with local authentication.",
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(f"Created default password reset email template for org {organization_id}")
 
         return created
