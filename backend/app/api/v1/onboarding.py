@@ -72,7 +72,8 @@ class OrganizationCreate(BaseModel):
 
     @validator('organization_type')
     def validate_org_type(cls, v):
-        valid_types = ['fire_department', 'ems', 'hospital', 'clinic', 'emergency_services']
+        # Must match OrganizationType enum values in models/user.py
+        valid_types = ['fire_department', 'ems_only', 'fire_ems_combined']
         if v not in valid_types:
             raise ValueError(f'Organization type must be one of: {", ".join(valid_types)}')
         return v

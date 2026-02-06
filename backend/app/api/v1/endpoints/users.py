@@ -22,7 +22,7 @@ from app.schemas.user import (
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
 from app.services.organization_service import OrganizationService
-from app.models.user import User, Role, user_roles
+from app.models.user import User, Role, UserStatus, user_roles
 from app.api.dependencies import get_current_user, require_permission
 # NOTE: Authentication is now implemented
 # from app.api.dependencies import get_current_active_user, get_user_organization
@@ -127,7 +127,7 @@ async def create_member(
 
     # Create new user
     new_user = User(
-        id=uuid4(),
+        id=str(uuid4()),
         organization_id=current_user.organization_id,
         username=user_data.username,
         email=user_data.email,
@@ -152,7 +152,7 @@ async def create_member(
         # Emergency contacts (stored as JSON)
         emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
-        status="active",
+        status=UserStatus.ACTIVE,
     )
 
     db.add(new_user)

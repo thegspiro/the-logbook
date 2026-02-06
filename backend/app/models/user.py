@@ -182,6 +182,10 @@ class User(Base):
     # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
     emergency_contacts = Column(JSON, default=[])
 
+    # Notification Preferences (stored as JSON object)
+    # Format: {"email": true, "sms": false, "push": true, "digest": "daily", ...}
+    notification_preferences = Column(JSON, default={})
+
     # Status
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVE, index=True)
     email_verified = Column(Boolean, default=False)
@@ -303,8 +307,8 @@ class Session(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    token = Column(Text, nullable=False, unique=True, index=True)
-    refresh_token = Column(Text)
+    token = Column(String(512), nullable=False, unique=True, index=True)
+    refresh_token = Column(String(512))
     ip_address = Column(String(45))
     user_agent = Column(Text)
     device_info = Column(JSON)
