@@ -372,7 +372,8 @@ const OrganizationSetup: React.FC = () => {
 
   // Hooks
   const { initializeSession, hasSession, isLoading: sessionLoading, saveOrganization } = useOnboardingSession();
-  const { isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
+  const { error, canRetry, clearError } = useApiRequest();
+  const [isSaving, setIsSaving] = useState(false);
 
   // Initialize session and restore any saved data
   useEffect(() => {
@@ -561,6 +562,8 @@ const OrganizationSetup: React.FC = () => {
       return;
     }
 
+    setIsSaving(true);
+
     try {
       // Store name in Zustand for other components
       setDepartmentName(formData.name);
@@ -615,6 +618,8 @@ const OrganizationSetup: React.FC = () => {
     } catch (err) {
       console.error('Failed to save organization:', err);
       toast.error('Failed to save organization. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 

@@ -115,36 +115,70 @@ class SecureApiClient {
   }
 
   /**
-   * Handle API errors
+   * Handle network-level errors from fetch (connection refused, DNS failure, etc.)
    */
-  private handleError(error: any): { error: string; statusCode: number } {
-    if (error.response) {
-      // Rate limiting
-      if (error.response.status === 429) {
-        const retryAfter = error.response.headers?.['Retry-After'];
-        const message = retryAfter
-          ? `Too many requests. Please try again in ${retryAfter} seconds.`
-          : 'Too many requests. Please wait before trying again.';
-        return { error: message, statusCode: 429 };
-      }
+  private handleNetworkError(error: any): { error: string; statusCode: number } {
+    if (error.name === 'AbortError') {
+      return { error: 'Request was cancelled.', statusCode: 0 };
+    }
 
-      // CSRF error
-      if (error.response.status === 403) {
-        return { error: 'Security validation failed. Please refresh and try again.', statusCode: 403 };
-      }
-
-      // Other errors
+    if (error.name === 'TypeError' && error.message?.includes('Failed to fetch')) {
       return {
-        error: error.response.data?.detail || error.response.data?.message || 'An error occurred',
-        statusCode: error.response.status,
+        error: 'Unable to reach the server. Please verify the backend is running and check your network connection.',
+        statusCode: 0,
       };
     }
 
-    // Network error
     return {
-      error: 'Network error. Please check your connection.',
+      error: 'Network error. Please check your connection and try again.',
       statusCode: 0,
     };
+  }
+
+  /**
+   * Map HTTP error status codes to user-friendly messages
+   */
+  private handleHttpError(status: number, errorData: any): { error: string; statusCode: number } {
+    const detail = errorData.detail || errorData.message;
+
+    switch (status) {
+      case 429: {
+        return {
+          error: 'Too many requests. Please wait a moment before trying again.',
+          statusCode: 429,
+        };
+      }
+      case 403:
+        return {
+          error: 'Security validation failed. Please refresh the page and try again.',
+          statusCode: 403,
+        };
+      case 422:
+        return {
+          error: detail || 'Invalid data submitted. Please check your input and try again.',
+          statusCode: 422,
+        };
+      case 409:
+        return {
+          error: detail || 'This record already exists. Please check for duplicates.',
+          statusCode: 409,
+        };
+      case 500:
+        return {
+          error: 'A server error occurred. Please try again or check the server logs.',
+          statusCode: 500,
+        };
+      case 503:
+        return {
+          error: 'The server is temporarily unavailable. It may still be starting up — please try again shortly.',
+          statusCode: 503,
+        };
+      default:
+        return {
+          error: detail || 'An unexpected error occurred. Please try again.',
+          statusCode: status,
+        };
+    }
   }
 
   /**
@@ -181,10 +215,7 @@ class SecureApiClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        return {
-          error: errorData.detail || errorData.message || 'Request failed',
-          statusCode: response.status,
-        };
+        return this.handleHttpError(response.status, errorData);
       }
 
       const data = await response.json();
@@ -193,7 +224,7 @@ class SecureApiClient {
         statusCode: response.status,
       };
     } catch (error: any) {
-      return this.handleError(error);
+      return this.handleNetworkError(error);
     }
   }
 

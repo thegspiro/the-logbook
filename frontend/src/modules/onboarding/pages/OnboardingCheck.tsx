@@ -139,12 +139,13 @@ const OnboardingCheck: React.FC = () => {
   }, [updateServiceStatus]);
 
   const checkOnboardingStatus = useCallback(async () => {
+    setStatusMessage('Checking setup status...');
     try {
       const response = await apiClient.getStatus();
 
       if (response.error || !response.data) {
         setError(
-          response.error || 'Unable to connect to the server. Please check your connection and try again.'
+          response.error || 'Failed to check onboarding status. The server is running but the status endpoint returned an error.'
         );
         return;
       }
@@ -159,7 +160,7 @@ const OnboardingCheck: React.FC = () => {
     } catch (err) {
       console.error('Error checking onboarding status:', err);
       setError(
-        'Unable to connect to the server. Please check your connection and try again.'
+        'Failed to check onboarding status. Please verify the backend is running and try again.'
       );
     }
   }, [navigate]);

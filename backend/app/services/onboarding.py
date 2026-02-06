@@ -187,12 +187,12 @@ class OnboardingService:
         passed = True
 
         # Check SECRET_KEY
-        if settings.SECRET_KEY == "change_me_to_random_64_character_string":
+        if "INSECURE_DEFAULT" in settings.SECRET_KEY:
             issues.append({
                 "field": "SECRET_KEY",
                 "severity": "critical",
-                "message": "SECRET_KEY is using default value. Generate a secure key immediately!",
-                "fix": "Run: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                "message": "SECRET_KEY is using the insecure default value. Generate a secure key in your .env file.",
+                "fix": "Run: python -c \"import secrets; print(secrets.token_urlsafe(64))\" and set SECRET_KEY in .env"
             })
             passed = False
         elif len(settings.SECRET_KEY) < 32:
@@ -200,17 +200,17 @@ class OnboardingService:
                 "field": "SECRET_KEY",
                 "severity": "critical",
                 "message": "SECRET_KEY is too short. Must be at least 32 characters.",
-                "fix": "Generate a longer key"
+                "fix": "Generate a longer key with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
             })
             passed = False
 
         # Check ENCRYPTION_KEY
-        if settings.ENCRYPTION_KEY == "change_me_to_32_byte_hex_string":
+        if "INSECURE_DEFAULT" in settings.ENCRYPTION_KEY:
             issues.append({
                 "field": "ENCRYPTION_KEY",
                 "severity": "critical",
-                "message": "ENCRYPTION_KEY is using default value. Generate a secure key!",
-                "fix": "Run: python -c \"import secrets; print(secrets.token_hex(32))\""
+                "message": "ENCRYPTION_KEY is using the insecure default value. Generate a secure key in your .env file.",
+                "fix": "Run: python -c \"import secrets; print(secrets.token_hex(32))\" and set ENCRYPTION_KEY in .env"
             })
             passed = False
 
@@ -861,7 +861,7 @@ class OnboardingService:
             "security": {
                 "password_min_length": settings.PASSWORD_MIN_LENGTH,
                 "mfa_available": True,
-                "session_timeout_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES // 60,
+                "session_timeout_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
                 "encryption": "AES-256",
                 "password_hashing": "Argon2id"
             },

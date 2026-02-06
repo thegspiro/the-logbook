@@ -7,15 +7,15 @@ const Welcome: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Show title after 3 seconds
+    // Show title quickly so the user isn't staring at a blank screen
     const titleTimer = setTimeout(() => {
       setShowTitle(true);
-    }, 3000);
+    }, 300);
 
-    // Show paragraph 1 second after title
+    // Show paragraph shortly after title
     const paragraphTimer = setTimeout(() => {
       setShowParagraph(true);
-    }, 4000);
+    }, 800);
 
     return () => {
       clearTimeout(titleTimer);
