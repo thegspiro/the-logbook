@@ -47,7 +47,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "first_name", "description": "Recipient's first name"},
         {"name": "reset_url", "description": "Password reset link"},
         {"name": "organization_name", "description": "Organization name"},
-        {"name": "expiry_hours", "description": "Hours until link expires"},
+        {"name": "expiry_hours", "description": "Minutes until link expires"},
     ],
 }
 
@@ -109,7 +109,7 @@ DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
 
         <p>We received a request to reset your password for <strong>{{organization_name}}</strong>.</p>
 
-        <p>Click the button below to set a new password. This link will expire in <strong>{{expiry_hours}} hours</strong>.</p>
+        <p>Click the button below to set a new password. This link will expire in <strong>{{expiry_hours}} minutes</strong>.</p>
 
         <p style="text-align: center;">
             <a href="{{reset_url}}" class="button">Reset Password</a>
@@ -131,7 +131,7 @@ Hello {{first_name}},
 
 We received a request to reset your password for {{organization_name}}.
 
-Click the link below to set a new password. This link will expire in {{expiry_hours}} hours.
+Click the link below to set a new password. This link will expire in {{expiry_hours}} minutes.
 
 Reset your password: {{reset_url}}
 

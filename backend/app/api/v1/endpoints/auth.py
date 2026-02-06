@@ -19,7 +19,7 @@ from app.schemas.auth import (
     PasswordResetRequest,
     PasswordReset,
 )
-from app.services.auth_service import AuthService, RESET_TOKEN_EXPIRY_HOURS
+from app.services.auth_service import AuthService, RESET_TOKEN_EXPIRY_MINUTES
 from app.api.dependencies import get_current_user, get_current_active_user
 from app.models.user import User, Organization
 from app.core.config import settings
@@ -291,6 +291,7 @@ async def check_authentication(
 @router.post("/forgot-password", dependencies=[Depends(check_rate_limit)])
 async def forgot_password(
     reset_request: PasswordResetRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
@@ -305,6 +306,10 @@ async def forgot_password(
     """
     from sqlalchemy import select
     from app.schemas.organization import AuthSettings
+    from app.core.audit import log_audit_event
+    from loguru import logger
+
+    ip_address = request.client.host if request.client else None
 
     # Look up the organization (single-org system)
     org_result = await db.execute(
@@ -341,14 +346,31 @@ async def forgot_password(
     user, raw_token = await auth_service.create_password_reset_token(
         email=reset_request.email,
         organization_id=str(organization.id),
+        ip_address=ip_address,
     )
 
-    # Send email in background (even if user not found, we don't reveal that)
+    # Audit log: record every reset request regardless of outcome
+    await log_audit_event(
+        db=db,
+        event_type="auth.password_reset_requested",
+        event_category="auth",
+        severity="INFO",
+        event_data={
+            "email": reset_request.email,
+            "token_issued": bool(user and raw_token),
+            "organization_id": str(organization.id),
+        },
+        ip_address=ip_address,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    # Send emails in background (even if user not found, we don't reveal that)
     if user and raw_token:
         from app.services.email_service import EmailService
 
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
         org_name = organization.name
+        expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
 
         async def _send_reset():
             try:
@@ -358,15 +380,39 @@ async def forgot_password(
                     first_name=user.first_name or user.username,
                     reset_url=reset_url,
                     organization_name=org_name,
-                    expiry_hours=RESET_TOKEN_EXPIRY_HOURS,
+                    expiry_minutes=expiry_minutes,
                     db=db,
                     organization_id=str(organization.id),
                 )
             except Exception as e:
-                from loguru import logger
                 logger.error(f"Failed to send password reset email: {e}")
 
         background_tasks.add_task(_send_reset)
+
+        # Notify IT team in background
+        async def _notify_it_team():
+            try:
+                it_team = org_settings.get("it_team", {})
+                it_members = it_team.get("members", [])
+                it_emails = [
+                    m["email"] for m in it_members
+                    if m.get("email")
+                ]
+                if not it_emails:
+                    return
+
+                email_svc = EmailService(organization)
+                await email_svc.send_it_password_reset_notification(
+                    to_emails=it_emails,
+                    user_email=user.email,
+                    user_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                    organization_name=org_name,
+                    ip_address=ip_address,
+                )
+            except Exception as e:
+                logger.error(f"Failed to send IT team notification: {e}")
+
+        background_tasks.add_task(_notify_it_team)
 
     # Always return the same message to prevent email enumeration
     return {"message": "If an account with that email exists, a reset link has been sent."}
@@ -375,6 +421,7 @@ async def forgot_password(
 @router.post("/reset-password", dependencies=[Depends(check_rate_limit)])
 async def reset_password(
     reset_data: PasswordReset,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -383,11 +430,28 @@ async def reset_password(
     The token was sent via email from the forgot-password endpoint.
     Requires a new password that meets strength requirements (12+ chars).
     """
+    from app.core.audit import log_audit_event
+
+    ip_address = request.client.host if request.client else None
     auth_service = AuthService(db)
 
     success, error = await auth_service.reset_password_with_token(
         raw_token=reset_data.token,
         new_password=reset_data.new_password,
+    )
+
+    # Audit log the outcome
+    await log_audit_event(
+        db=db,
+        event_type="auth.password_reset_completed" if success else "auth.password_reset_failed",
+        event_category="auth",
+        severity="INFO" if success else "WARNING",
+        event_data={
+            "success": success,
+            "error": error,
+        },
+        ip_address=ip_address,
+        user_agent=request.headers.get("user-agent"),
     )
 
     if not success:

@@ -81,6 +81,20 @@ class EmailServiceSettings(BaseModel):
     use_tls: bool = Field(default=True, description="Use TLS encryption")
 
 
+class ITTeamMember(BaseModel):
+    """An IT team member stored in organization settings"""
+    name: str = ""
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+
+
+class ITTeamSettings(BaseModel):
+    """IT team and backup access configuration"""
+    members: list[ITTeamMember] = Field(default_factory=list)
+    backup_access: Dict[str, Any] = Field(default_factory=dict)
+
+
 class AuthSettings(BaseModel):
     """Settings for organization authentication provider"""
     provider: str = Field(
@@ -180,6 +194,10 @@ class OrganizationSettings(BaseModel):
         default_factory=ModuleSettings,
         description="Module enablement settings"
     )
+    it_team: ITTeamSettings = Field(
+        default_factory=ITTeamSettings,
+        description="IT team members and backup access configuration"
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -212,6 +230,7 @@ class OrganizationSettingsUpdate(BaseModel):
     email_service: Optional[EmailServiceSettings] = None
     auth: Optional[AuthSettings] = None
     modules: Optional[ModuleSettingsUpdate] = None
+    it_team: Optional[ITTeamSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -233,6 +252,7 @@ class OrganizationSettingsResponse(BaseModel):
     contact_info_visibility: ContactInfoSettings
     email_service: EmailServiceSettings
     auth: AuthSettings = Field(default_factory=AuthSettings)
+    it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')

@@ -483,7 +483,7 @@ Please do not reply to this email.
         first_name: str,
         reset_url: str,
         organization_name: str,
-        expiry_hours: int = 4,
+        expiry_minutes: int = 30,
         db: Any = None,
         organization_id: Optional[str] = None,
     ) -> bool:
@@ -497,7 +497,7 @@ Please do not reply to this email.
             first_name: User's first name
             reset_url: Full URL to the password reset page with token
             organization_name: Organization display name
-            expiry_hours: Hours until the reset link expires
+            expiry_minutes: Minutes until the reset link expires
             db: Optional async database session (for loading templates)
             organization_id: Optional org ID (for loading templates)
 
@@ -508,7 +508,7 @@ Please do not reply to this email.
             "first_name": first_name,
             "reset_url": reset_url,
             "organization_name": organization_name,
-            "expiry_hours": str(expiry_hours),
+            "expiry_hours": str(expiry_minutes),
         }
 
         subject = None
@@ -560,3 +560,89 @@ Please do not reply to this email.
         )
 
         return success_count > 0
+
+    async def send_it_password_reset_notification(
+        self,
+        to_emails: List[str],
+        user_email: str,
+        user_name: str,
+        organization_name: str,
+        ip_address: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """
+        Notify IT team members that a password reset was requested.
+
+        Args:
+            to_emails: IT team member email addresses
+            user_email: Email of the user who requested the reset
+            user_name: Display name of the user
+            organization_name: Organization name
+            ip_address: IP address the request originated from
+
+        Returns:
+            Tuple of (success_count, failure_count)
+        """
+        timestamp = datetime.utcnow().strftime("%B %d, %Y at %I:%M %p UTC")
+        ip_display = ip_address or "Unknown"
+
+        subject = f"[IT Notice] Password Reset Requested — {organization_name}"
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #f59e0b; color: white; padding: 20px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 20px; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }}
+        .details p {{ margin: 4px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Password Reset Notification</h1>
+        </div>
+        <div class="content">
+            <p>A password reset has been requested for a member of <strong>{organization_name}</strong>.</p>
+
+            <div class="details">
+                <p><strong>Member:</strong> {user_name}</p>
+                <p><strong>Email:</strong> {user_email}</p>
+                <p><strong>Requested At:</strong> {timestamp}</p>
+                <p><strong>IP Address:</strong> {ip_display}</p>
+            </div>
+
+            <p>This is for informational purposes. If this request appears suspicious, please investigate and consider disabling the account.</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated IT notification from {organization_name}.</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+        text_body = f"""Password Reset Notification — {organization_name}
+
+A password reset has been requested for a member.
+
+Member: {user_name}
+Email: {user_email}
+Requested At: {timestamp}
+IP Address: {ip_display}
+
+This is for informational purposes. If this request appears suspicious,
+please investigate and consider disabling the account.
+
+---
+Automated IT notification from {organization_name}."""
+
+        return await self.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )

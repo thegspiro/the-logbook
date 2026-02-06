@@ -452,6 +452,53 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+async def _persist_session_data_to_org(
+    session: OnboardingSessionModel,
+    db: AsyncSession,
+) -> None:
+    """
+    Copy IT team and auth configuration from the ephemeral onboarding session
+    into the permanent Organization.settings JSON column.
+
+    Called during onboarding completion so the data survives after the
+    session is cleaned up.
+    """
+    from app.models.user import Organization
+
+    session_data = session.data or {}
+
+    # Find the organization (single-org system)
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        return
+
+    org_settings = dict(organization.settings or {})
+
+    # Persist IT team data
+    it_team_data = session_data.get("it_team")
+    if it_team_data:
+        org_settings["it_team"] = {
+            "members": it_team_data.get("members", []),
+            "backup_access": it_team_data.get("backup_access", {}),
+        }
+
+    # Persist auth provider choice
+    auth_data = session_data.get("auth")
+    if auth_data and auth_data.get("platform"):
+        org_settings.setdefault("auth", {})
+        org_settings["auth"]["provider"] = auth_data["platform"]
+
+    organization.settings = org_settings
+    await db.commit()
+    logger.info("Persisted session data (IT team, auth) to Organization.settings")
+
+
 # ============================================
 # Endpoints
 # ============================================
@@ -812,9 +859,13 @@ async def complete_onboarding(
     Complete the onboarding process
 
     Marks onboarding as finished and creates post-onboarding checklist.
+    Persists IT team and auth config from session data into Organization.settings.
     """
     # Validate session
-    await validate_session(request, db)
+    session = await validate_session(request, db)
+
+    # Persist session-collected data into Organization.settings before completion
+    await _persist_session_data_to_org(session, db)
 
     service = OnboardingService(db)
 

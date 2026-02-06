@@ -25,7 +25,7 @@ from app.core.security import (
 from app.core.config import settings
 from loguru import logger
 
-RESET_TOKEN_EXPIRY_HOURS = 4
+RESET_TOKEN_EXPIRY_MINUTES = 30
 
 
 class AuthService:
@@ -375,6 +375,7 @@ class AuthService:
         self,
         email: str,
         organization_id: str,
+        ip_address: Optional[str] = None,
     ) -> Tuple[Optional[User], Optional[str]]:
         """
         Generate a password reset token for a user identified by email.
@@ -382,8 +383,12 @@ class AuthService:
         The raw token is returned for inclusion in the reset email.
         A SHA-256 hash of the token is stored in the database for verification.
 
+        Enforces a cooldown: if a valid (non-expired) token already exists,
+        a new one will not be generated.
+
         Returns:
-            Tuple of (user, raw_token) if user found, (None, None) otherwise.
+            Tuple of (user, raw_token) if user found and token created,
+            (None, None) otherwise.
         """
         result = await self.db.execute(
             select(User)
@@ -403,17 +408,31 @@ class AuthService:
             # with the auth_provider gate, but just in case
             return None, None
 
+        # Cooldown: reject if an active (non-expired) token already exists
+        if (
+            user.password_reset_token
+            and user.password_reset_expires_at
+            and user.password_reset_expires_at > datetime.utcnow()
+        ):
+            logger.warning(
+                f"Password reset requested while active token exists "
+                f"(ip={ip_address})"
+            )
+            return None, None
+
         # Generate secure token and store its hash
         raw_token = secrets.token_urlsafe(48)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
         user.password_reset_token = token_hash
         user.password_reset_expires_at = datetime.utcnow() + timedelta(
-            hours=RESET_TOKEN_EXPIRY_HOURS
+            minutes=RESET_TOKEN_EXPIRY_MINUTES
         )
 
         await self.db.commit()
-        logger.info("Password reset token created for a user")
+        logger.info(
+            f"Password reset token created (ip={ip_address})"
+        )
 
         return user, raw_token
 
