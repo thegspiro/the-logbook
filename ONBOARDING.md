@@ -20,56 +20,61 @@ The system automatically detects if onboarding is needed by checking:
 - Whether any organizations exist in the database
 - Whether an OnboardingStatus record exists and is marked complete
 
-### 2. Onboarding Steps
+### 2. Startup Health Check
 
-The onboarding process consists of 7 steps:
+Before onboarding begins, the frontend performs a service health check that verifies:
+- Backend API is reachable
+- Database is connected and migrations are complete
+- Redis cache is available (optional — degraded mode is supported)
 
-#### Step 1: Welcome
-- Introduction to The Logbook
-- System information display
-- Security feature overview
+The health check includes auto-retry with exponential backoff (up to 20 attempts) and shows real-time migration progress. If services take longer than expected, a "Skip Wait & Continue" option appears after 5 failed attempts.
 
-#### Step 2: Security Check
-- Verifies `SECRET_KEY` is not default value
-- Verifies `ENCRYPTION_KEY` is not default value
-- Checks database password security
-- Validates other security settings
-- **CRITICAL**: Must pass before proceeding
+### 3. Onboarding Steps
 
-#### Step 3: Organization Setup
+The onboarding process consists of 10 steps:
+
+#### Step 1: Organization Setup
 - Create your fire department or organization
-- Set organization name and slug
-- Choose organization type (fire department, EMS, hospital, etc.)
-- Configure timezone
+- Set organization name, slug, and type (`fire_department`, `ems_only`, `fire_ems_combined`)
+- Configure timezone, contact info, mailing/physical addresses
+- Upload organization logo (optional)
+- Set department identifiers (FDID, State ID, or Department ID)
+- **Commits to database immediately**
 
-#### Step 4: Admin User Creation
-- Create first administrator account
-- Enforces strong password requirements (12+ characters)
-- Automatically assigns Super Admin role
-- Enables all administrative permissions
+#### Step 2: Navigation Choice
+- Choose between Top Bar or Left Sidebar navigation layout
 
-#### Step 5: Module Selection
+#### Step 3: Email Platform Choice
+- Select email service: Gmail, Microsoft 365, Self-Hosted (SMTP), or Skip
+- If a service is selected, proceeds to email configuration
+
+#### Step 4: File Storage Choice
+- Select file storage: Local, AWS S3, Azure Blob, or Google Cloud Storage
+
+#### Step 5: Authentication Choice
+- Select authentication method: Local, OAuth, SAML, or LDAP
+
+#### Step 6: IT Team & Backup Access
+- Configure IT team contacts and backup access information
+
+#### Step 7: Role Setup
+- Configure roles with two-tier permissions (View Access / Manage Access)
+- Pre-configured role templates by category (Leadership, Officers, Administrative, etc.)
+
+#### Step 8: Module Selection
 - Choose which modules to enable:
-  - Training & Certification
-  - Compliance Management
-  - Scheduling & Shifts
-  - Inventory Management
-  - Meeting Management
-  - Elections & Voting
-  - Incident Reporting
-  - Equipment Maintenance
-  - Fundraising & Donations
-  - Vehicle Management
-  - Budget & Finance
+  - **Essential**: Member Management, Events & RSVP, Documents & Files
+  - **Recommended**: Training & Certifications, Equipment & Inventory, Scheduling, Elections, Compliance
+  - **Optional**: Notifications, Mobile App, Forms & Surveys, Integrations
 
-#### Step 6: Notifications (Optional)
-- Configure email notifications (SMTP)
-- Set up SMS notifications (Twilio)
-- Can be skipped and configured later
+#### Step 9: Admin User Creation
+- Create first administrator account
+- Enforces strong password requirements (12+ characters with complexity rules)
+- Badge Number is optional — all other fields are required
+- Automatically assigns Super Admin role
 
-#### Step 7: Review & Complete
-- Review all configuration
-- Complete onboarding
+#### Step 10: Complete
+- Finalizes onboarding and redirects to dashboard
 - Generate post-onboarding checklist
 
 ### 3. Post-Onboarding Checklist
@@ -414,16 +419,18 @@ PATCH /api/v1/onboarding/checklist/{item_id}/complete
 
 ## Security Verification Requirements
 
+The onboarding security check detects insecure defaults using substring matching. Any value containing `"INSECURE_DEFAULT"` is flagged as critical. This matches the validation logic in `config.py`.
+
 ### Critical Issues (Must Fix)
 
 1. **SECRET_KEY**
-   - Cannot be default value
+   - Cannot contain `INSECURE_DEFAULT` (the factory default is `INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION`)
    - Must be at least 32 characters
    - Generate with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 
 2. **ENCRYPTION_KEY**
-   - Cannot be default value
-   - Must be 64-character hex string (32 bytes)
+   - Cannot contain `INSECURE_DEFAULT` (the factory default is `INSECURE_DEFAULT_KEY_CHANGE_ME`)
+   - Should be a 64-character hex string (32 bytes)
    - Generate with: `python -c "import secrets; print(secrets.token_hex(32))"`
 
 3. **ENCRYPTION_SALT**
@@ -432,7 +439,7 @@ PATCH /api/v1/onboarding/checklist/{item_id}/complete
    - Generate with: `python -c "import secrets; print(secrets.token_hex(16))"`
 
 4. **DB_PASSWORD**
-   - Cannot be "change_me_in_production"
+   - Cannot be `change_me_in_production`
    - Should be strong, unique password
 
 ### Warnings (Should Fix)
@@ -493,20 +500,29 @@ The onboarding module is designed to be integrated with a frontend wizard:
    - Allow marking items as complete
    - Link to relevant documentation
 
-### Sample Frontend Component Structure
+### Frontend Component Structure
 
 ```
-/onboarding
-  /welcome
-  /security-check
-  /organization
-  /admin-user
-  /modules
-  /notifications
-  /review
-/onboarding-complete
-/checklist
+/                              → Welcome page (animated intro, "Get Started" button)
+/onboarding                    → Service health check (auto-retries, then redirects)
+/onboarding/start              → Step 1: Organization Setup (comprehensive form)
+/onboarding/navigation-choice  → Step 2: Top Bar vs Left Sidebar
+/onboarding/email-platform     → Step 3: Email Platform Choice
+/onboarding/email-config       → Step 3a: Email Configuration (if service selected)
+/onboarding/file-storage       → Step 4: File Storage Choice
+/onboarding/file-storage-config → Step 4a: File Storage Config (placeholder)
+/onboarding/authentication     → Step 5: Authentication Choice
+/onboarding/it-team            → Step 6: IT Team & Backup Access
+/onboarding/roles              → Step 7: Role Setup (two-tier permissions)
+/onboarding/modules            → Step 8: Module Selection
+/onboarding/modules/:id/config → Step 8a: Per-Module Configuration
+/onboarding/admin-user         → Step 9: Admin User Creation
+→ On completion, redirects to /dashboard
 ```
+
+### Data Persistence
+
+Frontend onboarding state is stored in a Zustand store persisted to **localStorage** (key: `onboarding-storage`). Sensitive data (session IDs, CSRF tokens) is excluded from persistence. The API client stores the session ID separately in localStorage under `onboarding_session_id`.
 
 ## Database Schema
 
@@ -565,13 +581,14 @@ Stores post-onboarding tasks:
 
 ### Security Check Not Passing
 
-**Cause**: Using default values in .env file
+**Cause**: Using insecure default values in .env file. The security check flags any `SECRET_KEY` or `ENCRYPTION_KEY` containing the substring `INSECURE_DEFAULT`, and any `DB_PASSWORD` equal to `change_me_in_production`.
 
 **Solution**:
 1. Generate new SECRET_KEY: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 2. Generate new ENCRYPTION_KEY: `python -c "import secrets; print(secrets.token_hex(32))"`
-3. Update .env file with generated keys
-4. Restart backend: `docker-compose restart backend`
+3. Generate new ENCRYPTION_SALT: `python -c "import secrets; print(secrets.token_hex(16))"`
+4. Update .env file with all generated keys
+5. Restart backend: `docker-compose restart backend`
 
 ### "Organization must be created first" Error
 

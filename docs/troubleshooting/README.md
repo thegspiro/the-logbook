@@ -556,6 +556,78 @@ docker exec -it intranet-mysql mysql -u root -p
 
 ---
 
+### Problem: Admin user creation "Create Admin" button stays disabled
+**Symptom:** All required fields are filled in, password meets all requirements, but the "Create Admin & Complete Setup" button remains grayed out and disabled.
+
+### Root Cause
+The form validation was checking that **all** fields (including the optional Badge Number) had non-empty values using `Object.values(formData).every(...)`. Since Badge Number is optional, leaving it empty caused the form to appear invalid.
+
+### Solution
+This has been fixed in the codebase. The validation now checks only the 6 required fields: username, email, firstName, lastName, password, confirmPassword. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Organization setup "Continue" button shows no loading indicator
+**Symptom:** After clicking "Continue" on the Organization Setup page, the button doesn't change appearance or show a spinner during the save operation.
+
+### Root Cause
+The loading state (`isSaving`) was wired to the `useApiRequest` hook, but the actual API call used `useOnboardingSession.saveOrganization()` which tracks its loading state separately. The button checked the wrong variable.
+
+### Solution
+This has been fixed in the codebase. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Security check passes even with default/insecure keys
+**Symptom:** Onboarding security verification shows all checks passed, but you never changed the default `SECRET_KEY` or `ENCRYPTION_KEY` in your `.env` file.
+
+### Root Cause
+The onboarding security check was comparing keys against stale default strings (`"change_me_to_random_64_character_string"`) that didn't match the actual defaults in `config.py` (`"INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION"`). This caused the check to silently pass.
+
+### Solution
+This has been fixed in the codebase. The security check now uses substring matching for `"INSECURE_DEFAULT"`, consistent with `config.py`. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+To verify your security configuration after the fix:
+```bash
+curl http://YOUR-IP:7881/api/v1/onboarding/security-check | jq
+```
+
+---
+
+### Problem: Welcome page shows blank screen for several seconds
+**Symptom:** On first visit, the Welcome page (`/`) displays a completely dark/blank screen before any text appears.
+
+### Root Cause
+The title animation had a 3-second delay before appearing, with the body content following at 4 seconds.
+
+### Solution
+This has been fixed in the codebase. The title now appears after 300ms and the body after 800ms — still animated but without the blank-screen wait. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
 ## Build Errors
 
 ### Problem: TypeScript errors during Docker build
@@ -849,11 +921,13 @@ backend:
 ## Quick Diagnostic Checklist
 
 ### Security Configuration
-- [ ] `SECRET_KEY` is set (min 32 characters, not default)
-- [ ] `ENCRYPTION_KEY` is set (64 hex characters, not default)
+- [ ] `SECRET_KEY` is set (min 32 characters, does not contain `INSECURE_DEFAULT`)
+- [ ] `ENCRYPTION_KEY` is set (64 hex characters, does not contain `INSECURE_DEFAULT`)
 - [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
 - [ ] `DB_PASSWORD` is not `change_me_in_production`
 - [ ] `REDIS_PASSWORD` is set (required in production)
+
+> **Note**: The onboarding security check uses substring matching — any key containing `"INSECURE_DEFAULT"` is flagged as critical. The factory defaults (`INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION` for SECRET_KEY, `INSECURE_DEFAULT_KEY_CHANGE_ME` for ENCRYPTION_KEY) will both be caught. This matches the validation in `backend/app/core/config.py`.
 
 ### Application Configuration
 - [ ] Frontend `.env` exists with correct `VITE_API_URL`
@@ -1519,18 +1593,19 @@ Should include:
 
 ## Common Error Codes Reference
 
-| Code | Meaning | Common Causes | Solution |
-|------|---------|---------------|----------|
-| 400 | Bad Request | Malformed JSON, invalid parameters | Check request body format |
-| 401 | Unauthorized | Missing/expired token | Re-login to get new token |
-| 403 | Forbidden | Valid token but insufficient permissions | Check user roles |
-| 404 | Not Found | Resource doesn't exist, wrong URL | Verify endpoint path |
-| 409 | Conflict | Duplicate entry, constraint violation | Check for existing records |
-| 422 | Validation Error | Schema mismatch, invalid field values | Check API docs for required fields |
-| 429 | Too Many Requests | Rate limit exceeded | Wait and retry later |
-| 500 | Server Error | Backend exception | Check backend logs |
-| 502 | Bad Gateway | Backend not running | Restart backend container |
-| 503 | Service Unavailable | Database/Redis down | Check dependency containers |
+| Code | Meaning | Common Causes | Frontend Error Message | Solution |
+|------|---------|---------------|----------------------|----------|
+| 400 | Bad Request | Malformed JSON, invalid parameters | Server detail or "An unexpected error occurred" | Check request body format |
+| 401 | Unauthorized | Missing/expired token | Server detail or "An unexpected error occurred" | Re-login to get new token |
+| 403 | Forbidden | CSRF validation failed, insufficient permissions | "Security validation failed. Please refresh the page and try again." | Refresh page to get new CSRF token |
+| 404 | Not Found | Resource doesn't exist, wrong URL | Server detail or "An unexpected error occurred" | Verify endpoint path |
+| 409 | Conflict | Duplicate entry, constraint violation | Server detail or "This record already exists. Please check for duplicates." | Check for existing records |
+| 422 | Validation Error | Schema mismatch, invalid field values | Server detail or "Invalid data submitted. Please check your input and try again." | Check API docs for required fields |
+| 429 | Too Many Requests | Rate limit exceeded | "Too many requests. Please wait a moment before trying again." | Wait and retry later |
+| 500 | Server Error | Backend exception | "A server error occurred. Please try again or check the server logs." | Check backend logs |
+| 502 | Bad Gateway | Backend not running | "An unexpected error occurred" | Restart backend container |
+| 503 | Service Unavailable | Database/Redis down, still starting up | "The server is temporarily unavailable. It may still be starting up — please try again shortly." | Check dependency containers |
+| 0 | Network Error | Backend unreachable, DNS failure | "Unable to reach the server. Please verify the backend is running and check your network connection." | Check Docker containers and network |
 
 ---
 
