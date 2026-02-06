@@ -311,7 +311,6 @@ class SecureApiClient {
    * Test email connection
    * Tests the email configuration without saving it
    * Returns success/failure and error details
-   * TODO: Backend endpoint needs to be implemented at /onboarding/test/email
    */
   async testEmailConnection(data: {
     platform: string;

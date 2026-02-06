@@ -503,13 +503,16 @@ async def update_contact_info(
     **Authentication required**
     """
     # Check if user is updating their own profile or has admin permissions
-    # For now, only allow users to update their own profile
     if current_user.id != user_id:
-        # TODO: Add permission check for admins
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your own contact information"
-        )
+        # Admins with users.update or members.manage can update other users
+        user_permissions = []
+        for role in current_user.roles:
+            user_permissions.extend(role.permissions or [])
+        if "users.update" not in user_permissions and "members.manage" not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update your own contact information"
+            )
 
     result = await db.execute(
         select(User)

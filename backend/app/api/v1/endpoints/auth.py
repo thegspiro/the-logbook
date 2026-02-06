@@ -19,7 +19,7 @@ from app.schemas.auth import (
 )
 from app.services.auth_service import AuthService
 from app.api.dependencies import get_current_user, get_current_active_user
-from app.models.user import User
+from app.models.user import User, Organization
 from app.core.config import settings
 from app.core.security_middleware import check_rate_limit
 
@@ -41,15 +41,26 @@ async def register(
 
     Rate limited to 5 requests per minute per IP address to prevent abuse.
 
-    **Note**: Currently uses hardcoded organization ID. When multi-org
-    support is added, organization_id should come from registration context.
+    The organization is looked up from the database (single-org system).
     """
     auth_service = AuthService(db)
 
-    # TODO: Get organization_id from registration context
-    # For now, use the test organization
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
+    # Look up the organization from the database
+    # This is a single-org system — onboarding creates exactly one organization
+    from sqlalchemy import select
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    organization = org_result.scalar_one_or_none()
+
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No organization found. Please complete onboarding first."
+        )
 
     # Register user
     user, error = await auth_service.register_user(
@@ -58,7 +69,7 @@ async def register(
         password=user_data.password,
         first_name=user_data.first_name,
         last_name=user_data.last_name,
-        organization_id=test_org_id,
+        organization_id=organization.id,
         badge_number=user_data.badge_number,
     )
 

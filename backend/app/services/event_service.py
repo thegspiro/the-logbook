@@ -12,7 +12,7 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus, CheckInWindowType
-from app.models.user import User
+from app.models.user import User, Role, user_roles
 from app.models.location import Location
 from app.schemas.event import (
     EventCreate,
@@ -400,11 +400,15 @@ class EventService:
         # Base query for users in the organization
         query = select(User).where(User.organization_id == organization_id)
 
-        # Filter by eligible roles if specified
+        # Filter by eligible roles if specified (list of role slugs)
         if event.eligible_roles:
-            # This is a simplified version - you may need to join with user_roles
-            # based on your actual user-role relationship structure
-            pass  # TODO: Add role filtering if needed
+            query = (
+                query
+                .join(user_roles, User.id == user_roles.c.user_id)
+                .join(Role, Role.id == user_roles.c.role_id)
+                .where(Role.slug.in_(event.eligible_roles))
+                .distinct()
+            )
 
         query = query.order_by(User.last_name, User.first_name)
         result = await self.db.execute(query)
