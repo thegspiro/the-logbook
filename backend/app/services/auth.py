@@ -76,25 +76,27 @@ class AuthService:
         Raises:
             ValueError: If username/email already exists
         """
-        # Check if username exists in organization
+        # Check if username exists in organization (only active users)
         existing_user = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.username == username
+                User.username == username,
+                User.deleted_at.is_(None)  # Only check active users
             )
         )
         if existing_user.scalar_one_or_none():
-            raise ValueError("Username already exists")
+            raise ValueError(f"Username '{username}' is already taken. Try a different username.")
 
-        # Check if email exists in organization
+        # Check if email exists in organization (only active users)
         existing_email = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.email == email
+                User.email == email,
+                User.deleted_at.is_(None)  # Only check active users
             )
         )
         if existing_email.scalar_one_or_none():
-            raise ValueError("Email already exists")
+            raise ValueError(f"Email '{email}' is already registered. Use a different email address.")
 
         # Hash password
         password_hash = hash_password(password)

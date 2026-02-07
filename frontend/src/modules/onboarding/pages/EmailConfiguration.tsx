@@ -87,8 +87,15 @@ const EmailConfiguration: React.FC = () => {
     }
 
     if (emailPlatform === 'selfhosted') {
-      if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
-        toast.error('Please fill in all SMTP configuration fields');
+      // Check for missing SMTP fields and list them
+      const missingFields = [];
+      if (!config.smtpHost) missingFields.push('Server Address');
+      if (!config.smtpPort) missingFields.push('Port');
+      if (!config.smtpUsername) missingFields.push('Username');
+      if (!config.smtpPassword) missingFields.push('Password');
+
+      if (missingFields.length > 0) {
+        toast.error(`Missing required SMTP fields: ${missingFields.join(', ')}`);
         return;
       }
 
@@ -150,8 +157,15 @@ const EmailConfiguration: React.FC = () => {
     }
 
     if (emailPlatform === 'selfhosted') {
-      if (!config.smtpHost || !config.smtpPort || !config.smtpUsername || !config.smtpPassword) {
-        toast.error('Please fill in all SMTP configuration fields');
+      // Check for missing SMTP fields and list them
+      const missingFields = [];
+      if (!config.smtpHost) missingFields.push('Server Address');
+      if (!config.smtpPort) missingFields.push('Port');
+      if (!config.smtpUsername) missingFields.push('Username');
+      if (!config.smtpPassword) missingFields.push('Password');
+
+      if (missingFields.length > 0) {
+        toast.error(`Missing required SMTP fields: ${missingFields.join(', ')}`);
         return;
       }
 

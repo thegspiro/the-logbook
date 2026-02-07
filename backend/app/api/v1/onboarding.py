@@ -23,6 +23,7 @@ from app.services.onboarding import OnboardingService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
 from app.api.v1.test_email_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
+from app.utils.image_validator import validate_logo_image
 from datetime import datetime, timedelta
 import secrets
 
@@ -1040,11 +1041,14 @@ async def save_department_info(
     # Validate session
     session = await validate_session(request, db)
 
+    # Validate and sanitize logo before storing
+    validated_logo = validate_logo_image(data.logo)
+
     # Update session data with department info
     session.data = session.data or {}
     session.data['department'] = {
         'name': data.name,
-        'logo': data.logo,
+        'logo': validated_logo,
         'navigation_layout': data.navigation_layout,
         'saved_at': datetime.utcnow().isoformat()
     }
@@ -1347,7 +1351,7 @@ async def save_session_organization(
             county=data.county,
             founded_year=data.founded_year,
             tax_id=data.tax_id,
-            logo=data.logo,
+            logo=validate_logo_image(data.logo),  # Validate and sanitize logo
         )
 
         # Store organization ID in session for subsequent steps
@@ -1355,7 +1359,7 @@ async def save_session_organization(
         session.data['department'] = {
             'name': data.name,
             'organization_id': str(org.id),
-            'logo': data.logo,
+            'logo': org.logo,  # Use sanitized logo from org object
             'saved_at': datetime.utcnow().isoformat()
         }
         await db.commit()

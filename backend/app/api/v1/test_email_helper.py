@@ -115,7 +115,17 @@ def test_smtp_connection(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, A
 
     except smtplib.SMTPAuthenticationError as e:
         logger.error(f"SMTP authentication failed: {e}")
-        return False, f"Authentication failed: {str(e)}", details
+        error_str = str(e).lower()
+
+        # Provide user-friendly authentication error messages
+        if '535' in error_str or 'username and password not accepted' in error_str:
+            message = "SMTP authentication failed. Verify your username and password are correct. For Gmail or Outlook, you may need an app-specific password."
+        elif '534' in error_str:
+            message = "Authentication method not supported. Try enabling SSL/TLS or STARTTLS."
+        else:
+            message = f"SMTP authentication failed. Check your username and password. For Gmail/Outlook, use an app-specific password instead of your regular password."
+
+        return False, message, details
 
     except smtplib.SMTPConnectError as e:
         logger.error(f"SMTP connection error: {e}")
@@ -127,19 +137,53 @@ def test_smtp_connection(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, A
 
     except smtplib.SMTPException as e:
         logger.error(f"SMTP error: {e}")
-        return False, f"SMTP error: {str(e)}", details
+        error_str = str(e).lower()
+
+        # Provide specific messages based on error content
+        if 'connection refused' in error_str or 'errno 111' in error_str:
+            message = f"Cannot connect to mail server at {smtp_host}:{smtp_port}. Verify the server address and port are correct. Common ports: 587 (STARTTLS), 465 (SSL/TLS)."
+        elif 'timed out' in error_str or 'timeout' in error_str:
+            message = f"Connection to {smtp_host}:{smtp_port} timed out. The server may be slow, unreachable, or the address may be incorrect."
+        elif 'name or service not known' in error_str or 'nodename nor servname' in error_str:
+            message = f"Server address '{smtp_host}' could not be found. Check for typos in the hostname."
+        else:
+            message = f"SMTP error: {str(e)}. Check your mail server configuration."
+
+        return False, message, details
 
     except ssl.SSLError as e:
         logger.error(f"SSL error: {e}")
-        return False, f"SSL/TLS error: {str(e)}", details
+        error_str = str(e).lower()
+
+        # Provide helpful SSL/TLS error messages
+        if 'wrong version number' in error_str or 'ssl23_get_server_hello' in error_str:
+            message = f"SSL/TLS version mismatch. Try changing the encryption method: Use STARTTLS for port 587, or SSL/TLS for port 465."
+        elif 'certificate' in error_str:
+            message = f"SSL certificate error. The server's SSL certificate may be invalid or expired."
+        elif 'ssl3_get_record' in error_str:
+            message = f"SSL handshake failed. Verify the correct encryption method for your port (STARTTLS for 587, SSL for 465)."
+        else:
+            message = f"SSL/TLS connection error. Ensure you're using the correct encryption type for your port. Port 587 uses STARTTLS, port 465 uses SSL/TLS."
+
+        return False, message, details
 
     except TimeoutError:
         logger.error(f"Connection timeout to {smtp_host}:{smtp_port}")
-        return False, f"Connection timeout: Unable to reach {smtp_host}:{smtp_port}", details
+        return False, f"Connection to {smtp_host}:{smtp_port} timed out. The server is unreachable or responding slowly. Verify the server address and check your network connection.", details
 
     except Exception as e:
         logger.error(f"Unexpected error testing SMTP: {e}")
-        return False, f"Unexpected error: {str(e)}", details
+        error_str = str(e).lower()
+
+        # Try to provide helpful context for common errors
+        if 'permission denied' in error_str:
+            message = "Permission denied. Your server may be blocking outbound SMTP connections on this port."
+        elif 'network is unreachable' in error_str:
+            message = "Network unreachable. Check your internet connection."
+        else:
+            message = f"Unexpected error while testing email configuration. Check your settings and try again. Error: {str(e)}"
+
+        return False, message, details
 
 
 def test_gmail_oauth(config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:

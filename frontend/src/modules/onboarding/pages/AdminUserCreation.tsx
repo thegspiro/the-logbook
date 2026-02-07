@@ -7,6 +7,7 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
+import { getOnboardingErrorMessage } from '../utils/errorHandler';
 
 const AdminUserCreation: React.FC = () => {
   const navigate = useNavigate();
@@ -168,7 +169,19 @@ const AdminUserCreation: React.FC = () => {
         });
 
         if (response.error) {
-          throw new Error(response.error);
+          // Parse error to provide field-specific context
+          let errorMessage = response.error;
+
+          // Add helpful context for common errors
+          if (errorMessage.toLowerCase().includes('username') && errorMessage.toLowerCase().includes('exists')) {
+            errorMessage += ` Try adding numbers or your organization name (e.g., ${formData.username}2, ${formData.username}_fcvfd)`;
+          } else if (errorMessage.toLowerCase().includes('email') && errorMessage.toLowerCase().includes('exists')) {
+            errorMessage += ' Use a different email address or reset password if this is your account.';
+          } else if (errorMessage.toLowerCase().includes('password')) {
+            errorMessage += ' Check the password requirements above.';
+          }
+
+          throw new Error(errorMessage);
         }
 
         // SECURITY: Clear password from memory immediately (apiClient already does this)

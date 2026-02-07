@@ -64,6 +64,9 @@ const NavigationChoice: React.FC = () => {
       toast.success('Department information saved');
       // Navigate to email platform choice
       navigate('/onboarding/email-platform');
+    } else if (error) {
+      // Display the actual error message from the backend
+      toast.error(error);
     }
   };
 

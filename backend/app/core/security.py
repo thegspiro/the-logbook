@@ -171,7 +171,13 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
             break
 
     if errors:
-        return False, "; ".join(errors)
+        # Format errors clearly - prefix with count if multiple
+        if len(errors) == 1:
+            error_message = errors[0]
+        else:
+            error_message = f"Password requirements not met ({len(errors)} issues): " + "; ".join(errors)
+
+        return False, error_message
 
     return True, None
 

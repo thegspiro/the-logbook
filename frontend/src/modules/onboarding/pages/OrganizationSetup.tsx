@@ -558,7 +558,19 @@ const OrganizationSetup: React.FC = () => {
 
   const handleContinue = async () => {
     if (!validateForm()) {
-      toast.error('Please fix the errors before continuing');
+      // Format validation errors into a readable list
+      const errorMessages = Object.values(validationErrors);
+      const errorCount = errorMessages.length;
+
+      if (errorCount === 1) {
+        toast.error(errorMessages[0]);
+      } else {
+        // Show summary with count
+        toast.error(
+          `Please fix ${errorCount} errors:\n• ${errorMessages.join('\n• ')}`,
+          { duration: 8000 } // Longer duration for multiple errors
+        );
+      }
       return;
     }
 
@@ -615,9 +627,11 @@ const OrganizationSetup: React.FC = () => {
 
       // Navigate to next step (navigation choice)
       navigate('/onboarding/navigation-choice');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save organization:', err);
-      toast.error('Failed to save organization. Please try again.');
+      // Show the actual error message from the backend (includes validation details)
+      const errorMessage = err?.message || 'Failed to save organization. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }

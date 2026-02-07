@@ -347,6 +347,20 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("GeoIP service disabled")
 
+    # Validate database enum consistency (prevent case mismatch bugs)
+    startup_status.set_phase("validation", "Validating database schema...")
+    logger.info("Validating database enum consistency...")
+    try:
+        from app.utils.startup_validators import run_startup_validations
+        from app.core.database import async_session_factory
+
+        async with async_session_factory() as db:
+            # Run validations in non-strict mode (log warnings but don't block startup)
+            run_startup_validations(db, strict=False)
+    except Exception as e:
+        logger.warning(f"Could not run startup validations: {e}")
+        startup_status.add_error(f"Startup validation error: {str(e)}")
+
     # Verify audit log integrity on startup (zero-trust)
     if settings.ENVIRONMENT == "production":
         logger.info("Verifying audit log integrity...")
