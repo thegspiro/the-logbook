@@ -136,6 +136,12 @@ class Organization(Base):
     # Relationships
     users = relationship("User", back_populates="organization")
     roles = relationship("Role", back_populates="organization")
+    public_portal_config = relationship(
+        "PublicPortalConfig",
+        back_populates="organization",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Organization(name={self.name}, type={self.organization_type})>"

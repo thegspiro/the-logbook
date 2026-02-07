@@ -45,7 +45,6 @@ interface OrganizationFormData {
   // Basic Info
   name: string;
   slug: string;
-  description: string;
   organizationType: OrganizationType;
   timezone: string;
   // Contact Info
@@ -147,7 +146,6 @@ const emptyAddress: AddressData = {
 const initialFormData: OrganizationFormData = {
   name: '',
   slug: '',
-  description: '',
   organizationType: 'fire_department',
   timezone: 'America/New_York',
   phone: '',
@@ -584,7 +582,6 @@ const OrganizationSetup: React.FC = () => {
       const payload = {
         name: formData.name.trim(),
         slug: formData.slug || undefined,
-        description: formData.description || undefined,
         organization_type: formData.organizationType,
         timezone: formData.timezone,
         phone: formData.phone || undefined,
@@ -691,24 +688,6 @@ const OrganizationSetup: React.FC = () => {
                   maxLength={100}
                   helpText="Used in URLs. Auto-generated from name if left blank."
                 />
-
-                <div>
-                  <label
-                    htmlFor="org-description"
-                    className="block text-sm font-medium text-slate-200 mb-1"
-                  >
-                    Description
-                  </label>
-                  <textarea
-                    id="org-description"
-                    value={formData.description}
-                    onChange={(e) => updateFormData('description', e.target.value)}
-                    placeholder="Brief description of your organization (optional)"
-                    rows={3}
-                    maxLength={1000}
-                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all resize-none"
-                  />
-                </div>
 
                 <SelectField
                   label="Organization Type"

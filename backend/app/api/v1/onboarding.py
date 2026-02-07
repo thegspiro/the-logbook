@@ -62,7 +62,6 @@ class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=255, description="Organization name")
     slug: str = Field(..., min_length=2, max_length=100, description="URL-friendly slug")
     organization_type: str = Field(default="fire_department", description="Type of organization")
-    description: Optional[str] = Field(None, max_length=1000)
     timezone: str = Field(default="America/New_York")
 
     @validator('slug')
@@ -688,7 +687,7 @@ async def create_organization(
             name=org_data.name,
             slug=org_data.slug,
             organization_type=org_data.organization_type,
-            description=org_data.description,
+            description=None,
             settings_dict={"timezone": org_data.timezone}
         )
 
@@ -697,7 +696,7 @@ async def create_organization(
             name=org.name,
             slug=org.slug,
             type=org.type,
-            description=org.description,
+            description=None,
             active=org.active
         )
     except ValueError as e:
