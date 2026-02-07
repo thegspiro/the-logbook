@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.database import database_manager
 from app.core.cache import cache_manager
 from app.api.v1.api import api_router
+from app.api.public.portal import router as public_portal_router
 
 
 # Configure logging
@@ -459,6 +460,9 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include API v1 router
 app.include_router(api_router, prefix="/api/v1")
+
+# Include public portal API (no /api/v1 prefix - uses /api/public/v1)
+app.include_router(public_portal_router, prefix="/api")
 
 
 # Health check endpoint
