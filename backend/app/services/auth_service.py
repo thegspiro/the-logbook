@@ -240,7 +240,7 @@ class AuthService:
             )
         )
         if result.scalar_one_or_none():
-            return None, "Username already exists"
+            return None, f"Username '{username}' is already taken. Try a different username like '{username}2' or '{username}_{organization_id[:4]}'."
 
         # Check if email exists
         result = await self.db.execute(
@@ -251,7 +251,7 @@ class AuthService:
             )
         )
         if result.scalar_one_or_none():
-            return None, "Email already exists"
+            return None, f"Email '{email}' is already registered. Use a different email address or contact your administrator if this is your account."
 
         # Create user
         user = User(
