@@ -18,7 +18,10 @@ from app.services.auth_service import AuthService
 
 class PermissionChecker:
     """
-    Dependency class for checking user permissions
+    Dependency class for checking user permissions using OR logic.
+
+    Grants access if the user has **any one** of the listed permissions.
+    For AND logic (require ALL), use ``AllPermissionChecker`` instead.
 
     Usage:
         @app.get("/admin")
@@ -35,13 +38,11 @@ class PermissionChecker:
         self,
         current_user: User = Depends(lambda: get_current_user()),
     ) -> User:
-        """Check if user has required permissions"""
-        # Get user's permissions from all their roles
-        user_permissions = []
+        """Check if user has any of the required permissions (OR logic)"""
+        user_permissions = set()
         for role in current_user.roles:
-            user_permissions.extend(role.permissions or [])
+            user_permissions.update(role.permissions or [])
 
-        # Check if user has any of the required permissions
         for perm in self.required_permissions:
             if perm in user_permissions:
                 return current_user
@@ -52,9 +53,45 @@ class PermissionChecker:
         )
 
 
+class AllPermissionChecker:
+    """
+    Dependency class for checking user permissions using AND logic.
+
+    Grants access only if the user has **all** of the listed permissions.
+
+    Usage:
+        @app.delete("/users/{id}")
+        async def delete_user(
+            current_user: User = Depends(require_all_permissions("users.delete", "audit.write"))
+        ):
+            ...
+    """
+
+    def __init__(self, required_permissions: List[str]):
+        self.required_permissions = required_permissions
+
+    async def __call__(
+        self,
+        current_user: User = Depends(lambda: get_current_user()),
+    ) -> User:
+        """Check if user has all of the required permissions (AND logic)"""
+        user_permissions = set()
+        for role in current_user.roles:
+            user_permissions.update(role.permissions or [])
+
+        missing = [p for p in self.required_permissions if p not in user_permissions]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions"
+            )
+
+        return current_user
+
+
 def require_permission(*permissions: str):
     """
-    Create a permission checker dependency
+    Create a permission checker dependency (OR logic — any one permission suffices).
 
     Usage:
         @app.get("/settings")
@@ -64,6 +101,20 @@ def require_permission(*permissions: str):
             ...
     """
     return PermissionChecker(list(permissions))
+
+
+def require_all_permissions(*permissions: str):
+    """
+    Create a permission checker dependency (AND logic — all permissions required).
+
+    Usage:
+        @app.delete("/critical-data")
+        async def delete_data(
+            user: User = Depends(require_all_permissions("data.delete", "admin.access"))
+        ):
+            ...
+    """
+    return AllPermissionChecker(list(permissions))
 
 
 async def get_current_user(

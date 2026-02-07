@@ -41,10 +41,21 @@ async def register(
     Creates a new user with the provided information and returns
     authentication tokens.
 
+    Registration is disabled by default (REGISTRATION_ENABLED=false).
+    When enabled, new accounts require admin approval if
+    REGISTRATION_REQUIRES_APPROVAL is true.
+
     Rate limited to 5 requests per minute per IP address to prevent abuse.
 
     The organization is looked up from the database (single-org system).
     """
+    # SEC-05: Block registration unless explicitly enabled in settings
+    if not settings.REGISTRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Self-registration is disabled. Please contact your administrator to create an account."
+        )
+
     auth_service = AuthService(db)
 
     # Look up the organization from the database
@@ -152,15 +163,17 @@ async def refresh_token(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Refresh an access token using a refresh token
+    Refresh an access token using a refresh token.
 
-    Returns a new access token if the refresh token is valid.
+    Implements token rotation: a new refresh token is issued on every use
+    and the old one is invalidated.  Clients MUST store and use the new
+    refresh_token from the response for subsequent refreshes.
 
-    Rate limited to 5 requests per minute per IP address to prevent token refresh abuse.
+    Rate limited to 5 requests per minute per IP address.
     """
     auth_service = AuthService(db)
 
-    new_access_token = await auth_service.refresh_access_token(
+    new_access_token, new_refresh_token = await auth_service.refresh_access_token(
         token_data.refresh_token
     )
 
@@ -173,6 +186,7 @@ async def refresh_token(
 
     return {
         "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }

@@ -19,8 +19,10 @@ services:
       --innodb_redo_log_capacity=134217728
       --host-cache-size=0
       --skip-name-resolve
-    ports:
-      - "${DB_PORT:-3306}:3306"
+    # SEC-14: Database port is NOT exposed to the host by default.
+    # Uncomment the ports mapping below only for local development with DB tools.
+    # ports:
+    #   - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database/schemas:/docker-entrypoint-initdb.d
@@ -45,8 +47,10 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_in_production}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_in_production}
-    ports:
-      - "${REDIS_HOST_PORT:-6375}:6379"  # Changed to 6375 to avoid port conflicts
+    # SEC-14: Redis port is NOT exposed to the host by default.
+    # Uncomment for local development if you need direct Redis access.
+    # ports:
+    #   - "${REDIS_HOST_PORT:-6375}:6379"
     volumes:
       - redis_data:/data
     healthcheck:

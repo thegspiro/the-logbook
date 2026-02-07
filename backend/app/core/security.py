@@ -435,9 +435,9 @@ def sanitize_input(text: str, max_length: int = 1000) -> str:
     # Remove null bytes
     text = text.replace('\x00', '')
 
-    # Remove control characters except common ones
-    allowed_control = ['\n', '\r', '\t']
-    text = ''.join(char for char in text if char in allowed_control or not char.isprintable() is False)
+    # Remove control characters except common whitespace
+    allowed_control = {'\n', '\r', '\t'}
+    text = ''.join(char for char in text if char in allowed_control or char.isprintable())
 
     return text.strip()
 
@@ -465,17 +465,23 @@ def mask_sensitive_data(data: str, visible_chars: int = 4) -> str:
 # Rate Limiting Helpers
 # ============================================
 
-async def is_rate_limited(key: str, limit: int, window_seconds: int) -> bool:
+async def is_rate_limited(
+    key: str,
+    limit: int,
+    window_seconds: int,
+    fail_closed: bool = False,
+) -> bool:
     """
     Check if a key has exceeded rate limit using Redis sliding window.
 
     Uses Redis for distributed rate limiting across multiple instances.
-    Falls back to allowing requests if Redis is unavailable (graceful degradation).
 
     Args:
         key: Unique key to track (e.g., IP address, user ID)
         limit: Maximum number of requests allowed in the window
         window_seconds: Time window in seconds
+        fail_closed: If True, deny requests when Redis is unavailable.
+                     Use True for security-critical paths (login, registration).
 
     Returns:
         True if rate limit exceeded, False otherwise
@@ -484,9 +490,11 @@ async def is_rate_limited(key: str, limit: int, window_seconds: int) -> bool:
     from loguru import logger
     import time
 
-    # If Redis is not connected, allow the request (graceful degradation)
     if not cache_manager.is_connected or not cache_manager.redis_client:
-        logger.debug(f"Rate limiting disabled - Redis not connected")
+        if fail_closed:
+            logger.warning("Rate limiting fail-closed: Redis not connected, denying request")
+            return True
+        logger.debug("Rate limiting disabled - Redis not connected")
         return False
 
     try:
@@ -524,7 +532,9 @@ async def is_rate_limited(key: str, limit: int, window_seconds: int) -> bool:
 
     except Exception as e:
         logger.error(f"Rate limiting error: {e}")
-        # On error, allow the request (fail open for availability)
+        if fail_closed:
+            logger.warning("Rate limiting fail-closed on error, denying request")
+            return True
         return False
 
 
