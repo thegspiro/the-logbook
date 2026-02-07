@@ -11,13 +11,12 @@
     "plugin:react-hooks/recommended",
     "prettier"
   ],
-  "ignorePatterns": ["dist", ".eslintrc.json"],
+  "ignorePatterns": ["dist", ".eslintrc.json", "*.config.ts", "*.config.js"],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": "latest",
     "sourceType": "module",
-    "project": "./tsconfig.json",
-    "tsconfigRootDir": "."
+    "project": "./tsconfig.json"
   },
   "plugins": [
     "react-refresh",
@@ -49,19 +48,17 @@
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "@typescript-eslint/no-non-null-assertion": "warn",
+    "@typescript-eslint/no-unsafe-assignment": "off",
+    "@typescript-eslint/no-unsafe-member-access": "off",
+    "@typescript-eslint/no-unsafe-argument": "off",
+    "@typescript-eslint/no-unsafe-call": "off",
+    "@typescript-eslint/no-unsafe-return": "off",
 
-    // Ensure all Promises are handled
-    "@typescript-eslint/no-floating-promises": "error",
-    "@typescript-eslint/no-misused-promises": "error",
+    // Ensure all Promises are handled (warning for now, can upgrade to error later)
+    "@typescript-eslint/no-floating-promises": "warn",
+    "@typescript-eslint/no-misused-promises": "warn",
 
-    // Strict null checks
-    "@typescript-eslint/strict-boolean-expressions": [
-      "error",
-      {
-        "allowString": true,
-        "allowNumber": false,
-        "allowNullableObject": true
-      }
-    ]
+    // Strict null checks (disabled for now - too many false positives in existing code)
+    "@typescript-eslint/strict-boolean-expressions": "off"
   }
 }

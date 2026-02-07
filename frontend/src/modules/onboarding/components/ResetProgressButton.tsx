@@ -67,7 +67,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
 
       // Force page reload to ensure clean state
       window.location.reload();
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to reset onboarding. Please try again.');
       setIsResetting(false);
     }
