@@ -14,13 +14,14 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies (MySQL client for healthchecks, LDAP for auth)
+# Install system dependencies (MySQL client for healthchecks, LDAP for auth, libmagic for file validation)
 RUN apt-get update && apt-get install -y \
     gcc \
     default-mysql-client \
     default-libmysqlclient-dev \
     libldap2-dev \
     libsasl2-dev \
+    libmagic1 \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
