@@ -558,7 +558,19 @@ const OrganizationSetup: React.FC = () => {
 
   const handleContinue = async () => {
     if (!validateForm()) {
-      toast.error('Please fix the errors before continuing');
+      // Format validation errors into a readable list
+      const errorMessages = Object.values(validationErrors);
+      const errorCount = errorMessages.length;
+
+      if (errorCount === 1) {
+        toast.error(errorMessages[0]);
+      } else {
+        // Show summary with count
+        toast.error(
+          `Please fix ${errorCount} errors:\n• ${errorMessages.join('\n• ')}`,
+          { duration: 8000 } // Longer duration for multiple errors
+        );
+      }
       return;
     }
 
