@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Database, Server, Shield, Wrench, Clock, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
 
 interface ServiceStatus {
@@ -41,6 +42,8 @@ const OnboardingCheck: React.FC = () => {
   const [showSkipOption, setShowSkipOption] = useState(false);
   const [startupInfo, setStartupInfo] = useState<StartupInfo | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
+  const [migrationStartTime, setMigrationStartTime] = useState<number | null>(null);
+  const [lastMigrationCount, setLastMigrationCount] = useState<number>(0);
   const navigate = useNavigate();
 
   // Track elapsed time
@@ -58,10 +61,80 @@ const OnboardingCheck: React.FC = () => {
     }
   }, [retryCount]);
 
+  // Track migration progress for ETA calculation
+  useEffect(() => {
+    if (startupInfo?.phase === 'migrations' && startupInfo?.migrations) {
+      const { completed } = startupInfo.migrations;
+
+      // Start timer when first migration completes
+      if (completed > 0 && !migrationStartTime) {
+        setMigrationStartTime(Date.now());
+        setLastMigrationCount(completed);
+      }
+
+      // Update count when migrations progress
+      if (completed > lastMigrationCount) {
+        setLastMigrationCount(completed);
+      }
+    }
+  }, [startupInfo, migrationStartTime, lastMigrationCount]);
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  // Get detailed phase information with icon and description
+  const getPhaseDetails = (phase: string) => {
+    const phases: Record<string, { icon: React.ReactNode; title: string; description: string }> = {
+      security: {
+        icon: <Shield className="h-5 w-5" />,
+        title: 'Security Validation',
+        description: 'Verifying encryption keys and security configuration'
+      },
+      database: {
+        icon: <Database className="h-5 w-5" />,
+        title: 'Database Connection',
+        description: 'Establishing connection to MySQL database'
+      },
+      migrations: {
+        icon: <Wrench className="h-5 w-5" />,
+        title: 'Database Setup',
+        description: 'Running database migrations to set up tables and schema'
+      },
+      redis: {
+        icon: <Server className="h-5 w-5" />,
+        title: 'Cache Connection',
+        description: 'Connecting to Redis cache service'
+      },
+      ready: {
+        icon: <CheckCircle2 className="h-5 w-5" />,
+        title: 'Ready',
+        description: 'All systems ready'
+      }
+    };
+    return phases[phase] || {
+      icon: <Clock className="h-5 w-5" />,
+      title: 'Initializing',
+      description: 'Preparing backend services'
+    };
+  };
+
+  // Calculate estimated time remaining for migrations
+  const getEstimatedTimeRemaining = (): string | null => {
+    if (!startupInfo?.migrations || !migrationStartTime) return null;
+
+    const { completed, total } = startupInfo.migrations;
+    if (completed === 0 || completed === total) return null;
+
+    const elapsed = (Date.now() - migrationStartTime) / 1000; // seconds
+    const avgTimePerMigration = elapsed / completed;
+    const remaining = (total - completed) * avgTimePerMigration;
+
+    if (remaining < 5) return 'less than 5 seconds';
+    if (remaining < 60) return `~${Math.round(remaining)} seconds`;
+    return `~${Math.round(remaining / 60)} minute${Math.round(remaining / 60) > 1 ? 's' : ''}`;
   };
 
   const updateServiceStatus = useCallback((serviceName: string, status: ServiceStatus['status'], message?: string) => {
@@ -368,38 +441,68 @@ const OnboardingCheck: React.FC = () => {
           {/* Startup Progress Details */}
           {startupInfo && !startupInfo.ready && (
             <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-orange-400 border-t-transparent"></span>
-                <span className="text-orange-400 text-sm font-medium">
-                  {startupInfo.phase === 'migrations' ? 'Setting up database' :
-                   startupInfo.phase === 'database' ? 'Connecting to database' :
-                   startupInfo.phase === 'redis' ? 'Connecting to cache' :
-                   startupInfo.phase === 'security' ? 'Checking security' :
-                   'Initializing'}
-                </span>
-              </div>
-              <p className="text-slate-300 text-sm mb-2">{startupInfo.message}</p>
+              {(() => {
+                const phaseDetails = getPhaseDetails(startupInfo.phase);
+                return (
+                  <>
+                    {/* Current Phase with Icon */}
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <div className="p-2 bg-orange-500/10 rounded-lg border border-orange-500/30">
+                          <div className="text-orange-400 animate-pulse">
+                            {phaseDetails.icon}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-orange-400 font-semibold text-base mb-1">
+                          {phaseDetails.title}
+                        </h3>
+                        <p className="text-slate-300 text-sm mb-1">
+                          {phaseDetails.description}
+                        </p>
+                        {startupInfo.message && (
+                          <p className="text-slate-400 text-xs">
+                            {startupInfo.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-              {/* Migration progress bar */}
-              {startupInfo.migrations && startupInfo.migrations.total > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                    <span>Database migrations</span>
-                    <span>{startupInfo.migrations.completed}/{startupInfo.migrations.total}</span>
-                  </div>
-                  <div className="w-full bg-slate-700 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
-                    ></div>
-                  </div>
-                  {startupInfo.migrations.current && (
-                    <p className="text-slate-500 text-xs mt-1 truncate">
-                      {startupInfo.migrations.current}
-                    </p>
-                  )}
-                </div>
-              )}
+                    {/* Migration progress bar */}
+                    {startupInfo.migrations && startupInfo.migrations.total > 0 && (
+                      <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                          <span className="font-medium">Database Migrations</span>
+                          <span className="text-orange-400 font-semibold">
+                            {startupInfo.migrations.completed}/{startupInfo.migrations.total}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-700 rounded-full h-2.5 mb-2">
+                          <div
+                            className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
+                            style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
+                          ></div>
+                        </div>
+
+                        {/* Current migration and ETA */}
+                        <div className="space-y-1">
+                          {startupInfo.migrations.current && (
+                            <p className="text-slate-400 text-xs truncate">
+                              <span className="text-slate-500">Current:</span> {startupInfo.migrations.current}
+                            </p>
+                          )}
+                          {getEstimatedTimeRemaining() && (
+                            <p className="text-slate-400 text-xs">
+                              <span className="text-slate-500">Est. remaining:</span> {getEstimatedTimeRemaining()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
