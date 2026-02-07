@@ -288,7 +288,6 @@ class OrganizationSetupCreate(BaseModel):
     # Basic Information
     name: str = Field(..., min_length=2, max_length=255, description="Organization/Department name")
     slug: Optional[str] = Field(None, max_length=100, description="URL-friendly identifier (auto-generated if not provided)")
-    description: Optional[str] = Field(None, max_length=1000, description="Brief description of the organization")
 
     # Organization Type
     organization_type: OrganizationTypeEnum = Field(
