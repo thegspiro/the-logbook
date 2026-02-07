@@ -7,7 +7,6 @@ import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
 import { isValidEmail } from '../utils/validation';
-import { getOnboardingErrorMessage } from '../utils/errorHandler';
 
 const AdminUserCreation: React.FC = () => {
   const navigate = useNavigate();

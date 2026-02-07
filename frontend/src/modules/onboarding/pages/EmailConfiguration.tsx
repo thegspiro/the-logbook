@@ -99,7 +99,7 @@ const EmailConfiguration: React.FC = () => {
         return;
       }
 
-      const portNumber = parseInt(config.smtpPort, 10);
+      const portNumber = parseInt(config.smtpPort || '0', 10);
       if (!isValidPort(portNumber)) {
         toast.error('Please enter a valid port number (1-65535)');
         return;
@@ -170,7 +170,7 @@ const EmailConfiguration: React.FC = () => {
       }
 
       // Validate SMTP port number
-      const portNumber = parseInt(config.smtpPort, 10);
+      const portNumber = parseInt(config.smtpPort || '0', 10);
       if (!isValidPort(portNumber)) {
         toast.error('Please enter a valid port number (1-65535)');
         return;
