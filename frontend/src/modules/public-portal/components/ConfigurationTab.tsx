@@ -202,4 +202,4 @@ const ConfigurationTab: React.FC = () => {
   );
 };
 
-export default ConfigurationTab;
+export { ConfigurationTab };
