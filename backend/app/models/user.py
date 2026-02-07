@@ -19,6 +19,7 @@ from sqlalchemy import (
     Index,
     JSON,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -120,8 +121,8 @@ class Organization(Base):
     founded_year = Column(Integer)
     tax_id = Column(String(50))  # EIN for 501(c)(3) organizations
 
-    # Logo stored as base64 or URL
-    logo = Column(Text)
+    # Logo stored as base64 or URL (MEDIUMTEXT for large base64 images)
+    logo = Column(Text().with_variant(mysql.MEDIUMTEXT(), 'mysql'))
 
     # Legacy field - keep for compatibility
     type = Column(String(50), default="fire_department")

@@ -13,7 +13,8 @@ import {
   ChevronDown,
   Shield,
   Building2,
-  UserCog
+  UserCog,
+  Globe
 } from 'lucide-react';
 
 interface SideNavigationProps {
@@ -53,6 +54,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Organization', path: '/settings', icon: Building2 },
         { label: 'Role Management', path: '/settings/roles', icon: Shield },
         { label: 'Member Admin', path: '/admin/members', icon: UserCog },
+        { label: 'Public Portal', path: '/admin/public-portal', icon: Globe },
       ],
     },
   ];

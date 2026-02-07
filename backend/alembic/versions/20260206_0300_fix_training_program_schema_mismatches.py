@@ -27,58 +27,112 @@ def upgrade() -> None:
     # Fix program_requirements column names
     # ========================================
 
-    # Rename is_mandatory -> is_required
-    op.alter_column(
-        'program_requirements',
-        'is_mandatory',
-        new_column_name='is_required',
-        existing_type=sa.Boolean(),
-        existing_nullable=True,
-        existing_server_default='1',
-    )
+    # Get connection to check if columns exist
+    conn = op.get_bind()
 
-    # Rename order -> sort_order
-    op.alter_column(
-        'program_requirements',
-        'order',
-        new_column_name='sort_order',
-        existing_type=sa.Integer(),
-        existing_nullable=True,
-    )
+    # Check if is_mandatory column exists before renaming
+    result = conn.execute(sa.text("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'program_requirements'
+        AND COLUMN_NAME = 'is_mandatory'
+    """))
+    has_is_mandatory = result.scalar() > 0
 
-    # Add missing columns to program_requirements
-    op.add_column(
-        'program_requirements',
-        sa.Column('is_prerequisite', sa.Boolean(), nullable=True, server_default='0'),
-    )
-    op.add_column(
-        'program_requirements',
-        sa.Column('program_specific_description', sa.Text(), nullable=True),
-    )
-    op.add_column(
-        'program_requirements',
-        sa.Column('custom_deadline_days', sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        'program_requirements',
-        sa.Column('notification_message', sa.Text(), nullable=True),
-    )
+    if has_is_mandatory:
+        # Rename is_mandatory -> is_required
+        op.alter_column(
+            'program_requirements',
+            'is_mandatory',
+            new_column_name='is_required',
+            existing_type=sa.Boolean(),
+            existing_nullable=True,
+            existing_server_default='1',
+        )
+
+    # Check if order column exists before renaming
+    result = conn.execute(sa.text("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'program_requirements'
+        AND COLUMN_NAME = 'order'
+    """))
+    has_order = result.scalar() > 0
+
+    if has_order:
+        # Rename order -> sort_order
+        op.alter_column(
+            'program_requirements',
+            'order',
+            new_column_name='sort_order',
+            existing_type=sa.Integer(),
+            existing_nullable=True,
+        )
+
+    # Add missing columns to program_requirements (check if they don't already exist)
+    result = conn.execute(sa.text("""
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'program_requirements'
+        AND COLUMN_NAME IN ('is_prerequisite', 'program_specific_description', 'custom_deadline_days', 'notification_message')
+    """))
+    existing_columns = {row[0] for row in result}
+
+    if 'is_prerequisite' not in existing_columns:
+        op.add_column(
+            'program_requirements',
+            sa.Column('is_prerequisite', sa.Boolean(), nullable=True, server_default='0'),
+        )
+    if 'program_specific_description' not in existing_columns:
+        op.add_column(
+            'program_requirements',
+            sa.Column('program_specific_description', sa.Text(), nullable=True),
+        )
+    if 'custom_deadline_days' not in existing_columns:
+        op.add_column(
+            'program_requirements',
+            sa.Column('custom_deadline_days', sa.Integer(), nullable=True),
+        )
+    if 'notification_message' not in existing_columns:
+        op.add_column(
+            'program_requirements',
+            sa.Column('notification_message', sa.Text(), nullable=True),
+        )
 
     # ========================================
     # Fix program_phases missing column
     # ========================================
-    op.add_column(
-        'program_phases',
-        sa.Column('requires_manual_advancement', sa.Boolean(), nullable=True, server_default='0'),
-    )
+    result = conn.execute(sa.text("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'program_phases'
+        AND COLUMN_NAME = 'requires_manual_advancement'
+    """))
+    if result.scalar() == 0:
+        op.add_column(
+            'program_phases',
+            sa.Column('requires_manual_advancement', sa.Boolean(), nullable=True, server_default='0'),
+        )
 
     # ========================================
     # Fix program_milestones missing column
     # ========================================
-    op.add_column(
-        'program_milestones',
-        sa.Column('notification_message', sa.Text(), nullable=True),
-    )
+    result = conn.execute(sa.text("""
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'program_milestones'
+        AND COLUMN_NAME = 'notification_message'
+    """))
+    if result.scalar() == 0:
+        op.add_column(
+            'program_milestones',
+            sa.Column('notification_message', sa.Text(), nullable=True),
+        )
 
 
 def downgrade() -> None:
