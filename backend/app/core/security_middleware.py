@@ -476,15 +476,23 @@ class SecurityAuditLogger:
 # ============================================
 
 def get_client_ip(request: Request) -> str:
-    """Get client IP address from request"""
-    # Check X-Forwarded-For header (if behind proxy)
+    """Get client IP address from request.
+
+    Only trusts the X-Forwarded-For header when the direct peer IP is in
+    the configured TRUSTED_PROXY_IPS list (SEC-16).  This prevents clients
+    from spoofing their IP to bypass rate limiting or geo-blocking.
+    """
+    from app.core.config import settings
+
+    direct_ip = request.client.host if request.client else "unknown"
+    trusted_proxies = settings.get_trusted_proxy_ips()
+
     forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # Take first IP in list
+    if forwarded_for and (not trusted_proxies or direct_ip in trusted_proxies):
+        # Take the left-most IP (original client)
         return forwarded_for.split(",")[0].strip()
 
-    # Fallback to direct client IP
-    return request.client.host if request.client else "unknown"
+    return direct_ip
 
 
 def get_user_agent(request: Request) -> Optional[str]:

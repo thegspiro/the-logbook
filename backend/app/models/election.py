@@ -118,6 +118,11 @@ class Election(Base):
     runoff_round = Column(Integer, nullable=False, default=0)
     # Which round of runoff this is (0 = original election)
 
+    # Per-election anonymity salt for voter hash (SEC-12).
+    # Generated when the election is created and can be destroyed after
+    # the election closes to make de-anonymization impossible.
+    voter_anonymity_salt = Column(String(64), nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",

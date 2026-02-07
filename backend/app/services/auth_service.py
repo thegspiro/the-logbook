@@ -143,37 +143,61 @@ class AuthService:
 
         return access_token, refresh_token
 
-    async def refresh_access_token(self, refresh_token: str) -> Optional[str]:
+    async def refresh_access_token(
+        self, refresh_token: str
+    ) -> Tuple[Optional[str], Optional[str]]:
         """
-        Refresh an access token using a refresh token
+        Refresh an access token using a refresh token.
+
+        Implements refresh token rotation (SEC-11): each use issues a new
+        refresh token and invalidates the old one.  If a previously-used
+        refresh token is replayed, the entire session is revoked to limit
+        the damage of token theft.
 
         Args:
             refresh_token: Refresh token string
 
         Returns:
-            New access token if successful, None otherwise
+            Tuple of (new_access_token, new_refresh_token) or (None, None)
         """
         try:
             # Decode refresh token
             payload = decode_token(refresh_token)
 
             if payload.get("type") != "refresh":
-                return None
+                return None, None
 
             user_id = UUID(payload.get("sub"))
 
-            # Get user
+            # Look up the session by refresh token
             result = await self.db.execute(
+                select(UserSession).where(UserSession.refresh_token == refresh_token)
+            )
+            session = result.scalar_one_or_none()
+
+            if not session:
+                # The refresh token is not in the DB.  This could mean it was
+                # already rotated (i.e. stolen token replay).  Revoke all
+                # sessions for this user as a precaution.
+                logger.warning(
+                    f"Refresh token replay detected for user {user_id}. "
+                    "Revoking all sessions."
+                )
+                await self._revoke_all_user_sessions(user_id)
+                return None, None
+
+            # Get user
+            user_result = await self.db.execute(
                 select(User)
                 .where(User.id == user_id)
                 .where(User.deleted_at.is_(None))
             )
-            user = result.scalar_one_or_none()
+            user = user_result.scalar_one_or_none()
 
             if not user or not user.is_active:
-                return None
+                return None, None
 
-            # Create new access token
+            # Create new token pair
             token_data = {
                 "sub": str(user.id),
                 "username": user.username,
@@ -181,25 +205,43 @@ class AuthService:
             }
 
             new_access_token = create_access_token(token_data)
+            new_refresh_token = create_refresh_token(token_data)
 
-            # Update session
-            result = await self.db.execute(
-                select(UserSession).where(UserSession.refresh_token == refresh_token)
+            # Rotate: update the session with the new tokens
+            session.token = new_access_token
+            session.refresh_token = new_refresh_token
+            session.expires_at = datetime.utcnow() + timedelta(
+                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
-            session = result.scalar_one_or_none()
+            await self.db.commit()
 
-            if session:
-                session.token = new_access_token
-                session.expires_at = datetime.utcnow() + timedelta(
-                    minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-                )
-                await self.db.commit()
-
-            return new_access_token
+            return new_access_token, new_refresh_token
 
         except Exception as e:
             logger.error(f"Token refresh failed: {e}")
-            return None
+            return None, None
+
+    async def _revoke_all_user_sessions(self, user_id: UUID) -> int:
+        """
+        Revoke all active sessions for a user.
+
+        Used when refresh token replay is detected (potential theft)
+        or when a user's password is changed/account is deactivated.
+
+        Returns:
+            Number of sessions revoked
+        """
+        result = await self.db.execute(
+            select(UserSession).where(UserSession.user_id == user_id)
+        )
+        sessions = result.scalars().all()
+        count = len(sessions)
+        for session in sessions:
+            await self.db.delete(session)
+        if count:
+            await self.db.commit()
+            logger.info(f"Revoked {count} session(s) for user {user_id}")
+        return count
 
     async def register_user(
         self,
@@ -231,7 +273,13 @@ class AuthService:
         if not is_valid:
             return None, error_msg
 
-        # Check if username exists
+        # Check if username or email already exists.
+        # Use a generic error message to prevent user enumeration (SEC-13).
+        _generic_conflict = (
+            "Registration could not be completed with the provided credentials. "
+            "Please try different credentials or contact your administrator."
+        )
+
         result = await self.db.execute(
             select(User).where(
                 User.username == username,
@@ -240,9 +288,8 @@ class AuthService:
             )
         )
         if result.scalar_one_or_none():
-            return None, f"Username '{username}' is already taken. Try a different username like '{username}2' or '{username}_{organization_id[:4]}'."
+            return None, _generic_conflict
 
-        # Check if email exists
         result = await self.db.execute(
             select(User).where(
                 User.email == email,
@@ -251,7 +298,7 @@ class AuthService:
             )
         )
         if result.scalar_one_or_none():
-            return None, f"Email '{email}' is already registered. Use a different email address or contact your administrator if this is your account."
+            return None, _generic_conflict
 
         # Create user
         user = User(
@@ -341,13 +388,19 @@ class AuthService:
 
     async def get_user_from_token(self, token: str) -> Optional[User]:
         """
-        Get user from access token
+        Get user from access token with server-side session validation.
+
+        Verifies that:
+        1. The JWT is valid and not expired
+        2. A matching session exists in the database (not logged out)
+        3. The session has not expired
+        4. The user is active and not deleted
 
         Args:
             token: Access token
 
         Returns:
-            User object if token is valid, None otherwise
+            User object if token is valid and session exists, None otherwise
         """
         try:
             payload = decode_token(token)
@@ -356,6 +409,24 @@ class AuthService:
                 return None
 
             user_id = UUID(payload.get("sub"))
+
+            # SEC-03: Verify the token has an active session in the database.
+            # This ensures logged-out or revoked tokens are rejected immediately.
+            session_result = await self.db.execute(
+                select(UserSession).where(
+                    UserSession.token == token,
+                    UserSession.user_id == user_id,
+                )
+            )
+            session = session_result.scalar_one_or_none()
+
+            if not session:
+                logger.debug("Token rejected: no matching session found")
+                return None
+
+            if session.expires_at and session.expires_at < datetime.utcnow():
+                logger.debug("Token rejected: session expired")
+                return None
 
             result = await self.db.execute(
                 select(User)

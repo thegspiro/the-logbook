@@ -125,11 +125,14 @@ async def create_election(
             detail="End date must be after start date"
         )
 
+    import secrets as _secrets
     new_election = Election(
         id=uuid4(),
         organization_id=current_user.organization_id,
         created_by=current_user.id,
         status=ElectionStatus.DRAFT,
+        # SEC-12: Generate per-election salt for anonymous voter hash privacy
+        voter_anonymity_salt=_secrets.token_hex(32),
         **election.model_dump()
     )
 

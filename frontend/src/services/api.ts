@@ -126,8 +126,12 @@ api.interceptors.response.use(
             refresh_token: refreshToken,
           });
 
-          const { access_token } = response.data;
+          const { access_token, refresh_token: new_refresh_token } = response.data;
           localStorage.setItem('access_token', access_token);
+          // SEC-11: Store the rotated refresh token from the server
+          if (new_refresh_token) {
+            localStorage.setItem('refresh_token', new_refresh_token);
+          }
 
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return api(originalRequest);

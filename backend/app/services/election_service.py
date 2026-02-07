@@ -267,7 +267,7 @@ class ElectionService:
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=user_id if not election.anonymous_voting else None,
-            voter_hash=self._generate_voter_hash(user_id, election_id) if election.anonymous_voting else None,
+            voter_hash=self._generate_voter_hash(user_id, election_id, election.voter_anonymity_salt or "") if election.anonymous_voting else None,
             position=position,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -289,12 +289,23 @@ class ElectionService:
         )
         return result.scalars().all()
 
-    def _generate_voter_hash(self, user_id: UUID, election_id: UUID) -> str:
-        """Generate a hash to track anonymous voters without revealing identity"""
-        # Combine user_id and election_id and hash to allow duplicate vote checking
-        # while maintaining anonymity
+    def _generate_voter_hash(
+        self, user_id: UUID, election_id: UUID, salt: str = ""
+    ) -> str:
+        """Generate a keyed hash to track anonymous voters without revealing identity.
+
+        Uses a per-election salt (SEC-12) so that voter hashes cannot be
+        pre-computed from known user IDs.  The salt is stored on the Election
+        model and can be destroyed after the election closes to make
+        de-anonymization permanently impossible.
+        """
+        import hmac
         data = f"{user_id}:{election_id}"
-        return hashlib.sha256(data.encode()).hexdigest()
+        return hmac.new(
+            key=salt.encode() if salt else b"",
+            msg=data.encode(),
+            digestmod=hashlib.sha256,
+        ).hexdigest()
 
     async def get_election_results(
         self, election_id: UUID, organization_id: UUID, user_id: Optional[UUID] = None
@@ -970,7 +981,8 @@ Best regards,
         return sent_count
 
     async def _generate_voting_token(
-        self, user_id: UUID, election_id: UUID, election_end_date: datetime
+        self, user_id: UUID, election_id: UUID, election_end_date: datetime,
+        anonymity_salt: str = "",
     ) -> VotingToken:
         """
         Generate a secure voting token for a user-election pair
@@ -979,6 +991,7 @@ Best regards,
             user_id: User ID (for hashing, not stored directly)
             election_id: Election ID
             election_end_date: Election end date (token expires after this)
+            anonymity_salt: Per-election salt for voter anonymity
 
         Returns:
             VotingToken instance
@@ -987,7 +1000,7 @@ Best regards,
         token = secrets.token_urlsafe(64)
 
         # Generate voter hash (same method as used in voting)
-        voter_hash = self._generate_voter_hash(user_id, election_id)
+        voter_hash = self._generate_voter_hash(user_id, election_id, anonymity_salt)
 
         # Token expires when election ends (or 30 days if election is longer)
         max_expiry = datetime.utcnow() + timedelta(days=30)
@@ -1075,7 +1088,8 @@ Best regards,
             voting_token = await self._generate_voting_token(
                 user_id=recipient.id,
                 election_id=election_id,
-                election_end_date=election.end_date
+                election_end_date=election.end_date,
+                anonymity_salt=election.voter_anonymity_salt or "",
             )
 
             # Build unique ballot URL with token
