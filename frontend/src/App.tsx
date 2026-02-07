@@ -33,6 +33,7 @@ import TrainingProgramsPage from './pages/TrainingProgramsPage';
 import CreateTrainingSessionPage from './pages/CreateTrainingSessionPage';
 import ExternalTrainingPage from './pages/ExternalTrainingPage';
 import { LoginPage } from './pages/LoginPage';
+import PublicPortalAdmin from './modules/public-portal/pages/PublicPortalAdmin';
 
 /**
  * Main Application Component
@@ -98,6 +99,7 @@ function App() {
           <Route path="/admin/errors" element={<ErrorMonitoringPage />} />
           <Route path="/admin/analytics" element={<AnalyticsDashboardPage />} />
           <Route path="/admin/members" element={<MembersAdminPage />} />
+          <Route path="/admin/public-portal" element={<PublicPortalAdmin />} />
 
           {/* Settings Module */}
           <Route path="/settings" element={<SettingsPage />} />
