@@ -15,20 +15,25 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --max_connections=500
       --max_allowed_packet=256M
-      --innodb_buffer_pool_size=512M
-      --innodb_redo_log_capacity=268435456
+      --innodb_buffer_pool_size=256M
+      --innodb_redo_log_capacity=134217728
       --host-cache-size=0
+      --skip-name-resolve
     ports:
       - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database/schemas:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-change_me_in_production}"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 120s
+      test:
+        - "CMD-SHELL"
+        - |
+          mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_in_production} &&
+          mysql -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_in_production} -e 'SELECT 1' $${MYSQL_DATABASE:-intranet_db}
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 90s
     networks:
       - intranet-network
 

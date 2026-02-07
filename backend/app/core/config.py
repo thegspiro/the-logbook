@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     DB_CHARSET: str = "utf8mb4"  # Use utf8mb4 for full Unicode support
     DB_CONNECT_TIMEOUT: int = 10  # Connection timeout in seconds
     DB_CONNECT_RETRIES: int = 20  # Number of connection retry attempts
-    DB_CONNECT_RETRY_DELAY: int = 5  # Initial delay between retries (exponential backoff)
-    DB_CONNECT_RETRY_MAX_DELAY: int = 30  # Maximum delay between retries (caps exponential backoff)
+    DB_CONNECT_RETRY_DELAY: int = 2  # Initial delay between retries (exponential backoff) - optimized for faster startup
+    DB_CONNECT_RETRY_MAX_DELAY: int = 15  # Maximum delay between retries (caps exponential backoff) - optimized for faster startup
 
     @property
     def DATABASE_URL(self) -> str:
