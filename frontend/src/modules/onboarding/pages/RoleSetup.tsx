@@ -436,8 +436,10 @@ const RoleSetup: React.FC = () => {
         `Roles configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
       );
       navigate('/onboarding/modules');
-    } catch (error) {
-      toast.error('Failed to save role configuration. Please try again.');
+    } catch (error: any) {
+      // Show specific error message from backend
+      const errorMessage = error?.message || error?.toString() || 'Failed to save role configuration. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
