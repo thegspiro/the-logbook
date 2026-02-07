@@ -615,9 +615,11 @@ const OrganizationSetup: React.FC = () => {
 
       // Navigate to next step (navigation choice)
       navigate('/onboarding/navigation-choice');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save organization:', err);
-      toast.error('Failed to save organization. Please try again.');
+      // Show the actual error message from the backend (includes validation details)
+      const errorMessage = err?.message || 'Failed to save organization. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
