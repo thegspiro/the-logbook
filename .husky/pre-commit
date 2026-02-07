@@ -1,0 +1,31 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🔍 Running pre-commit checks..."
+
+# TypeScript type checking for frontend
+echo "📘 Checking TypeScript types..."
+cd frontend
+npm run typecheck
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript type check failed!"
+  echo "Fix the errors above before committing."
+  exit 1
+fi
+
+echo "✅ TypeScript type check passed"
+
+# ESLint for frontend
+echo "🔧 Running ESLint..."
+npm run lint
+if [ $? -ne 0 ]; then
+  echo "⚠️  ESLint found issues!"
+  echo "Fix linting errors or run 'npm run lint:fix' to auto-fix."
+  exit 1
+fi
+
+echo "✅ ESLint check passed"
+
+cd ..
+
+echo "✅ All pre-commit checks passed!"

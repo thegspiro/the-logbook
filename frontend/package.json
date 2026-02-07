@@ -13,7 +13,11 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "validate": "npm run typecheck && npm run lint",
+    "validate:onboarding": "npm run typecheck && eslint src/modules/onboarding --ext ts,tsx",
+    "precommit": "npm run validate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
