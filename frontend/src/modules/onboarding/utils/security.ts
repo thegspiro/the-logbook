@@ -87,11 +87,29 @@ export const isValidUsernameSecure = (username: string): boolean => {
 };
 
 /**
- * Simple symmetric encryption for sessionStorage (client-side only - NOT production-grade)
+ * Simple symmetric obfuscation for sessionStorage (client-side only - NOT production-grade)
  * WARNING: This is obfuscation, not true encryption. Sensitive data should NEVER
  * be stored client-side. This is only to prevent casual inspection.
+ *
+ * SECURITY: If VITE_SESSION_KEY is not set, a per-session random key is generated
+ * instead of using a hardcoded default. This prevents all instances sharing the same key.
  */
-const ENCRYPTION_KEY = import.meta.env.VITE_SESSION_KEY || 'default-key-change-in-production';
+const getObfuscationKey = (): string => {
+  const envKey = import.meta.env.VITE_SESSION_KEY;
+  if (envKey) return envKey;
+
+  // Generate a per-session random key if no env key is set
+  const storageKey = 'obfuscation_session_key';
+  let key = sessionStorage.getItem(storageKey);
+  if (!key) {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    key = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    sessionStorage.setItem(storageKey, key);
+  }
+  return key;
+};
+const ENCRYPTION_KEY = getObfuscationKey();
 
 export const obfuscate = (text: string): string => {
   // Simple XOR cipher for obfuscation (NOT secure encryption)

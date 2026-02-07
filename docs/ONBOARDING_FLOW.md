@@ -17,9 +17,9 @@ This document describes the complete onboarding flow for The Logbook application
 ┌──────────────────────┐
 │  1. Welcome Page     │
 │  Route: /            │
-│  Auto-redirects to   │
-│  /onboarding after   │
-│  10 seconds          │
+│  Animated intro with │
+│  "Get Started" button│
+│                      │
 └──────────┬───────────┘
            │
            │ Button: "Get Started"
@@ -211,9 +211,10 @@ This document describes the complete onboarding flow for The Logbook application
 ### 1. Welcome Page (`/`)
 **Purpose**: First landing page with animated introduction
 
+**Animation**: Title appears after 300ms, body content after 800ms (quick fade-in so users aren't waiting on a blank screen).
+
 **Navigation**:
-- Auto-redirects to `/onboarding` after 10 seconds
-- Manual button: "Get Started" → `/onboarding`
+- Button: "Get Started" → `/onboarding`
 
 **No API calls**
 
@@ -343,7 +344,7 @@ Response: {
 **Navigation**:
 - Button: "Continue" → `/onboarding/email-platform`
 
-**Data Storage**: SessionStorage
+**Data Storage**: Zustand store (persisted to localStorage)
 - `navigationLayout` = "top" | "left"
 
 ---
@@ -361,7 +362,7 @@ Response: {
 - If "None" → `/onboarding/file-storage`
 - If service selected → `/onboarding/email-config`
 
-**Data Storage**: SessionStorage
+**Data Storage**: Zustand store (persisted to localStorage)
 - `emailPlatform` = "none" | "google" | "microsoft" | "smtp"
 
 ---
@@ -420,8 +421,8 @@ Body: {
 - If "Local Storage" → `/onboarding/authentication`
 - If cloud service → `/onboarding/file-storage-config`
 
-**Data Storage**: SessionStorage
-- `fileStorage` = "local" | "s3" | "azure" | "gcs"
+**Data Storage**: Zustand store (persisted to localStorage)
+- `fileStoragePlatform` = "local" | "s3" | "azure" | "gcs"
 
 ---
 
@@ -447,8 +448,8 @@ Body: {
 **Navigation**:
 - Button: "Continue" → `/onboarding/it-team`
 
-**Data Storage**: SessionStorage
-- `authenticationMethod` = "local" | "oauth" | "saml" | "ldap"
+**Data Storage**: Zustand store (persisted to localStorage)
+- `authPlatform` = "local" | "oauth" | "saml" | "ldap"
 
 ---
 
@@ -791,36 +792,54 @@ Marks a checklist item as done.
 
 ---
 
-## SessionStorage Data
+## Client-Side Data Persistence
 
-The onboarding flow uses `sessionStorage` to persist data between pages:
+The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `onboarding-storage`). This replaced the earlier `sessionStorage` approach to support persistence across tabs and page refreshes.
 
+**Persisted state** (in localStorage under `onboarding-storage`):
 ```javascript
 {
-  // Department Info
-  "departmentName": "Fire Department Name",
-  "hasLogo": "true",
-  "organizationType": "fire_department",
-  "timezone": "America/New_York",
+  "state": {
+    // Department Info
+    "departmentName": "Fire Department Name",
+    "logoData": "data:image/png;base64,...",   // or null
+    "navigationLayout": "top",                  // "top" | "left"
 
-  // Navigation Choice
-  "navigationLayout": "top", // or "left"
+    // Email
+    "emailPlatform": "gmail",                   // "gmail" | "microsoft" | "selfhosted" | "other" | null
+    "emailConfigured": false,
 
-  // Email Platform
-  "emailPlatform": "google", // or "microsoft", "smtp", "none"
+    // File Storage
+    "fileStoragePlatform": "local",             // "local" | "s3" | "azure" | "gcs" | null
 
-  // File Storage
-  "fileStorage": "local", // or "s3", "azure", "gcs"
+    // Authentication
+    "authPlatform": "local",                    // "local" | "oauth" | "saml" | "ldap" | null
 
-  // Authentication
-  "authenticationMethod": "local", // or "oauth", "saml", "ldap"
+    // IT Team
+    "itTeamConfigured": false,
+    "itTeamMembers": [{ "id": "1", "name": "", "email": "", "phone": "", "role": "Primary IT Contact" }],
+    "backupEmail": "",
+    "backupPhone": "",
+    "secondaryAdminEmail": "",
 
-  // Module Status
-  "moduleStatus_members": "enabled",
-  "moduleStatus_training": "skipped",
-  "moduleStatus_elections": "ignored"
+    // Modules
+    "selectedModules": ["members", "events"],
+    "moduleStatuses": { "members": "enabled", "training": "skipped" },
+
+    // Progress
+    "currentStep": 1,
+    "completedSteps": ["organization"],
+    "lastSaved": "2026-02-06T12:00:00.000Z"
+  }
 }
 ```
+
+**Not persisted** (excluded from localStorage for security):
+- `sessionId` — stored separately in localStorage as `onboarding_session_id`
+- `csrfToken` — stored separately in localStorage as `csrf_token`
+- `errors` — only kept in memory
+
+**Legacy compatibility**: The `syncWithSessionStorage()` function in the store reads from `sessionStorage` on first load if the Zustand store is empty, migrating any data from the older approach.
 
 ---
 
@@ -831,6 +850,42 @@ All onboarding pages include:
 - API error handling with toast notifications
 - Redirect to `/onboarding/start` if department info is missing
 - Graceful fallbacks for API failures
+
+### API Error Messages
+The API client maps HTTP status codes to user-friendly messages:
+- **429**: "Too many requests. Please wait a moment before trying again."
+- **403**: "Security validation failed. Please refresh the page and try again."
+- **422**: Shows the server's validation detail, or "Invalid data submitted. Please check your input and try again."
+- **409**: Shows server detail, or "This record already exists. Please check for duplicates."
+- **500**: "A server error occurred. Please try again or check the server logs."
+- **503**: "The server is temporarily unavailable. It may still be starting up — please try again shortly."
+- **Network errors**: "Unable to reach the server. Please verify the backend is running and check your network connection."
+- **Email test timeout**: "Email connection test timed out after 30 seconds." (returned when mail server is unreachable)
+
+### Backend Security Notes
+
+The following middleware and security features affect onboarding:
+
+**Access & Network:**
+- **GeoIP Blocking**: The `IPBlockingMiddleware` blocks requests from countries in the `BLOCKED_COUNTRIES` configuration. Onboarding endpoints (`/api/v1/onboarding/*`) are **exempt** from geo-blocking since first-time setup must be accessible before any configuration exists. Other API endpoints remain subject to geo-blocking.
+- **CSRF Protection**: Session endpoints require a valid `X-CSRF-Token` header that matches the token stored in the server-side session. The token is generated during `POST /start` and returned in the response header.
+- **Reset Protection**: The `POST /reset` endpoint is blocked after onboarding completes. It only works while onboarding is still in progress (`needs_onboarding` returns `True`).
+- **Email Test Timeout**: SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable or firewalled.
+
+**Data Protection:**
+- **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only the platform type is stored in plain text.
+- **No Passwords in Logs**: Temporary passwords are never written to application logs. The `users.py` endpoint only logs that a welcome email was requested.
+- **Sanitized Error Responses**: API 500 errors return generic messages (`"Please check the server logs"`) instead of raw exception strings. This prevents leaking database schema, SQL queries, or internal paths to clients.
+- **Health Endpoint Sanitized**: The `/health` endpoint reports service status (`"connected"`, `"disconnected"`, `"error"`) without exposing raw error messages or infrastructure details.
+
+**Authentication Hardening:**
+- **Uniform Auth Failure Messages**: Authentication failure logs do not reveal whether the failure was due to "user not found", "invalid password", or "no password set". All pre-verification failures log `"Authentication failed for login attempt"` and post-verification failures log `"Authentication failed: invalid credentials"`. This prevents username enumeration via log analysis.
+- **Account lockout events** still log the username (needed for security incident response).
+
+**Frontend Security:**
+- **Production Console Logging**: The onboarding store's error logging is restricted in production — only the step name and error message are logged. Full details (error context, user information) are only visible in development mode (`import.meta.env.DEV`).
+- **Per-Session Obfuscation Key**: The frontend obfuscation utility generates a random per-session key via `crypto.getRandomValues()` instead of using a hardcoded default. This ensures each browser session has a unique key.
+- **Environment File Protection**: `.env` files are excluded from version control via `.gitignore`.
 
 ---
 
@@ -847,8 +902,8 @@ All onboarding pages include:
 - Proper error responses with detailed messages
 
 ✅ **All data persistence verified**:
-- SessionStorage for frontend state
-- Database for backend data
+- Zustand store (localStorage) for frontend state
+- Database for backend data (organization committed at Step 1)
 - Proper cleanup after onboarding complete
 
 ---
@@ -859,8 +914,10 @@ To test the complete onboarding flow:
 
 1. **Start fresh**:
    ```bash
-   # Clear sessionStorage in browser console
-   sessionStorage.clear()
+   # Clear onboarding data in browser console
+   localStorage.removeItem('onboarding-storage')
+   localStorage.removeItem('onboarding_session_id')
+   localStorage.removeItem('csrf_token')
 
    # Reset database (if testing backend)
    alembic downgrade base
@@ -899,4 +956,4 @@ Before deploying to production:
 
 ---
 
-**Last Updated**: February 2, 2026 (Updated with comprehensive Organization Setup)
+**Last Updated**: February 6, 2026 (Updated storage references, error handling, Welcome page timing, security check details)

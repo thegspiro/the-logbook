@@ -81,6 +81,32 @@ class EmailServiceSettings(BaseModel):
     use_tls: bool = Field(default=True, description="Use TLS encryption")
 
 
+class ITTeamMember(BaseModel):
+    """An IT team member stored in organization settings"""
+    name: str = ""
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+
+
+class ITTeamSettings(BaseModel):
+    """IT team and backup access configuration"""
+    members: list[ITTeamMember] = Field(default_factory=list)
+    backup_access: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AuthSettings(BaseModel):
+    """Settings for organization authentication provider"""
+    provider: str = Field(
+        default="local",
+        description="Authentication provider: local, google, microsoft, authentik"
+    )
+
+    def is_local_auth(self) -> bool:
+        """Check if local password authentication is enabled"""
+        return self.provider == "local"
+
+
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization"""
     # Essential modules are always enabled
@@ -160,9 +186,17 @@ class OrganizationSettings(BaseModel):
         default_factory=EmailServiceSettings,
         description="Email service configuration"
     )
+    auth: AuthSettings = Field(
+        default_factory=AuthSettings,
+        description="Authentication provider configuration"
+    )
     modules: ModuleSettings = Field(
         default_factory=ModuleSettings,
         description="Module enablement settings"
+    )
+    it_team: ITTeamSettings = Field(
+        default_factory=ITTeamSettings,
+        description="IT team members and backup access configuration"
     )
 
     # Allow additional settings
@@ -194,7 +228,9 @@ class OrganizationSettingsUpdate(BaseModel):
     """Schema for updating organization settings"""
     contact_info_visibility: Optional[ContactInfoSettings] = None
     email_service: Optional[EmailServiceSettings] = None
+    auth: Optional[AuthSettings] = None
     modules: Optional[ModuleSettingsUpdate] = None
+    it_team: Optional[ITTeamSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -215,6 +251,8 @@ class OrganizationSettingsResponse(BaseModel):
     """Schema for organization settings response"""
     contact_info_visibility: ContactInfoSettings
     email_service: EmailServiceSettings
+    auth: AuthSettings = Field(default_factory=AuthSettings)
+    it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')

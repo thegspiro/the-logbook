@@ -486,7 +486,9 @@ async def health_check():
             health_status["checks"]["database"] = "disconnected"
             health_status["status"] = "degraded"
     except Exception as e:
-        health_status["checks"]["database"] = f"error: {str(e)}"
+        # Log details internally but don't expose to clients
+        logger.error(f"Health check - database error: {e}")
+        health_status["checks"]["database"] = "error"
         health_status["status"] = "unhealthy"
 
     # Check Redis
@@ -499,7 +501,8 @@ async def health_check():
             health_status["checks"]["redis"] = "disconnected"
             health_status["status"] = "degraded"
     except Exception as e:
-        health_status["checks"]["redis"] = f"error: {str(e)}"
+        logger.error(f"Health check - redis error: {e}")
+        health_status["checks"]["redis"] = "error"
         health_status["status"] = "degraded"  # Redis is not critical
 
     # Security configuration validation

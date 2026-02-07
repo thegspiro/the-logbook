@@ -5,10 +5,14 @@ Handles sending emails using SMTP or organization-specific email service configu
 """
 
 import smtplib
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import List, Optional, Dict
+from email.mime.base import MIMEBase
+from email import encoders
+from typing import List, Optional, Dict, Any
 from datetime import datetime
+from loguru import logger
 
 from app.core.config import settings
 from app.models.user import Organization
@@ -66,6 +70,7 @@ class EmailService:
         subject: str,
         html_body: str,
         text_body: Optional[str] = None,
+        attachment_paths: Optional[List[str]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -75,14 +80,14 @@ class EmailService:
             subject: Email subject line
             html_body: HTML email body
             text_body: Optional plain text version of email
+            attachment_paths: Optional list of file paths to attach
 
         Returns:
             Tuple of (success_count, failure_count)
         """
         if not settings.EMAIL_ENABLED and not (self.organization and
                                                 self.organization.settings.get('email_service', {}).get('enabled')):
-            # Email not enabled, just log and return
-            print(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
+            logger.info(f"Email disabled. Would send to {len(to_emails)} recipients: {subject}")
             return 0, len(to_emails)
 
         success_count = 0
@@ -90,19 +95,38 @@ class EmailService:
 
         for to_email in to_emails:
             try:
-                msg = MIMEMultipart('alternative')
+                # Use mixed type when we have attachments, alternative otherwise
+                if attachment_paths:
+                    msg = MIMEMultipart('mixed')
+                    # Create alternative sub-part for text/html
+                    alt_part = MIMEMultipart('alternative')
+                    if text_body:
+                        alt_part.attach(MIMEText(text_body, 'plain'))
+                    alt_part.attach(MIMEText(html_body, 'html'))
+                    msg.attach(alt_part)
+
+                    # Attach files
+                    for filepath in attachment_paths:
+                        if not os.path.isfile(filepath):
+                            logger.warning(f"Attachment not found, skipping: {filepath}")
+                            continue
+                        with open(filepath, 'rb') as f:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(f.read())
+                        encoders.encode_base64(part)
+                        filename = os.path.basename(filepath)
+                        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                        msg.attach(part)
+                else:
+                    msg = MIMEMultipart('alternative')
+                    if text_body:
+                        msg.attach(MIMEText(text_body, 'plain'))
+                    msg.attach(MIMEText(html_body, 'html'))
+
                 msg['From'] = f"{self._smtp_config['from_name']} <{self._smtp_config['from_email']}>"
                 msg['To'] = to_email
                 msg['Subject'] = subject
                 msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
-
-                # Attach text and HTML versions
-                if text_body:
-                    part1 = MIMEText(text_body, 'plain')
-                    msg.attach(part1)
-
-                part2 = MIMEText(html_body, 'html')
-                msg.attach(part2)
 
                 # Send email
                 with smtplib.SMTP(self._smtp_config['host'], self._smtp_config['port']) as server:
@@ -117,7 +141,7 @@ class EmailService:
                 success_count += 1
 
             except Exception as e:
-                print(f"Failed to send email to {to_email}: {str(e)}")
+                logger.error(f"Failed to send email to {to_email}: {e}")
                 failure_count += 1
 
         return success_count, failure_count
@@ -340,6 +364,281 @@ Review & Approve: {approval_url}
 This is an automated message from {self._smtp_config['from_name']}
 Please do not reply to this email.
 """
+
+        return await self.send_email(
+            to_emails=to_emails,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+    async def send_welcome_email(
+        self,
+        to_email: str,
+        first_name: str,
+        last_name: str,
+        username: str,
+        temp_password: str,
+        organization_name: str,
+        login_url: str,
+        db: Any = None,
+        organization_id: Optional[str] = None,
+        attachment_paths: Optional[List[str]] = None,
+    ) -> bool:
+        """
+        Send a welcome email to a newly created user.
+
+        If a database session and organization_id are provided, loads the
+        admin-configured template from the database. Otherwise falls back
+        to a default template.
+
+        Args:
+            to_email: New user's email address
+            first_name: New user's first name
+            last_name: New user's last name
+            username: Login username
+            temp_password: Temporary password
+            organization_name: Organization display name
+            login_url: URL to the login page
+            db: Optional async database session (for loading templates)
+            organization_id: Optional org ID (for loading templates)
+            attachment_paths: Optional list of local file paths to attach
+
+        Returns:
+            True if sent successfully
+        """
+        context = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": f"{first_name} {last_name}",
+            "username": username,
+            "temp_password": temp_password,
+            "organization_name": organization_name,
+            "login_url": login_url,
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.services.email_template_service import (
+                    EmailTemplateService,
+                )
+                from app.models.email_template import EmailTemplateType
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.WELCOME
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
+                    # Gather stored attachment paths if template has attachments
+                    if template.allow_attachments and template.attachments:
+                        stored_paths = [a.storage_path for a in template.attachments]
+                        if attachment_paths:
+                            attachment_paths = attachment_paths + stored_paths
+                        else:
+                            attachment_paths = stored_paths
+            except Exception as e:
+                logger.warning(f"Failed to load welcome email template, using default: {e}")
+
+        # Fall back to inline default if no template loaded
+        if not subject:
+            from app.services.email_template_service import (
+                DEFAULT_WELCOME_SUBJECT,
+                DEFAULT_WELCOME_HTML,
+                DEFAULT_WELCOME_TEXT,
+                DEFAULT_CSS,
+            )
+            import re
+
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    return str(context.get(var, match.group(0)))
+                return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+
+            subject = _replace(DEFAULT_WELCOME_SUBJECT)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_WELCOME_HTML)}</body></html>"
+            text_body = _replace(DEFAULT_WELCOME_TEXT)
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            attachment_paths=attachment_paths,
+        )
+
+        return success_count > 0
+
+    async def send_password_reset_email(
+        self,
+        to_email: str,
+        first_name: str,
+        reset_url: str,
+        organization_name: str,
+        expiry_minutes: int = 30,
+        db: Any = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Send a password reset email.
+
+        Only used when local authentication is enabled.
+
+        Args:
+            to_email: User's email address
+            first_name: User's first name
+            reset_url: Full URL to the password reset page with token
+            organization_name: Organization display name
+            expiry_minutes: Minutes until the reset link expires
+            db: Optional async database session (for loading templates)
+            organization_id: Optional org ID (for loading templates)
+
+        Returns:
+            True if sent successfully
+        """
+        context = {
+            "first_name": first_name,
+            "reset_url": reset_url,
+            "organization_name": organization_name,
+            "expiry_hours": str(expiry_minutes),
+        }
+
+        subject = None
+        html_body = None
+        text_body = None
+
+        # Try loading the admin-configured template from the database
+        if db and organization_id:
+            try:
+                from app.services.email_template_service import EmailTemplateService
+                from app.models.email_template import EmailTemplateType
+
+                template_service = EmailTemplateService(db)
+                template = await template_service.get_template(
+                    organization_id, EmailTemplateType.PASSWORD_RESET
+                )
+                if template:
+                    subject, html_body, text_body = template_service.render(
+                        template, context
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to load password reset template, using default: {e}")
+
+        # Fall back to inline default
+        if not subject:
+            from app.services.email_template_service import (
+                DEFAULT_PASSWORD_RESET_SUBJECT,
+                DEFAULT_PASSWORD_RESET_HTML,
+                DEFAULT_PASSWORD_RESET_TEXT,
+                DEFAULT_CSS,
+            )
+            import re
+
+            def _replace(text: str) -> str:
+                def replacer(match):
+                    var = match.group(1).strip()
+                    return str(context.get(var, match.group(0)))
+                return re.sub(r'\{\{(\s*\w+\s*)\}\}', replacer, text)
+
+            subject = _replace(DEFAULT_PASSWORD_RESET_SUBJECT)
+            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_PASSWORD_RESET_HTML)}</body></html>"
+            text_body = _replace(DEFAULT_PASSWORD_RESET_TEXT)
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+        return success_count > 0
+
+    async def send_it_password_reset_notification(
+        self,
+        to_emails: List[str],
+        user_email: str,
+        user_name: str,
+        organization_name: str,
+        ip_address: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """
+        Notify IT team members that a password reset was requested.
+
+        Args:
+            to_emails: IT team member email addresses
+            user_email: Email of the user who requested the reset
+            user_name: Display name of the user
+            organization_name: Organization name
+            ip_address: IP address the request originated from
+
+        Returns:
+            Tuple of (success_count, failure_count)
+        """
+        timestamp = datetime.utcnow().strftime("%B %d, %Y at %I:%M %p UTC")
+        ip_display = ip_address or "Unknown"
+
+        subject = f"[IT Notice] Password Reset Requested — {organization_name}"
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #f59e0b; color: white; padding: 20px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 20px; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #e5e7eb; }}
+        .details p {{ margin: 4px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Password Reset Notification</h1>
+        </div>
+        <div class="content">
+            <p>A password reset has been requested for a member of <strong>{organization_name}</strong>.</p>
+
+            <div class="details">
+                <p><strong>Member:</strong> {user_name}</p>
+                <p><strong>Email:</strong> {user_email}</p>
+                <p><strong>Requested At:</strong> {timestamp}</p>
+                <p><strong>IP Address:</strong> {ip_display}</p>
+            </div>
+
+            <p>This is for informational purposes. If this request appears suspicious, please investigate and consider disabling the account.</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated IT notification from {organization_name}.</p>
+        </div>
+    </div>
+</body>
+</html>"""
+
+        text_body = f"""Password Reset Notification — {organization_name}
+
+A password reset has been requested for a member.
+
+Member: {user_name}
+Email: {user_email}
+Requested At: {timestamp}
+IP Address: {ip_display}
+
+This is for informational purposes. If this request appears suspicious,
+please investigate and consider disabling the account.
+
+---
+Automated IT notification from {organization_name}."""
 
         return await self.send_email(
             to_emails=to_emails,

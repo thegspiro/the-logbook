@@ -10,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
+import secrets
+import hashlib
 
 from app.models.user import User, Session as UserSession, Organization
 from app.core.security import (
@@ -22,6 +24,8 @@ from app.core.security import (
 )
 from app.core.config import settings
 from loguru import logger
+
+RESET_TOKEN_EXPIRY_MINUTES = 30
 
 
 class AuthService:
@@ -57,11 +61,11 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
-            logger.warning(f"Authentication failed: user not found - {username}")
+            logger.warning("Authentication failed for login attempt")
             return None
 
         if not user.password_hash:
-            logger.warning(f"Authentication failed: no password set - {username}")
+            logger.warning("Authentication failed for login attempt")
             return None
 
         # Check if account is locked
@@ -80,7 +84,7 @@ class AuthService:
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
             await self.db.commit()
-            logger.warning(f"Authentication failed: invalid password - {username}")
+            logger.warning("Authentication failed: invalid credentials")
             return None
 
         # Reset failed login attempts on successful login
@@ -366,3 +370,121 @@ class AuthService:
         except Exception as e:
             logger.error(f"Token validation failed: {e}")
             return None
+
+    async def create_password_reset_token(
+        self,
+        email: str,
+        organization_id: str,
+        ip_address: Optional[str] = None,
+    ) -> Tuple[Optional[User], Optional[str]]:
+        """
+        Generate a password reset token for a user identified by email.
+
+        The raw token is returned for inclusion in the reset email.
+        A SHA-256 hash of the token is stored in the database for verification.
+
+        Enforces a cooldown: if a valid (non-expired) token already exists,
+        a new one will not be generated.
+
+        Returns:
+            Tuple of (user, raw_token) if user found and token created,
+            (None, None) otherwise.
+        """
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.email == email,
+                User.organization_id == organization_id,
+                User.deleted_at.is_(None),
+            )
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return None, None
+
+        if not user.password_hash:
+            # User has no local password (OAuth-only) — shouldn't happen
+            # with the auth_provider gate, but just in case
+            return None, None
+
+        # Cooldown: reject if an active (non-expired) token already exists
+        if (
+            user.password_reset_token
+            and user.password_reset_expires_at
+            and user.password_reset_expires_at > datetime.utcnow()
+        ):
+            logger.warning(
+                f"Password reset requested while active token exists "
+                f"(ip={ip_address})"
+            )
+            return None, None
+
+        # Generate secure token and store its hash
+        raw_token = secrets.token_urlsafe(48)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        user.password_reset_token = token_hash
+        user.password_reset_expires_at = datetime.utcnow() + timedelta(
+            minutes=RESET_TOKEN_EXPIRY_MINUTES
+        )
+
+        await self.db.commit()
+        logger.info(
+            f"Password reset token created (ip={ip_address})"
+        )
+
+        return user, raw_token
+
+    async def reset_password_with_token(
+        self,
+        raw_token: str,
+        new_password: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Reset a user's password using a valid reset token.
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.password_reset_token == token_hash,
+                User.deleted_at.is_(None),
+            )
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return False, "Invalid or expired reset token"
+
+        if (
+            not user.password_reset_expires_at
+            or user.password_reset_expires_at < datetime.utcnow()
+        ):
+            # Clear expired token
+            user.password_reset_token = None
+            user.password_reset_expires_at = None
+            await self.db.commit()
+            return False, "Reset token has expired. Please request a new one."
+
+        # Validate new password strength
+        is_valid, error_msg = validate_password_strength(new_password)
+        if not is_valid:
+            return False, error_msg
+
+        # Set new password and clear token
+        user.password_hash = hash_password(new_password)
+        user.password_changed_at = datetime.utcnow()
+        user.password_reset_token = None
+        user.password_reset_expires_at = None
+        user.failed_login_attempts = 0
+        user.locked_until = None
+
+        await self.db.commit()
+        logger.info("Password successfully reset via token")
+
+        return True, None

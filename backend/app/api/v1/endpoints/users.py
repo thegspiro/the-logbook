@@ -5,7 +5,7 @@ Endpoints for user management and listing.
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -22,8 +22,9 @@ from app.schemas.user import (
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
 from app.services.organization_service import OrganizationService
-from app.models.user import User, Role, user_roles
+from app.models.user import User, Role, UserStatus, user_roles
 from app.api.dependencies import get_current_user, require_permission
+from app.core.config import settings
 # NOTE: Authentication is now implemented
 # from app.api.dependencies import get_current_active_user, get_user_organization
 # from app.models.user import Organization
@@ -78,6 +79,7 @@ async def list_users(
 @router.post("/", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
 async def create_member(
     user_data: AdminUserCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create")),
 ):
@@ -127,7 +129,7 @@ async def create_member(
 
     # Create new user
     new_user = User(
-        id=uuid4(),
+        id=str(uuid4()),
         organization_id=current_user.organization_id,
         username=user_data.username,
         email=user_data.email,
@@ -152,7 +154,7 @@ async def create_member(
         # Emergency contacts (stored as JSON)
         emergency_contacts=[ec.model_dump() for ec in user_data.emergency_contacts],
         email_verified=False,
-        status="active",
+        status=UserStatus.ACTIVE,
     )
 
     db.add(new_user)
@@ -179,13 +181,40 @@ async def create_member(
     await db.commit()
     await db.refresh(new_user, ["roles"])
 
-    # TODO: Send welcome email with temporary password if send_welcome_email is True
-    # This should be implemented with an email service
-    # For now, log the temporary password (REMOVE IN PRODUCTION)
+    # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
         from loguru import logger
-        logger.info(f"Temporary password for {user_data.username}: {temp_password}")
-        # In production: send email with password reset link
+        from app.services.email_service import EmailService
+        from app.models.user import Organization as OrgModel
+
+        logger.info(f"Welcome email requested for new user: {user_data.username}")
+
+        # Load organization for email config
+        org_result = await db.execute(
+            select(OrgModel).where(OrgModel.id == current_user.organization_id)
+        )
+        organization = org_result.scalar_one_or_none()
+
+        org_name = organization.name if organization else "The Logbook"
+        login_url = f"{settings.FRONTEND_URL}/login" if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL else "/login"
+
+        async def _send_welcome():
+            try:
+                email_svc = EmailService(organization)
+                await email_svc.send_welcome_email(
+                    to_email=new_user.email,
+                    first_name=new_user.first_name,
+                    last_name=new_user.last_name,
+                    username=new_user.username,
+                    temp_password=temp_password,
+                    organization_name=org_name,
+                    login_url=login_url,
+                    organization_id=str(current_user.organization_id),
+                )
+            except Exception as e:
+                logger.error(f"Failed to send welcome email to {new_user.email}: {e}")
+
+        background_tasks.add_task(_send_welcome)
 
     return new_user
 
@@ -504,13 +533,16 @@ async def update_contact_info(
     **Authentication required**
     """
     # Check if user is updating their own profile or has admin permissions
-    # For now, only allow users to update their own profile
     if current_user.id != user_id:
-        # TODO: Add permission check for admins
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your own contact information"
-        )
+        # Admins with users.update or members.manage can update other users
+        user_permissions = []
+        for role in current_user.roles:
+            user_permissions.extend(role.permissions or [])
+        if "users.update" not in user_permissions and "members.manage" not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update your own contact information"
+            )
 
     result = await db.execute(
         select(User)

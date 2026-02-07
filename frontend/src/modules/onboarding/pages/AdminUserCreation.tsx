@@ -216,8 +216,9 @@ const AdminUserCreation: React.FC = () => {
   };
 
   const currentYear = new Date().getFullYear();
+  const requiredFields = ['username', 'email', 'firstName', 'lastName', 'password', 'confirmPassword'] as const;
   const isFormValid =
-    Object.values(formData).every((value) => value.trim() !== '') &&
+    requiredFields.every((key) => formData[key].trim() !== '') &&
     Object.values(errors).every((error) => error === '') &&
     passwordStrength.passedChecks === 5;
 

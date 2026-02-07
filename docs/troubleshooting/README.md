@@ -556,6 +556,144 @@ docker exec -it intranet-mysql mysql -u root -p
 
 ---
 
+### Problem: Admin user creation "Create Admin" button stays disabled
+**Symptom:** All required fields are filled in, password meets all requirements, but the "Create Admin & Complete Setup" button remains grayed out and disabled.
+
+### Root Cause
+The form validation was checking that **all** fields (including the optional Badge Number) had non-empty values using `Object.values(formData).every(...)`. Since Badge Number is optional, leaving it empty caused the form to appear invalid.
+
+### Solution
+This has been fixed in the codebase. The validation now checks only the 6 required fields: username, email, firstName, lastName, password, confirmPassword. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Organization setup "Continue" button shows no loading indicator
+**Symptom:** After clicking "Continue" on the Organization Setup page, the button doesn't change appearance or show a spinner during the save operation.
+
+### Root Cause
+The loading state (`isSaving`) was wired to the `useApiRequest` hook, but the actual API call used `useOnboardingSession.saveOrganization()` which tracks its loading state separately. The button checked the wrong variable.
+
+### Solution
+This has been fixed in the codebase. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Security check passes even with default/insecure keys
+**Symptom:** Onboarding security verification shows all checks passed, but you never changed the default `SECRET_KEY` or `ENCRYPTION_KEY` in your `.env` file.
+
+### Root Cause
+The onboarding security check was comparing keys against stale default strings (`"change_me_to_random_64_character_string"`) that didn't match the actual defaults in `config.py` (`"INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION"`). This caused the check to silently pass.
+
+### Solution
+This has been fixed in the codebase. The security check now uses substring matching for `"INSECURE_DEFAULT"`, consistent with `config.py`. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+To verify your security configuration after the fix:
+```bash
+curl http://YOUR-IP:7881/api/v1/onboarding/security-check | jq
+```
+
+---
+
+### Problem: Welcome page shows blank screen for several seconds
+**Symptom:** On first visit, the Welcome page (`/`) displays a completely dark/blank screen before any text appears.
+
+### Root Cause
+The title animation had a 3-second delay before appearing, with the body content following at 4 seconds.
+
+### Solution
+This has been fixed in the codebase. The title now appears after 300ms and the body after 800ms — still animated but without the blank-screen wait. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: Onboarding returns 403 "Access denied from your location"
+**Symptom:** All onboarding API calls fail with a 403 status code and the message "Access denied from your location" / error code `GEO_BLOCKED`.
+
+### Root Cause
+The GeoIP middleware (`IPBlockingMiddleware`) was blocking ALL API requests from countries in the `BLOCKED_COUNTRIES` list — including onboarding endpoints. Since onboarding runs before any configuration exists, there's no way for a blocked user to allowlist their IP or disable geo-blocking.
+
+### Solution
+This has been fixed in the codebase. Onboarding endpoints (`/api/v1/onboarding/*`) are now exempt from GeoIP blocking. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+**If you need to disable GeoIP blocking entirely:**
+```bash
+# In your .env file:
+GEOIP_ENABLED=false
+```
+
+**If you want to customize blocked countries:**
+```bash
+# In your .env file (comma-separated ISO 3166-1 alpha-2 codes):
+BLOCKED_COUNTRIES=KP,IR,SY,CU
+```
+
+---
+
+### Problem: Email configuration test hangs indefinitely
+**Symptom:** Clicking "Test Connection" on the email configuration page causes the UI to spin forever with no response. The browser may eventually show a timeout or the request stays pending.
+
+### Root Cause
+The email test endpoint (`POST /api/v1/onboarding/test/email`) runs SMTP connection tests in a thread pool without a timeout. If the mail server is unreachable, firewalled, or slow, the connection attempt can hang for minutes (limited only by OS TCP timeout).
+
+### Solution
+This has been fixed in the codebase. Email tests now have a 30-second timeout. If the server doesn't respond within 30 seconds, the user gets a clear timeout message. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+**If you see timeouts consistently:** Your network may be blocking outbound SMTP traffic (ports 25, 465, 587). Check with your network administrator or cloud provider.
+
+---
+
+### Problem: Onboarding reset endpoint accessible without authentication
+**Symptom:** Security concern — the `POST /api/v1/onboarding/reset` endpoint could be called by anyone, even without a valid session, potentially wiping all data.
+
+### Root Cause
+The reset endpoint was catching and ignoring session validation errors to handle the case where a session expired during a failed onboarding attempt. However, this also allowed unauthenticated callers to trigger a full data wipe.
+
+### Solution
+This has been fixed in the codebase. The reset endpoint now:
+1. Checks if onboarding has been completed — if so, reset is blocked entirely
+2. Only allows reset without a session if onboarding is still in progress (needs_onboarding returns True)
+3. After onboarding is complete, system data can only be managed through the admin panel
+
+Pull the latest changes:
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
 ## Build Errors
 
 ### Problem: TypeScript errors during Docker build
@@ -709,7 +847,7 @@ INFO:     Uvicorn running on http://0.0.0.0:3001
 ### Browser
 - Welcome page with animated logo loads
 - No errors in console (F12)
-- Auto-redirect to onboarding after 10 seconds
+- Click "Begin Setup" to start onboarding
 
 ### API
 - `http://YOUR-IP:7881/docs` → FastAPI documentation
@@ -846,14 +984,124 @@ backend:
 
 ---
 
+### Problem: 500 error responses show internal exception details
+**Symptom:** API 500 errors return raw Python exception messages like `"detail": "Failed to create organization: IntegrityError(...)"`, which reveals database schema, table names, or query structure.
+
+### Root Cause
+Some error handlers were passing `str(e)` directly into the HTTPException `detail` field, leaking internal error information to clients.
+
+### Solution
+This has been fixed in the codebase. Error handlers now log full details internally (via `logger.error()`) and return generic messages to clients: `"Failed to create organization. Please check the server logs for details."` Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+**If you need to debug a 500 error:** Check the backend container logs instead of the API response:
+```bash
+docker compose logs backend --tail=50
+```
+
+---
+
+### Problem: Temporary passwords visible in application logs
+**Symptom:** When creating a new user with `send_welcome_email: true`, the temporary password was previously written to the application log in plaintext.
+
+### Root Cause
+A development-only logging statement (`logger.info(f"Temporary password for {username}: {temp_password}")`) was left in the user creation endpoint.
+
+### Solution
+This has been fixed in the codebase. Temporary passwords are no longer logged. The email service should be used to deliver temporary passwords or password reset links. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: Health endpoint reveals database/Redis connection error details
+**Symptom:** The `/health` endpoint returns raw exception messages like `"database": "error: (2003, \"Can't connect to MySQL server...\")"`, revealing internal infrastructure details.
+
+### Root Cause
+Exception strings were included directly in the health check response, potentially exposing database hostnames, ports, or connection configuration.
+
+### Solution
+This has been fixed in the codebase. The health endpoint now returns only the status (`"error"`, `"connected"`, `"disconnected"`) without raw exception details. Full errors are logged internally. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: Authentication failure logs reveal whether username exists
+**Symptom:** Backend logs show different messages for different failure modes: `"user not found"` vs `"invalid password"` vs `"no password set"`. An attacker with log access could enumerate valid usernames.
+
+### Root Cause
+Authentication failure logging used distinct messages for each failure type, which is an information disclosure vulnerability.
+
+### Solution
+This has been fixed in the codebase. All authentication failures now log a uniform message: `"Authentication failed for login attempt"` (pre-login) or `"Authentication failed: invalid credentials"` (wrong password). Account lockout events still log the username for security incident response. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose restart backend
+```
+
+---
+
+### Problem: `.env` file accidentally committed to git
+**Symptom:** Secrets (database passwords, encryption keys, API keys) are visible in the git repository history.
+
+### Root Cause
+The `.gitignore` file did not include `.env` entries, so `.env` files could be accidentally committed.
+
+### Solution
+`.env` files are now excluded via `.gitignore`. Pull the latest changes:
+
+```bash
+git pull origin main
+```
+
+If a `.env` file was already committed, remove it from tracking:
+```bash
+git rm --cached .env
+git commit -m "Remove .env from tracking"
+git push
+```
+
+**IMPORTANT:** If secrets were committed, consider them compromised. Rotate all affected secrets immediately:
+```bash
+echo "SECRET_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+echo "ENCRYPTION_SALT=$(openssl rand -hex 16)"
+echo "DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
+```
+
+---
+
 ## Quick Diagnostic Checklist
 
 ### Security Configuration
-- [ ] `SECRET_KEY` is set (min 32 characters, not default)
-- [ ] `ENCRYPTION_KEY` is set (64 hex characters, not default)
+- [ ] `SECRET_KEY` is set (min 32 characters, does not contain `INSECURE_DEFAULT`)
+- [ ] `ENCRYPTION_KEY` is set (64 hex characters, does not contain `INSECURE_DEFAULT`)
 - [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
 - [ ] `DB_PASSWORD` is not `change_me_in_production`
 - [ ] `REDIS_PASSWORD` is set (required in production)
+
+> **Note**: The onboarding security check uses substring matching — any key containing `"INSECURE_DEFAULT"` is flagged as critical. The factory defaults (`INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION` for SECRET_KEY, `INSECURE_DEFAULT_KEY_CHANGE_ME` for ENCRYPTION_KEY) will both be caught. This matches the validation in `backend/app/core/config.py`.
+
+### Secret Handling
+- [ ] `.env` files are in `.gitignore` (never committed to version control)
+- [ ] No passwords logged in application output (temporary passwords are never logged)
+- [ ] Health endpoint does not expose raw error strings (shows only "error" status)
+- [ ] API error responses do not leak internal exception details
+- [ ] Frontend console logging restricted in production mode
+- [ ] Authentication failure logs do not reveal whether username exists or password was wrong
 
 ### Application Configuration
 - [ ] Frontend `.env` exists with correct `VITE_API_URL`
@@ -1519,18 +1767,21 @@ Should include:
 
 ## Common Error Codes Reference
 
-| Code | Meaning | Common Causes | Solution |
-|------|---------|---------------|----------|
-| 400 | Bad Request | Malformed JSON, invalid parameters | Check request body format |
-| 401 | Unauthorized | Missing/expired token | Re-login to get new token |
-| 403 | Forbidden | Valid token but insufficient permissions | Check user roles |
-| 404 | Not Found | Resource doesn't exist, wrong URL | Verify endpoint path |
-| 409 | Conflict | Duplicate entry, constraint violation | Check for existing records |
-| 422 | Validation Error | Schema mismatch, invalid field values | Check API docs for required fields |
-| 429 | Too Many Requests | Rate limit exceeded | Wait and retry later |
-| 500 | Server Error | Backend exception | Check backend logs |
-| 502 | Bad Gateway | Backend not running | Restart backend container |
-| 503 | Service Unavailable | Database/Redis down | Check dependency containers |
+| Code | Meaning | Common Causes | Frontend Error Message | Solution |
+|------|---------|---------------|----------------------|----------|
+| 400 | Bad Request | Malformed JSON, invalid parameters | Server detail or "An unexpected error occurred" | Check request body format |
+| 401 | Unauthorized | Missing/expired token | Server detail or "An unexpected error occurred" | Re-login to get new token |
+| 403 | Forbidden | CSRF validation failed, insufficient permissions | "Security validation failed. Please refresh the page and try again." | Refresh page to get new CSRF token |
+| 404 | Not Found | Resource doesn't exist, wrong URL | Server detail or "An unexpected error occurred" | Verify endpoint path |
+| 409 | Conflict | Duplicate entry, constraint violation | Server detail or "This record already exists. Please check for duplicates." | Check for existing records |
+| 422 | Validation Error | Schema mismatch, invalid field values | Server detail or "Invalid data submitted. Please check your input and try again." | Check API docs for required fields |
+| 429 | Too Many Requests | Rate limit exceeded | "Too many requests. Please wait a moment before trying again." | Wait and retry later |
+| 500 | Server Error | Backend exception | "A server error occurred. Please try again or check the server logs." | Check backend logs |
+| 502 | Bad Gateway | Backend not running | "An unexpected error occurred" | Restart backend container |
+| 503 | Service Unavailable | Database/Redis down, still starting up | "The server is temporarily unavailable. It may still be starting up — please try again shortly." | Check dependency containers |
+| 0 | Network Error | Backend unreachable, DNS failure | "Unable to reach the server. Please verify the backend is running and check your network connection." | Check Docker containers and network |
+| 403 (GEO_BLOCKED) | Geo-Blocked | Request from blocked country | "Access denied from your location" | Onboarding endpoints bypass geo-blocking; for other endpoints, add IP to allowlist or set GEOIP_ENABLED=false |
+| N/A | Email Test Timeout | SMTP server unreachable or firewalled | "Email connection test timed out after 30 seconds." | Check outbound SMTP ports (25, 465, 587) are not blocked |
 
 ---
 

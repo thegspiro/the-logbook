@@ -4,7 +4,7 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
@@ -16,10 +16,12 @@ from app.schemas.auth import (
     TokenRefresh,
     CurrentUser,
     PasswordChange,
+    PasswordResetRequest,
+    PasswordReset,
 )
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, RESET_TOKEN_EXPIRY_MINUTES
 from app.api.dependencies import get_current_user, get_current_active_user
-from app.models.user import User
+from app.models.user import User, Organization
 from app.core.config import settings
 from app.core.security_middleware import check_rate_limit
 
@@ -41,15 +43,26 @@ async def register(
 
     Rate limited to 5 requests per minute per IP address to prevent abuse.
 
-    **Note**: Currently uses hardcoded organization ID. When multi-org
-    support is added, organization_id should come from registration context.
+    The organization is looked up from the database (single-org system).
     """
     auth_service = AuthService(db)
 
-    # TODO: Get organization_id from registration context
-    # For now, use the test organization
-    from uuid import UUID as UUIDType
-    test_org_id = UUIDType("00000000-0000-0000-0000-000000000001")
+    # Look up the organization from the database
+    # This is a single-org system — onboarding creates exactly one organization
+    from sqlalchemy import select
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    organization = org_result.scalar_one_or_none()
+
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No organization found. Please complete onboarding first."
+        )
 
     # Register user
     user, error = await auth_service.register_user(
@@ -58,7 +71,7 @@ async def register(
         password=user_data.password,
         first_name=user_data.first_name,
         last_name=user_data.last_name,
-        organization_id=test_org_id,
+        organization_id=organization.id,
         badge_number=user_data.badge_number,
     )
 
@@ -273,3 +286,178 @@ async def check_authentication(
         "user_id": str(current_user.id),
         "username": current_user.username,
     }
+
+
+@router.post("/forgot-password", dependencies=[Depends(check_rate_limit)])
+async def forgot_password(
+    reset_request: PasswordResetRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Request a password reset email.
+
+    Only works when local authentication is enabled for the organization.
+    If the org uses Google, Microsoft, or another OAuth provider, the user
+    is directed to reset via that provider instead.
+
+    Rate limited to prevent abuse. Always returns 200 to avoid email enumeration.
+    """
+    from sqlalchemy import select
+    from app.schemas.organization import AuthSettings
+    from app.core.audit import log_audit_event
+    from loguru import logger
+
+    ip_address = request.client.host if request.client else None
+
+    # Look up the organization (single-org system)
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    organization = org_result.scalar_one_or_none()
+
+    if not organization:
+        # No org — return generic success to avoid leaking info
+        return {"message": "If an account with that email exists, a reset link has been sent."}
+
+    # Check auth provider
+    org_settings = organization.settings or {}
+    auth_config = AuthSettings(**org_settings.get("auth", {}))
+
+    if not auth_config.is_local_auth():
+        provider_names = {
+            "google": "Google",
+            "microsoft": "Microsoft",
+            "authentik": "your SSO provider",
+        }
+        provider_label = provider_names.get(auth_config.provider, auth_config.provider)
+        return {
+            "message": f"This organization uses {provider_label} for authentication. "
+                       f"Please reset your password through {provider_label}.",
+            "auth_provider": auth_config.provider,
+        }
+
+    # Generate reset token
+    auth_service = AuthService(db)
+    user, raw_token = await auth_service.create_password_reset_token(
+        email=reset_request.email,
+        organization_id=str(organization.id),
+        ip_address=ip_address,
+    )
+
+    # Audit log: record every reset request regardless of outcome
+    await log_audit_event(
+        db=db,
+        event_type="auth.password_reset_requested",
+        event_category="auth",
+        severity="INFO",
+        event_data={
+            "email": reset_request.email,
+            "token_issued": bool(user and raw_token),
+            "organization_id": str(organization.id),
+        },
+        ip_address=ip_address,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    # Send emails in background (even if user not found, we don't reveal that)
+    if user and raw_token:
+        from app.services.email_service import EmailService
+
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
+        org_name = organization.name
+        expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
+
+        async def _send_reset():
+            try:
+                email_svc = EmailService(organization)
+                await email_svc.send_password_reset_email(
+                    to_email=user.email,
+                    first_name=user.first_name or user.username,
+                    reset_url=reset_url,
+                    organization_name=org_name,
+                    expiry_minutes=expiry_minutes,
+                    db=db,
+                    organization_id=str(organization.id),
+                )
+            except Exception as e:
+                logger.error(f"Failed to send password reset email: {e}")
+
+        background_tasks.add_task(_send_reset)
+
+        # Notify IT team in background
+        async def _notify_it_team():
+            try:
+                it_team = org_settings.get("it_team", {})
+                it_members = it_team.get("members", [])
+                it_emails = [
+                    m["email"] for m in it_members
+                    if m.get("email")
+                ]
+                if not it_emails:
+                    return
+
+                email_svc = EmailService(organization)
+                await email_svc.send_it_password_reset_notification(
+                    to_emails=it_emails,
+                    user_email=user.email,
+                    user_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username,
+                    organization_name=org_name,
+                    ip_address=ip_address,
+                )
+            except Exception as e:
+                logger.error(f"Failed to send IT team notification: {e}")
+
+        background_tasks.add_task(_notify_it_team)
+
+    # Always return the same message to prevent email enumeration
+    return {"message": "If an account with that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password", dependencies=[Depends(check_rate_limit)])
+async def reset_password(
+    reset_data: PasswordReset,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reset password using a valid reset token.
+
+    The token was sent via email from the forgot-password endpoint.
+    Requires a new password that meets strength requirements (12+ chars).
+    """
+    from app.core.audit import log_audit_event
+
+    ip_address = request.client.host if request.client else None
+    auth_service = AuthService(db)
+
+    success, error = await auth_service.reset_password_with_token(
+        raw_token=reset_data.token,
+        new_password=reset_data.new_password,
+    )
+
+    # Audit log the outcome
+    await log_audit_event(
+        db=db,
+        event_type="auth.password_reset_completed" if success else "auth.password_reset_failed",
+        event_category="auth",
+        severity="INFO" if success else "WARNING",
+        event_data={
+            "success": success,
+            "error": error,
+        },
+        ip_address=ip_address,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "Password reset failed"
+        )
+
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}

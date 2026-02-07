@@ -15,6 +15,7 @@ import {
   ModuleConfigTemplate,
   AdminUserCreation,
 } from './pages';
+import { useOnboardingStore } from './store';
 
 /**
  * File Storage Config Placeholder Component
@@ -22,7 +23,8 @@ import {
  */
 const FileStorageConfigPlaceholder: React.FC = () => {
   const navigate = useNavigate();
-  const platform = sessionStorage.getItem('fileStoragePlatform') || 'local';
+  const storedPlatform = useOnboardingStore(state => state.fileStoragePlatform);
+  const platform = storedPlatform || 'local';
 
   // Auto-redirect after a brief moment to show the user what happened
   React.useEffect(() => {

@@ -72,7 +72,8 @@ class OrganizationCreate(BaseModel):
 
     @validator('organization_type')
     def validate_org_type(cls, v):
-        valid_types = ['fire_department', 'ems', 'hospital', 'clinic', 'emergency_services']
+        # Must match OrganizationType enum values in models/user.py
+        valid_types = ['fire_department', 'ems_only', 'fire_ems_combined']
         if v not in valid_types:
             raise ValueError(f'Organization type must be one of: {", ".join(valid_types)}')
         return v
@@ -451,6 +452,53 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+async def _persist_session_data_to_org(
+    session: OnboardingSessionModel,
+    db: AsyncSession,
+) -> None:
+    """
+    Copy IT team and auth configuration from the ephemeral onboarding session
+    into the permanent Organization.settings JSON column.
+
+    Called during onboarding completion so the data survives after the
+    session is cleaned up.
+    """
+    from app.models.user import Organization
+
+    session_data = session.data or {}
+
+    # Find the organization (single-org system)
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        return
+
+    org_settings = dict(organization.settings or {})
+
+    # Persist IT team data
+    it_team_data = session_data.get("it_team")
+    if it_team_data:
+        org_settings["it_team"] = {
+            "members": it_team_data.get("members", []),
+            "backup_access": it_team_data.get("backup_access", {}),
+        }
+
+    # Persist auth provider choice
+    auth_data = session_data.get("auth")
+    if auth_data and auth_data.get("platform"):
+        org_settings.setdefault("auth", {})
+        org_settings["auth"]["provider"] = auth_data["platform"]
+
+    organization.settings = org_settings
+    await db.commit()
+    logger.info("Persisted session data (IT team, auth) to Organization.settings")
+
+
 # ============================================
 # Endpoints
 # ============================================
@@ -811,9 +859,13 @@ async def complete_onboarding(
     Complete the onboarding process
 
     Marks onboarding as finished and creates post-onboarding checklist.
+    Persists IT team and auth config from session data into Organization.settings.
     """
     # Validate session
-    await validate_session(request, db)
+    session = await validate_session(request, db)
+
+    # Persist session-collected data into Organization.settings before completion
+    await _persist_session_data_to_org(session, db)
 
     service = OnboardingService(db)
 
@@ -923,29 +975,28 @@ async def test_email_configuration(
     config = request.config
 
     # Run SMTP tests in thread pool to avoid blocking async event loop
+    # Use a 30-second timeout to prevent indefinite hangs if mail server is unreachable
+    EMAIL_TEST_TIMEOUT = 30
     loop = asyncio.get_event_loop()
 
     try:
         if platform == 'gmail':
             # Test Gmail configuration (OAuth or app password)
             test_func = partial(test_gmail_oauth, config)
-            success, message, details = await loop.run_in_executor(None, test_func)
-
         elif platform == 'microsoft':
             # Test Microsoft 365 configuration (OAuth)
             test_func = partial(test_microsoft_oauth, config)
-            success, message, details = await loop.run_in_executor(None, test_func)
-
         elif platform == 'selfhosted' or platform == 'other':
             # Test self-hosted SMTP configuration
             test_func = partial(test_smtp_connection, config)
-            success, message, details = await loop.run_in_executor(None, test_func)
-
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported email platform: {platform}"
             )
+
+        async with asyncio.timeout(EMAIL_TEST_TIMEOUT):
+            success, message, details = await loop.run_in_executor(None, test_func)
 
         return EmailTestResponse(
             success=success,
@@ -953,10 +1004,14 @@ async def test_email_configuration(
             details=details
         )
 
+    except TimeoutError:
+        return EmailTestResponse(
+            success=False,
+            message=f"Email connection test timed out after {EMAIL_TEST_TIMEOUT} seconds. The mail server may be unreachable or slow to respond.",
+            details={"error": "timeout", "timeout_seconds": EMAIL_TEST_TIMEOUT}
+        )
+
     except Exception as e:
-        # Log the error
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error testing email configuration: {e}")
 
         return EmailTestResponse(
@@ -1012,9 +1067,11 @@ async def save_email_config(
     """
     Save email configuration to the onboarding session.
 
-    SECURITY: Sensitive fields (passwords, API keys) are stored server-side only,
-    never exposed to the browser.
+    SECURITY: Sensitive fields (passwords, API keys) are encrypted before
+    storage using AES-256. Only the platform type is stored in plain text.
     """
+    from app.core.security import encrypt_data
+
     # Validate session
     session = await validate_session(request, db)
 
@@ -1026,11 +1083,15 @@ async def save_email_config(
             detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
         )
 
-    # Update session data with email config
+    # Encrypt sensitive config data (contains passwords, API keys, etc.)
+    import json
+    encrypted_config = encrypt_data(json.dumps(data.config))
+
+    # Update session data - store config encrypted, platform in plain text
     session.data = session.data or {}
     session.data['email'] = {
         'platform': data.platform,
-        'config': data.config,
+        'config_encrypted': encrypted_config,
         'saved_at': datetime.utcnow().isoformat()
     }
 
@@ -1052,8 +1113,11 @@ async def save_file_storage_config(
     """
     Save file storage configuration to the onboarding session.
 
-    SECURITY: API keys and secrets are stored server-side only.
+    SECURITY: API keys and secrets are encrypted before storage using AES-256.
+    Only the platform type is stored in plain text.
     """
+    from app.core.security import encrypt_data
+
     # Validate session
     session = await validate_session(request, db)
 
@@ -1065,11 +1129,15 @@ async def save_file_storage_config(
             detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}"
         )
 
-    # Update session data with file storage config
+    # Encrypt sensitive config data (contains API keys, AWS credentials, etc.)
+    import json
+    encrypted_config = encrypt_data(json.dumps(data.config))
+
+    # Update session data - store config encrypted, platform in plain text
     session.data = session.data or {}
     session.data['file_storage'] = {
         'platform': data.platform,
-        'config': data.config,
+        'config_encrypted': encrypted_config,
         'saved_at': datetime.utcnow().isoformat()
     }
 
@@ -1310,7 +1378,7 @@ async def save_session_organization(
         logger.error(f"Error creating organization during onboarding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create organization: {str(e)}"
+            detail="Failed to create organization. Please check the server logs for details."
         )
 
 
@@ -1503,13 +1571,28 @@ async def reset_onboarding(
 
     WARNING: This is a destructive operation that cannot be undone.
     It will delete all users, organizations, roles, and onboarding data.
+    Only allowed while onboarding has not been completed.
     """
-    # Validate session (with CSRF) - only allow reset during active onboarding
+    # Verify onboarding has NOT been completed - never allow reset after completion
+    service = OnboardingService(db)
+    onboarding_status = await service.get_onboarding_status()
+    if onboarding_status and onboarding_status.is_completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reset after onboarding is completed. Use the admin panel to manage settings."
+        )
+
+    # Validate session if one exists (CSRF protection)
     try:
         await validate_session(request, db)
     except HTTPException:
-        # Allow reset even without valid session (in case session expired)
-        pass
+        # Allow reset without valid session only if onboarding is still in progress
+        # (session may have expired during a failed onboarding attempt)
+        if not await service.needs_onboarding():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Session expired and onboarding appears complete. Cannot reset."
+            )
 
     # Import models for deletion
     from app.models.user import Organization, User, Role
@@ -1592,7 +1675,8 @@ async def reset_onboarding(
 
     except Exception as e:
         await db.rollback()
+        logger.error(f"Failed to reset onboarding: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reset onboarding: {str(e)}"
+            detail="Failed to reset onboarding. Please check the server logs for details."
         )
