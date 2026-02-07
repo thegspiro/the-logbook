@@ -435,16 +435,7 @@ async def health_check():
 # ============================================================================
 # Error Handlers
 # ============================================================================
+# Note: Exception handlers cannot be registered on APIRouter objects.
+# The main FastAPI app handles all exceptions automatically.
+# Custom error responses are handled within each endpoint as needed.
 
-@router.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """
-    Custom error handler for HTTP exceptions.
-
-    Returns standardized error responses.
-    """
-    return PublicPortalErrorResponse(
-        error=exc.status_code,
-        message=exc.detail,
-        details=exc.headers if hasattr(exc, 'headers') else None
-    )
