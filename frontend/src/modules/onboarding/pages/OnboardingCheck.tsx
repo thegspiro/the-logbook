@@ -96,12 +96,12 @@ const OnboardingCheck: React.FC = () => {
       database: {
         icon: <Database className="h-5 w-5" />,
         title: 'Database Connection',
-        description: 'Establishing connection to MySQL database'
+        description: 'Establishing connection to MySQL database (may retry while database initializes)'
       },
       migrations: {
         icon: <Wrench className="h-5 w-5" />,
         title: 'Database Setup',
-        description: 'Running database migrations to set up tables and schema'
+        description: 'Creating database tables and schema (this may take 1-2 minutes on first startup)'
       },
       redis: {
         icon: <Server className="h-5 w-5" />,
@@ -478,6 +478,11 @@ const OnboardingCheck: React.FC = () => {
                             {startupInfo.migrations.completed}/{startupInfo.migrations.total}
                           </span>
                         </div>
+                        {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
+                          <p className="text-xs text-slate-500 mb-2">
+                            Running {startupInfo.migrations.total} migrations in batch mode. Please wait...
+                          </p>
+                        )}
                         <div className="w-full bg-slate-700 rounded-full h-2.5 mb-2">
                           <div
                             className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
@@ -524,7 +529,7 @@ const OnboardingCheck: React.FC = () => {
                 </span>
               </div>
               <p className="text-slate-500 text-xs mt-2">
-                Services are starting up. This is normal on first deployment.
+                Services are starting up. On first deployment, database initialization can take 1-3 minutes.
               </p>
             </div>
           )}
