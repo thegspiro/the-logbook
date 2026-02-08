@@ -309,7 +309,7 @@ class EventService:
         if not event:
             return []
 
-        query = select(EventRSVP).where(EventRSVP.event_id == event_id)
+        query = select(EventRSVP).where(EventRSVP.event_id == event_id).options(selectinload(EventRSVP.user))
 
         if status_filter:
             query = query.where(EventRSVP.status == status_filter)

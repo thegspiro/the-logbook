@@ -14,7 +14,7 @@ import os
 
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem
 from app.models.user import Organization, User, Role, UserStatus, OrganizationType, IdentifierType
-from app.services.auth import AuthService
+from app.services.auth_service import AuthService
 from app.core.config import settings
 from app.core.audit import log_audit_event
 

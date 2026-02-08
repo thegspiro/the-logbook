@@ -8,7 +8,6 @@ from typing import Optional, List
 from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.core.database import get_db
