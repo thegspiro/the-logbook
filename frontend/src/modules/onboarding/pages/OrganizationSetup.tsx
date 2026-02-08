@@ -18,12 +18,11 @@ import {
 import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
-import { useApiRequest } from '../hooks';
+import { useApiRequest, useUnsavedChanges, useFormChanged } from '../hooks';
 import {
   ProgressIndicator,
   LoadingOverlay,
   ErrorAlert,
-  AutoSaveNotification,
   BackButton,
 } from '../components';
 import { useOnboardingStore } from '../store';
@@ -350,6 +349,13 @@ const OrganizationSetup: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  // Warn before leaving with unsaved changes
+  const hasUnsavedChanges = useFormChanged(formData, initialFormData);
+  useUnsavedChanges({
+    hasUnsavedChanges,
+    message: 'You have unsaved organization information. Are you sure you want to leave?'
+  });
+
   // Section expansion state
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
@@ -366,7 +372,6 @@ const OrganizationSetup: React.FC = () => {
   const setDepartmentName = useOnboardingStore((state) => state.setDepartmentName);
   const logoData = useOnboardingStore((state) => state.logoData);
   const setLogoData = useOnboardingStore((state) => state.setLogoData);
-  const lastSaved = useOnboardingStore((state) => state.lastSaved);
 
   // Hooks
   const { initializeSession, hasSession, isLoading: sessionLoading, saveOrganization } = useOnboardingSession();
@@ -1139,9 +1144,6 @@ const OrganizationSetup: React.FC = () => {
             totalSteps={10}
             className="pt-4 border-t border-white/10"
           />
-
-          {/* Auto-save Notification */}
-          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
 
         {/* Help Text */}

@@ -122,12 +122,7 @@ const DepartmentInfo: React.FC = () => {
       return;
     }
 
-    // Store data locally for now - API call happens in step 2 after navigation choice
-    sessionStorage.setItem('departmentName', departmentName);
-    if (logoPreview) {
-      sessionStorage.setItem('logoData', logoPreview);
-    }
-
+    // Data is already stored in Zustand store with persistence
     // Navigate to navigation choice (step 2)
     navigate('/onboarding/navigation-choice');
   };
