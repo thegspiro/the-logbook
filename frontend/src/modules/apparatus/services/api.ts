@@ -58,7 +58,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
+  (error: Error) => {
     return Promise.reject(error);
   }
 );
@@ -66,10 +66,10 @@ api.interceptors.request.use(
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: Error) => {
+    const originalRequest = (error as any).config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if ((error as any).response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {

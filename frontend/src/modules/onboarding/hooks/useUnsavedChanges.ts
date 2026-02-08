@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useBeforeUnload, useBlocker } from 'react-router-dom';
+import { useBeforeUnload, useBlocker, type Location } from 'react-router-dom';
 
 interface UseUnsavedChangesOptions {
   hasUnsavedChanges: boolean;

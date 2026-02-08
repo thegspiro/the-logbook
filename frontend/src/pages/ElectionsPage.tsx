@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { electionService } from '../services/api';
-import type { ElectionListItem, ElectionCreate } from '../types/election';
+import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
 
 export const ElectionsPage: React.FC = () => {

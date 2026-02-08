@@ -460,7 +460,11 @@ export const EventDetailPage: React.FC = () => {
                 {event.custom_fields.training_type && (
                   <div>
                     <p className="text-sm font-medium text-gray-700">Training Type</p>
-                    <p className="text-sm text-gray-900 capitalize">{event.custom_fields.training_type.replace('_', ' ')}</p>
+                    <p className="text-sm text-gray-900 capitalize">
+                      {typeof event.custom_fields.training_type === 'string'
+                        ? event.custom_fields.training_type.replace('_', ' ')
+                        : event.custom_fields.training_type}
+                    </p>
                   </div>
                 )}
 

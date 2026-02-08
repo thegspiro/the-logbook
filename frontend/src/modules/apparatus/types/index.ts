@@ -378,7 +378,7 @@ export interface ApparatusCreate {
   notes?: string;
 }
 
-export interface ApparatusUpdate extends Partial<ApparatusCreate> {}
+export type ApparatusUpdate = Partial<ApparatusCreate>;
 
 export interface ApparatusStatusChange {
   statusId: string;
@@ -481,7 +481,7 @@ export interface ApparatusMaintenanceTypeCreate {
   isActive?: boolean;
 }
 
-export interface ApparatusMaintenanceTypeUpdate extends Partial<ApparatusMaintenanceTypeCreate> {}
+export type ApparatusMaintenanceTypeUpdate = Partial<ApparatusMaintenanceTypeCreate>;
 
 export interface ApparatusMaintenance {
   id: string;
@@ -535,7 +535,7 @@ export interface ApparatusMaintenanceCreate {
   notes?: string;
 }
 
-export interface ApparatusMaintenanceUpdate extends Partial<ApparatusMaintenanceCreate> {}
+export type ApparatusMaintenanceUpdate = Partial<ApparatusMaintenanceCreate>;
 
 export interface ApparatusMaintenanceDue {
   id: string;
@@ -634,7 +634,7 @@ export interface ApparatusOperatorCreate {
   notes?: string;
 }
 
-export interface ApparatusOperatorUpdate extends Partial<Omit<ApparatusOperatorCreate, 'apparatusId' | 'userId'>> {}
+export type ApparatusOperatorUpdate = Partial<Omit<ApparatusOperatorCreate, 'apparatusId' | 'userId'>>;
 
 // =============================================================================
 // Equipment
@@ -675,7 +675,7 @@ export interface ApparatusEquipmentCreate {
   notes?: string;
 }
 
-export interface ApparatusEquipmentUpdate extends Partial<Omit<ApparatusEquipmentCreate, 'apparatusId'>> {}
+export type ApparatusEquipmentUpdate = Partial<Omit<ApparatusEquipmentCreate, 'apparatusId'>>;
 
 // =============================================================================
 // Photos and Documents
