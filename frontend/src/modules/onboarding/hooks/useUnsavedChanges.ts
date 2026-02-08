@@ -46,21 +46,8 @@ export function useUnsavedChanges({
   );
 
   // Block navigation within the app
-  const blocker = useBlocker(
-    useCallback(
-      ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }, nextLocation: { pathname: string } }) => {
-        // Only block if:
-        // 1. There are unsaved changes
-        // 2. Not navigating to the same page
-        // 3. User confirms they want to leave
-        return (
-          hasUnsavedChanges &&
-          currentLocation.pathname !== nextLocation.pathname
-        );
-      },
-      [hasUnsavedChanges]
-    )
-  );
+  // In React Router v6.30+, useBlocker takes a boolean or function returning boolean
+  const blocker = useBlocker(hasUnsavedChanges);
 
   // Handle blocked navigation
   useEffect(() => {
