@@ -42,13 +42,15 @@ interface HealthStatus {
     phase: string;
     message: string;
     ready: boolean;
+    detailed_message?: string;
     migrations?: {
       total: number;
       completed: number;
       current: string | null;
-    } | null;
+      progress_percent: number;
+    };
     uptime_seconds: number;
-    errors?: string[] | null;
+    errors?: string[];
   };
 }
 

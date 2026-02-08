@@ -14,10 +14,12 @@ interface StartupInfo {
   phase: string;
   message: string;
   ready: boolean;
+  detailed_message?: string;
   migrations?: {
     total: number;
     completed: number;
     current: string | null;
+    progress_percent: number;
   };
   uptime_seconds: number;
   errors?: string[] | null;
@@ -152,7 +154,7 @@ const OnboardingCheck: React.FC = () => {
       updateServiceStatus('Backend API', 'disconnected', healthResponse.error || 'Not responding');
       updateServiceStatus('Database', 'checking');
       updateServiceStatus('Cache (Redis)', 'checking');
-      setStartupInfo(null);
+      // Don't clear startupInfo - preserve last known state for user visibility
       return false;
     }
 
@@ -439,6 +441,30 @@ const OnboardingCheck: React.FC = () => {
           ))}
 
           {/* Startup Progress Details */}
+          {!startupInfo && isWaiting && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                    <div className="text-blue-400 animate-pulse">
+                      <Server className="h-5 w-5" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-blue-400 font-semibold text-base mb-1">
+                    Waiting for Backend
+                  </h3>
+                  <p className="text-slate-300 text-sm mb-1">
+                    The backend server is starting up. This process includes initializing services, connecting to the database, and running migrations.
+                  </p>
+                  <p className="text-slate-400 text-xs">
+                    First startup can take 1-2 minutes while containers initialize and database tables are created.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           {startupInfo && !startupInfo.ready && (
             <div className="mt-4 pt-4 border-t border-white/10">
               {(() => {
@@ -459,7 +485,7 @@ const OnboardingCheck: React.FC = () => {
                           {phaseDetails.title}
                         </h3>
                         <p className="text-slate-300 text-sm mb-1">
-                          {phaseDetails.description}
+                          {startupInfo.detailed_message || phaseDetails.description}
                         </p>
                         {startupInfo.message && (
                           <p className="text-slate-400 text-xs">
