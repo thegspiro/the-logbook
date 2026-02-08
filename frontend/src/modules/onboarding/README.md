@@ -4,23 +4,25 @@ The Onboarding Module handles the first-time setup wizard for The Logbook fire d
 
 ## Features
 
-- **9-Step Setup Wizard**:
+- **10-Step Setup Wizard**:
   1. Welcome screen with animated introduction
-  2. Department name and logo collection
-  3. Email platform configuration (Gmail, Microsoft 365, self-hosted SMTP, or skip)
-  4. File storage selection (Local, S3, MinIO, Azure, GCS)
-  5. File storage configuration
-  6. Authentication platform selection:
-     - Google OAuth (recommended for Google Workspace)
-     - Microsoft Azure AD (recommended for Microsoft 365)
-     - Authentik SSO (self-hosted option)
-     - **Local Passwords** (Argon2id hashing, no external services)
-  7. IT Team & backup access configuration
-  8. Module selection with 3-tier organization (Essential, Recommended, Optional)
-  9. Admin user account creation and review
+  2. Onboarding check (verifies services, database, migrations)
+  3. Organization setup (comprehensive organization details, address, identifiers, logo)
+  4. Navigation layout choice (top bar or left sidebar)
+  5. Email platform configuration (Gmail, Microsoft 365, self-hosted SMTP, or skip)
+  6. File storage selection (Local, S3, Azure, GCS)
+  7. Authentication platform selection (Local, OAuth, SAML, LDAP)
+  8. IT Team & backup access configuration
+  9. Module selection with 3-tier organization (Essential, Recommended, Optional)
+  10. Admin user account creation and onboarding completion
 
 - **Reset Progress**: Button available on every page to clear all data and start over
 - **Persistent State**: Zustand store with localStorage persistence across navigation
+- **Unsaved Changes Warning**: Prevents accidental data loss when navigating away
+- **Inline Validation**: Error messages appear directly under problematic fields
+- **Section Completion Indicators**: Visual checkmarks when form sections are complete
+- **Mobile Optimized**: Sticky continue buttons, responsive layouts
+- **Enhanced Startup Experience**: Detailed messaging during database initialization
 - **Modular Architecture**: Entire module can be enabled/disabled with a single line
 - **Comprehensive Validation**: Real-time field validation and password strength checking
 - **Accessible**: WCAG 2.1 Level AA compliant with ARIA labels
@@ -42,6 +44,10 @@ onboarding/
 │   └── index.ts
 ├── hooks/               # Custom React hooks
 │   ├── useOnboardingStorage.ts
+│   ├── useOnboardingSession.ts
+│   ├── useApiRequest.ts
+│   ├── useUnsavedChanges.ts  # NEW: Warns before leaving with unsaved changes
+│   ├── useAutoSave.ts
 │   └── index.ts
 ├── pages/               # Wizard page components
 │   ├── Welcome.tsx
@@ -193,7 +199,7 @@ import { AutoSaveNotification } from './modules/onboarding';
 
 ### useOnboardingStorage
 
-Access onboarding data from session storage:
+Access onboarding data from Zustand store (persisted to localStorage):
 
 ```tsx
 import { useOnboardingStorage } from './modules/onboarding';
@@ -209,6 +215,58 @@ function MyComponent() {
   );
 }
 ```
+
+### useUnsavedChanges (NEW)
+
+Warns users before leaving a page with unsaved changes:
+
+```tsx
+import { useUnsavedChanges, useFormChanged } from './modules/onboarding';
+
+function MyForm() {
+  const [formData, setFormData] = useState(initialData);
+  const hasChanges = useFormChanged(formData, initialData);
+
+  // Warn before navigating away with unsaved changes
+  useUnsavedChanges({
+    hasUnsavedChanges: hasChanges,
+    message: 'You have unsaved changes. Are you sure you want to leave?'
+  });
+
+  return <form>...</form>;
+}
+```
+
+**Features:**
+- Warns before browser refresh/close
+- Blocks in-app navigation with confirmation dialog
+- Automatically compares current vs initial data
+- Customizable warning message
+
+### useFormChanged (NEW)
+
+Detects if form data has changed from initial values:
+
+```tsx
+import { useFormChanged } from './modules/onboarding';
+
+function MyForm() {
+  const [formData, setFormData] = useState(initialData);
+  const hasChanges = useFormChanged(formData, initialData);
+
+  return (
+    <div>
+      {hasChanges && <span>Unsaved changes</span>}
+      <form>...</form>
+    </div>
+  );
+}
+```
+
+**How it works:**
+- Deep comparison using JSON.stringify
+- Returns boolean indicating if data has changed
+- Updates when initial data changes (e.g., loaded from API)
 
 ## Utilities
 
