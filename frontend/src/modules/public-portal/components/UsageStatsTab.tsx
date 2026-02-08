@@ -93,9 +93,6 @@ export const UsageStatsTab: React.FC = () => {
     );
   }
 
-  // Calculate total requests
-  const totalRequests = stats.total_requests_24h + stats.total_requests_7d + stats.total_requests_30d;
-
   // Calculate endpoint usage percentages
   const totalEndpointRequests = Object.values(stats.endpoint_usage || {}).reduce((sum, count) => sum + count, 0);
   const endpointStats = Object.entries(stats.endpoint_usage || {})
