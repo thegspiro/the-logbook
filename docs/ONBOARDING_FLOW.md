@@ -956,4 +956,60 @@ Before deploying to production:
 
 ---
 
-**Last Updated**: February 6, 2026 (Updated storage references, error handling, Welcome page timing, security check details)
+---
+
+## Recent UX Improvements (February 8, 2026)
+
+### Data Loss Prevention
+- **Unsaved Changes Warning**: Users are now warned before navigating away from forms with unsaved data
+  - Browser refresh/close triggers confirmation dialog
+  - In-app navigation blocked with user confirmation
+  - Implemented via `useUnsavedChanges` hook
+
+### Enhanced Form Experience
+- **Password Requirements Always Visible**: Requirements shown before user starts typing (AdminUserCreation page)
+  - Eliminates confusion about password criteria
+  - Real-time validation feedback with checkmarks
+
+- **Section Completion Indicators**: Organization setup form shows green checkmarks when sections are complete
+  - Visual feedback helps users track progress through long forms
+  - Red asterisks removed when section requirements are met
+
+- **Inline Address Validation**: Error messages appear directly under problematic fields
+  - Previously only showed errors at form bottom
+  - Reduces user frustration by pinpointing exact issues
+
+### Mobile Optimizations
+- **Sticky Continue Button**: Primary action button stays visible at bottom on mobile devices
+  - Applied to NavigationChoice and OrganizationSetup pages
+  - Improves mobile usability on long forms
+
+### Input Enhancements
+- **URL Auto-HTTPS**: Website URLs automatically prepended with `https://` if protocol omitted
+  - Prevents common user error
+  - Triggers on field blur
+
+- **Improved ZIP Code Errors**: Now shows expected format ("12345 or 12345-6789")
+
+### Progress Standardization
+- **Consistent Step Indicators**: All pages now show "Step X of 10" format
+  - Sets clear expectations about onboarding length
+  - Previously had inconsistent numbering
+
+### Startup Experience
+- **Enhanced Initialization Messaging**: OnboardingCheck page now explains 1-3 minute startup delay
+  - Shows database connection retry attempts
+  - Displays migration progress with table count
+  - Explains what tables are being created
+  - Reduces user anxiety during first-time deployment
+
+### State Management Cleanup
+- **Removed Misleading Auto-save Indicators**: OrganizationSetup no longer shows "Last saved" timestamps
+  - Zustand state changes aren't true backend saves
+  - Prevents confusion about when data is actually persisted
+
+- **Removed Redundant Storage Operations**: Cleaned up duplicate sessionStorage writes
+
+---
+
+**Last Updated**: February 8, 2026 (Added UX improvements section, documented new hooks and mobile optimizations)

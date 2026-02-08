@@ -513,8 +513,7 @@ const AdminUserCreation: React.FC = () => {
                 )}
 
                 {/* Password Strength Indicators */}
-                {formData.password && (
-                  <div id="password-requirements" className="mt-3 space-y-2">
+                <div id="password-requirements" className="mt-3 space-y-2">
                     <div className="flex items-center text-sm">
                       {passwordStrength.checks.length ? (
                         <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
@@ -596,7 +595,6 @@ const AdminUserCreation: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                )}
               </div>
 
               {/* Confirm Password */}

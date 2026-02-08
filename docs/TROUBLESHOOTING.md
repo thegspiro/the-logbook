@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-07 (includes latest error handling improvements)
+**Last Updated**: 2026-02-08 (includes backend configuration fixes and migration improvements)
 
 ---
 
@@ -926,6 +926,15 @@ docker logs the-logbook-backend-1 | grep "slow"
 
 ## Version History
 
+**v1.2** - 2026-02-08
+- ✅ Added backend configuration issues section
+- ✅ Added database migration best practices
+- ✅ Added startup sequence troubleshooting
+- ✅ Documented three critical backend fixes:
+  - Settings configuration reference fix
+  - Duplicate migration error fix
+  - Organization creation error fix
+
 **v1.1** - 2026-02-07
 - ✅ Added comprehensive network error handling section
 - ✅ Added email/username duplicate troubleshooting with soft-delete clarification
@@ -943,3 +952,213 @@ docker logs the-logbook-backend-1 | grep "slow"
 **Document Maintainer**: Development Team
 **For Updates**: Submit PR or create GitHub issue
 **Related Docs**: ERROR_MESSAGES_COMPLETE.md, ENUM_CONVENTIONS.md, SECURITY_IMAGE_UPLOADS.md
+
+---
+
+## Backend Configuration Issues (Added 2026-02-08)
+
+### Error: "'Settings' object has no attribute 'MYSQL_DATABASE'"
+
+**Symptoms:**
+```
+WARNI [app.utils.startup_validators] Could not validate enum consistency: 'Settings' object has no attribute 'MYSQL_DATABASE'
+```
+
+**Cause:**
+- The startup validator was trying to access `settings.MYSQL_DATABASE` 
+- The correct attribute name in the config is `settings.DB_NAME`
+
+**Solution:**
+✅ **FIXED in latest version** (commit: bc58d8d)
+
+If you see this error in an older version:
+1. Update to the latest code: `git pull`
+2. Rebuild Docker containers: `docker-compose down && docker-compose up --build -d`
+
+**Technical Details:**
+- File: `backend/app/utils/startup_validators.py`
+- Changed lines 64 and 199 from `settings.MYSQL_DATABASE` to `settings.DB_NAME`
+
+---
+
+### Error: "Table 'skill_evaluations' already exists"
+
+**Symptoms:**
+```
+ERROR [alembic.env] Migration failed: (pymysql.err.OperationalError) (1050, "Table 'skill_evaluations' already exists")
+```
+
+**Cause:**
+- Migration `20260206_0301` was trying to create tables that already existed from migration `20260122_0015`
+- Duplicate table creation in migration chain
+
+**Solution:**
+✅ **FIXED in latest version** (commit: bc58d8d)
+
+The migration now checks if tables exist before creating them:
+```python
+# Check if tables exist to avoid errors
+conn = op.get_bind()
+inspector = inspect(conn)
+existing_tables = inspector.get_table_names()
+
+# Only create tables if they don't exist
+for table_name, create_func in tables_to_create.items():
+    if table_name not in existing_tables:
+        create_func()
+```
+
+If you encounter this on a fresh install:
+1. Update to latest code: `git pull`
+2. Clear old database (if safe to do so): `docker-compose down -v`
+3. Rebuild: `docker-compose up --build -d`
+
+For existing installations, the migration will skip creating tables that already exist.
+
+---
+
+### Error: "'OrganizationSetupCreate' object has no attribute 'description'"
+
+**Symptoms:**
+```
+ERROR | app.api.v1.onboarding:save_session_organization:1381 - Error creating organization during onboarding: 'OrganizationSetupCreate' object has no attribute 'description'
+```
+
+**Cause:**
+- The onboarding endpoint was trying to access `data.description`
+- The `OrganizationSetupCreate` Pydantic schema doesn't have a `description` field
+- Frontend doesn't collect organization description
+
+**Solution:**
+✅ **FIXED in latest version** (commit: da23ccd)
+
+If you see this in an older version:
+1. Update to latest code: `git pull`
+2. Restart backend: `docker-compose restart backend`
+
+**Technical Details:**
+- File: `backend/app/api/v1/onboarding.py` line 1322
+- Changed `description=data.description` to `description=None`
+
+---
+
+## Database Migration Best Practices
+
+### Checking Migration Status
+
+To see which migrations have been applied:
+```bash
+# Inside Docker container
+docker exec -it intranet-backend alembic current
+
+# Or on host
+cd backend
+alembic current
+```
+
+### Viewing Migration History
+```bash
+docker exec -it intranet-backend alembic history
+```
+
+### Common Migration Issues
+
+#### Migrations Out of Sync
+If migrations seem out of sync:
+```bash
+# Check current revision
+docker exec -it intranet-backend alembic current
+
+# Stamp to specific revision (if you know the correct one)
+docker exec -it intranet-backend alembic stamp head
+```
+
+#### Rolling Back Migrations
+⚠️ **WARNING: Can cause data loss**
+```bash
+# Downgrade one revision
+docker exec -it intranet-backend alembic downgrade -1
+
+# Downgrade to specific revision
+docker exec -it intranet-backend alembic downgrade <revision_id>
+```
+
+---
+
+## Startup Sequence Issues
+
+### Database Initialization Takes 1-3 Minutes
+
+**Symptoms:**
+- Backend shows "Connecting to database..." for extended period
+- Multiple retry attempts logged
+- Eventually connects successfully
+
+**This is NORMAL behavior** on first startup:
+
+1. **MySQL Container Startup** (30-60 seconds)
+   - MySQL needs time to initialize database
+   - Creates system tables and sets up permissions
+
+2. **Backend Connection Retries** (up to 20 attempts)
+   - Backend retries every 2-15 seconds with exponential backoff
+   - Logged as: `Database connection attempt X/20...`
+
+3. **Database Migration** (1-2 minutes)
+   - Creates 37+ database tables
+   - Logged as: `Running 37 database migrations...`
+
+**What the Frontend Shows:**
+- "Database Connection: Establishing connection to MySQL database (may retry while database initializes)"
+- "Database Setup: Creating database tables for users, training, events, elections, and more (this may take 1-2 minutes on first startup)"
+- Migration progress bar showing X/37 migrations complete
+
+**When to Worry:**
+- If connection attempts exceed 20 retries
+- If migrations fail with errors (not warnings)
+- If the process takes more than 5 minutes
+
+**Troubleshooting:**
+```bash
+# Check MySQL logs
+docker logs intranet-mysql
+
+# Check if MySQL is ready
+docker exec intranet-mysql mysqladmin ping -h localhost
+
+# Check backend logs for specific errors
+docker logs intranet-backend | grep ERROR
+```
+
+---
+
+## Recent Fixes Summary (2026-02-08)
+
+### Backend Fixes
+1. ✅ Fixed settings configuration reference (`MYSQL_DATABASE` → `DB_NAME`)
+2. ✅ Fixed duplicate migration error (conditional table creation)
+3. ✅ Fixed organization creation error (removed non-existent `description` field)
+
+### When to Update
+If you see any of these errors, update immediately:
+```bash
+cd /path/to/the-logbook
+git pull
+docker-compose down
+docker-compose up --build -d
+```
+
+### Verifying the Fixes
+After updating, check logs for clean startup:
+```bash
+# Should see no MYSQL_DATABASE errors
+docker logs intranet-backend | grep MYSQL_DATABASE
+
+# Should see no "Table already exists" errors  
+docker logs intranet-backend | grep "already exists"
+
+# Should see successful onboarding
+docker logs intranet-backend | grep "Organization created"
+```
+
+---

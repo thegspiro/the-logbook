@@ -122,12 +122,7 @@ const DepartmentInfo: React.FC = () => {
       return;
     }
 
-    // Store data locally for now - API call happens in step 2 after navigation choice
-    sessionStorage.setItem('departmentName', departmentName);
-    if (logoPreview) {
-      sessionStorage.setItem('logoData', logoPreview);
-    }
-
+    // Data is already stored in Zustand store with persistence
     // Navigate to navigation choice (step 2)
     navigate('/onboarding/navigation-choice');
   };
@@ -332,7 +327,7 @@ const DepartmentInfo: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={1} totalSteps={9} className="pt-4 border-t border-white/10" />
+          <ProgressIndicator currentStep={1} totalSteps={10} className="pt-4 border-t border-white/10" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />

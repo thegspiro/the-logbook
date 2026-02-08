@@ -347,7 +347,7 @@ const ModuleSelection: React.FC = () => {
             {/* Progress Indicator */}
             <ProgressIndicator
               currentStep={8}
-              totalSteps={9}
+              totalSteps={10}
               className="mt-6 pt-6 border-t border-white/10"
             />
           </div>

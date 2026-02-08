@@ -314,7 +314,7 @@ const NavigationChoice: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="max-w-md mx-auto">
+          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0">
             <button
               onClick={handleContinue}
               disabled={!navigationLayout || isSaving}

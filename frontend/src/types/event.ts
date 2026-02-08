@@ -38,7 +38,7 @@ export interface Event {
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
   require_checkout?: boolean;
-  custom_fields?: { [key: string]: any };
+  custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: Array<{ [key: string]: string }>;
   is_cancelled: boolean;
   cancellation_reason?: string;
@@ -88,7 +88,7 @@ export interface EventCreate {
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
   require_checkout?: boolean;
-  custom_fields?: { [key: string]: any };
+  custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: Array<{ [key: string]: string }>;
 }
 
@@ -109,7 +109,7 @@ export interface EventUpdate {
   allow_guests?: boolean;
   send_reminders?: boolean;
   reminder_hours_before?: number;
-  custom_fields?: { [key: string]: any };
+  custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: Array<{ [key: string]: string }>;
 }
 

@@ -203,6 +203,13 @@ export interface ElectionResults {
   overall_results: CandidateResult[];
 }
 
+export interface TimelineEvent {
+  timestamp: string;
+  event_type: string;
+  description: string;
+  user_id?: string;
+}
+
 export interface ElectionStats {
   election_id: string;
   total_candidates: number;
@@ -211,7 +218,7 @@ export interface ElectionStats {
   total_voters: number;
   voter_turnout_percentage: number;
   votes_by_position: { [position: string]: number };
-  voting_timeline?: any[];
+  voting_timeline?: TimelineEvent[];
 }
 
 export interface EmailBallot {

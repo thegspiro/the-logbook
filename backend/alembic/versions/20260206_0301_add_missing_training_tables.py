@@ -4,7 +4,11 @@ Revision ID: 20260206_0301
 Revises: 20260206_0300
 Create Date: 2026-02-06
 
-Adds tables defined in the training model but missing from migrations:
+NOTE: This migration is now a no-op because these tables were already created
+in migration 20260122_0015. This migration is kept in the chain for backwards
+compatibility with existing deployments that may have run it.
+
+Originally added:
 - skill_evaluations: Defines skills that require evaluation/checkoff
 - skill_checkoffs: Records individual skill evaluations
 - shifts: Records shift information for member participation
@@ -13,6 +17,7 @@ Adds tables defined in the training model but missing from migrations:
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '20260206_0301'
@@ -22,9 +27,32 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ========================================
-    # Skill Evaluations
-    # ========================================
+    """
+    No-op migration. Tables were already created in 20260122_0015.
+    This migration is kept for backwards compatibility.
+    """
+    # Check if tables exist to avoid errors
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+
+    # Only create tables if they don't exist (for backwards compatibility)
+    # In practice, these tables should already exist from migration 20260122_0015
+    tables_to_create = {
+        'skill_evaluations': lambda: create_skill_evaluations_table(),
+        'skill_checkoffs': lambda: create_skill_checkoffs_table(),
+        'shifts': lambda: create_shifts_table(),
+        'shift_attendance': lambda: create_shift_attendance_table(),
+        'shift_calls': lambda: create_shift_calls_table(),
+    }
+
+    for table_name, create_func in tables_to_create.items():
+        if table_name not in existing_tables:
+            create_func()
+
+
+def create_skill_evaluations_table() -> None:
+    """Create skill_evaluations table and indexes"""
     op.create_table(
         'skill_evaluations',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -46,9 +74,9 @@ def upgrade() -> None:
     op.create_index('ix_skill_evaluations_active', 'skill_evaluations', ['active'])
     op.create_index('idx_skill_org_category', 'skill_evaluations', ['organization_id', 'category'])
 
-    # ========================================
-    # Skill Checkoffs
-    # ========================================
+
+def create_skill_checkoffs_table() -> None:
+    """Create skill_checkoffs table and indexes"""
     op.create_table(
         'skill_checkoffs',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -71,9 +99,9 @@ def upgrade() -> None:
     op.create_index('idx_checkoff_user', 'skill_checkoffs', ['user_id'])
     op.create_index('idx_checkoff_skill', 'skill_checkoffs', ['skill_evaluation_id'])
 
-    # ========================================
-    # Shifts
-    # ========================================
+
+def create_shifts_table() -> None:
+    """Create shifts table and indexes"""
     op.create_table(
         'shifts',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -97,9 +125,9 @@ def upgrade() -> None:
     op.create_index('ix_shifts_shift_date', 'shifts', ['shift_date'])
     op.create_index('idx_shift_date', 'shifts', ['organization_id', 'shift_date'])
 
-    # ========================================
-    # Shift Attendance
-    # ========================================
+
+def create_shift_attendance_table() -> None:
+    """Create shift_attendance table and indexes"""
     op.create_table(
         'shift_attendance',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -115,9 +143,9 @@ def upgrade() -> None:
     op.create_index('idx_shift_att_shift', 'shift_attendance', ['shift_id'])
     op.create_index('idx_shift_att_user', 'shift_attendance', ['user_id'])
 
-    # ========================================
-    # Shift Calls
-    # ========================================
+
+def create_shift_calls_table() -> None:
+    """Create shift_calls table and indexes"""
     op.create_table(
         'shift_calls',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -141,25 +169,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('idx_call_type', 'shift_calls')
-    op.drop_index('idx_call_shift', 'shift_calls')
-    op.drop_table('shift_calls')
-
-    op.drop_index('idx_shift_att_user', 'shift_attendance')
-    op.drop_index('idx_shift_att_shift', 'shift_attendance')
-    op.drop_table('shift_attendance')
-
-    op.drop_index('idx_shift_date', 'shifts')
-    op.drop_index('ix_shifts_shift_date', 'shifts')
-    op.drop_index('ix_shifts_organization_id', 'shifts')
-    op.drop_table('shifts')
-
-    op.drop_index('idx_checkoff_skill', 'skill_checkoffs')
-    op.drop_index('idx_checkoff_user', 'skill_checkoffs')
-    op.drop_index('ix_skill_checkoffs_organization_id', 'skill_checkoffs')
-    op.drop_table('skill_checkoffs')
-
-    op.drop_index('idx_skill_org_category', 'skill_evaluations')
-    op.drop_index('ix_skill_evaluations_active', 'skill_evaluations')
-    op.drop_index('ix_skill_evaluations_organization_id', 'skill_evaluations')
-    op.drop_table('skill_evaluations')
+    """
+    No-op downgrade. Tables are managed by migration 20260122_0015.
+    This migration does not drop tables to avoid conflicts.
+    """
+    # No-op: Tables were not created by this migration, so nothing to drop
+    pass

@@ -18,12 +18,11 @@ import {
 import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
-import { useApiRequest } from '../hooks';
+import { useApiRequest, useUnsavedChanges, useFormChanged } from '../hooks';
 import {
   ProgressIndicator,
   LoadingOverlay,
   ErrorAlert,
-  AutoSaveNotification,
   BackButton,
 } from '../components';
 import { useOnboardingStore } from '../store';
@@ -172,7 +171,8 @@ const SectionHeader: React.FC<{
   expanded: boolean;
   onToggle: () => void;
   required?: boolean;
-}> = ({ title, icon, expanded, onToggle, required }) => (
+  isComplete?: boolean;
+}> = ({ title, icon, expanded, onToggle, required, isComplete }) => (
   <button
     type="button"
     onClick={onToggle}
@@ -181,7 +181,8 @@ const SectionHeader: React.FC<{
     <div className="flex items-center gap-3">
       <span className="text-red-400">{icon}</span>
       <span className="text-white font-semibold">{title}</span>
-      {required && <span className="text-red-400 text-sm">*</span>}
+      {required && !isComplete && <span className="text-red-400 text-sm">*</span>}
+      {isComplete && <Check className="w-5 h-5 text-green-400 ml-2" />}
     </div>
     {expanded ? (
       <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -203,6 +204,7 @@ const InputField: React.FC<{
   maxLength?: number;
   helpText?: string;
   error?: string;
+  onBlur?: () => void;
 }> = ({
   label,
   id,
@@ -214,6 +216,7 @@ const InputField: React.FC<{
   maxLength,
   helpText,
   error,
+  onBlur,
 }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
@@ -224,6 +227,7 @@ const InputField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
       className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
@@ -246,7 +250,8 @@ const SelectField: React.FC<{
   options: { value: string; label: string }[];
   required?: boolean;
   helpText?: string;
-}> = ({ label, id, value, onChange, options, required, helpText }) => (
+  error?: string;
+}> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
       {label} {required && <span className="text-red-400">*</span>}
@@ -255,8 +260,11 @@ const SelectField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+        error ? 'border-red-500' : 'border-slate-600'
+      }`}
       aria-required={required}
+      aria-invalid={!!error}
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -265,6 +273,7 @@ const SelectField: React.FC<{
       ))}
     </select>
     {helpText && <p className="mt-1 text-xs text-slate-400">{helpText}</p>}
+    {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
   </div>
 );
 
@@ -274,9 +283,15 @@ const AddressForm: React.FC<{
   onChange: (address: AddressData) => void;
   idPrefix: string;
   required?: boolean;
-}> = ({ address, onChange, idPrefix, required }) => {
+  errors?: Record<string, string>;
+}> = ({ address, onChange, idPrefix, required, errors = {} }) => {
   const updateField = (field: keyof AddressData, value: string) => {
     onChange({ ...address, [field]: value });
+  };
+
+  // Map parent error keys (e.g., "mailingLine1") to field names (e.g., "line1")
+  const getFieldError = (field: string) => {
+    return errors[`${idPrefix}${field.charAt(0).toUpperCase() + field.slice(1)}`] || errors[field];
   };
 
   return (
@@ -290,6 +305,7 @@ const AddressForm: React.FC<{
           placeholder="123 Main Street"
           required={required}
           maxLength={255}
+          error={getFieldError('line1')}
         />
       </div>
       <div className="md:col-span-2">
@@ -300,6 +316,7 @@ const AddressForm: React.FC<{
           onChange={(v) => updateField('line2', v)}
           placeholder="Suite, Unit, Building (optional)"
           maxLength={255}
+          error={getFieldError('line2')}
         />
       </div>
       <InputField
@@ -310,6 +327,7 @@ const AddressForm: React.FC<{
         placeholder="City"
         required={required}
         maxLength={100}
+        error={getFieldError('city')}
       />
       <SelectField
         label="State"
@@ -318,6 +336,7 @@ const AddressForm: React.FC<{
         onChange={(v) => updateField('state', v)}
         options={[{ value: '', label: 'Select State' }, ...US_STATES]}
         required={required}
+        error={getFieldError('state')}
       />
       <InputField
         label="ZIP Code"
@@ -327,6 +346,7 @@ const AddressForm: React.FC<{
         placeholder="12345 or 12345-6789"
         required={required}
         maxLength={20}
+        error={getFieldError('zipCode')}
       />
       <InputField
         label="Country"
@@ -335,6 +355,7 @@ const AddressForm: React.FC<{
         onChange={(v) => updateField('country', v)}
         placeholder="USA"
         maxLength={100}
+        error={getFieldError('country')}
       />
     </div>
   );
@@ -349,6 +370,13 @@ const OrganizationSetup: React.FC = () => {
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Warn before leaving with unsaved changes
+  const hasUnsavedChanges = useFormChanged(formData, initialFormData);
+  useUnsavedChanges({
+    hasUnsavedChanges,
+    message: 'You have unsaved organization information. Are you sure you want to leave?'
+  });
 
   // Section expansion state
   const [expandedSections, setExpandedSections] = useState({
@@ -366,7 +394,6 @@ const OrganizationSetup: React.FC = () => {
   const setDepartmentName = useOnboardingStore((state) => state.setDepartmentName);
   const logoData = useOnboardingStore((state) => state.logoData);
   const setLogoData = useOnboardingStore((state) => state.setLogoData);
-  const lastSaved = useOnboardingStore((state) => state.lastSaved);
 
   // Hooks
   const { initializeSession, hasSession, isLoading: sessionLoading, saveOrganization } = useOnboardingSession();
@@ -492,7 +519,7 @@ const OrganizationSetup: React.FC = () => {
     if (!formData.mailingAddress.zipCode.trim()) {
       errors.mailingZip = 'ZIP code is required';
     } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
-      errors.mailingZip = 'Invalid ZIP code format';
+      errors.mailingZip = 'Invalid ZIP code format. Expected: 12345 or 12345-6789';
     }
 
     // Physical address validation (if different)
@@ -514,6 +541,16 @@ const OrganizationSetup: React.FC = () => {
     // Email validation (optional but must be valid if provided)
     if (formData.email && !/^[^@]+@[^@]+\.[^@]+$/.test(formData.email)) {
       errors.email = 'Invalid email format';
+    }
+
+    // Website validation (optional but must be valid if provided)
+    if (formData.website && formData.website.trim()) {
+      const website = formData.website.trim();
+      // Check if URL has protocol, if not, will be auto-prepended
+      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+      if (!urlPattern.test(website)) {
+        errors.website = 'Invalid website URL format';
+      }
     }
 
     // Phone validation (optional but must be valid if provided)
@@ -634,6 +671,18 @@ const OrganizationSetup: React.FC = () => {
     }
   };
 
+  // Check if sections are complete
+  const isSectionComplete = {
+    basic: formData.name.trim().length >= 2,
+    contact: true, // All fields optional
+    mailing: formData.mailingAddress.line1.trim() && formData.mailingAddress.city.trim() && formData.mailingAddress.state && formData.mailingAddress.zipCode.trim(),
+    physical: formData.physicalAddressSame || (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state),
+    identifiers: formData.identifierType === '' ||
+                 (formData.identifierType === 'fdid' && formData.fdid.trim()) ||
+                 (formData.identifierType === 'state_id' && formData.stateId.trim()) ||
+                 (formData.identifierType === 'department_id'),
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-8 px-4">
       <div className="max-w-3xl mx-auto">
@@ -665,6 +714,7 @@ const OrganizationSetup: React.FC = () => {
               expanded={expandedSections.basic}
               onToggle={() => toggleSection('basic')}
               required
+              isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
               <div className="p-4 space-y-4 bg-slate-900/30">
@@ -760,9 +810,16 @@ const OrganizationSetup: React.FC = () => {
                   id="org-website"
                   value={formData.website}
                   onChange={(v) => updateFormData('website', v)}
+                  onBlur={() => {
+                    const website = formData.website.trim();
+                    if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+                      updateFormData('website', `https://${website}`);
+                    }
+                  }}
                   placeholder="https://www.department.org"
                   type="url"
                   maxLength={255}
+                  helpText="Will automatically prepend https:// if not provided"
                 />
               </div>
             )}
@@ -776,6 +833,8 @@ const OrganizationSetup: React.FC = () => {
               expanded={expandedSections.mailing}
               onToggle={() => toggleSection('mailing')}
               required
+              isComplete={isSectionComplete.mailing}
+              isComplete={isSectionComplete.contact}
             />
             {expandedSections.mailing && (
               <div className="p-4 bg-slate-900/30">
@@ -784,6 +843,7 @@ const OrganizationSetup: React.FC = () => {
                   onChange={(addr) => updateFormData('mailingAddress', addr)}
                   idPrefix="mailing"
                   required
+                  errors={validationErrors}
                 />
               </div>
             )}
@@ -815,6 +875,8 @@ const OrganizationSetup: React.FC = () => {
                     onChange={(addr) => updateFormData('physicalAddress', addr)}
                     idPrefix="physical"
                     required
+              isComplete={isSectionComplete.physical}
+                    errors={validationErrors}
                   />
                 )}
               </div>
@@ -1108,7 +1170,7 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4">
+          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={handleContinue}
               disabled={isSaving}
@@ -1139,9 +1201,6 @@ const OrganizationSetup: React.FC = () => {
             totalSteps={10}
             className="pt-4 border-t border-white/10"
           />
-
-          {/* Auto-save Notification */}
-          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
 
         {/* Help Text */}
