@@ -3,7 +3,24 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useBeforeUnload, useBlocker, type Location } from 'react-router-dom';
+import { useBeforeUnload, useBlocker } from 'react-router-dom';
+
+interface BlockerFunctionArgs {
+  currentLocation: {
+    pathname: string;
+    search: string;
+    hash: string;
+    state: unknown;
+    key: string;
+  };
+  nextLocation: {
+    pathname: string;
+    search: string;
+    hash: string;
+    state: unknown;
+    key: string;
+  };
+}
 
 interface UseUnsavedChangesOptions {
   hasUnsavedChanges: boolean;
