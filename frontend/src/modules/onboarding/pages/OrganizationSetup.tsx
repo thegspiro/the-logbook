@@ -677,7 +677,8 @@ const OrganizationSetup: React.FC = () => {
     contact: true, // All fields optional
     mailing: Boolean(formData.mailingAddress.line1.trim() && formData.mailingAddress.city.trim() && formData.mailingAddress.state && formData.mailingAddress.zipCode.trim()),
     physical: Boolean(formData.physicalAddressSame || (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state)),
-    identifiers: Boolean((formData.identifierType === 'fdid' && formData.fdid.trim()) ||
+    identifiers: Boolean(!formData.identifierType ||
+                 (formData.identifierType === 'fdid' && formData.fdid.trim()) ||
                  (formData.identifierType === 'state_id' && formData.stateId.trim()) ||
                  (formData.identifierType === 'department_id')),
   };

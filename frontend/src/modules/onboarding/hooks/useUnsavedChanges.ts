@@ -48,10 +48,7 @@ export function useUnsavedChanges({
   // Block navigation within the app
   const blocker = useBlocker(
     useCallback(
-      ({ currentLocation, nextLocation }: {
-        currentLocation: { pathname: string; search: string; hash: string; state: unknown; key: string };
-        nextLocation: { pathname: string; search: string; hash: string; state: unknown; key: string };
-      }) => {
+      ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }, nextLocation: { pathname: string } }) => {
         // Only block if:
         // 1. There are unsaved changes
         // 2. Not navigating to the same page
