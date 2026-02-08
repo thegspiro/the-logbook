@@ -110,6 +110,7 @@ const OnboardingCheck: React.FC = () => {
       }, 15000); // Change tip every 15 seconds
       return () => clearInterval(tipRotation);
     }
+    return undefined;
   }, [isWaiting, startupInfo, educationalTips.length]);
 
   // Show skip option after certain attempts
