@@ -200,3 +200,123 @@ class CacheManager:
 
 # Global cache manager instance
 cache_manager = CacheManager()
+
+
+# ============================================
+# Caching Decorators for FastAPI Endpoints
+# ============================================
+
+from functools import wraps
+from fastapi import Request
+from typing import Callable
+import hashlib
+
+
+def cache_response(
+    ttl: int = 300,  # 5 minutes default
+    key_prefix: str = "",
+    vary_by_org: bool = True,
+):
+    """
+    Decorator to cache endpoint responses in Redis
+
+    Args:
+        ttl: Time to live in seconds (default: 300s / 5min)
+        key_prefix: Optional prefix for cache key
+        vary_by_org: Include organization_id in cache key (default: True)
+
+    Usage:
+        @router.get("/settings")
+        @cache_response(ttl=600, key_prefix="org_settings")
+        async def get_settings(
+            request: Request,
+            user: User = Depends(get_current_user),
+            db: AsyncSession = Depends(get_db)
+        ):
+            # This response will be cached for 10 minutes
+            return {"settings": [...]}
+
+    Cache invalidation:
+        await cache_manager.delete(f"org_settings:{org_id}:/settings")
+        await cache_manager.clear_pattern(f"org_settings:{org_id}:*")
+    """
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Extract request object from kwargs
+            request: Optional[Request] = kwargs.get("request")
+            if not request:
+                # If no request in kwargs, check args
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
+
+            # If still no request or cache not available, execute normally
+            if not request or not cache_manager.is_connected:
+                return await func(*args, **kwargs)
+
+            # Build cache key
+            path = request.url.path
+            query = str(sorted(request.query_params.items()))
+
+            # Include organization ID if vary_by_org is True
+            org_id = ""
+            if vary_by_org:
+                # Try to get org_id from user in kwargs
+                user = kwargs.get("user") or kwargs.get("current_user")
+                if user and hasattr(user, "organization_id"):
+                    org_id = f"{user.organization_id}:"
+
+            # Create deterministic cache key
+            key_data = f"{path}?{query}"
+            key_hash = hashlib.md5(key_data.encode()).hexdigest()[:12]
+            cache_key = f"{key_prefix}:{org_id}{path}:{key_hash}" if key_prefix else f"{org_id}{path}:{key_hash}"
+
+            # Try to get from cache
+            cached = await cache_manager.get(cache_key)
+            if cached is not None:
+                logger.debug(f"Cache HIT: {cache_key}")
+                return cached
+
+            # Cache miss - execute function
+            logger.debug(f"Cache MISS: {cache_key}")
+            result = await func(*args, **kwargs)
+
+            # Cache the result
+            await cache_manager.set(cache_key, result, ttl=ttl)
+
+            return result
+
+        return wrapper
+    return decorator
+
+
+def invalidate_cache_pattern(pattern: str) -> Callable:
+    """
+    Decorator to invalidate cache after an endpoint modifies data
+
+    Args:
+        pattern: Redis key pattern to clear (e.g., "org_settings:*")
+
+    Usage:
+        @router.put("/settings")
+        @invalidate_cache_pattern("org_settings:*")
+        async def update_settings(...):
+            # Cache will be cleared after this executes
+            return {"updated": True}
+    """
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            result = await func(*args, **kwargs)
+
+            # Clear cache pattern after successful execution
+            if cache_manager.is_connected:
+                cleared = await cache_manager.clear_pattern(pattern)
+                logger.debug(f"Cleared {cleared} cache keys matching: {pattern}")
+
+            return result
+
+        return wrapper
+    return decorator

@@ -344,6 +344,27 @@ async def lifespan(app: FastAPI):
     await database_manager.connect()
     logger.info("Database connected")
 
+    # Preflight environment check before migrations
+    startup_status.set_phase(
+        "preflight",
+        "Running preflight checks...",
+        "Verifying environment configuration and system requirements before database setup."
+    )
+    logger.info("Running preflight environment checks...")
+
+    # Check critical environment variables
+    preflight_warnings = []
+    if settings.SECRET_KEY == "change_me_in_production":
+        preflight_warnings.append("SECRET_KEY is using default value")
+    if settings.ENCRYPTION_KEY == "change_me_in_production":
+        preflight_warnings.append("ENCRYPTION_KEY is using default value")
+
+    if preflight_warnings and settings.ENVIRONMENT == "production":
+        for warning in preflight_warnings:
+            logger.warning(f"⚠ Preflight: {warning}")
+
+    logger.info("✓ Preflight checks complete")
+
     # Run migrations to ensure tables exist
     startup_status.set_phase(
         "migrations",
@@ -352,68 +373,93 @@ async def lifespan(app: FastAPI):
     )
     run_migrations()
 
-    # Connect to Redis (graceful degradation if unavailable)
+    # After migrations complete, parallelize independent operations for faster startup
     startup_status.set_phase(
-        "redis",
-        "Connecting to cache...",
-        "Connecting to Redis for session storage and performance caching."
+        "services",
+        "Initializing services...",
+        "Connecting to Redis, initializing GeoIP, and validating database in parallel."
     )
-    logger.info("Connecting to Redis...")
-    await cache_manager.connect()
-    if cache_manager.is_connected:
-        logger.info("Redis connected")
-    else:
-        logger.warning("Redis unavailable - running in degraded mode (caching disabled)")
+    logger.info("Starting parallel service initialization...")
 
-    # Initialize GeoIP service for country blocking
-    if settings.GEOIP_ENABLED:
-        from app.core.geoip import init_geoip_service
-        blocked_countries = settings.get_blocked_countries_set()
-        geoip = init_geoip_service(
-            geoip_db_path=settings.GEOIP_DATABASE_PATH,
-            blocked_countries=blocked_countries,
-            enabled=True,
-        )
-        logger.info(f"GeoIP service initialized. Blocked countries: {blocked_countries or 'none'}")
-    else:
-        logger.info("GeoIP service disabled")
+    import asyncio
 
-    # Validate database enum consistency (prevent case mismatch bugs)
-    startup_status.set_phase(
-        "validation",
-        "Validating database schema...",
-        "Verifying database structure and data integrity to prevent configuration issues."
-    )
-    logger.info("Validating database enum consistency...")
-    try:
-        from app.utils.startup_validators import run_startup_validations
-        from app.core.database import async_session_factory
-
-        async with async_session_factory() as db:
-            # Run validations in non-strict mode (log warnings but don't block startup)
-            await run_startup_validations(db, strict=False)
-    except Exception as e:
-        logger.warning(f"Could not run startup validations: {e}")
-        startup_status.add_error(f"Startup validation error: {str(e)}")
-
-    # Verify audit log integrity on startup (zero-trust)
-    if settings.ENVIRONMENT == "production":
-        logger.info("Verifying audit log integrity...")
+    async def connect_redis():
+        """Connect to Redis cache"""
         try:
-            from app.core.audit import verify_audit_log_integrity
+            logger.info("Connecting to Redis...")
+            await cache_manager.connect()
+            if cache_manager.is_connected:
+                logger.info("✓ Redis connected")
+            else:
+                logger.warning("Redis unavailable - running in degraded mode (caching disabled)")
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}")
+
+    async def initialize_geoip():
+        """Initialize GeoIP service"""
+        try:
+            if settings.GEOIP_ENABLED:
+                from app.core.geoip import init_geoip_service
+                blocked_countries = settings.get_blocked_countries_set()
+                geoip = init_geoip_service(
+                    geoip_db_path=settings.GEOIP_DATABASE_PATH,
+                    blocked_countries=blocked_countries,
+                    enabled=True,
+                )
+                logger.info(f"✓ GeoIP service initialized. Blocked countries: {blocked_countries or 'none'}")
+            else:
+                logger.info("GeoIP service disabled")
+        except Exception as e:
+            logger.warning(f"GeoIP initialization failed: {e}")
+
+    async def validate_database():
+        """Validate database schema and enums"""
+        try:
+            logger.info("Validating database enum consistency...")
+            from app.utils.startup_validators import run_startup_validations
             from app.core.database import async_session_factory
 
             async with async_session_factory() as db:
-                integrity_result = await verify_audit_log_integrity(db)
-                if integrity_result["verified"]:
-                    logger.info(f"✓ Audit log integrity verified ({integrity_result['total_checked']} entries)")
-                else:
-                    logger.critical(
-                        f"⚠ AUDIT LOG INTEGRITY FAILURE: {len(integrity_result.get('errors', []))} issues detected!"
-                    )
-                    # Log but don't block startup - allow investigation
+                # Run validations in non-strict mode (log warnings but don't block startup)
+                await run_startup_validations(db, strict=False)
+            logger.info("✓ Database validations complete")
         except Exception as e:
-            logger.warning(f"Could not verify audit log integrity: {e}")
+            logger.warning(f"Could not run startup validations: {e}")
+            startup_status.add_error(f"Startup validation error: {str(e)}")
+
+    # Run Redis, GeoIP, and validations in parallel
+    await asyncio.gather(
+        connect_redis(),
+        initialize_geoip(),
+        validate_database(),
+        return_exceptions=True
+    )
+
+    logger.info("✓ Parallel service initialization complete")
+
+    # Defer audit log verification to background (only in production, don't block startup)
+    if settings.ENVIRONMENT == "production":
+        async def verify_audit_logs_background():
+            """Verify audit log integrity in background"""
+            try:
+                await asyncio.sleep(5)  # Give server time to fully start
+                logger.info("Starting background audit log verification...")
+                from app.core.audit import verify_audit_log_integrity
+                from app.core.database import async_session_factory
+
+                async with async_session_factory() as db:
+                    integrity_result = await verify_audit_log_integrity(db)
+                    if integrity_result["verified"]:
+                        logger.info(f"✓ Audit log integrity verified ({integrity_result['total_checked']} entries)")
+                    else:
+                        logger.critical(
+                            f"⚠ AUDIT LOG INTEGRITY FAILURE: {len(integrity_result.get('errors', []))} issues detected!"
+                        )
+            except Exception as e:
+                logger.warning(f"Could not verify audit log integrity: {e}")
+
+        # Start audit verification in background (don't await)
+        asyncio.create_task(verify_audit_logs_background())
 
     # Mark server as ready
     startup_status.set_ready()

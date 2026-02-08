@@ -63,11 +63,59 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+        // Strategic code splitting for optimal caching and performance
+        manualChunks: (id) => {
+          // Core vendor libraries (framework essentials)
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/react-router-dom')) {
+            return 'vendor-router';
+          }
+
+          // UI libraries
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
+          }
+          if (id.includes('node_modules/react-hook-form') || id.includes('node_modules/zod')) {
+            return 'vendor-forms';
+          }
+
+          // Feature modules - split by domain for better caching
+          if (id.includes('/modules/onboarding/')) {
+            return 'module-onboarding';
+          }
+          if (id.includes('/modules/apparatus/')) {
+            return 'module-apparatus';
+          }
+          if (id.includes('/modules/public-portal/')) {
+            return 'module-portal';
+          }
+
+          // Page groups - split by feature area
+          if (id.includes('/pages/Training') || id.includes('/pages/CreateTrainingSession') || id.includes('/pages/ExternalTraining')) {
+            return 'pages-training';
+          }
+          if (id.includes('/pages/Event') || id.includes('/pages/Analytics')) {
+            return 'pages-events';
+          }
+          if (id.includes('/pages/Member') || id.includes('/pages/AddMember') || id.includes('/pages/ImportMember')) {
+            return 'pages-members';
+          }
+          if (id.includes('/pages/Settings') || id.includes('/pages/Role')) {
+            return 'pages-settings';
+          }
+
+          // Other vendor libraries
+          if (id.includes('node_modules')) {
+            return 'vendor-libs';
+          }
         },
       },
     },
+    // Additional optimizations
+    chunkSizeWarningLimit: 1000, // Warn for chunks > 1MB
+    minify: 'esbuild', // Fast minification
   },
   preview: {
     port: 3000,
