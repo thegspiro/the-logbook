@@ -76,7 +76,7 @@ class IPException(Base):
     cidr_range = Column(String(50))  # Optional CIDR notation for ranges
 
     # Exception type
-    exception_type = Column(Enum(IPExceptionType), nullable=False, index=True)
+    exception_type = Column(Enum(IPExceptionType, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
 
     # Reason and documentation (required - user must justify the request)
     reason = Column(Text, nullable=False)
@@ -110,7 +110,7 @@ class IPException(Base):
 
     # Current approval status
     approval_status = Column(
-        Enum(IPExceptionApprovalStatus),
+        Enum(IPExceptionApprovalStatus, values_callable=lambda x: [e.value for e in x]),
         default=IPExceptionApprovalStatus.PENDING,
         nullable=False,
         index=True

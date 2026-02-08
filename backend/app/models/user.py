@@ -75,7 +75,7 @@ class Organization(Base):
 
     # Organization Type
     organization_type = Column(
-        Enum(OrganizationType),
+        Enum(OrganizationType, values_callable=lambda x: [e.value for e in x]),
         default=OrganizationType.FIRE_DEPARTMENT,
         nullable=False
     )
@@ -108,7 +108,7 @@ class Organization(Base):
 
     # Department Identifiers
     identifier_type = Column(
-        Enum(IdentifierType),
+        Enum(IdentifierType, values_callable=lambda x: [e.value for e in x]),
         default=IdentifierType.DEPARTMENT_ID,
         nullable=False
     )
@@ -194,7 +194,7 @@ class User(Base):
     notification_preferences = Column(JSON, default={})
 
     # Status
-    status = Column(Enum(UserStatus), default=UserStatus.ACTIVE, index=True)
+    status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 

@@ -175,7 +175,7 @@ class TrainingCourse(Base):
     name = Column(String(255), nullable=False)
     code = Column(String(50))  # Course code like "FF1", "EMT-B", etc.
     description = Column(Text)
-    training_type = Column(Enum(TrainingType), nullable=False)
+    training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     # Duration and Credits
     duration_hours = Column(Float)  # How long the course takes
@@ -229,7 +229,7 @@ class TrainingRecord(Base):
     # Training Details
     course_name = Column(String(255), nullable=False)  # Stored in case course is deleted
     course_code = Column(String(50))
-    training_type = Column(Enum(TrainingType), nullable=False)
+    training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     # Dates
     scheduled_date = Column(Date)
@@ -245,7 +245,7 @@ class TrainingRecord(Base):
     issuing_agency = Column(String(255))
 
     # Status and Scores
-    status = Column(Enum(TrainingStatus), default=TrainingStatus.SCHEDULED, index=True)
+    status = Column(Enum(TrainingStatus, values_callable=lambda x: [e.value for e in x]), default=TrainingStatus.SCHEDULED, index=True)
     score = Column(Float)  # Percentage or points
     passing_score = Column(Float)
     passed = Column(Boolean)
@@ -292,11 +292,11 @@ class TrainingRequirement(Base):
     # Requirement Details
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    requirement_type = Column(Enum(RequirementType), nullable=False)  # hours, courses, certification, etc.
-    training_type = Column(Enum(TrainingType))  # certification, continuing_education, etc.
+    requirement_type = Column(Enum(RequirementType, values_callable=lambda x: [e.value for e in x]), nullable=False)  # hours, courses, certification, etc.
+    training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]))  # certification, continuing_education, etc.
 
     # Source Information
-    source = Column(Enum(RequirementSource), nullable=False, default=RequirementSource.DEPARTMENT)
+    source = Column(Enum(RequirementSource, values_callable=lambda x: [e.value for e in x]), nullable=False, default=RequirementSource.DEPARTMENT)
     registry_name = Column(String(100))  # e.g., "NFPA", "NREMT", "Pro Board", state name
     registry_code = Column(String(50))  # e.g., "NFPA 1001", "EMR"
     is_editable = Column(Boolean, default=True)  # Department can override registry requirements
@@ -311,11 +311,11 @@ class TrainingRequirement(Base):
     checklist_items = Column(JSON)  # For CHECKLIST type - list of items
 
     # Frequency
-    frequency = Column(Enum(RequirementFrequency), nullable=False)
+    frequency = Column(Enum(RequirementFrequency, values_callable=lambda x: [e.value for e in x]), nullable=False)
     year = Column(Integer)  # For annual requirements
 
     # Due Date Calculation Type
-    due_date_type = Column(Enum(DueDateType), default=DueDateType.CALENDAR_PERIOD)
+    due_date_type = Column(Enum(DueDateType, values_callable=lambda x: [e.value for e in x]), default=DueDateType.CALENDAR_PERIOD)
     # - CALENDAR_PERIOD: Due by end of calendar period (e.g., Dec 31st for annual)
     # - ROLLING: Due X months from last completion
     # - CERTIFICATION_PERIOD: Due when certification expires
@@ -379,7 +379,7 @@ class TrainingSession(Base):
     # Training Details (stored here for quick access)
     course_name = Column(String(255), nullable=False)
     course_code = Column(String(50))
-    training_type = Column(Enum(TrainingType), nullable=False)
+    training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     credit_hours = Column(Float, nullable=False)
     instructor = Column(String(255))
 
@@ -446,7 +446,7 @@ class TrainingApproval(Base):
     token_expires_at = Column(DateTime(timezone=True), nullable=False)  # Token expiration
 
     # Approval Details
-    status = Column(Enum(ApprovalStatus), default=ApprovalStatus.PENDING, index=True)
+    status = Column(Enum(ApprovalStatus, values_callable=lambda x: [e.value for e in x]), default=ApprovalStatus.PENDING, index=True)
     approved_by = Column(String(36), ForeignKey("users.id"))
     approved_at = Column(DateTime(timezone=True))
     approval_notes = Column(Text)
@@ -498,7 +498,7 @@ class TrainingProgram(Base):
     target_roles = Column(JSON)  # Role slugs this program applies to
 
     # Structure
-    structure_type = Column(Enum(ProgramStructureType), nullable=False, default=ProgramStructureType.FLEXIBLE)
+    structure_type = Column(Enum(ProgramStructureType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ProgramStructureType.FLEXIBLE)
 
     # Prerequisites
     prerequisite_program_ids = Column(JSON)  # Programs that must be completed before enrollment
@@ -685,7 +685,7 @@ class ProgramEnrollment(Base):
     progress_percentage = Column(Float, default=0.0)  # Overall program completion percentage
 
     # Status
-    status = Column(Enum(EnrollmentStatus), default=EnrollmentStatus.ACTIVE, index=True)
+    status = Column(Enum(EnrollmentStatus, values_callable=lambda x: [e.value for e in x]), default=EnrollmentStatus.ACTIVE, index=True)
     completed_at = Column(DateTime(timezone=True))
     withdrawn_at = Column(DateTime(timezone=True))
     withdrawal_reason = Column(Text)
@@ -727,7 +727,7 @@ class RequirementProgress(Base):
     requirement_id = Column(String(36), ForeignKey("training_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Progress Tracking
-    status = Column(Enum(RequirementProgressStatus), default=RequirementProgressStatus.NOT_STARTED, index=True)
+    status = Column(Enum(RequirementProgressStatus, values_callable=lambda x: [e.value for e in x]), default=RequirementProgressStatus.NOT_STARTED, index=True)
     progress_value = Column(Float, default=0.0)  # Hours completed, calls responded, etc.
     progress_percentage = Column(Float, default=0.0)  # Calculated percentage
 
@@ -870,7 +870,7 @@ class ExternalTrainingProvider(Base):
 
     # Provider Details
     name = Column(String(255), nullable=False)  # Display name: "Vector Solutions", "Target Solutions"
-    provider_type = Column(Enum(ExternalProviderType), nullable=False)
+    provider_type = Column(Enum(ExternalProviderType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     description = Column(Text)
 
     # API Configuration (encrypted)
@@ -1020,7 +1020,7 @@ class ExternalTrainingSyncLog(Base):
 
     # Sync Details
     sync_type = Column(String(50), nullable=False)  # full, incremental, manual
-    status = Column(Enum(SyncStatus), default=SyncStatus.PENDING, index=True)
+    status = Column(Enum(SyncStatus, values_callable=lambda x: [e.value for e in x]), default=SyncStatus.PENDING, index=True)
 
     # Timing
     started_at = Column(DateTime(timezone=True), default=func.now())
