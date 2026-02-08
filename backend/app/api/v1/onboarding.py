@@ -1319,7 +1319,7 @@ async def save_session_organization(
             name=data.name,
             slug=slug,
             organization_type=data.organization_type.value,
-            description=data.description,
+            description=None,  # Description not collected in OrganizationSetupCreate schema
             timezone=data.timezone,
             # Contact info
             phone=data.phone,
