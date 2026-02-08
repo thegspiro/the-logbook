@@ -61,7 +61,7 @@ def validate_enum_consistency(db: Session) -> Tuple[bool, List[str]]:
             result = db.execute(
                 query,
                 {
-                    'schema': settings.MYSQL_DATABASE,
+                    'schema': settings.DB_NAME,
                     'table': table,
                     'column': column
                 }
@@ -196,7 +196,7 @@ def validate_enum_case_convention(db: Session) -> Tuple[bool, List[str]]:
             AND DATA_TYPE = 'enum'
         """)
 
-        results = db.execute(query, {'schema': settings.MYSQL_DATABASE}).fetchall()
+        results = db.execute(query, {'schema': settings.DB_NAME}).fetchall()
 
         import re
         for table, column, column_type in results:
