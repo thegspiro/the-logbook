@@ -171,7 +171,8 @@ const SectionHeader: React.FC<{
   expanded: boolean;
   onToggle: () => void;
   required?: boolean;
-}> = ({ title, icon, expanded, onToggle, required }) => (
+  isComplete?: boolean;
+}> = ({ title, icon, expanded, onToggle, required, isComplete }) => (
   <button
     type="button"
     onClick={onToggle}
@@ -180,7 +181,8 @@ const SectionHeader: React.FC<{
     <div className="flex items-center gap-3">
       <span className="text-red-400">{icon}</span>
       <span className="text-white font-semibold">{title}</span>
-      {required && <span className="text-red-400 text-sm">*</span>}
+      {required && !isComplete && <span className="text-red-400 text-sm">*</span>}
+      {isComplete && <Check className="w-5 h-5 text-green-400 ml-2" />}
     </div>
     {expanded ? (
       <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -669,6 +671,18 @@ const OrganizationSetup: React.FC = () => {
     }
   };
 
+  // Check if sections are complete
+  const isSectionComplete = {
+    basic: formData.name.trim().length >= 2,
+    contact: true, // All fields optional
+    mailing: formData.mailingAddress.line1.trim() && formData.mailingAddress.city.trim() && formData.mailingAddress.state && formData.mailingAddress.zipCode.trim(),
+    physical: formData.physicalAddressSame || (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state),
+    identifiers: formData.identifierType === '' ||
+                 (formData.identifierType === 'fdid' && formData.fdid.trim()) ||
+                 (formData.identifierType === 'state_id' && formData.stateId.trim()) ||
+                 (formData.identifierType === 'department_id'),
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-8 px-4">
       <div className="max-w-3xl mx-auto">
@@ -700,6 +714,7 @@ const OrganizationSetup: React.FC = () => {
               expanded={expandedSections.basic}
               onToggle={() => toggleSection('basic')}
               required
+              isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
               <div className="p-4 space-y-4 bg-slate-900/30">
@@ -818,6 +833,8 @@ const OrganizationSetup: React.FC = () => {
               expanded={expandedSections.mailing}
               onToggle={() => toggleSection('mailing')}
               required
+              isComplete={isSectionComplete.mailing}
+              isComplete={isSectionComplete.contact}
             />
             {expandedSections.mailing && (
               <div className="p-4 bg-slate-900/30">
@@ -858,6 +875,7 @@ const OrganizationSetup: React.FC = () => {
                     onChange={(addr) => updateFormData('physicalAddress', addr)}
                     idPrefix="physical"
                     required
+              isComplete={isSectionComplete.physical}
                     errors={validationErrors}
                   />
                 )}
@@ -1152,7 +1170,7 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4">
+          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={handleContinue}
               disabled={isSaving}
