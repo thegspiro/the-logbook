@@ -59,10 +59,12 @@ class StartupStatus:
         self.started_at = datetime.utcnow()
         self.ready = False
         self.errors = []
+        self.detailed_message = None
 
-    def set_phase(self, phase: str, message: str):
+    def set_phase(self, phase: str, message: str, detailed_message: str = None):
         self.phase = phase
         self.message = message
+        self.detailed_message = detailed_message
         logger.info(f"Startup: {message}")
 
     def set_migration_progress(self, current: str, completed: int, total: int):
@@ -70,28 +72,40 @@ class StartupStatus:
         self.migrations_completed = completed
         self.migrations_total = total
         self.message = f"Running migration {completed}/{total}: {current}"
+        self.detailed_message = f"Applying database schema changes to keep your data structure up to date. This may take a few minutes on first startup."
 
     def set_ready(self):
         self.ready = True
         self.phase = "ready"
         self.message = "Server is ready"
+        self.detailed_message = None
 
     def add_error(self, error: str):
         self.errors.append(error)
 
     def to_dict(self):
-        return {
+        result = {
             "phase": self.phase,
             "message": self.message,
             "ready": self.ready,
-            "migrations": {
+            "uptime_seconds": (datetime.utcnow() - self.started_at).total_seconds(),
+        }
+
+        if self.detailed_message:
+            result["detailed_message"] = self.detailed_message
+
+        if self.migrations_total > 0:
+            result["migrations"] = {
                 "total": self.migrations_total,
                 "completed": self.migrations_completed,
-                "current": self.current_migration
-            } if self.migrations_total > 0 else None,
-            "uptime_seconds": (datetime.utcnow() - self.started_at).total_seconds(),
-            "errors": self.errors if self.errors else None
-        }
+                "current": self.current_migration,
+                "progress_percent": int((self.migrations_completed / self.migrations_total) * 100) if self.migrations_total > 0 else 0
+            }
+
+        if self.errors:
+            result["errors"] = self.errors
+
+        return result
 
 # Global startup status instance
 startup_status = StartupStatus()
@@ -313,21 +327,37 @@ async def lifespan(app: FastAPI):
     logger.info(f"Version: {settings.VERSION}")
 
     # Validate security configuration first
-    startup_status.set_phase("security", "Validating security configuration...")
+    startup_status.set_phase(
+        "security",
+        "Validating security configuration...",
+        "Checking encryption keys, secrets, and security settings to ensure safe operation."
+    )
     validate_security_configuration()
 
     # Connect to database
-    startup_status.set_phase("database", "Connecting to database...")
+    startup_status.set_phase(
+        "database",
+        "Connecting to database...",
+        "Establishing connection to MySQL database. This may take up to 2 minutes if MySQL is still initializing."
+    )
     logger.info("Connecting to database...")
     await database_manager.connect()
     logger.info("Database connected")
 
     # Run migrations to ensure tables exist
-    startup_status.set_phase("migrations", "Setting up database tables...")
+    startup_status.set_phase(
+        "migrations",
+        "Setting up database tables...",
+        "Preparing to run database migrations. This ensures your database schema is up to date."
+    )
     run_migrations()
 
     # Connect to Redis (graceful degradation if unavailable)
-    startup_status.set_phase("redis", "Connecting to cache...")
+    startup_status.set_phase(
+        "redis",
+        "Connecting to cache...",
+        "Connecting to Redis for session storage and performance caching."
+    )
     logger.info("Connecting to Redis...")
     await cache_manager.connect()
     if cache_manager.is_connected:
@@ -349,7 +379,11 @@ async def lifespan(app: FastAPI):
         logger.info("GeoIP service disabled")
 
     # Validate database enum consistency (prevent case mismatch bugs)
-    startup_status.set_phase("validation", "Validating database schema...")
+    startup_status.set_phase(
+        "validation",
+        "Validating database schema...",
+        "Verifying database structure and data integrity to prevent configuration issues."
+    )
     logger.info("Validating database enum consistency...")
     try:
         from app.utils.startup_validators import run_startup_validations
@@ -357,7 +391,7 @@ async def lifespan(app: FastAPI):
 
         async with async_session_factory() as db:
             # Run validations in non-strict mode (log warnings but don't block startup)
-            run_startup_validations(db, strict=False)
+            await run_startup_validations(db, strict=False)
     except Exception as e:
         logger.warning(f"Could not run startup validations: {e}")
         startup_status.add_error(f"Startup validation error: {str(e)}")

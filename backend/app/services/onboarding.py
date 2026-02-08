@@ -251,6 +251,16 @@ class OnboardingService:
                 "fix": "Restrict ALLOWED_ORIGINS to specific domains"
             })
 
+        # Safety check: if passed=False but no issues, add a generic issue
+        # This prevents the UI from showing "Please fix the following errors" with empty bullets
+        if not passed and len(issues) == 0:
+            issues.append({
+                "field": "CONFIGURATION",
+                "severity": "critical",
+                "message": "Security configuration check failed but no specific issues were identified. Please review logs for details.",
+                "fix": "Check application logs for more information about the security validation failure."
+            })
+
         return {
             "passed": passed,
             "issues": issues,
@@ -295,7 +305,6 @@ class OnboardingService:
         # Additional info
         county: Optional[str] = None,
         founded_year: Optional[int] = None,
-        tax_id: Optional[str] = None,
         logo: Optional[str] = None,
     ) -> Organization:
         """
@@ -321,8 +330,10 @@ class OnboardingService:
             department_id: Internal department ID
             county: County/jurisdiction
             founded_year: Year organization was founded
-            tax_id: EIN for 501(c)(3) organizations
             logo: Logo as base64 data URL or external URL
+
+            Note: EIN/tax_id can be added later via organization settings when
+            enabling the Financial or Reports module.
 
         Returns:
             Created Organization object
@@ -392,7 +403,6 @@ class OnboardingService:
             # Additional info
             county=county,
             founded_year=founded_year,
-            tax_id=tax_id,
             logo=logo,
         )
 

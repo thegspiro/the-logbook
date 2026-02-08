@@ -128,7 +128,7 @@ def upgrade() -> None:
 
     # Seed a default welcome template for each existing organization
     conn = op.get_bind()
-    orgs = conn.execute(sa.text("SELECT id FROM organizations WHERE deleted_at IS NULL"))
+    orgs = conn.execute(sa.text("SELECT id FROM organizations"))
     for org in orgs:
         conn.execute(
             sa.text("""
