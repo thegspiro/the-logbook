@@ -423,15 +423,11 @@ async def list_event_rsvps(
         status_filter=status_filter,
     )
 
-    # Get user details for each RSVP
-    from sqlalchemy import select
+    # Build response using eager-loaded user data
     rsvp_responses = []
     for rsvp in rsvps:
-        # Get user
-        user_result = await db.execute(
-            select(User).where(User.id == rsvp.user_id)
-        )
-        user = user_result.scalar_one_or_none()
+        # User is already loaded via selectinload in the service layer
+        user = rsvp.user
 
         rsvp_responses.append(
             RSVPResponse(

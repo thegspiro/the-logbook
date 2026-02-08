@@ -411,6 +411,13 @@ const RoleSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    // Verify organization was created first
+    if (!departmentName) {
+      toast.error('Please complete organization setup first');
+      navigate('/onboarding/start');
+      return;
+    }
+
     setIsSaving(true);
 
     try {

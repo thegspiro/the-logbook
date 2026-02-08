@@ -7,10 +7,8 @@ import {
   User,
   MapPin,
   Phone,
-  Mail as _Mail,
   Calendar,
   AlertCircle,
-  CheckCircle as _CheckCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';

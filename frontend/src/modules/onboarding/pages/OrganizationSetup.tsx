@@ -592,6 +592,12 @@ const OrganizationSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    // Ensure session is initialized before submitting
+    if (!hasSession || sessionLoading) {
+      toast.error('Please wait for the session to initialize...');
+      return;
+    }
+
     if (!validateForm()) {
       // Format validation errors into a readable list
       const errorMessages = Object.values(validationErrors);
