@@ -87,6 +87,33 @@ const OnboardingCheck: React.FC = () => {
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
+  // Convert technical migration names to user-friendly feature descriptions
+  const getMigrationFeatureMessage = (migrationName: string | null): string => {
+    if (!migrationName) return 'Setting up database...';
+
+    const name = migrationName.toLowerCase();
+
+    // Map migration keywords to user-friendly feature messages
+    if (name.includes('notification')) return '📬 Setting up notification system';
+    if (name.includes('training')) return '📚 Preparing training & certification tracking';
+    if (name.includes('election') || name.includes('voting') || name.includes('ballot') || name.includes('candidate'))
+      return '🗳️ Configuring elections & voting system';
+    if (name.includes('event') || name.includes('rsvp')) return '📅 Setting up event management & RSVPs';
+    if (name.includes('apparatus') || name.includes('equipment')) return '🚒 Configuring apparatus & equipment tracking';
+    if (name.includes('inventory')) return '📦 Setting up inventory management';
+    if (name.includes('location')) return '📍 Configuring location management';
+    if (name.includes('external') && name.includes('training')) return '🎓 Setting up external training integration';
+    if (name.includes('email') || name.includes('template')) return '✉️ Configuring email templates';
+    if (name.includes('portal')) return '🌐 Setting up public portal';
+    if (name.includes('user') || name.includes('organization') || name.includes('role'))
+      return '👥 Creating membership & organization system';
+    if (name.includes('audit') || name.includes('security')) return '🔒 Setting up security & audit logs';
+    if (name.includes('index') || name.includes('performance')) return '⚡ Optimizing database performance';
+
+    // Default message for migrations we don't recognize
+    return '⚙️ Configuring database tables';
+  };
+
   // Get detailed phase information with icon and description
   const getPhaseDetails = (phase: string) => {
     const phases: Record<string, { icon: React.ReactNode; title: string; description: string }> = {
@@ -103,7 +130,7 @@ const OnboardingCheck: React.FC = () => {
       migrations: {
         icon: <Wrench className="h-5 w-5" />,
         title: 'Database Setup',
-        description: 'Creating database tables for users, training, events, elections, and more (this may take 1-2 minutes on first startup)'
+        description: 'Preparing your intranet with membership, training, events, elections, inventory, and audit capabilities'
       },
       redis: {
         icon: <Server className="h-5 w-5" />,
@@ -536,13 +563,11 @@ const OnboardingCheck: React.FC = () => {
                           ></div>
                         </div>
 
-                        {/* Current migration and ETA */}
+                        {/* Current feature being set up and ETA */}
                         <div className="space-y-1">
-                          {startupInfo.migrations.current && (
-                            <p className="text-slate-400 text-xs truncate">
-                              <span className="text-slate-500">Current:</span> {startupInfo.migrations.current}
-                            </p>
-                          )}
+                          <p className="text-orange-300 text-sm font-medium">
+                            {getMigrationFeatureMessage(startupInfo.migrations.current)}
+                          </p>
                           {getEstimatedTimeRemaining() && (
                             <p className="text-slate-400 text-xs">
                               <span className="text-slate-500">Est. remaining:</span> {getEstimatedTimeRemaining()}
