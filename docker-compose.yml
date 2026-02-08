@@ -47,6 +47,9 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_in_production}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_in_production}
+    sysctls:
+      - net.core.somaxconn=511
+      - vm.overcommit_memory=1
     # SEC-14: Redis port is NOT exposed to the host by default.
     # Uncomment for local development if you need direct Redis access.
     # ports:
