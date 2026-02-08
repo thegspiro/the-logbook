@@ -100,7 +100,7 @@ class InventoryCategory(Base):
     # Category Information
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    item_type = Column(Enum(ItemType), nullable=False)
+    item_type = Column(Enum(ItemType, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     # Organization
     parent_category_id = Column(String(36), ForeignKey("inventory_categories.id", ondelete="SET NULL"))
@@ -178,8 +178,8 @@ class InventoryItem(Base):
     station = Column(String(100))  # Which station it's assigned to
 
     # Condition & Status
-    condition = Column(Enum(ItemCondition), default=ItemCondition.GOOD, nullable=False, index=True)
-    status = Column(Enum(ItemStatus), default=ItemStatus.AVAILABLE, nullable=False, index=True)
+    condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]), default=ItemCondition.GOOD, nullable=False, index=True)
+    status = Column(Enum(ItemStatus, values_callable=lambda x: [e.value for e in x]), default=ItemStatus.AVAILABLE, nullable=False, index=True)
     status_notes = Column(Text)
 
     # Quantity (for consumables or bulk items)
@@ -239,7 +239,7 @@ class ItemAssignment(Base):
     # Assignment Details
     item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    assignment_type = Column(Enum(AssignmentType), default=AssignmentType.PERMANENT, nullable=False)
+    assignment_type = Column(Enum(AssignmentType, values_callable=lambda x: [e.value for e in x]), default=AssignmentType.PERMANENT, nullable=False)
 
     # Dates
     assigned_date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -250,7 +250,7 @@ class ItemAssignment(Base):
     assigned_by = Column(String(36), ForeignKey("users.id"))
     returned_by = Column(String(36), ForeignKey("users.id"))
     assignment_reason = Column(Text)
-    return_condition = Column(Enum(ItemCondition))
+    return_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
     return_notes = Column(Text)
 
     # Status
@@ -299,8 +299,8 @@ class CheckOutRecord(Base):
     checkout_reason = Column(Text)
 
     # Return Condition
-    checkout_condition = Column(Enum(ItemCondition))
-    return_condition = Column(Enum(ItemCondition))
+    checkout_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
+    return_condition = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
     damage_notes = Column(Text)
 
     # Status
@@ -337,7 +337,7 @@ class MaintenanceRecord(Base):
 
     # Maintenance Details
     item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True)
-    maintenance_type = Column(Enum(MaintenanceType), nullable=False)
+    maintenance_type = Column(Enum(MaintenanceType, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     # Dates
     scheduled_date = Column(Date, index=True)
@@ -350,8 +350,8 @@ class MaintenanceRecord(Base):
     cost = Column(Numeric(10, 2))
 
     # Condition Assessment
-    condition_before = Column(Enum(ItemCondition))
-    condition_after = Column(Enum(ItemCondition))
+    condition_before = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
+    condition_after = Column(Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]))
 
     # Work Performed
     description = Column(Text)

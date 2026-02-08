@@ -77,7 +77,7 @@ class Election(Base):
     end_date = Column(DateTime, nullable=False)
 
     # Status
-    status = Column(SQLEnum(ElectionStatus), nullable=False, default=ElectionStatus.DRAFT)
+    status = Column(SQLEnum(ElectionStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ElectionStatus.DRAFT)
 
     # Election settings
     anonymous_voting = Column(Boolean, nullable=False, default=True)

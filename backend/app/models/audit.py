@@ -51,7 +51,7 @@ class AuditLog(Base):
     # Event Information
     event_type = Column(String(100), nullable=False, index=True)
     event_category = Column(String(50), nullable=False, index=True)
-    severity = Column(Enum(SeverityLevel), nullable=False)
+    severity = Column(Enum(SeverityLevel, values_callable=lambda x: [e.value for e in x]), nullable=False)
     
     # Actor Information
     user_id = Column(String(36), index=True)

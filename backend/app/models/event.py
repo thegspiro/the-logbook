@@ -69,7 +69,7 @@ class Event(Base):
     # Event details
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    event_type = Column(SQLEnum(EventType), nullable=False, default=EventType.OTHER)
+    event_type = Column(SQLEnum(EventType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=EventType.OTHER)
 
     # Location (new system with location_id FK, or legacy free-text location for "Other")
     location_id = Column(String(36), ForeignKey("locations.id"), nullable=True)  # FK to Location table
@@ -98,7 +98,7 @@ class Event(Base):
     reminder_hours_before = Column(Integer, nullable=False, default=24)  # Hours before event to send reminder
 
     # Check-in window settings
-    check_in_window_type = Column(SQLEnum(CheckInWindowType), nullable=False, default=CheckInWindowType.FLEXIBLE)
+    check_in_window_type = Column(SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=CheckInWindowType.FLEXIBLE)
     check_in_minutes_before = Column(Integer, nullable=True, default=15)  # For WINDOW type
     check_in_minutes_after = Column(Integer, nullable=True, default=15)  # For WINDOW type
     require_checkout = Column(Boolean, nullable=False, default=False)  # Require manual check-out
@@ -142,7 +142,7 @@ class EventRSVP(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     # RSVP details
-    status = Column(SQLEnum(RSVPStatus), nullable=False, default=RSVPStatus.GOING)
+    status = Column(SQLEnum(RSVPStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=RSVPStatus.GOING)
     guest_count = Column(Integer, nullable=False, default=0)  # Number of additional guests
     notes = Column(Text, nullable=True)  # Special requests, dietary restrictions, etc.
 

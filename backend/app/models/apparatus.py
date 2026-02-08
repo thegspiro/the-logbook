@@ -148,11 +148,11 @@ class ApparatusType(Base):
     name = Column(String(100), nullable=False)  # Display name (e.g., "Engine", "Ladder Truck")
     code = Column(String(50), nullable=False)  # Short code (e.g., "ENG", "LAD")
     description = Column(Text, nullable=True)
-    category = Column(Enum(ApparatusCategory), default=ApparatusCategory.FIRE, nullable=False)
+    category = Column(Enum(ApparatusCategory, values_callable=lambda x: [e.value for e in x]), default=ApparatusCategory.FIRE, nullable=False)
 
     # System vs Custom
     is_system = Column(Boolean, default=False, nullable=False)  # System types can't be deleted
-    default_type = Column(Enum(DefaultApparatusType), nullable=True)  # Maps to default type if system
+    default_type = Column(Enum(DefaultApparatusType, values_callable=lambda x: [e.value for e in x]), nullable=True)  # Maps to default type if system
 
     # Display
     icon = Column(String(50), nullable=True)  # Icon identifier for UI
@@ -202,7 +202,7 @@ class ApparatusStatus(Base):
 
     # System vs Custom
     is_system = Column(Boolean, default=False, nullable=False)
-    default_status = Column(Enum(DefaultApparatusStatus), nullable=True)
+    default_status = Column(Enum(DefaultApparatusStatus, values_callable=lambda x: [e.value for e in x]), nullable=True)
 
     # Behavior flags
     is_available = Column(Boolean, default=True, nullable=False)  # Can respond to calls
@@ -281,7 +281,7 @@ class Apparatus(Base):
     color = Column(String(50), nullable=True)
 
     # Fuel
-    fuel_type = Column(Enum(FuelType), default=FuelType.DIESEL, nullable=True)
+    fuel_type = Column(Enum(FuelType, values_callable=lambda x: [e.value for e in x]), default=FuelType.DIESEL, nullable=True)
     fuel_capacity_gallons = Column(Numeric(10, 2), nullable=True)
 
     # Capacity
@@ -464,7 +464,7 @@ class ApparatusCustomField(Base):
     name = Column(String(100), nullable=False)  # Display name
     field_key = Column(String(100), nullable=False)  # Unique key for storage
     description = Column(Text, nullable=True)
-    field_type = Column(Enum(CustomFieldType), nullable=False, default=CustomFieldType.TEXT)
+    field_type = Column(Enum(CustomFieldType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=CustomFieldType.TEXT)
 
     # Configuration
     is_required = Column(Boolean, default=False, nullable=False)
@@ -623,14 +623,14 @@ class ApparatusMaintenanceType(Base):
     name = Column(String(100), nullable=False)
     code = Column(String(50), nullable=False)
     description = Column(Text, nullable=True)
-    category = Column(Enum(MaintenanceCategory), default=MaintenanceCategory.PREVENTIVE, nullable=False)
+    category = Column(Enum(MaintenanceCategory, values_callable=lambda x: [e.value for e in x]), default=MaintenanceCategory.PREVENTIVE, nullable=False)
 
     # System vs Custom
     is_system = Column(Boolean, default=False, nullable=False)
 
     # Scheduling
     default_interval_value = Column(Integer, nullable=True)  # e.g., 3 (for "every 3 months")
-    default_interval_unit = Column(Enum(MaintenanceIntervalUnit), nullable=True)  # e.g., "months"
+    default_interval_unit = Column(Enum(MaintenanceIntervalUnit, values_callable=lambda x: [e.value for e in x]), nullable=True)  # e.g., "months"
     default_interval_miles = Column(Integer, nullable=True)  # Alternative: every X miles
     default_interval_hours = Column(Integer, nullable=True)  # Alternative: every X engine hours
 
@@ -754,7 +754,7 @@ class ApparatusFuelLog(Base):
 
     # Fuel Details
     fuel_date = Column(DateTime(timezone=True), nullable=False)
-    fuel_type = Column(Enum(FuelType), nullable=False)
+    fuel_type = Column(Enum(FuelType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     gallons = Column(Numeric(10, 3), nullable=False)
     price_per_gallon = Column(Numeric(6, 3), nullable=True)
     total_cost = Column(Numeric(10, 2), nullable=True)
