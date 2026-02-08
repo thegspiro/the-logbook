@@ -251,6 +251,16 @@ class OnboardingService:
                 "fix": "Restrict ALLOWED_ORIGINS to specific domains"
             })
 
+        # Safety check: if passed=False but no issues, add a generic issue
+        # This prevents the UI from showing "Please fix the following errors" with empty bullets
+        if not passed and len(issues) == 0:
+            issues.append({
+                "field": "CONFIGURATION",
+                "severity": "critical",
+                "message": "Security configuration check failed but no specific issues were identified. Please review logs for details.",
+                "fix": "Check application logs for more information about the security validation failure."
+            })
+
         return {
             "passed": passed,
             "issues": issues,
