@@ -675,12 +675,11 @@ const OrganizationSetup: React.FC = () => {
   const isSectionComplete = {
     basic: formData.name.trim().length >= 2,
     contact: true, // All fields optional
-    mailing: formData.mailingAddress.line1.trim() && formData.mailingAddress.city.trim() && formData.mailingAddress.state && formData.mailingAddress.zipCode.trim(),
-    physical: formData.physicalAddressSame || (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state),
-    identifiers: formData.identifierType === '' ||
-                 (formData.identifierType === 'fdid' && formData.fdid.trim()) ||
+    mailing: Boolean(formData.mailingAddress.line1.trim() && formData.mailingAddress.city.trim() && formData.mailingAddress.state && formData.mailingAddress.zipCode.trim()),
+    physical: Boolean(formData.physicalAddressSame || (formData.physicalAddress.line1.trim() && formData.physicalAddress.city.trim() && formData.physicalAddress.state)),
+    identifiers: Boolean((formData.identifierType === 'fdid' && formData.fdid.trim()) ||
                  (formData.identifierType === 'state_id' && formData.stateId.trim()) ||
-                 (formData.identifierType === 'department_id'),
+                 (formData.identifierType === 'department_id')),
   };
 
   return (
@@ -834,7 +833,6 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('mailing')}
               required
               isComplete={isSectionComplete.mailing}
-              isComplete={isSectionComplete.contact}
             />
             {expandedSections.mailing && (
               <div className="p-4 bg-slate-900/30">
@@ -875,7 +873,6 @@ const OrganizationSetup: React.FC = () => {
                     onChange={(addr) => updateFormData('physicalAddress', addr)}
                     idPrefix="physical"
                     required
-              isComplete={isSectionComplete.physical}
                     errors={validationErrors}
                   />
                 )}

@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useBeforeUnload, useBlocker } from 'react-router-dom';
+import { useBeforeUnload, useBlocker, type Location } from 'react-router-dom';
 
 interface UseUnsavedChangesOptions {
   hasUnsavedChanges: boolean;
@@ -38,6 +38,7 @@ export function useUnsavedChanges({
           // Modern browsers ignore custom messages and show their own
           return message;
         }
+        return undefined;
       },
       [hasUnsavedChanges, message]
     ),
@@ -47,7 +48,7 @@ export function useUnsavedChanges({
   // Block navigation within the app
   const blocker = useBlocker(
     useCallback(
-      ({ currentLocation, nextLocation }) => {
+      ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
         // Only block if:
         // 1. There are unsaved changes
         // 2. Not navigating to the same page
