@@ -287,7 +287,11 @@ class OrganizationSetupCreate(BaseModel):
     """
     # Basic Information
     name: str = Field(..., min_length=2, max_length=255, description="Organization/Department name")
-    slug: Optional[str] = Field(None, max_length=100, description="URL-friendly identifier (auto-generated if not provided)")
+    slug: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="URL slug (automatically generated from name - used for unique web addresses)"
+    )
 
     # Organization Type
     organization_type: OrganizationTypeEnum = Field(
@@ -321,19 +325,30 @@ class OrganizationSetupCreate(BaseModel):
         description="Physical address (if different from mailing)"
     )
 
-    # Department Identifiers
+    # Department Identifiers (Optional - can be configured later in Members module)
     identifier_type: IdentifierTypeEnum = Field(
         default=IdentifierTypeEnum.DEPARTMENT_ID,
         description="Type of identifier used: fdid, state_id, or department_id"
     )
-    fdid: Optional[str] = Field(None, max_length=50, description="Fire Department ID (NFIRS)")
-    state_id: Optional[str] = Field(None, max_length=50, description="State license/certification number")
-    department_id: Optional[str] = Field(None, max_length=50, description="Internal department ID")
+    fdid: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Fire Department ID (NFIRS) - Optional, can be set later in Members module"
+    )
+    state_id: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="State license/certification number - Optional, can be set later in Members module"
+    )
+    department_id: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Internal department ID - Optional, can be set later in Members module"
+    )
 
     # Additional Information
     county: Optional[str] = Field(None, max_length=100, description="County/jurisdiction")
     founded_year: Optional[int] = Field(None, ge=1700, le=2100, description="Year organization was founded")
-    tax_id: Optional[str] = Field(None, max_length=50, description="EIN for 501(c)(3) organizations")
 
     # Logo
     logo: Optional[str] = Field(None, description="Logo as base64 data URL or external URL")
@@ -392,17 +407,6 @@ class OrganizationSetupCreate(BaseModel):
             v = 'https://' + v
         return v
 
-    @field_validator('tax_id')
-    @classmethod
-    def validate_tax_id(cls, v: Optional[str]) -> Optional[str]:
-        """Validate EIN format"""
-        if v is None:
-            return v
-        # Remove formatting
-        cleaned = re.sub(r'[\s\-]', '', v)
-        if not re.match(r'^\d{9}$', cleaned):
-            raise ValueError('Invalid EIN format (should be 9 digits)')
-        return v.strip()
 
 
 class OrganizationSetupResponse(BaseModel):
