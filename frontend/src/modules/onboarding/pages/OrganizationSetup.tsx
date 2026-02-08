@@ -202,6 +202,7 @@ const InputField: React.FC<{
   maxLength?: number;
   helpText?: string;
   error?: string;
+  onBlur?: () => void;
 }> = ({
   label,
   id,
@@ -213,6 +214,7 @@ const InputField: React.FC<{
   maxLength,
   helpText,
   error,
+  onBlur,
 }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
@@ -223,6 +225,7 @@ const InputField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
       className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
@@ -245,7 +248,8 @@ const SelectField: React.FC<{
   options: { value: string; label: string }[];
   required?: boolean;
   helpText?: string;
-}> = ({ label, id, value, onChange, options, required, helpText }) => (
+  error?: string;
+}> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
       {label} {required && <span className="text-red-400">*</span>}
@@ -254,8 +258,11 @@ const SelectField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+        error ? 'border-red-500' : 'border-slate-600'
+      }`}
       aria-required={required}
+      aria-invalid={!!error}
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -264,6 +271,7 @@ const SelectField: React.FC<{
       ))}
     </select>
     {helpText && <p className="mt-1 text-xs text-slate-400">{helpText}</p>}
+    {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
   </div>
 );
 
@@ -273,9 +281,15 @@ const AddressForm: React.FC<{
   onChange: (address: AddressData) => void;
   idPrefix: string;
   required?: boolean;
-}> = ({ address, onChange, idPrefix, required }) => {
+  errors?: Record<string, string>;
+}> = ({ address, onChange, idPrefix, required, errors = {} }) => {
   const updateField = (field: keyof AddressData, value: string) => {
     onChange({ ...address, [field]: value });
+  };
+
+  // Map parent error keys (e.g., "mailingLine1") to field names (e.g., "line1")
+  const getFieldError = (field: string) => {
+    return errors[`${idPrefix}${field.charAt(0).toUpperCase() + field.slice(1)}`] || errors[field];
   };
 
   return (
@@ -289,6 +303,7 @@ const AddressForm: React.FC<{
           placeholder="123 Main Street"
           required={required}
           maxLength={255}
+          error={getFieldError('line1')}
         />
       </div>
       <div className="md:col-span-2">
@@ -299,6 +314,7 @@ const AddressForm: React.FC<{
           onChange={(v) => updateField('line2', v)}
           placeholder="Suite, Unit, Building (optional)"
           maxLength={255}
+          error={getFieldError('line2')}
         />
       </div>
       <InputField
@@ -309,6 +325,7 @@ const AddressForm: React.FC<{
         placeholder="City"
         required={required}
         maxLength={100}
+        error={getFieldError('city')}
       />
       <SelectField
         label="State"
@@ -317,6 +334,7 @@ const AddressForm: React.FC<{
         onChange={(v) => updateField('state', v)}
         options={[{ value: '', label: 'Select State' }, ...US_STATES]}
         required={required}
+        error={getFieldError('state')}
       />
       <InputField
         label="ZIP Code"
@@ -326,6 +344,7 @@ const AddressForm: React.FC<{
         placeholder="12345 or 12345-6789"
         required={required}
         maxLength={20}
+        error={getFieldError('zipCode')}
       />
       <InputField
         label="Country"
@@ -334,6 +353,7 @@ const AddressForm: React.FC<{
         onChange={(v) => updateField('country', v)}
         placeholder="USA"
         maxLength={100}
+        error={getFieldError('country')}
       />
     </div>
   );
@@ -497,7 +517,7 @@ const OrganizationSetup: React.FC = () => {
     if (!formData.mailingAddress.zipCode.trim()) {
       errors.mailingZip = 'ZIP code is required';
     } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
-      errors.mailingZip = 'Invalid ZIP code format';
+      errors.mailingZip = 'Invalid ZIP code format. Expected: 12345 or 12345-6789';
     }
 
     // Physical address validation (if different)
@@ -519,6 +539,16 @@ const OrganizationSetup: React.FC = () => {
     // Email validation (optional but must be valid if provided)
     if (formData.email && !/^[^@]+@[^@]+\.[^@]+$/.test(formData.email)) {
       errors.email = 'Invalid email format';
+    }
+
+    // Website validation (optional but must be valid if provided)
+    if (formData.website && formData.website.trim()) {
+      const website = formData.website.trim();
+      // Check if URL has protocol, if not, will be auto-prepended
+      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+      if (!urlPattern.test(website)) {
+        errors.website = 'Invalid website URL format';
+      }
     }
 
     // Phone validation (optional but must be valid if provided)
@@ -765,9 +795,16 @@ const OrganizationSetup: React.FC = () => {
                   id="org-website"
                   value={formData.website}
                   onChange={(v) => updateFormData('website', v)}
+                  onBlur={() => {
+                    const website = formData.website.trim();
+                    if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+                      updateFormData('website', `https://${website}`);
+                    }
+                  }}
                   placeholder="https://www.department.org"
                   type="url"
                   maxLength={255}
+                  helpText="Will automatically prepend https:// if not provided"
                 />
               </div>
             )}
@@ -789,6 +826,7 @@ const OrganizationSetup: React.FC = () => {
                   onChange={(addr) => updateFormData('mailingAddress', addr)}
                   idPrefix="mailing"
                   required
+                  errors={validationErrors}
                 />
               </div>
             )}
@@ -820,6 +858,7 @@ const OrganizationSetup: React.FC = () => {
                     onChange={(addr) => updateFormData('physicalAddress', addr)}
                     idPrefix="physical"
                     required
+                    errors={validationErrors}
                   />
                 )}
               </div>

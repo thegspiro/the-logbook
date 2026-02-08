@@ -327,7 +327,7 @@ const DepartmentInfo: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={1} totalSteps={9} className="pt-4 border-t border-white/10" />
+          <ProgressIndicator currentStep={1} totalSteps={10} className="pt-4 border-t border-white/10" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
