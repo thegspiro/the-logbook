@@ -88,22 +88,26 @@ export const ApparatusDetailPage: React.FC = () => {
       setLoadingTab(true);
       try {
         switch (activeTab) {
-          case 'maintenance':
+          case 'maintenance': {
             const maint = await apparatusMaintenanceService.getMaintenanceRecords({ apparatusId: id });
             setMaintenanceRecords(maint);
             break;
-          case 'fuel':
+          }
+          case 'fuel': {
             const fuel = await apparatusFuelLogService.getFuelLogs({ apparatusId: id });
             setFuelLogs(fuel);
             break;
-          case 'operators':
+          }
+          case 'operators': {
             const ops = await apparatusOperatorService.getOperators({ apparatusId: id });
             setOperators(ops);
             break;
-          case 'equipment':
+          }
+          case 'equipment': {
             const equip = await apparatusEquipmentService.getEquipment({ apparatusId: id });
             setEquipment(equip);
             break;
+          }
         }
       } catch (err) {
         console.error('Failed to load tab data:', err);
