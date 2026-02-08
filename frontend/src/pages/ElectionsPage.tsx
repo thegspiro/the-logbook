@@ -452,7 +452,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <select
                       value={formData.voting_method}
-                      onChange={(e) => setFormData({ ...formData, voting_method: e.target.value as any })}
+                      onChange={(e) => setFormData({ ...formData, voting_method: e.target.value as VotingMethod })}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="simple_majority">Simple Majority</option>
@@ -468,7 +468,7 @@ export const ElectionsPage: React.FC = () => {
                     </label>
                     <select
                       value={formData.victory_condition}
-                      onChange={(e) => setFormData({ ...formData, victory_condition: e.target.value as any })}
+                      onChange={(e) => setFormData({ ...formData, victory_condition: e.target.value as VictoryCondition })}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="most_votes">Most Votes (Plurality)</option>

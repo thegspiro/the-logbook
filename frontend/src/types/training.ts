@@ -417,11 +417,11 @@ export interface TrainingRequirementEnhanced {
   // Different requirement quantities
   training_type?: TrainingType;
   required_hours?: number;
-  required_courses?: any[];
+  required_courses?: string[];
   required_shifts?: number;
   required_calls?: number;
   required_call_types?: string[];
-  required_skills?: any[];
+  required_skills?: string[];
   checklist_items?: string[];
 
   frequency: RequirementFrequency;
@@ -446,11 +446,11 @@ export interface TrainingRequirementEnhancedCreate {
   is_editable?: boolean;
   training_type?: TrainingType;
   required_hours?: number;
-  required_courses?: any[];
+  required_courses?: string[];
   required_shifts?: number;
   required_calls?: number;
   required_call_types?: string[];
-  required_skills?: any[];
+  required_skills?: string[];
   checklist_items?: string[];
   frequency: RequirementFrequency;
   time_limit_days?: number;
@@ -607,7 +607,7 @@ export interface RequirementProgressRecord {
   status: RequirementProgressStatus;
   progress_value: number;
   progress_percentage: number;
-  progress_notes?: any;
+  progress_notes?: string | null;
   started_at?: string;
   completed_at?: string;
   verified_by?: string;
@@ -620,7 +620,7 @@ export interface RequirementProgressRecord {
 export interface RequirementProgressUpdate {
   status?: RequirementProgressStatus;
   progress_value?: number;
-  progress_notes?: any;
+  progress_notes?: string | null;
   verified_by?: string;
 }
 

@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { authService } from '../services/api';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
+import { toAppError, getErrorMessage } from '../utils/errorHandling';
 
 interface AuthState {
   user: CurrentUser | null;
@@ -44,10 +45,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().loadUser();
 
       set({ isLoading: false });
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = toAppError(err);
       set({
         isLoading: false,
-        error: error.response?.data?.detail || 'Login failed. Please try again.',
+        error: getErrorMessage(err, 'Login failed. Please try again.'),
       });
       throw error;
     }
@@ -67,10 +69,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().loadUser();
 
       set({ isLoading: false });
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = toAppError(err);
       set({
         isLoading: false,
-        error: error.response?.data?.detail || 'Registration failed. Please try again.',
+        error: getErrorMessage(err, 'Registration failed. Please try again.'),
       });
       throw error;
     }
