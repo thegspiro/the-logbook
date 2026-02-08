@@ -46,7 +46,53 @@ const OnboardingCheck: React.FC = () => {
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [migrationStartTime, setMigrationStartTime] = useState<number | null>(null);
   const [lastMigrationCount, setLastMigrationCount] = useState<number>(0);
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [showWhatsHappening, setShowWhatsHappening] = useState(false);
   const navigate = useNavigate();
+
+  // Educational tips to show while waiting
+  const educationalTips = [
+    {
+      icon: '👥',
+      title: 'Member Management',
+      content: 'Track your department roster, certifications, and contact information all in one place.'
+    },
+    {
+      icon: '📚',
+      title: 'Training & Certifications',
+      content: 'Keep records of all training sessions, certifications, and upcoming renewal dates.'
+    },
+    {
+      icon: '🗳️',
+      title: 'Elections & Voting',
+      content: 'Run secure department elections with automated ballot distribution and vote tallying.'
+    },
+    {
+      icon: '📅',
+      title: 'Event Management',
+      content: 'Schedule meetings, drills, and events with automatic notifications and RSVP tracking.'
+    },
+    {
+      icon: '🚒',
+      title: 'Apparatus & Equipment',
+      content: 'Maintain detailed records of all apparatus, equipment checks, and maintenance schedules.'
+    },
+    {
+      icon: '📦',
+      title: 'Inventory Tracking',
+      content: 'Monitor supply levels, track usage, and set reorder alerts for critical items.'
+    },
+    {
+      icon: '🔒',
+      title: 'HIPAA Compliance',
+      content: 'Built with security in mind - encrypted data, audit logs, and role-based access control.'
+    },
+    {
+      icon: '📊',
+      title: 'Reporting & Analytics',
+      content: 'Generate compliance reports, training summaries, and department statistics with ease.'
+    }
+  ];
 
   // Track elapsed time
   useEffect(() => {
@@ -55,6 +101,16 @@ const OnboardingCheck: React.FC = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Rotate educational tips every 15 seconds while waiting
+  useEffect(() => {
+    if (isWaiting || (startupInfo && !startupInfo.ready)) {
+      const tipRotation = setInterval(() => {
+        setCurrentTipIndex((prev) => (prev + 1) % educationalTips.length);
+      }, 15000); // Change tip every 15 seconds
+      return () => clearInterval(tipRotation);
+    }
+  }, [isWaiting, startupInfo, educationalTips.length]);
 
   // Show skip option after certain attempts
   useEffect(() => {
@@ -117,6 +173,11 @@ const OnboardingCheck: React.FC = () => {
   // Get detailed phase information with icon and description
   const getPhaseDetails = (phase: string) => {
     const phases: Record<string, { icon: React.ReactNode; title: string; description: string }> = {
+      preflight: {
+        icon: <CheckCircle2 className="h-5 w-5" />,
+        title: 'Preflight Checks',
+        description: 'Verifying environment configuration and system requirements'
+      },
       security: {
         icon: <Shield className="h-5 w-5" />,
         title: 'Security Validation',
@@ -131,6 +192,11 @@ const OnboardingCheck: React.FC = () => {
         icon: <Wrench className="h-5 w-5" />,
         title: 'Database Setup',
         description: 'Preparing your intranet with membership, training, events, elections, inventory, and audit capabilities'
+      },
+      services: {
+        icon: <Server className="h-5 w-5" />,
+        title: 'Service Initialization',
+        description: 'Starting Redis cache, GeoIP service, and running validations in parallel'
       },
       redis: {
         icon: <Server className="h-5 w-5" />,
@@ -582,6 +648,35 @@ const OnboardingCheck: React.FC = () => {
             </div>
           )}
 
+          {/* Educational Tips - shown while waiting */}
+          {(isWaiting || (startupInfo && !startupInfo.ready)) && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex].icon}</div>
+                  <div className="flex-1">
+                    <h4 className="text-blue-300 font-semibold text-sm mb-1">
+                      {educationalTips[currentTipIndex].title}
+                    </h4>
+                    <p className="text-slate-300 text-xs">
+                      {educationalTips[currentTipIndex].content}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-1 mt-3 justify-center">
+                  {educationalTips.map((_, index) => (
+                    <div
+                      key={index}
+                      className={`h-1 rounded-full transition-all duration-300 ${
+                        index === currentTipIndex ? 'w-6 bg-blue-400' : 'w-1 bg-slate-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {isWaiting && (
             <div className="mt-4 pt-4 border-t border-white/10">
               {/* Retry progress bar */}
@@ -602,6 +697,65 @@ const OnboardingCheck: React.FC = () => {
               <p className="text-slate-500 text-xs mt-2">
                 Services are starting up. On first deployment, database initialization can take 1-3 minutes.
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* What's Happening? - Expandable Help Section */}
+        <div className="mt-4">
+          <button
+            onClick={() => setShowWhatsHappening(!showWhatsHappening)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 rounded-lg transition-all duration-300"
+          >
+            <span className="text-slate-300 text-sm font-medium">What's happening?</span>
+            <span className={`text-slate-400 transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+          </button>
+
+          {showWhatsHappening && (
+            <div className="mt-2 bg-slate-800/30 border border-slate-700 rounded-lg p-4 space-y-3 text-sm">
+              <div>
+                <h4 className="text-slate-200 font-semibold mb-1">🔍 Preflight Checks</h4>
+                <p className="text-slate-400 text-xs">
+                  Verifying that all required environment variables are set and the system has enough resources.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-slate-200 font-semibold mb-1">🗄️ Database Connection</h4>
+                <p className="text-slate-400 text-xs">
+                  Connecting to MySQL. On first startup, MySQL needs to initialize its system tables, which can take 1-2 minutes.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-slate-200 font-semibold mb-1">🔧 Database Migrations</h4>
+                <p className="text-slate-400 text-xs">
+                  Creating 37 database tables for users, training, events, elections, inventory, and more. This only happens once during initial setup.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-slate-200 font-semibold mb-1">⚡ Service Initialization</h4>
+                <p className="text-slate-400 text-xs">
+                  Starting Redis cache, GeoIP service, and running database validations in parallel to speed up startup.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-slate-200 font-semibold mb-1">⏱️ Expected Timeline</h4>
+                <p className="text-slate-400 text-xs">
+                  • Fresh install: 10-12 minutes (mostly MySQL initialization)<br />
+                  • Subsequent restarts: 10-30 seconds<br />
+                  • The wait time is longest on the very first startup
+                </p>
+              </div>
+              <div className="pt-2 border-t border-slate-700">
+                <h4 className="text-slate-200 font-semibold mb-1">🔧 Troubleshooting</h4>
+                <p className="text-slate-400 text-xs mb-2">
+                  If startup is taking too long, check the logs:
+                </p>
+                <code className="block bg-slate-900/50 text-green-400 text-xs p-2 rounded font-mono">
+                  docker compose logs backend
+                </code>
+              </div>
             </div>
           )}
         </div>
