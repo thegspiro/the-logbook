@@ -103,21 +103,25 @@ const AdminUserCreation: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: value };
+
+      // Also revalidate confirm password if password changes
+      if (name === 'password' && touched.confirmPassword) {
+        // Validate confirmPassword against the NEW password value
+        const confirmError = newData.confirmPassword !== value
+          ? 'Passwords do not match'
+          : '';
+        setErrors((prevErrors) => ({ ...prevErrors, confirmPassword: confirmError }));
+      }
+
+      return newData;
+    });
 
     // Validate on change if field was touched
     if (touched[name]) {
       const error = validateField(name, value);
       setErrors((prev) => ({ ...prev, [name]: error }));
-    }
-
-    // Also revalidate confirm password if password changes
-    if (name === 'password' && touched.confirmPassword) {
-      const confirmError = validateField(
-        'confirmPassword',
-        formData.confirmPassword
-      );
-      setErrors((prev) => ({ ...prev, confirmPassword: confirmError }));
     }
   };
 

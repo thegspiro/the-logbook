@@ -249,21 +249,25 @@ const OnboardingCheck: React.FC = () => {
       setStatusMessage('Services ready! Redirecting...');
       await checkOnboardingStatus();
     } else {
-      if (retryCount < MAX_RETRIES) {
-        const delay = Math.min(INITIAL_DELAY + (retryCount * 500), MAX_DELAY);
-        setRetryCount(prev => prev + 1);
-        setIsWaiting(true);
+      setRetryCount(prev => {
+        const newCount = prev + 1;
 
-        setStatusMessage(`Waiting for services... (${retryCount + 1}/${MAX_RETRIES})`);
+        if (newCount < MAX_RETRIES) {
+          const delay = Math.min(INITIAL_DELAY + (newCount * 500), MAX_DELAY);
+          setIsWaiting(true);
+          setStatusMessage(`Waiting for services... (${newCount}/${MAX_RETRIES})`);
 
-        setTimeout(() => {
-          runCheck();
-        }, delay);
-      } else {
-        setError('Services did not become ready in time. Please check that all containers are running.');
-      }
+          setTimeout(() => {
+            runCheck();
+          }, delay);
+        } else {
+          setError('Services did not become ready in time. Please check that all containers are running.');
+        }
+
+        return newCount;
+      });
     }
-  }, [checkServices, checkOnboardingStatus, retryCount]);
+  }, [checkServices, checkOnboardingStatus]);
 
   const handleSkip = () => {
     // Attempt to proceed anyway - useful if only Redis is down
@@ -285,7 +289,7 @@ const OnboardingCheck: React.FC = () => {
 
   useEffect(() => {
     runCheck();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [runCheck]);
 
   const getStatusIcon = (status: ServiceStatus['status']) => {
     switch (status) {
