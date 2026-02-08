@@ -101,7 +101,7 @@ const OnboardingCheck: React.FC = () => {
       migrations: {
         icon: <Wrench className="h-5 w-5" />,
         title: 'Database Setup',
-        description: 'Creating database tables and schema (this may take 1-2 minutes on first startup)'
+        description: 'Creating database tables for users, training, events, elections, and more (this may take 1-2 minutes on first startup)'
       },
       redis: {
         icon: <Server className="h-5 w-5" />,
@@ -479,9 +479,15 @@ const OnboardingCheck: React.FC = () => {
                           </span>
                         </div>
                         {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
-                          <p className="text-xs text-slate-500 mb-2">
-                            Running {startupInfo.migrations.total} migrations in batch mode. Please wait...
-                          </p>
+                          <div className="text-xs text-slate-400 mb-2 space-y-1">
+                            <p className="font-medium text-orange-400">
+                              Creating {startupInfo.migrations.total} database tables...
+                            </p>
+                            <p className="text-slate-500">
+                              Setting up tables for users, organizations, training records, events, elections, inventory, and audit logs.
+                              This process runs in the background and may take 1-2 minutes.
+                            </p>
+                          </div>
                         )}
                         <div className="w-full bg-slate-700 rounded-full h-2.5 mb-2">
                           <div
