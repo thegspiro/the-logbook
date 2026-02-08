@@ -25,10 +25,10 @@ interface StartupInfo {
   errors?: string[] | null;
 }
 
-const MAX_RETRIES = 20; // Reduced from 30 - about 1.5 minutes with delays
+const MAX_RETRIES = 150; // ~12.5 minutes total - allows for MySQL init + migrations
 const INITIAL_DELAY = 2000;
 const MAX_DELAY = 5000;
-const SKIP_AVAILABLE_AFTER = 5; // Show skip option after 5 attempts
+const SKIP_AVAILABLE_AFTER = 10; // Show skip option after 10 attempts (~50 seconds)
 
 const OnboardingCheck: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
@@ -255,19 +255,29 @@ const OnboardingCheck: React.FC = () => {
         if (newCount < MAX_RETRIES) {
           const delay = Math.min(INITIAL_DELAY + (newCount * 500), MAX_DELAY);
           setIsWaiting(true);
-          setStatusMessage(`Waiting for services... (${newCount}/${MAX_RETRIES})`);
+
+          // More informative message based on startup info
+          let message = `Waiting for services... (${newCount}/${MAX_RETRIES})`;
+          if (startupInfo && !startupInfo.ready) {
+            message = startupInfo.message || message;
+            // Add helpful context about migration time
+            if (startupInfo.phase?.includes('migration')) {
+              message += ' (First startup may take 10+ minutes for database initialization)';
+            }
+          }
+          setStatusMessage(message);
 
           setTimeout(() => {
             runCheck();
           }, delay);
         } else {
-          setError('Services did not become ready in time. Please check that all containers are running.');
+          setError('Services did not become ready in time. Please check that all containers are running and review logs.');
         }
 
         return newCount;
       });
     }
-  }, [checkServices, checkOnboardingStatus]);
+  }, [checkServices, checkOnboardingStatus, startupInfo]);
 
   const handleSkip = () => {
     // Attempt to proceed anyway - useful if only Redis is down
