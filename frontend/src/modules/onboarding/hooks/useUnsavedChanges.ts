@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useBeforeUnload, useBlocker } from 'react-router-dom';
+import { useBeforeUnload } from 'react-router-dom';
 
 interface UseUnsavedChangesOptions {
   hasUnsavedChanges: boolean;
@@ -30,6 +30,7 @@ export function useUnsavedChanges({
 }: UseUnsavedChangesOptions) {
 
   // Warn before browser refresh/close
+  // This is the primary protection against data loss
   useBeforeUnload(
     useCallback(
       (event) => {
@@ -45,32 +46,14 @@ export function useUnsavedChanges({
     { capture: true }
   );
 
-  // Block navigation within the app
-  // In React Router v6.30+, useBlocker takes a boolean or function returning boolean
-  // Check if useBlocker is available before calling (avoids console spam)
-  const isBlockerAvailable = typeof useBlocker === 'function';
-
-  // Only call useBlocker if it's actually available
-  const blocker = isBlockerAvailable
-    ? useBlocker(hasUnsavedChanges)
-    : { state: 'unblocked' as const, proceed: () => {}, reset: () => {} };
-
-  // Handle blocked navigation
-  useEffect(() => {
-    if (blocker?.state === 'blocked') {
-      const shouldLeave = window.confirm(message);
-
-      if (shouldLeave) {
-        blocker.proceed?.();
-      } else {
-        blocker.reset?.();
-      }
-    }
-  }, [blocker, message]);
+  // Note: We don't use React Router's useBlocker for in-app navigation blocking
+  // because it's unstable in v6.30+ and causes errors in certain routing contexts.
+  // The useBeforeUnload hook above provides the critical protection against
+  // accidental browser refresh/close, which is the main data loss risk.
 
   return {
-    isBlocked: blocker?.state === 'blocked',
-    blocker
+    isBlocked: false,
+    blocker: null
   };
 }
 
