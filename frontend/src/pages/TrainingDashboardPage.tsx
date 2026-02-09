@@ -6,7 +6,11 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { trainingService } from '../services/api';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { formatDate } from '../utils/dateFormatting';
+import { getExpirationStatus } from '../utils/eventHelpers';
 import type {
   TrainingCourse,
   TrainingRecord,
@@ -39,33 +43,15 @@ export default function TrainingDashboardPage() {
       setRequirements(requirementsData);
     } catch (error) {
       console.error('Error loading training data:', error);
+      toast.error('Failed to load training dashboard data');
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const getExpirationStatus = (expirationDate: string) => {
-    const today = new Date();
-    const expDate = new Date(expirationDate);
-    const daysUntilExpiry = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysUntilExpiry < 0) return { status: 'Expired', color: 'text-red-600 bg-red-50' };
-    if (daysUntilExpiry <= 30) return { status: `${daysUntilExpiry} days`, color: 'text-red-600 bg-red-50' };
-    if (daysUntilExpiry <= 60) return { status: `${daysUntilExpiry} days`, color: 'text-yellow-600 bg-yellow-50' };
-    return { status: `${daysUntilExpiry} days`, color: 'text-green-600 bg-green-50' };
-  };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading training dashboard...</div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading training dashboard..." />;
   }
 
   return (

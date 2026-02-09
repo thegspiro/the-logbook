@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import {
   Link2,
   Plus,
@@ -654,12 +655,12 @@ const ExternalTrainingPage: React.FC = () => {
       // Reload providers to get updated connection status
       await loadProviders();
       if (result.success) {
-        alert('Connection successful!');
+        toast.success('Connection successful!');
       } else {
-        alert(`Connection failed: ${result.message}`);
+        toast.error(`Connection failed: ${result.message}`);
       }
     } catch (err: any) {
-      alert(`Connection test failed: ${err.response?.data?.detail || err.message}`);
+      toast.error(`Connection test failed: ${err.response?.data?.detail || err.message}`);
     } finally {
       setTestingProvider(null);
     }
@@ -669,11 +670,11 @@ const ExternalTrainingPage: React.FC = () => {
     setSyncingProvider(providerId);
     try {
       const result = await externalTrainingService.triggerSync(providerId, { sync_type: 'incremental' });
-      alert(result.message || 'Sync initiated. Check sync logs for progress.');
+      toast.success(result.message || 'Sync initiated. Check sync logs for progress.');
       // Reload providers after a short delay to show updated last_sync_at
       setTimeout(() => loadProviders(), 2000);
     } catch (err: any) {
-      alert(`Sync failed: ${err.response?.data?.detail || err.message}`);
+      toast.error(`Sync failed: ${err.response?.data?.detail || err.message}`);
     } finally {
       setSyncingProvider(null);
     }
@@ -690,8 +691,9 @@ const ExternalTrainingPage: React.FC = () => {
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
+      toast.success('Provider deleted successfully');
     } catch (err: any) {
-      alert(`Failed to delete: ${err.response?.data?.detail || err.message}`);
+      toast.error(`Failed to delete: ${err.response?.data?.detail || err.message}`);
     }
   };
 

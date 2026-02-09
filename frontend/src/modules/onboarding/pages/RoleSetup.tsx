@@ -125,9 +125,23 @@ const generateRolePermissions = (
  * This ensures new modules are included in role permissions automatically.
  */
 const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
+  administrative: {
+    name: 'Administrative',
+    description: 'System and IT administration roles',
+    roles: [
+      {
+        id: 'admin',
+        name: 'Administrator',
+        description: 'Full system access - IT and system administrators',
+        icon: Shield,
+        priority: 100,
+        permissions: generateRolePermissions(modules, 'full_access'),
+      },
+    ],
+  },
   leadership: {
     name: 'Leadership',
-    description: 'Executive and administrative leadership roles',
+    description: 'Executive and operational leadership roles',
     roles: [
       {
         id: 'chief',
@@ -299,19 +313,9 @@ const RoleSetup: React.FC = () => {
     // Build templates for initial state
     const templates = buildRoleTemplates(MODULE_REGISTRY);
 
-    // Pre-select essential roles
+    // Pre-select essential roles (admin, chief, secretary, training_officer, member)
     const initial: Record<string, RoleConfig> = {};
-    // Always include admin
-    initial['admin'] = {
-      id: 'admin',
-      name: 'Administrator',
-      description: 'Full system access - IT and system administrators',
-      icon: Shield,
-      priority: 100,
-      permissions: generateRolePermissions(MODULE_REGISTRY, 'full_access'),
-    };
-    // Pre-select some common roles
-    ['chief', 'secretary', 'training_officer', 'member'].forEach(roleId => {
+    ['admin', 'chief', 'secretary', 'training_officer', 'member'].forEach(roleId => {
       Object.values(templates).forEach(category => {
         const role = category.roles.find(r => r.id === roleId);
         if (role) {
@@ -323,7 +327,7 @@ const RoleSetup: React.FC = () => {
   });
 
   // Expanded categories
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(['leadership', 'officers']);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(['administrative', 'leadership', 'officers']);
 
   // Role being edited
   const [editingRole, setEditingRole] = useState<string | null>(null);
@@ -495,17 +499,32 @@ const RoleSetup: React.FC = () => {
             </p>
           </div>
 
-          {/* Info Banner */}
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
-            <div className="flex items-start">
-              <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
-              <div>
-                <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
-                <p className="text-slate-300 text-sm">
-                  Each role has <strong className="text-green-400">View</strong> (see content) and{' '}
-                  <strong className="text-orange-400">Manage</strong> (create/edit/delete) permissions per module.
-                  Click on a selected role to customize its permissions.
-                </p>
+          {/* Info Banners */}
+          <div className="space-y-4 mb-6">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="flex items-start">
+                <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
+                  <p className="text-slate-300 text-sm">
+                    Each role has <strong className="text-green-400">View</strong> (see content) and{' '}
+                    <strong className="text-orange-400">Manage</strong> (create/edit/delete) permissions per module.
+                    Click on a selected role to customize its permissions.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+              <div className="flex items-start">
+                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <p className="text-green-400 font-semibold mb-1">Don't Worry - You Can Change These Later</p>
+                  <p className="text-slate-300 text-sm">
+                    Roles and permissions can be updated anytime in <strong>Settings → Roles & Permissions</strong>.
+                    You can add new roles, modify permissions, or remove roles as your organization's needs evolve.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

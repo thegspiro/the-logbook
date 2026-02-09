@@ -6,9 +6,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { EventTypeBadge } from '../components/EventTypeBadge';
+import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
+import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
+import { formatDateTime, formatTime, formatForDateTimeInput } from '../utils/dateFormatting';
 
 export const EventDetailPage: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -44,7 +50,7 @@ export const EventDetailPage: React.FC = () => {
         fetchStats();
       }
     }
-  }, [eventId]);
+  }, [eventId, canManage]);
 
   const fetchEvent = async () => {
     if (!eventId) return;
@@ -54,9 +60,9 @@ export const EventDetailPage: React.FC = () => {
       setError(null);
       const data = await eventService.getEvent(eventId);
       setEvent(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching event:', err);
-      setError(err.response?.data?.detail || 'Failed to load event');
+      setError((err as any).response?.data?.detail || 'Failed to load event');
     } finally {
       setLoading(false);
     }
@@ -68,7 +74,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEventRSVPs(eventId);
       setRsvps(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching RSVPs:', err);
     }
   };
@@ -79,7 +85,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEventStats(eventId);
       setStats(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching stats:', err);
     }
   };
@@ -90,7 +96,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEligibleMembers(eventId);
       setEligibleMembers(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching eligible members:', err);
     }
   };
@@ -124,9 +130,9 @@ export const EventDetailPage: React.FC = () => {
         await fetchRSVPs();
         await fetchStats();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error submitting RSVP:', err);
-      setSubmitError(err.response?.data?.detail || 'Failed to submit RSVP');
+      setSubmitError((err as any).response?.data?.detail || 'Failed to submit RSVP');
     } finally {
       setSubmitting(false);
     }
@@ -147,9 +153,9 @@ export const EventDetailPage: React.FC = () => {
       setShowCancelModal(false);
       setCancelReason('');
       await fetchEvent();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cancelling event:', err);
-      setSubmitError(err.response?.data?.detail || 'Failed to cancel event');
+      setSubmitError((err as any).response?.data?.detail || 'Failed to cancel event');
     } finally {
       setSubmitting(false);
     }
@@ -162,17 +168,18 @@ export const EventDetailPage: React.FC = () => {
       await eventService.checkInAttendee(eventId, { user_id: userId });
       await fetchRSVPs();
       await fetchStats();
-    } catch (err: any) {
+      toast.success('Member checked in successfully');
+    } catch (err) {
       console.error('Error checking in attendee:', err);
-      alert(err.response?.data?.detail || 'Failed to check in attendee');
+      toast.error((err as any).response?.data?.detail || 'Failed to check in attendee');
     }
   };
 
   const openRecordTimesModal = () => {
     if (event) {
       // Pre-fill with existing actual times if they exist
-      setActualStartTime(event.actual_start_time ? new Date(event.actual_start_time).toISOString().slice(0, 16) : '');
-      setActualEndTime(event.actual_end_time ? new Date(event.actual_end_time).toISOString().slice(0, 16) : '');
+      setActualStartTime(event.actual_start_time ? formatForDateTimeInput(event.actual_start_time) : '');
+      setActualEndTime(event.actual_end_time ? formatForDateTimeInput(event.actual_end_time) : '');
     }
     setShowRecordTimesModal(true);
     setSubmitError(null);
@@ -196,51 +203,16 @@ export const EventDetailPage: React.FC = () => {
       if (canManage) {
         await fetchRSVPs();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error recording times:', err);
-      setSubmitError(err.response?.data?.detail || 'Failed to record times');
+      setSubmitError((err as any).response?.data?.detail || 'Failed to record times');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const getEventTypeLabel = (type: string): string => {
-    const labels: Record<string, string> = {
-      business_meeting: 'Business Meeting',
-      public_education: 'Public Education',
-      training: 'Training',
-      social: 'Social',
-      fundraiser: 'Fundraiser',
-      ceremony: 'Ceremony',
-      other: 'Other',
-    };
-    return labels[type] || type;
-  };
-
-  const getStatusLabel = (status: RSVPStatus): string => {
-    const labels: Record<RSVPStatus, string> = {
-      going: 'Going',
-      not_going: 'Not Going',
-      maybe: 'Maybe',
-    };
-    return labels[status];
-  };
-
-  const getStatusColor = (status: RSVPStatus): string => {
-    const colors: Record<RSVPStatus, string> = {
-      going: 'bg-green-100 text-green-800',
-      not_going: 'bg-red-100 text-red-800',
-      maybe: 'bg-yellow-100 text-yellow-800',
-    };
-    return colors[status];
-  };
-
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading event details..." />;
   }
 
   if (error || !event) {
@@ -281,9 +253,7 @@ export const EventDetailPage: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{event.title}</h1>
             <div className="mt-2 flex items-center space-x-2">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                {getEventTypeLabel(event.event_type)}
-              </span>
+              <EventTypeBadge type={event.event_type} size="sm" />
               {event.is_cancelled && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                   Cancelled
@@ -389,20 +359,10 @@ export const EventDetailPage: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-700">Date & Time</p>
                   <p className="text-sm text-gray-600">
-                    {new Date(event.start_datetime).toLocaleString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
+                    {formatDateTime(event.start_datetime)}
                   </p>
                   <p className="text-sm text-gray-600">
-                    to {new Date(event.end_datetime).toLocaleString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
+                    to {formatTime(event.end_datetime)}
                   </p>
                 </div>
               </div>
@@ -519,9 +479,7 @@ export const EventDetailPage: React.FC = () => {
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">Your RSVP</h2>
               <div className="flex items-center space-x-4">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(event.user_rsvp_status)}`}>
-                  {getStatusLabel(event.user_rsvp_status)}
-                </span>
+                <RSVPStatusBadge status={event.user_rsvp_status} />
                 {canRSVP && (
                   <button
                     onClick={() => setShowRSVPModal(true)}
@@ -552,8 +510,8 @@ export const EventDetailPage: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center space-x-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(rsvp.status)}`}>
-                        {getStatusLabel(rsvp.status)}
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
+                        {getRSVPStatusLabel(rsvp.status)}
                       </span>
                       {rsvp.status === 'going' && !rsvp.checked_in && (
                         <button
@@ -698,7 +656,7 @@ export const EventDetailPage: React.FC = () => {
                               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                             />
                             <span className="ml-2 text-sm text-gray-700">
-                              {getStatusLabel(status as RSVPStatus)}
+                              {getRSVPStatusLabel(status as RSVPStatus)}
                             </span>
                           </label>
                         ))}
@@ -905,11 +863,11 @@ export const EventDetailPage: React.FC = () => {
                             {rsvp && (
                               <div className="flex items-center mt-1 space-x-2">
                                 <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getRSVPStatusColor(
                                     rsvp.status
                                   )}`}
                                 >
-                                  {getStatusLabel(rsvp.status)}
+                                  {getRSVPStatusLabel(rsvp.status)}
                                 </span>
                                 {isCheckedIn && (
                                   <span className="text-xs text-green-600">

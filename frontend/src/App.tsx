@@ -5,6 +5,12 @@ import { Toaster } from 'react-hot-toast';
 // Security initialization
 import { clearLegacySensitiveData } from './modules/onboarding/utils/storage';
 
+// Error Boundary
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+// Protected Route
+import { ProtectedRoute } from './components/ProtectedRoute';
+
 // Modules (keep these as they're router functions, not components)
 import { getOnboardingRoutes } from './modules/onboarding';
 import { getApparatusRoutes } from './modules/apparatus';
@@ -70,10 +76,11 @@ function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <div className="App">
-        <Suspense fallback={<PageLoadingFallback />}>
-          <Routes>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <div className="App">
+          <Suspense fallback={<PageLoadingFallback />}>
+            <Routes>
             {/* ============================================
                 ONBOARDING MODULE
                 Comment out the line below to disable onboarding
@@ -92,40 +99,40 @@ function App() {
                 ============================================ */}
 
             {/* Main Dashboard - User lands here after onboarding */}
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
             {/* Membership Module */}
-            <Route path="/members" element={<Members />} />
-            <Route path="/members/add" element={<AddMember />} />
-            <Route path="/members/import" element={<ImportMembers />} />
-            <Route path="/members/:userId" element={<MemberProfilePage />} />
-            <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
+            <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
+            <Route path="/members/add" element={<ProtectedRoute requiredPermission="members.create"><AddMember /></ProtectedRoute>} />
+            <Route path="/members/import" element={<ProtectedRoute requiredPermission="members.create"><ImportMembers /></ProtectedRoute>} />
+            <Route path="/members/:userId" element={<ProtectedRoute><MemberProfilePage /></ProtectedRoute>} />
+            <Route path="/members/:userId/training" element={<ProtectedRoute><MemberTrainingHistoryPage /></ProtectedRoute>} />
 
             {/* Events Module */}
-            <Route path="/events" element={<EventsPage />} />
-            <Route path="/events/:id" element={<EventDetailPage />} />
-            <Route path="/events/:id/qr-code" element={<EventQRCodePage />} />
-            <Route path="/events/:id/check-in" element={<EventSelfCheckInPage />} />
-            <Route path="/events/:id/monitoring" element={<EventCheckInMonitoringPage />} />
-            <Route path="/events/:id/analytics" element={<AnalyticsDashboardPage />} />
+            <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+            <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
+            <Route path="/events/:id/qr-code" element={<ProtectedRoute><EventQRCodePage /></ProtectedRoute>} />
+            <Route path="/events/:id/check-in" element={<ProtectedRoute><EventSelfCheckInPage /></ProtectedRoute>} />
+            <Route path="/events/:id/monitoring" element={<ProtectedRoute requiredPermission="events.manage"><EventCheckInMonitoringPage /></ProtectedRoute>} />
+            <Route path="/events/:id/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
 
             {/* Training Module */}
-            <Route path="/training" element={<TrainingDashboardPage />} />
-            <Route path="/training/officer" element={<TrainingOfficerDashboard />} />
-            <Route path="/training/requirements" element={<TrainingRequirementsPage />} />
-            <Route path="/training/programs" element={<TrainingProgramsPage />} />
-            <Route path="/training/sessions/new" element={<CreateTrainingSessionPage />} />
-            <Route path="/training/integrations" element={<ExternalTrainingPage />} />
+            <Route path="/training" element={<ProtectedRoute><TrainingDashboardPage /></ProtectedRoute>} />
+            <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
+            <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
+            <Route path="/training/programs" element={<ProtectedRoute><TrainingProgramsPage /></ProtectedRoute>} />
+            <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
+            <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
 
             {/* Admin/Monitoring Routes */}
-            <Route path="/admin/errors" element={<ErrorMonitoringPage />} />
-            <Route path="/admin/analytics" element={<AnalyticsDashboardPage />} />
-            <Route path="/admin/members" element={<MembersAdminPage />} />
-            <Route path="/admin/public-portal" element={<PublicPortalAdmin />} />
+            <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="admin.errors"><ErrorMonitoringPage /></ProtectedRoute>} />
+            <Route path="/admin/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
+            <Route path="/admin/members" element={<ProtectedRoute requiredPermission="members.manage"><MembersAdminPage /></ProtectedRoute>} />
+            <Route path="/admin/public-portal" element={<ProtectedRoute requiredPermission="admin.settings"><PublicPortalAdmin /></ProtectedRoute>} />
 
             {/* Settings Module */}
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/roles" element={<RoleManagementPage />} />
+            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RoleManagementPage /></ProtectedRoute>} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />
@@ -159,8 +166,9 @@ function App() {
             },
           }}
         />
-      </div>
-    </BrowserRouter>
+        </div>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

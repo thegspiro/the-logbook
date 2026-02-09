@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { Election } from '../types/election';
 import { ElectionResults } from '../components/ElectionResults';
@@ -65,9 +66,10 @@ export const ElectionDetailPage: React.FC = () => {
         results_visible_immediately: !election.results_visible_immediately,
       });
       setElection(updated);
+      toast.success('Visibility setting updated successfully');
     } catch (err: any) {
       console.error('Error updating visibility:', err);
-      alert(err.response?.data?.detail || 'Failed to update visibility');
+      toast.error(err.response?.data?.detail || 'Failed to update visibility');
     } finally {
       setUpdatingVisibility(false);
     }
@@ -79,9 +81,10 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.openElection(electionId);
       setElection(updated);
+      toast.success('Election opened successfully');
     } catch (err: any) {
       console.error('Error opening election:', err);
-      alert(err.response?.data?.detail || 'Failed to open election');
+      toast.error(err.response?.data?.detail || 'Failed to open election');
     }
   };
 
@@ -96,9 +99,10 @@ export const ElectionDetailPage: React.FC = () => {
       const updated = await electionService.closeElection(electionId);
       setElection(updated);
       setShowResults(true);
+      toast.success('Election closed successfully');
     } catch (err: any) {
       console.error('Error closing election:', err);
-      alert(err.response?.data?.detail || 'Failed to close election');
+      toast.error(err.response?.data?.detail || 'Failed to close election');
     }
   };
 
@@ -155,7 +159,7 @@ export const ElectionDetailPage: React.FC = () => {
       setRollbackReason('');
 
       // Show success message
-      alert(`Election rolled back successfully. ${response.notifications_sent} leadership members were notified.`);
+      toast.success(`Election rolled back successfully. ${response.notifications_sent} leadership members were notified.`);
     } catch (err: any) {
       console.error('Error rolling back election:', err);
       setRollbackError(err.response?.data?.detail || 'Failed to rollback election');

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Users, FileText, Settings, GraduationCap, TrendingUp, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { AppLayout } from '../components/layout';
 import { useNavigate } from 'react-router-dom';
 import { trainingProgramService } from '../services/api';
+import { getProgressBarColor } from '../utils/eventHelpers';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 
 /**
@@ -43,11 +45,13 @@ const Dashboard: React.FC = () => {
           details.set(enrollment.id, progress);
         } catch (err) {
           console.error(`Failed to load progress for enrollment ${enrollment.id}:`, err);
+          // Continue loading other enrollments even if one fails
         }
       }
       setProgressDetails(details);
     } catch (error) {
       console.error('Failed to load training progress:', error);
+      toast.error('Failed to load training progress');
     } finally {
       setLoadingTraining(false);
     }
@@ -170,12 +174,7 @@ const Dashboard: React.FC = () => {
                     {/* Progress Bar */}
                     <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
                       <div
-                        className={`h-2 rounded-full transition-all ${
-                          enrollment.progress_percentage >= 75 ? 'bg-green-500' :
-                          enrollment.progress_percentage >= 50 ? 'bg-blue-500' :
-                          enrollment.progress_percentage >= 25 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`}
+                        className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}
                       />
                     </div>
