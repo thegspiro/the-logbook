@@ -567,7 +567,7 @@ const OnboardingCheck: React.FC = () => {
                     The backend server is starting up. This process includes initializing services, connecting to the database, and running migrations.
                   </p>
                   <p className="text-slate-400 text-xs">
-                    First startup can take 1-2 minutes while containers initialize and database tables are created.
+                    First startup can take 10-15 minutes while MySQL initializes and 38 database tables are created.
                   </p>
                 </div>
               </div>
@@ -696,7 +696,7 @@ const OnboardingCheck: React.FC = () => {
                 </span>
               </div>
               <p className="text-slate-500 text-xs mt-2">
-                Services are starting up. On first deployment, database initialization can take 1-3 minutes.
+                Services are starting up. On first deployment, database initialization can take 10-15 minutes.
               </p>
             </div>
           )}
