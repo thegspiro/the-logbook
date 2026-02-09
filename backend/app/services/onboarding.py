@@ -108,7 +108,7 @@ class OnboardingService:
         Returns:
             True if onboarding is needed, False if already completed
         """
-        # Check if onboarding status exists
+        # First, check if onboarding is explicitly marked as completed
         result = await self.db.execute(
             select(OnboardingStatus).where(OnboardingStatus.is_completed == True)
         )
@@ -117,16 +117,27 @@ class OnboardingService:
         if completed:
             return False
 
-        # Also check if any organizations exist
+        # Check if there's an onboarding in progress (not completed)
+        result = await self.db.execute(
+            select(OnboardingStatus).where(OnboardingStatus.is_completed == False)
+        )
+        in_progress = result.scalar_one_or_none()
+
+        if in_progress:
+            # Onboarding is in progress, needs to continue
+            return True
+
+        # No OnboardingStatus found - check if this is a legacy installation
+        # (organizations exist but no onboarding record was ever created)
         result = await self.db.execute(select(func.count(Organization.id)))
         org_count = result.scalar()
 
-        # If organizations exist, assume onboarding was done (legacy)
         if org_count > 0:
-            # Auto-mark as completed
+            # Legacy installation - auto-mark as completed
             await self._mark_legacy_completed()
             return False
 
+        # No onboarding status and no organizations - needs onboarding
         return True
 
     async def get_onboarding_status(self) -> Optional[OnboardingStatus]:
