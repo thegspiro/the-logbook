@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
@@ -44,7 +45,7 @@ export const EventDetailPage: React.FC = () => {
         fetchStats();
       }
     }
-  }, [eventId]);
+  }, [eventId, canManage]);
 
   const fetchEvent = async () => {
     if (!eventId) return;
@@ -162,9 +163,10 @@ export const EventDetailPage: React.FC = () => {
       await eventService.checkInAttendee(eventId, { user_id: userId });
       await fetchRSVPs();
       await fetchStats();
+      toast.success('Member checked in successfully');
     } catch (err: any) {
       console.error('Error checking in attendee:', err);
-      alert(err.response?.data?.detail || 'Failed to check in attendee');
+      toast.error(err.response?.data?.detail || 'Failed to check in attendee');
     }
   };
 
