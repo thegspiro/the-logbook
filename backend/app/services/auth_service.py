@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 import secrets
 import hashlib
 
-from app.models.user import User, Session as UserSession, Organization
+from app.models.user import User, Session as UserSession, Organization, UserStatus
 from app.core.security import (
     verify_password,
     hash_password,
@@ -310,7 +310,7 @@ class AuthService:
             first_name=first_name,
             last_name=last_name,
             badge_number=badge_number,
-            status="active",
+            status=UserStatus.ACTIVE,
             email_verified=False,
         )
 

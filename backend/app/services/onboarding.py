@@ -540,7 +540,7 @@ class OnboardingService:
         # Use AuthService to create user with proper password hashing
         auth_service = AuthService(self.db)
 
-        user = await auth_service.register_user(
+        user, error = await auth_service.register_user(
             organization_id=organization_id,
             username=username,
             email=email,
@@ -549,6 +549,9 @@ class OnboardingService:
             last_name=last_name,
             badge_number=badge_number
         )
+
+        if error or not user:
+            raise ValueError(error or "Failed to create admin user")
 
         # Assign Super Admin role
         result = await self.db.execute(

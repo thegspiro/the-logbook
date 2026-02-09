@@ -25,10 +25,9 @@ interface StartupInfo {
   errors?: string[] | null;
 }
 
-const MAX_RETRIES = 150; // ~12.5 minutes total - allows for MySQL init + migrations
-const INITIAL_DELAY = 2000;
-const MAX_DELAY = 5000;
-const SKIP_AVAILABLE_AFTER = 10; // Show skip option after 10 attempts (~50 seconds)
+const MAX_RETRIES = 20; // 20 minutes total - allows for MySQL init + migrations
+const CHECK_INTERVAL = 60000; // Check every 60 seconds (1 minute)
+const SKIP_AVAILABLE_AFTER = 5; // Show skip option after 5 attempts (~5 minutes)
 
 const OnboardingCheck: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +110,7 @@ const OnboardingCheck: React.FC = () => {
       return () => clearInterval(tipRotation);
     }
     return undefined;
-  }, [isWaiting, startupInfo, educationalTips.length]);
+  }, [isWaiting, startupInfo]);
 
   // Show skip option after certain attempts
   useEffect(() => {
@@ -347,7 +346,6 @@ const OnboardingCheck: React.FC = () => {
         const newCount = prev + 1;
 
         if (newCount < MAX_RETRIES) {
-          const delay = Math.min(INITIAL_DELAY + (newCount * 500), MAX_DELAY);
           setIsWaiting(true);
 
           // More informative message based on startup info
@@ -356,14 +354,14 @@ const OnboardingCheck: React.FC = () => {
             message = startupInfo.message || message;
             // Add helpful context about migration time
             if (startupInfo.phase?.includes('migration')) {
-              message += ' (First startup may take 10+ minutes for database initialization)';
+              message += ' (First startup may take 25-30 minutes for database initialization)';
             }
           }
           setStatusMessage(message);
 
           setTimeout(() => {
             runCheck();
-          }, delay);
+          }, CHECK_INTERVAL);
         } else {
           setError('Services did not become ready in time. Please check that all containers are running and review logs.');
         }
@@ -567,7 +565,7 @@ const OnboardingCheck: React.FC = () => {
                     The backend server is starting up. This process includes initializing services, connecting to the database, and running migrations.
                   </p>
                   <p className="text-slate-400 text-xs">
-                    First startup can take 1-2 minutes while containers initialize and database tables are created.
+                    First startup can take 25-30 minutes while MySQL initializes and 38 database migrations create comprehensive tables for your fire department intranet.
                   </p>
                 </div>
               </div>
@@ -696,7 +694,7 @@ const OnboardingCheck: React.FC = () => {
                 </span>
               </div>
               <p className="text-slate-500 text-xs mt-2">
-                Services are starting up. On first deployment, database initialization can take 1-3 minutes.
+                Services are starting up. Checking every 60 seconds. First deployment can take 25-30 minutes.
               </p>
             </div>
           )}
@@ -743,7 +741,7 @@ const OnboardingCheck: React.FC = () => {
               <div>
                 <h4 className="text-slate-200 font-semibold mb-1">⏱️ Expected Timeline</h4>
                 <p className="text-slate-400 text-xs">
-                  • Fresh install: 10-12 minutes (mostly MySQL initialization)<br />
+                  • Fresh install: 25-30 minutes (~6 min MySQL init + ~23 min migrations)<br />
                   • Subsequent restarts: 10-30 seconds<br />
                   • The wait time is longest on the very first startup
                 </p>

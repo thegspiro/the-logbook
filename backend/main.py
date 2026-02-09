@@ -6,13 +6,14 @@ It initializes the FastAPI application, sets up middleware,
 connects to the database, and configures routes.
 """
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from loguru import logger
 import sys
+import signal
 
 from app.core.config import settings
 from app.core.database import database_manager
@@ -109,6 +110,36 @@ class StartupStatus:
 
 # Global startup status instance
 startup_status = StartupStatus()
+
+
+@contextmanager
+def timeout_context(seconds: int, operation_name: str = "Operation"):
+    """
+    Context manager for adding timeout to blocking operations.
+
+    Args:
+        seconds: Timeout in seconds
+        operation_name: Name of operation for error messages
+
+    Raises:
+        TimeoutError: If operation exceeds timeout
+    """
+    def timeout_handler(signum, frame):
+        raise TimeoutError(
+            f"{operation_name} timed out after {seconds} seconds. "
+            "This may indicate a deadlock, infinite loop, or network issue."
+        )
+
+    # Set up the signal handler (Unix/Linux only - works in Docker containers)
+    original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+
+    try:
+        yield
+    finally:
+        # Cancel the alarm and restore original handler
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, original_handler)
 
 
 def validate_schema(engine) -> tuple[bool, list[str]]:
@@ -229,10 +260,25 @@ def run_migrations():
         schema_was_stamped = False
 
         try:
-            command.upgrade(alembic_cfg, "head")
+            # Run migrations with 30-minute timeout to prevent infinite hangs
+            # Normal migration time: ~23 minutes for 38 migrations
+            # This protects against deadlocks, infinite loops, or network issues
+            with timeout_context(1800, "Database migrations"):
+                command.upgrade(alembic_cfg, "head")
+
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database migrations complete")
             logger.info("✓ Database migrations complete")
+        except TimeoutError as timeout_error:
+            logger.error(f"⚠️  {timeout_error}")
+            startup_status.add_error(str(timeout_error))
+            startup_status.phase = "error"
+            startup_status.message = "Database migrations timed out - possible deadlock or hang"
+            raise RuntimeError(
+                "Database migrations timed out after 30 minutes. "
+                "This may indicate a deadlock, infinite loop, or network issue. "
+                "Check database logs for locked tables or stuck queries."
+            )
         except Exception as upgrade_error:
             # If upgrade fails due to table already exists, stamp to head
             error_str = str(upgrade_error).lower()
