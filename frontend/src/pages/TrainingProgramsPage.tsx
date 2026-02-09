@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   GraduationCap,
   Plus,
@@ -253,10 +254,10 @@ const TrainingProgramsPage: React.FC = () => {
     setImportingRegistry(registryName);
     try {
       const result = await trainingProgramService.importRegistry(registryName);
-      alert(`Successfully imported ${result.imported_count} requirements from ${result.registry_name}`);
+      toast.success(`Successfully imported ${result.imported_count} requirements from ${result.registry_name}`);
       loadData();
     } catch (error: any) {
-      alert(`Failed to import registry: ${error.response?.data?.detail || error.message}`);
+      toast.error(`Failed to import registry: ${error.response?.data?.detail || error.message}`);
     } finally {
       setImportingRegistry(null);
     }

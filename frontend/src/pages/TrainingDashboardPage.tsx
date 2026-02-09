@@ -6,7 +6,9 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { trainingService } from '../services/api';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import type {
   TrainingCourse,
   TrainingRecord,
@@ -39,6 +41,7 @@ export default function TrainingDashboardPage() {
       setRequirements(requirementsData);
     } catch (error) {
       console.error('Error loading training data:', error);
+      toast.error('Failed to load training dashboard data');
     } finally {
       setLoading(false);
     }
@@ -61,11 +64,7 @@ export default function TrainingDashboardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading training dashboard...</div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading training dashboard..." />;
   }
 
   return (

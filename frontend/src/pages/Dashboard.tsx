@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Users, FileText, Settings, GraduationCap, TrendingUp, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { AppLayout } from '../components/layout';
 import { useNavigate } from 'react-router-dom';
@@ -43,11 +44,13 @@ const Dashboard: React.FC = () => {
           details.set(enrollment.id, progress);
         } catch (err) {
           console.error(`Failed to load progress for enrollment ${enrollment.id}:`, err);
+          // Continue loading other enrollments even if one fails
         }
       }
       setProgressDetails(details);
     } catch (error) {
       console.error('Failed to load training progress:', error);
+      toast.error('Failed to load training progress');
     } finally {
       setLoadingTraining(false);
     }

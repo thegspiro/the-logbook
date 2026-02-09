@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { Save, Plus, X, AlertCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
 
@@ -37,7 +38,7 @@ const ConfigurationTab: React.FC = () => {
         setNewOrigin('');
       }
     } catch {
-      alert('Please enter a valid URL (e.g., https://example.com)');
+      toast.error('Please enter a valid URL (e.g., https://example.com)');
     }
   };
 
