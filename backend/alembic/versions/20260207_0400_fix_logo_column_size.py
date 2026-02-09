@@ -29,23 +29,22 @@ def upgrade() -> None:
     TEXT: 65,535 bytes (64KB)
     LONGTEXT: 4,294,967,295 bytes (4GB)
     """
-    # Alter the column to LONGTEXT
-    op.alter_column(
-        'organizations',
-        'logo',
-        existing_type=sa.Text(),
-        type_=mysql.LONGTEXT(),
-        existing_nullable=True
-    )
+    # Use raw SQL for MySQL compatibility
+    # ALTER COLUMN with TEXT variants requires raw SQL in MySQL
+    from sqlalchemy import text
+
+    bind = op.get_bind()
+    bind.execute(text(
+        "ALTER TABLE organizations MODIFY COLUMN logo LONGTEXT"
+    ))
 
 
 def downgrade() -> None:
     """Revert logo column back to TEXT."""
     # WARNING: This will truncate any logos larger than 64KB
-    op.alter_column(
-        'organizations',
-        'logo',
-        existing_type=mysql.LONGTEXT(),
-        type_=sa.Text(),
-        existing_nullable=True
-    )
+    from sqlalchemy import text
+
+    bind = op.get_bind()
+    bind.execute(text(
+        "ALTER TABLE organizations MODIFY COLUMN logo TEXT"
+    ))

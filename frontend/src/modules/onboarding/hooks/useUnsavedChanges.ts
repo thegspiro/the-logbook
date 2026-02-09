@@ -47,23 +47,29 @@ export function useUnsavedChanges({
 
   // Block navigation within the app
   // In React Router v6.30+, useBlocker takes a boolean or function returning boolean
-  const blocker = useBlocker(hasUnsavedChanges);
+  // Check if useBlocker is available before calling (avoids console spam)
+  const isBlockerAvailable = typeof useBlocker === 'function';
+
+  // Only call useBlocker if it's actually available
+  const blocker = isBlockerAvailable
+    ? useBlocker(hasUnsavedChanges)
+    : { state: 'unblocked' as const, proceed: () => {}, reset: () => {} };
 
   // Handle blocked navigation
   useEffect(() => {
-    if (blocker.state === 'blocked') {
+    if (blocker?.state === 'blocked') {
       const shouldLeave = window.confirm(message);
 
       if (shouldLeave) {
-        blocker.proceed();
+        blocker.proceed?.();
       } else {
-        blocker.reset();
+        blocker.reset?.();
       }
     }
   }, [blocker, message]);
 
   return {
-    isBlocked: blocker.state === 'blocked',
+    isBlocked: blocker?.state === 'blocked',
     blocker
   };
 }
