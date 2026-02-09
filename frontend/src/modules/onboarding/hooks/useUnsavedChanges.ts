@@ -51,9 +51,9 @@ export function useUnsavedChanges({
   let blocker;
   try {
     blocker = useBlocker(hasUnsavedChanges);
-  } catch (error) {
-    console.warn('useBlocker not available:', error);
-    // Fallback blocker object when useBlocker fails
+  } catch {
+    // Silently fallback when useBlocker is unavailable
+    // Browser refresh warnings still work via useBeforeUnload above
     blocker = { state: 'unblocked', proceed: () => {}, reset: () => {} };
   }
 
