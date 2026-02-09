@@ -4,6 +4,7 @@ import { Users, FileText, Settings, GraduationCap, TrendingUp, AlertTriangle, Ch
 import { AppLayout } from '../components/layout';
 import { useNavigate } from 'react-router-dom';
 import { trainingProgramService } from '../services/api';
+import { getProgressBarColor } from '../utils/eventHelpers';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 
 /**
@@ -173,12 +174,7 @@ const Dashboard: React.FC = () => {
                     {/* Progress Bar */}
                     <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
                       <div
-                        className={`h-2 rounded-full transition-all ${
-                          enrollment.progress_percentage >= 75 ? 'bg-green-500' :
-                          enrollment.progress_percentage >= 50 ? 'bg-blue-500' :
-                          enrollment.progress_percentage >= 25 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`}
+                        className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}
                       />
                     </div>
