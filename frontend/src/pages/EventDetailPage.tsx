@@ -14,7 +14,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
 import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
-import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, calculateDurationMinutes } from '../utils/dateFormatting';
+import { formatDateTime, formatTime, formatForDateTimeInput } from '../utils/dateFormatting';
 
 export const EventDetailPage: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -510,8 +510,8 @@ export const EventDetailPage: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center space-x-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(rsvp.status)}`}>
-                        {getStatusLabel(rsvp.status)}
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}>
+                        {getRSVPStatusLabel(rsvp.status)}
                       </span>
                       {rsvp.status === 'going' && !rsvp.checked_in && (
                         <button
@@ -656,7 +656,7 @@ export const EventDetailPage: React.FC = () => {
                               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                             />
                             <span className="ml-2 text-sm text-gray-700">
-                              {getStatusLabel(status as RSVPStatus)}
+                              {getRSVPStatusLabel(status as RSVPStatus)}
                             </span>
                           </label>
                         ))}
@@ -863,11 +863,11 @@ export const EventDetailPage: React.FC = () => {
                             {rsvp && (
                               <div className="flex items-center mt-1 space-x-2">
                                 <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getRSVPStatusColor(
                                     rsvp.status
                                   )}`}
                                 >
-                                  {getStatusLabel(rsvp.status)}
+                                  {getRSVPStatusLabel(rsvp.status)}
                                 </span>
                                 {isCheckedIn && (
                                   <span className="text-xs text-green-600">
