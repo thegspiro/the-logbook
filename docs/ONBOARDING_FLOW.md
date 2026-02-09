@@ -997,11 +997,14 @@ Before deploying to production:
   - Previously had inconsistent numbering
 
 ### Startup Experience
-- **Enhanced Initialization Messaging**: OnboardingCheck page now explains 1-3 minute startup delay
-  - Shows database connection retry attempts
-  - Displays migration progress with table count
-  - Explains what tables are being created
-  - Reduces user anxiety during first-time deployment
+- **Enhanced Initialization Messaging**: OnboardingCheck page now explains 25-30 minute first-time startup (10-30 seconds on subsequent restarts)
+  - Shows database connection retry attempts (up to 20 attempts)
+  - Displays migration progress with detailed count (38 migrations)
+  - Explains what features are being set up (membership, training, events, elections, inventory, audit logs)
+  - Educational tips rotate every 15 seconds while waiting
+  - Accurate timeline breakdown: ~6 min MySQL init + ~23 min migrations
+  - Reduces user anxiety during comprehensive database initialization
+  - **Migration timeout protection**: 30-minute timeout prevents infinite hangs
 
 ### State Management Cleanup
 - **Removed Misleading Auto-save Indicators**: OrganizationSetup no longer shows "Last saved" timestamps

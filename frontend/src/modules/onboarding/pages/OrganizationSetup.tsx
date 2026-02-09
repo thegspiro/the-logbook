@@ -370,6 +370,7 @@ const OrganizationSetup: React.FC = () => {
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   // Warn before leaving with unsaved changes
   const hasUnsavedChanges = useFormChanged(formData, initialFormData);
@@ -592,6 +593,9 @@ const OrganizationSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    // Mark that user has attempted to submit
+    setHasAttemptedSubmit(true);
+
     // Ensure session is initialized before submitting
     if (!hasSession || sessionLoading) {
       toast.error('Please wait for the session to initialize...');
@@ -1156,8 +1160,8 @@ const OrganizationSetup: React.FC = () => {
             />
           )}
 
-          {/* Validation Errors Summary */}
-          {Object.keys(validationErrors).length > 0 && (
+          {/* Validation Errors Summary - Only show after first submit attempt */}
+          {hasAttemptedSubmit && Object.keys(validationErrors).length > 0 && (
             <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />

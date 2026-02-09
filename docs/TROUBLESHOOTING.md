@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-08 (includes backend configuration fixes and migration improvements)
+**Last Updated**: 2026-02-09 (includes critical onboarding fixes, migration timeout protection, and accurate startup timing)
 
 ---
 
@@ -363,6 +363,72 @@ use_ssl: true  # Wrong! Port 587 needs TLS, not SSL
 ❌ Short1!            - Too short (only 7 chars)
 ❌ SimplePassword     - No number, no special char
 ```
+
+---
+
+### Admin User Creation Fails with 500 Error (Step 10)
+
+#### Error: 500 Internal Server Error during admin account creation
+
+**Status**: ✅ **FIXED** in latest version (commit `314a721`)
+
+**Symptoms:**
+- Complete onboarding steps 1-9 successfully
+- Step 10 "Create Admin Account" returns 500 error
+- Backend logs show: `INFO | User registered: [username]`
+- But endpoint returns 500 error to frontend
+- Trying again shows: "Username already exists"
+
+**What Happened:**
+1. User WAS successfully created in database ✅
+2. But endpoint failed after creation ❌
+3. Frontend stayed on form (thought it failed)
+4. User tried again → "already exists" error
+
+**Root Cause:**
+- Bug in code: Tuple unpacking error in `onboarding.py`
+- `register_user()` returns `(user, error)` tuple
+- Code treated it as single user object
+- Caused AttributeError when accessing user properties
+
+**Solution:**
+✅ **Update to latest version** - This bug is fixed.
+
+```bash
+# Update and restart with fresh database
+docker compose down -v
+git pull origin main
+docker compose up --build
+```
+
+**If You're Stuck on This Error:**
+
+**Option 1: Delete the user and try again**
+```bash
+# Connect to MySQL
+docker compose exec mysql mysql -u root -p[YOUR_ROOT_PASSWORD]
+
+# Delete the stuck user
+USE the_logbook;
+DELETE FROM users WHERE username = '[your-username]';
+EXIT;
+
+# Refresh browser and try Step 10 again
+```
+
+**Option 2: Fresh start (recommended)**
+```bash
+# Complete reset
+docker compose down -v
+docker compose up --build
+
+# Complete onboarding again from Step 1
+```
+
+**Prevention:**
+- This bug is fixed in commit `314a721`
+- Update to latest version before starting onboarding
+- No workaround needed - the fix works correctly
 
 **Password Generators**:
 - Browser built-in (Chrome, Firefox, Safari all offer this)
@@ -1087,36 +1153,47 @@ docker exec -it intranet-backend alembic downgrade <revision_id>
 
 ## Startup Sequence Issues
 
-### Database Initialization Takes 1-3 Minutes
+### Database Initialization Takes 25-30 Minutes (First Startup)
 
 **Symptoms:**
 - Backend shows "Connecting to database..." for extended period
 - Multiple retry attempts logged
 - Eventually connects successfully
+- Migrations take significant time
 
 **This is NORMAL behavior** on first startup:
 
-1. **MySQL Container Startup** (30-60 seconds)
+1. **MySQL Container Initialization** (~6 minutes)
    - MySQL needs time to initialize database
    - Creates system tables and sets up permissions
+   - First-time setup is slower than subsequent restarts
 
 2. **Backend Connection Retries** (up to 20 attempts)
    - Backend retries every 2-15 seconds with exponential backoff
    - Logged as: `Database connection attempt X/20...`
+   - Usually connects within first few attempts once MySQL is ready
 
-3. **Database Migration** (1-2 minutes)
-   - Creates 37+ database tables
-   - Logged as: `Running 37 database migrations...`
+3. **Database Migrations** (~23 minutes for 38 migrations)
+   - Creates comprehensive database schema for fire department intranet
+   - Includes tables for users, organizations, training, events, elections, inventory, and audit logs
+   - Logged as: `Running 38 database migrations...`
+   - **Protected by 30-minute timeout** to prevent infinite hangs
+
+**Total Expected Time:**
+- **First startup**: 25-30 minutes (~6 min MySQL + ~23 min migrations)
+- **Subsequent restarts**: 10-30 seconds (MySQL already initialized)
 
 **What the Frontend Shows:**
 - "Database Connection: Establishing connection to MySQL database (may retry while database initializes)"
-- "Database Setup: Creating database tables for users, training, events, elections, and more (this may take 1-2 minutes on first startup)"
-- Migration progress bar showing X/37 migrations complete
+- "Database Setup: Preparing your intranet with membership, training, events, elections, inventory, and audit capabilities"
+- Migration progress bar showing X/38 migrations complete
+- Educational tips rotating every 15 seconds while waiting
 
 **When to Worry:**
 - If connection attempts exceed 20 retries
 - If migrations fail with errors (not warnings)
-- If the process takes more than 5 minutes
+- **If the process takes more than 35 minutes** (migration timeout will trigger at 30 minutes)
+- If migrations time out (indicates deadlock, infinite loop, or network issue)
 
 **Troubleshooting:**
 ```bash
@@ -1132,21 +1209,121 @@ docker logs intranet-backend | grep ERROR
 
 ---
 
-## Recent Fixes Summary (2026-02-08)
+## Recent Fixes Summary
 
-### Backend Fixes
+### Critical Fixes (2026-02-09)
+
+#### 🔴 CRITICAL: Admin User Creation 500 Error (Step 10 Onboarding)
+
+**Status**: ✅ **FIXED** in commit `314a721`
+
+**Symptoms:**
+- User completes onboarding steps 1-9 successfully
+- Step 10 (admin user creation) returns 500 Internal Server Error
+- Backend logs show "User registered: [username]" but endpoint fails
+- User tries again and gets "username already exists" error
+
+**Root Cause:**
+- `auth_service.register_user()` returns a tuple `(user, error_message)`
+- Onboarding service was treating it as a single `User` object
+- Caused AttributeError when trying to access `user.roles` on a tuple
+
+**Fix Applied:**
+```python
+# Before (WRONG):
+user = await auth_service.register_user(...)
+
+# After (CORRECT):
+user, error = await auth_service.register_user(...)
+if error or not user:
+    raise ValueError(error or "Failed to create admin user")
+```
+
+**Impact**: Users can now complete Step 10 and finish onboarding successfully.
+
+---
+
+#### 🟡 User Status Field Type Safety
+
+**Status**: ✅ **FIXED** in commit `afe28f2`
+
+**Issue:**
+- User status was set as string `"active"` instead of enum `UserStatus.ACTIVE`
+- Could cause AttributeError when accessing `.value` on status field
+
+**Fix Applied:**
+```python
+# Before:
+user = User(..., status="active", ...)
+
+# After:
+from app.models.user import UserStatus
+user = User(..., status=UserStatus.ACTIVE, ...)
+```
+
+---
+
+#### 🔴 Migration Timeout Protection
+
+**Status**: ✅ **ADDED** in commit `eed280e`
+
+**Issue:**
+- Database migrations had NO timeout
+- Could hang indefinitely on deadlocks, infinite loops, or network issues
+- Highest-risk hang point in startup process
+
+**Protection Added:**
+- 30-minute timeout on migrations (normal time: ~23 minutes)
+- Fail-fast with clear error messages
+- Prevents silent hangs
+
+**Implementation:**
+```python
+with timeout_context(1800, "Database migrations"):
+    command.upgrade(alembic_cfg, "head")
+```
+
+**Error Handling:**
+- TimeoutError raised with descriptive message
+- Startup phase set to "error"
+- Application startup blocked (fail-fast principle)
+- Clear troubleshooting guidance in logs
+
+---
+
+#### 🟢 Accurate Startup Time Estimates
+
+**Status**: ✅ **UPDATED** in commit `5b8e63f`
+
+**Changes:**
+- Frontend now shows accurate 25-30 minute estimate (was 1-3 minutes)
+- Reflects actual observed times: ~6 min MySQL + ~23 min migrations
+- Updated in multiple locations:
+  - OnboardingCheck initialization page
+  - "What's Happening?" help section
+  - Expected Timeline breakdown
+
+---
+
+### Previous Fixes (2026-02-08)
+
 1. ✅ Fixed settings configuration reference (`MYSQL_DATABASE` → `DB_NAME`)
 2. ✅ Fixed duplicate migration error (conditional table creation)
 3. ✅ Fixed organization creation error (removed non-existent `description` field)
 
+---
+
 ### When to Update
-If you see any of these errors, update immediately:
+
+**If you see any of these errors, update immediately:**
 ```bash
 cd /path/to/the-logbook
-git pull
-docker-compose down
-docker-compose up --build -d
+git pull origin main
+docker-compose down -v  # -v removes volumes for fresh start
+docker-compose up --build
 ```
+
+**⚠️ Note:** The `-v` flag removes database volumes. Since these fixes relate to onboarding (before data entry), no data will be lost.
 
 ### Verifying the Fixes
 After updating, check logs for clean startup:
