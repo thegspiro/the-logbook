@@ -181,8 +181,7 @@ class OnboardingService:
         )
 
         self.db.add(status)
-        await self.db.commit()
-        await self.db.refresh(status)
+        await self.db.flush()
 
         return status
 
@@ -418,7 +417,7 @@ class OnboardingService:
         )
 
         self.db.add(org)
-        await self.db.commit()
+        await self.db.flush()
 
         # Create default roles for organization
         await self._create_default_roles(org.id)
@@ -509,7 +508,7 @@ class OnboardingService:
             )
             self.db.add(role)
 
-        await self.db.commit()
+        await self.db.flush()
 
     async def create_admin_user(
         self,
@@ -565,7 +564,7 @@ class OnboardingService:
             # Refresh user with roles relationship loaded to avoid MissingGreenlet error
             await self.db.refresh(user, ['roles'])
             user.roles.append(super_admin_role)
-            await self.db.commit()
+            await self.db.flush()
 
         # Update onboarding status
         status = await self.get_onboarding_status()
@@ -702,7 +701,7 @@ class OnboardingService:
         status.current_step = len(self.STEPS)
         status.setup_notes = notes
 
-        await self.db.commit()
+        await self.db.flush()
 
         # Create post-onboarding checklist
         await self._create_post_onboarding_checklist()
@@ -737,7 +736,7 @@ class OnboardingService:
         }
         status.steps_completed = steps
         status.current_step = step_number + 1
-        await self.db.commit()
+        await self.db.flush()
 
     async def _mark_legacy_completed(self):
         """Mark onboarding as completed for existing installations"""
@@ -749,7 +748,7 @@ class OnboardingService:
             setup_notes="Auto-completed for existing installation"
         )
         self.db.add(status)
-        await self.db.commit()
+        await self.db.flush()
 
     async def _create_post_onboarding_checklist(self):
         """Create post-onboarding checklist items"""
@@ -850,7 +849,7 @@ class OnboardingService:
             item = OnboardingChecklistItem(**item_data)
             self.db.add(item)
 
-        await self.db.commit()
+        await self.db.flush()
 
     async def get_post_onboarding_checklist(self) -> List[OnboardingChecklistItem]:
         """
