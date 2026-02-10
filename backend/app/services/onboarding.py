@@ -563,6 +563,8 @@ class OnboardingService:
         super_admin_role = result.scalar_one_or_none()
 
         if super_admin_role:
+            # Refresh user with roles relationship loaded to avoid MissingGreenlet error
+            await self.db.refresh(user, ['roles'])
             user.roles.append(super_admin_role)
             await self.db.commit()
 
