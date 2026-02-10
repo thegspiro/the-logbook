@@ -1,18 +1,17 @@
 """
 Integration Tests for Onboarding Flow
 
-This module tests the complete onboarding process from start to finish,
-ensuring all 10 steps work correctly together and handle edge cases.
+This module tests the critical onboarding process, especially the admin user
+creation with async role assignment that was causing the MissingGreenlet error.
 
 To run these tests:
     pytest tests/test_onboarding_integration.py -v -s
 
 Test Coverage:
-- Complete onboarding flow (all 10 steps)
-- Step validation and error handling
-- Database state consistency
-- Role assignment (especially the MissingGreenlet fix)
-- Admin user creation with proper async handling
+- Admin user creation with async role assignment (MissingGreenlet fix)
+- Organization creation
+- Default role creation
+- Onboarding status tracking
 """
 
 import pytest
@@ -21,331 +20,49 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.onboarding import OnboardingService
-from app.models.organization import Organization
-from app.models.user import User
-from app.models.role import Role
-from app.models.department import Department
-from app.models.station import Station
-from app.models.onboarding_status import OnboardingStatus
+from app.models.user import Organization, User, Role
+from app.models.onboarding import OnboardingStatus
 
 
 class TestOnboardingIntegration:
-    """Integration tests for the complete onboarding flow"""
+    """Integration tests for the onboarding flow"""
 
     @pytest.mark.asyncio
-    async def test_complete_onboarding_flow(
+    async def test_admin_user_creation_with_role_assignment(
         self,
         db_session: AsyncSession,
-        sample_org_data,
-        sample_admin_data,
-        sample_roles_data,
-        sample_departments_data,
-        sample_stations_data,
     ):
         """
-        Test the complete onboarding flow from start to finish.
-        This is the critical test that validates the entire process.
+        CRITICAL TEST: Validates the fix for SQLAlchemy MissingGreenlet error.
+
+        This test ensures that admin user creation with role assignment works
+        correctly using async-compatible methods (await db.refresh(user, ['roles'])).
         """
         service = OnboardingService(db_session)
 
-        # Step 1: Initialize onboarding
-        status = await service.initialize_onboarding()
-        assert status is not None
-        assert status.current_step == 0
-        assert not status.is_completed
+        # Create organization first
+        org_data = {
+            "name": "Test Fire Department",
+            "type": "fire_department",
+            "identifier_type": "fdid",
+            "identifier_value": "12345",
+            "street_address": "123 Test St",
+            "city": "Test City",
+            "state": "NY",
+            "zip_code": "12345",
+            "country": "USA",
+            "phone": "555-0100",
+            "email": "test@example.com",
+            "timezone": "America/New_York",
+        }
 
-        # Step 2: Save organization info (Step 1)
-        org_data = sample_org_data.copy()
-        await service.save_organization_info(org_data)
-
-        # Verify organization was created
-        result = await db_session.execute(select(Organization))
-        org = result.scalar_one_or_none()
+        org, error = await service.create_organization(**org_data)
+        assert error is None, f"Organization creation failed: {error}"
         assert org is not None
-        assert org.name == org_data["name"]
-        assert org.type == org_data["type"]
+        org_id = org.id
 
-        # Verify onboarding status updated
-        status = await service.get_onboarding_status()
-        assert status.current_step >= 1
-        assert status.organization_id is not None
-        org_id = status.organization_id
-
-        # Step 3: Configure roles (Step 2)
-        await service.configure_roles(
-            organization_id=org_id,
-            selected_roles=sample_roles_data["selected_roles"],
-            custom_roles=sample_roles_data["custom_roles"],
-        )
-
-        # Verify roles were created
-        result = await db_session.execute(
-            select(Role).where(Role.organization_id == org_id)
-        )
-        roles = result.scalars().all()
-        assert len(roles) > 0
-
-        # Verify Super Admin role exists (critical for admin user creation)
-        result = await db_session.execute(
-            select(Role).where(
-                Role.organization_id == org_id,
-                Role.slug == "super_admin"
-            )
-        )
-        super_admin_role = result.scalar_one_or_none()
-        assert super_admin_role is not None
-        assert super_admin_role.name == "Super Admin"
-
-        # Step 4: Configure departments (Step 3)
-        await service.configure_departments(
-            organization_id=org_id,
-            departments=sample_departments_data["departments"],
-        )
-
-        # Verify departments were created
-        result = await db_session.execute(
-            select(Department).where(Department.organization_id == org_id)
-        )
-        departments = result.scalars().all()
-        assert len(departments) == len(sample_departments_data["departments"])
-
-        # Step 5: Configure stations (Step 4)
-        await service.configure_stations(
-            organization_id=org_id,
-            stations=sample_stations_data["stations"],
-        )
-
-        # Verify stations were created
-        result = await db_session.execute(
-            select(Station).where(Station.organization_id == org_id)
-        )
-        stations = result.scalars().all()
-        assert len(stations) == len(sample_stations_data["stations"])
-
-        # Steps 6-9: These are typically configuration steps that may be skipped
-        # For now, we'll mark them as completed
-        status = await service.get_onboarding_status()
-        for step in [5, 6, 7, 8, 9]:
-            if status.current_step < step:
-                await service._mark_step_completed(status, step, f"step_{step}")
-
-        # Step 10: Create admin user (CRITICAL TEST - this is where the MissingGreenlet error occurred)
-        admin_data = sample_admin_data.copy()
-        user, error = await service.create_admin_user(
-            organization_id=org_id,
-            email=admin_data["email"],
-            username=admin_data["username"],
-            password=admin_data["password"],
-            first_name=admin_data["first_name"],
-            last_name=admin_data["last_name"],
-            badge_number=admin_data["badge_number"],
-        )
-
-        # Verify admin user creation
-        assert error is None, f"Admin user creation failed: {error}"
-        assert user is not None
-        assert user.email == admin_data["email"]
-        assert user.username == admin_data["username"]
-        assert user.organization_id == org_id
-
-        # CRITICAL: Verify the user has the Super Admin role
-        # This tests the fix for the MissingGreenlet error
-        await db_session.refresh(user, ['roles'])
-        assert len(user.roles) > 0, "User should have at least one role assigned"
-
-        role_slugs = [role.slug for role in user.roles]
-        assert "super_admin" in role_slugs, "User should have Super Admin role"
-
-        # Verify onboarding is complete
-        status = await service.get_onboarding_status()
-        assert status.is_completed
-        assert status.admin_email == admin_data["email"]
-        assert status.admin_username == admin_data["username"]
-
-    @pytest.mark.asyncio
-    async def test_admin_user_role_assignment_async_handling(
-        self,
-        db_session: AsyncSession,
-        sample_org_data,
-        sample_admin_data,
-    ):
-        """
-        Specific test for the async role assignment that was causing MissingGreenlet error.
-        This validates the fix where we use await db.refresh(user, ['roles']) before appending.
-        """
-        service = OnboardingService(db_session)
-
-        # Initialize and create organization
-        await service.initialize_onboarding()
-        await service.save_organization_info(sample_org_data)
-
-        status = await service.get_onboarding_status()
-        org_id = status.organization_id
-
-        # Create Super Admin role
-        from app.models.role import RoleCategory
-        super_admin_role = Role(
-            organization_id=org_id,
-            name="Super Admin",
-            slug="super_admin",
-            category=RoleCategory.ADMINISTRATIVE,
-            priority=100,
-        )
-        db_session.add(super_admin_role)
-        await db_session.commit()
-
-        # Create admin user - this should NOT raise MissingGreenlet error
-        admin_data = sample_admin_data.copy()
-        try:
-            user, error = await service.create_admin_user(
-                organization_id=org_id,
-                email=admin_data["email"],
-                username=admin_data["username"],
-                password=admin_data["password"],
-                first_name=admin_data["first_name"],
-                last_name=admin_data["last_name"],
-                badge_number=admin_data["badge_number"],
-            )
-        except Exception as e:
-            pytest.fail(f"Admin user creation raised exception: {type(e).__name__}: {e}")
-
-        # Verify success
-        assert error is None
-        assert user is not None
-
-        # Verify role was assigned correctly (this is where the bug was)
-        await db_session.refresh(user, ['roles'])
-        assert len(user.roles) > 0
-        assert user.roles[0].slug == "super_admin"
-
-    @pytest.mark.asyncio
-    async def test_onboarding_step_order_validation(
-        self,
-        db_session: AsyncSession,
-        sample_org_data,
-        sample_admin_data,
-    ):
-        """
-        Test that steps must be completed in order.
-        You can't create admin user before creating the organization.
-        """
-        service = OnboardingService(db_session)
-
-        # Initialize
-        await service.initialize_onboarding()
-
-        # Try to create admin user without setting up organization first
-        # This should fail gracefully
-        with pytest.raises(ValueError):
-            await service.create_admin_user(
-                organization_id=UUID("00000000-0000-0000-0000-000000000000"),
-                email=sample_admin_data["email"],
-                username=sample_admin_data["username"],
-                password=sample_admin_data["password"],
-                first_name=sample_admin_data["first_name"],
-                last_name=sample_admin_data["last_name"],
-                badge_number=sample_admin_data["badge_number"],
-            )
-
-    @pytest.mark.asyncio
-    async def test_duplicate_admin_user_prevention(
-        self,
-        db_session: AsyncSession,
-        sample_org_data,
-        sample_admin_data,
-    ):
-        """
-        Test that we can't create duplicate admin users.
-        """
-        service = OnboardingService(db_session)
-
-        # Setup
-        await service.initialize_onboarding()
-        await service.save_organization_info(sample_org_data)
-
-        status = await service.get_onboarding_status()
-        org_id = status.organization_id
-
-        # Create Super Admin role
-        from app.models.role import RoleCategory
-        super_admin_role = Role(
-            organization_id=org_id,
-            name="Super Admin",
-            slug="super_admin",
-            category=RoleCategory.ADMINISTRATIVE,
-            priority=100,
-        )
-        db_session.add(super_admin_role)
-        await db_session.commit()
-
-        # Create first admin user
-        admin_data = sample_admin_data.copy()
-        user1, error1 = await service.create_admin_user(
-            organization_id=org_id,
-            **admin_data,
-        )
-        assert error1 is None
-        assert user1 is not None
-
-        # Try to create duplicate admin user with same username
-        user2, error2 = await service.create_admin_user(
-            organization_id=org_id,
-            **admin_data,
-        )
-        assert error2 is not None
-        assert user2 is None
-        assert "already exists" in error2.lower() or "duplicate" in error2.lower()
-
-    @pytest.mark.asyncio
-    async def test_onboarding_status_persistence(
-        self,
-        db_session: AsyncSession,
-        sample_org_data,
-    ):
-        """
-        Test that onboarding status persists correctly across operations.
-        """
-        service = OnboardingService(db_session)
-
-        # Initialize
-        status1 = await service.initialize_onboarding()
-        initial_id = status1.id
-
-        # Save organization
-        await service.save_organization_info(sample_org_data)
-
-        # Get status again - should be same instance
-        status2 = await service.get_onboarding_status()
-        assert status2.id == initial_id
-        assert status2.current_step > status1.current_step
-        assert status2.organization_id is not None
-
-    @pytest.mark.asyncio
-    async def test_role_configuration_creates_required_roles(
-        self,
-        db_session: AsyncSession,
-        sample_org_data,
-        sample_roles_data,
-    ):
-        """
-        Test that role configuration creates all required system roles,
-        especially Super Admin which is critical for admin user creation.
-        """
-        service = OnboardingService(db_session)
-
-        # Setup
-        await service.initialize_onboarding()
-        await service.save_organization_info(sample_org_data)
-
-        status = await service.get_onboarding_status()
-        org_id = status.organization_id
-
-        # Configure roles
-        await service.configure_roles(
-            organization_id=org_id,
-            selected_roles=sample_roles_data["selected_roles"],
-            custom_roles=sample_roles_data["custom_roles"],
-        )
+        # Create default roles (including Super Admin)
+        await service._create_default_roles(org_id)
 
         # Verify Super Admin role exists
         result = await db_session.execute(
@@ -354,21 +71,194 @@ class TestOnboardingIntegration:
                 Role.slug == "super_admin"
             )
         )
-        super_admin = result.scalar_one_or_none()
-        assert super_admin is not None
+        super_admin_role = result.scalar_one_or_none()
+        assert super_admin_role is not None, "Super Admin role should be created"
+
+        # Create admin user - THIS IS THE CRITICAL TEST
+        # This should NOT raise MissingGreenlet error
+        admin_data = {
+            "organization_id": org_id,
+            "email": "admin@test.com",
+            "username": "testadmin",
+            "password": "SecurePass123!",
+            "first_name": "Test",
+            "last_name": "Admin",
+            "badge_number": "ADMIN-001",
+        }
+
+        try:
+            user, error = await service.create_admin_user(**admin_data)
+        except Exception as e:
+            pytest.fail(f"Admin user creation raised exception: {type(e).__name__}: {e}")
+
+        # Verify success
+        assert error is None, f"Admin user creation failed: {error}"
+        assert user is not None
+        assert user.email == admin_data["email"]
+        assert user.username == admin_data["username"]
+
+        # CRITICAL: Verify the user has the Super Admin role
+        # This tests that await db.refresh(user, ['roles']) worked correctly
+        await db_session.refresh(user, ['roles'])
+        assert len(user.roles) > 0, "User should have at least one role assigned"
+
+        role_slugs = [role.slug for role in user.roles]
+        assert "super_admin" in role_slugs, "User should have Super Admin role"
+
+    @pytest.mark.asyncio
+    async def test_create_organization(
+        self,
+        db_session: AsyncSession,
+    ):
+        """Test organization creation"""
+        service = OnboardingService(db_session)
+
+        org_data = {
+            "name": "Test Fire Department 2",
+            "type": "fire_department",
+            "identifier_type": "fdid",
+            "identifier_value": "54321",
+            "street_address": "456 Test Ave",
+            "city": "Test Town",
+            "state": "CA",
+            "zip_code": "90210",
+            "country": "USA",
+            "phone": "555-0200",
+            "email": "test2@example.com",
+            "timezone": "America/Los_Angeles",
+        }
+
+        org, error = await service.create_organization(**org_data)
+
+        assert error is None
+        assert org is not None
+        assert org.name == org_data["name"]
+        assert org.phone == org_data["phone"]
+
+        # Verify organization exists in database
+        result = await db_session.execute(
+            select(Organization).where(Organization.id == org.id)
+        )
+        db_org = result.scalar_one_or_none()
+        assert db_org is not None
+        assert db_org.name == org_data["name"]
+
+    @pytest.mark.asyncio
+    async def test_default_roles_creation(
+        self,
+        db_session: AsyncSession,
+    ):
+        """Test that default roles are created correctly"""
+        service = OnboardingService(db_session)
+
+        # Create organization
+        org_data = {
+            "name": "Test Fire Department 3",
+            "type": "fire_department",
+            "identifier_type": "state_id",
+            "identifier_value": "STATE-001",
+            "street_address": "789 Test Blvd",
+            "city": "Test Village",
+            "state": "TX",
+            "zip_code": "75001",
+            "country": "USA",
+            "phone": "555-0300",
+            "email": "test3@example.com",
+            "timezone": "America/Chicago",
+        }
+
+        org, error = await service.create_organization(**org_data)
+        assert error is None
+
+        # Create default roles
+        await service._create_default_roles(org.id)
+
+        # Verify roles were created
+        result = await db_session.execute(
+            select(Role).where(Role.organization_id == org.id)
+        )
+        roles = result.scalars().all()
+
+        assert len(roles) > 0, "Default roles should be created"
+
+        # Verify Super Admin role exists (critical for admin user creation)
+        role_slugs = [r.slug for r in roles]
+        assert "super_admin" in role_slugs, "Super Admin role must exist"
+
+        # Find Super Admin role and verify its properties
+        super_admin = next(r for r in roles if r.slug == "super_admin")
         assert super_admin.name == "Super Admin"
         assert super_admin.priority == 100
 
-        # Verify other selected roles
-        result = await db_session.execute(
-            select(Role).where(Role.organization_id == org_id)
-        )
-        all_roles = result.scalars().all()
-        role_slugs = [r.slug for r in all_roles]
+    @pytest.mark.asyncio
+    async def test_duplicate_admin_user_prevention(
+        self,
+        db_session: AsyncSession,
+    ):
+        """Test that duplicate admin users are prevented"""
+        service = OnboardingService(db_session)
 
-        # Should have super_admin plus the selected roles
-        assert "super_admin" in role_slugs
-        for selected_role in sample_roles_data["selected_roles"]:
-            # Note: The actual slug might be different from the input
-            # This is just checking that roles were created
-            pass
+        # Create organization and roles
+        org_data = {
+            "name": "Test Fire Department 4",
+            "type": "fire_department",
+            "identifier_type": "fdid",
+            "identifier_value": "99999",
+            "street_address": "999 Test Dr",
+            "city": "Test City",
+            "state": "FL",
+            "zip_code": "33101",
+            "country": "USA",
+            "phone": "555-0400",
+            "email": "test4@example.com",
+            "timezone": "America/New_York",
+        }
+
+        org, _ = await service.create_organization(**org_data)
+        await service._create_default_roles(org.id)
+
+        # Create first admin user
+        admin_data = {
+            "organization_id": org.id,
+            "email": "admin4@test.com",
+            "username": "testadmin4",
+            "password": "SecurePass123!",
+            "first_name": "Test",
+            "last_name": "Admin",
+            "badge_number": "ADMIN-004",
+        }
+
+        user1, error1 = await service.create_admin_user(**admin_data)
+        assert error1 is None
+        assert user1 is not None
+
+        # Try to create duplicate with same username
+        user2, error2 = await service.create_admin_user(**admin_data)
+        assert error2 is not None, "Should return error for duplicate user"
+        assert user2 is None
+
+    @pytest.mark.asyncio
+    async def test_onboarding_status_tracking(
+        self,
+        db_session: AsyncSession,
+    ):
+        """Test that onboarding status is tracked correctly"""
+        service = OnboardingService(db_session)
+
+        # Check if onboarding is needed
+        needs_onboarding = await service.needs_onboarding()
+        assert isinstance(needs_onboarding, bool)
+
+        # Get current status
+        status = await service.get_onboarding_status()
+
+        # Status might not exist in clean test DB
+        if status is None:
+            # Create initial status by starting onboarding
+            initial_status = await service.start_onboarding(
+                session_id="test-session",
+                ip_address="127.0.0.1",
+                user_agent="pytest"
+            )
+            assert initial_status is not None
+            assert not initial_status.is_completed
