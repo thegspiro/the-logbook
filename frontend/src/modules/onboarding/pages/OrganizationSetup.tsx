@@ -380,14 +380,15 @@ const OrganizationSetup: React.FC = () => {
   });
 
   // Section expansion state
+  // Start with more sections expanded to reduce clicks during onboarding
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
-    contact: false,
-    mailing: false,
+    contact: true,
+    mailing: true,
     physical: false,
     identifiers: false,
     additional: false,
-    logo: false,
+    logo: true, // Logo is important and small, show by default
   });
 
   // Zustand store
@@ -518,9 +519,9 @@ const OrganizationSetup: React.FC = () => {
       errors.mailingState = 'State is required';
     }
     if (!formData.mailingAddress.zipCode.trim()) {
-      errors.mailingZip = 'ZIP code is required';
-    } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
-      errors.mailingZip = 'Invalid ZIP code format. Expected: 12345 or 12345-6789';
+      errors.mailingZip = 'ZIP/Postal code is required';
+    } else if (formData.mailingAddress.zipCode.trim().length < 3) {
+      errors.mailingZip = 'ZIP/Postal code must be at least 3 characters';
     }
 
     // Physical address validation (if different)
@@ -846,7 +847,18 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-slate-900/30">
+              <div className="p-4 bg-slate-900/30 space-y-4">
+                {/* Info banner explaining why mailing address is required */}
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-blue-200">
+                      <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
+                      certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
+                      you can specify that separately below.
+                    </p>
+                  </div>
+                </div>
                 <AddressForm
                   address={formData.mailingAddress}
                   onChange={(addr) => updateFormData('mailingAddress', addr)}

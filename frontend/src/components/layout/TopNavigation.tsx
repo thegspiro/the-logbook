@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, LogOut, Menu, X } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -15,6 +16,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 }) => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', active: true },
@@ -98,7 +100,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <nav id="mobile-menu" className="md:hidden pb-4" aria-label="Mobile navigation">
-            <div className="flex flex-col space-y-2">
+            <div ref={mobileMenuRef} className="flex flex-col space-y-2">
               {navItems.map((item) => (
                 <a
                   key={item.label}

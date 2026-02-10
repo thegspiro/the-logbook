@@ -16,6 +16,7 @@ import {
   UserCog,
   Globe
 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -40,6 +41,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
+  const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: Home },
@@ -135,6 +137,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
       {/* Side Navigation */}
       <aside
+        ref={sideNavRef}
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
