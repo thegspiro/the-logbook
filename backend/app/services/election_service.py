@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 from uuid import UUID, uuid4
 import hashlib
 import secrets
@@ -275,8 +276,18 @@ class ElectionService:
         )
 
         self.db.add(vote)
-        await self.db.commit()
-        await self.db.refresh(vote)
+
+        # SECURITY: Database-level constraint prevents double-voting
+        # even if race condition bypasses application-level checks
+        try:
+            await self.db.commit()
+            await self.db.refresh(vote)
+        except IntegrityError:
+            # Caught by unique constraint - duplicate vote attempted
+            await self.db.rollback()
+            if position:
+                return None, f"Database integrity check: You have already voted for {position}"
+            return None, "Database integrity check: You have already voted in this election"
 
         return vote, None
 
@@ -313,10 +324,19 @@ class ElectionService:
         """
         Get comprehensive election results
 
-        Only returns results if:
-        - Election is closed, OR
-        - results_visible_immediately is True, OR
-        - User has permission to view results
+        SECURITY CRITICAL: Results are only visible AFTER election closing time.
+
+        Before the election closes, use get_election_stats() to view:
+        - Number of issued ballots (total_eligible_voters)
+        - Number of received ballots (total_votes_cast)
+
+        Results visibility rules:
+        1. Election end_date must have passed (current time > end_date)
+        2. Election status must be CLOSED
+        3. OR results_visible_immediately flag is True (override for instant results)
+
+        This prevents election manipulation and ensures integrity by not revealing
+        results until voting has officially ended.
         """
         # Get the election
         result = await self.db.execute(
@@ -329,14 +349,18 @@ class ElectionService:
         if not election:
             return None
 
-        # Check if results can be viewed
-        # TODO: Add permission check for early viewing
+        # SECURITY: Check if results can be viewed
+        # Results are ONLY visible after the election closing time has passed
+        current_time = datetime.now()
+        election_has_closed = current_time > election.end_date
+
         can_view = (
-            election.status == ElectionStatus.CLOSED
+            (election.status == ElectionStatus.CLOSED and election_has_closed)
             or election.results_visible_immediately
         )
 
         if not can_view:
+            # Before closing: use get_election_stats() for ballot counts only
             return None
 
         # Get all votes
@@ -495,7 +519,19 @@ class ElectionService:
     async def get_election_stats(
         self, election_id: UUID, organization_id: UUID
     ) -> Optional[ElectionStats]:
-        """Get detailed statistics about an election"""
+        """
+        Get election statistics including ballot counts
+
+        This method can be called BEFORE the election closes to view:
+        - Number of issued ballots (total_eligible_voters)
+        - Number of received ballots (total_votes_cast)
+        - Voter turnout percentage
+        - Total unique voters
+
+        This does NOT reveal individual candidate vote counts or results.
+        For full results with candidate breakdowns, use get_election_results()
+        which is only accessible after the election closing time.
+        """
         # Get the election
         result = await self.db.execute(
             select(Election)

@@ -58,7 +58,6 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
           {ONBOARDING_STEPS.map((step, index) => {
             const isCompleted = step.id < currentStep;
             const isCurrent = step.id === currentStep;
-            const isUpcoming = step.id > currentStep;
 
             return (
               <React.Fragment key={step.id}>
