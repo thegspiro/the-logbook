@@ -11,7 +11,7 @@ from typing import AsyncGenerator, Generator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from app.core.database import async_session_maker
+from app.core.database import async_session_factory
 
 
 @pytest.fixture(scope="function")
@@ -23,7 +23,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     Each test runs in a transaction that is rolled back after the test,
     ensuring test isolation without affecting the actual database.
     """
-    async with async_session_maker() as session:
+    async with async_session_factory() as session:
         # Start a transaction
         async with session.begin():
             yield session
