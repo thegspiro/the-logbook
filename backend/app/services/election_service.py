@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 from uuid import UUID, uuid4
 import hashlib
 import secrets
@@ -275,8 +276,18 @@ class ElectionService:
         )
 
         self.db.add(vote)
-        await self.db.commit()
-        await self.db.refresh(vote)
+
+        # SECURITY: Database-level constraint prevents double-voting
+        # even if race condition bypasses application-level checks
+        try:
+            await self.db.commit()
+            await self.db.refresh(vote)
+        except IntegrityError:
+            # Caught by unique constraint - duplicate vote attempted
+            await self.db.rollback()
+            if position:
+                return None, f"Database integrity check: You have already voted for {position}"
+            return None, "Database integrity check: You have already voted in this election"
 
         return vote, None
 
