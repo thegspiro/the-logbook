@@ -45,12 +45,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     { label: 'Dashboard', path: '/dashboard', icon: Home },
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
-    { label: 'Reports', path: '#', icon: FileText },
+    { label: 'Reports', path: '/reports', icon: FileText },
     {
       label: 'Settings',
       path: '/settings',
       icon: Settings,
       subItems: [
+        { label: 'My Account', path: '/settings/account', icon: UserCog },
         { label: 'Organization', path: '/settings', icon: Building2 },
         { label: 'Role Management', path: '/settings/roles', icon: Shield },
         { label: 'Member Admin', path: '/admin/members', icon: UserCog },

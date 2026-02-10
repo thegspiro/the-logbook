@@ -20,8 +20,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     { label: 'Dashboard', path: '/dashboard', active: true },
     { label: 'Members', path: '/members', active: false },
     { label: 'Events', path: '/events', active: false },
-    { label: 'Reports', path: '#', active: false },
-    { label: 'Settings', path: '#', active: false },
+    { label: 'Reports', path: '/reports', active: false },
+    { label: 'Settings', path: '/settings', active: false },
   ];
 
   const handleNavigation = (path: string, e?: React.MouseEvent) => {

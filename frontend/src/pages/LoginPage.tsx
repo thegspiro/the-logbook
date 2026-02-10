@@ -181,6 +181,14 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          <div className="flex items-center justify-end">
+            <div className="text-sm">
+              <a href="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1">
+                Forgot your password?
+              </a>
+            </div>
+          </div>
+
           <div>
             <button
               type="submit"

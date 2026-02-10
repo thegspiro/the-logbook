@@ -19,6 +19,8 @@ import type {
   TokenResponse,
   CurrentUser,
   PasswordChangeData,
+  PasswordResetRequest,
+  PasswordResetConfirm,
 } from '../types/auth';
 import type {
   TrainingCourse,
@@ -405,6 +407,30 @@ export const authService = {
    */
   async changePassword(data: PasswordChangeData): Promise<void> {
     await api.post('/auth/change-password', data);
+  },
+
+  /**
+   * Request password reset (sends email with reset link)
+   */
+  async requestPasswordReset(data: PasswordResetRequest): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/password-reset/request', data);
+    return response.data;
+  },
+
+  /**
+   * Confirm password reset with token
+   */
+  async confirmPasswordReset(data: PasswordResetConfirm): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/password-reset/confirm', data);
+    return response.data;
+  },
+
+  /**
+   * Validate password reset token
+   */
+  async validateResetToken(token: string): Promise<{ valid: boolean; email?: string }> {
+    const response = await api.get<{ valid: boolean; email?: string }>(`/auth/password-reset/validate/${token}`);
+    return response.data;
   },
 
   /**
@@ -1315,6 +1341,25 @@ export const inventoryService = {
    */
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
+    return response.data;
+  },
+};
+
+export interface DashboardStats {
+  total_members: number;
+  active_members: number;
+  total_documents: number;
+  setup_percentage: number;
+  recent_events_count: number;
+  pending_tasks_count: number;
+}
+
+export const dashboardService = {
+  /**
+   * Get dashboard statistics
+   */
+  async getStats(): Promise<DashboardStats> {
+    const response = await api.get<DashboardStats>('/dashboard/stats');
     return response.data;
   },
 };

@@ -211,3 +211,24 @@ export function getStrengthText(strength: PasswordValidationResult['strength']):
       return 'Weak password';
   }
 }
+
+/**
+ * Validate password strength and return individual checks
+ * Useful for displaying password requirements checklist in the UI
+ */
+export function validatePasswordStrength(password: string) {
+  const checks = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /\d/.test(password),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password),
+  };
+
+  const isValid = Object.values(checks).every(Boolean);
+
+  return {
+    checks,
+    isValid,
+  };
+}
