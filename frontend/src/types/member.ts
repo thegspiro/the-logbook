@@ -58,6 +58,7 @@ export interface Member {
   // Department Info
   joinDate: string;
   status: 'active' | 'inactive' | 'leave' | 'retired';
+  membershipType?: 'prospective' | 'probationary' | 'regular' | 'life' | 'administrative';
   rank?: string;
   role?: string;
   station?: string;
@@ -94,6 +95,7 @@ export interface MemberFormData {
   // Department
   joinDate: string;
   status: 'active' | 'inactive' | 'leave' | 'retired';
+  membershipType: 'prospective' | 'probationary' | 'regular' | 'life' | 'administrative';
   rank: string;
   role: string;
   station: string;
