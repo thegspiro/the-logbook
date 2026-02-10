@@ -11,11 +11,32 @@ from typing import AsyncGenerator, Generator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from app.core.database import async_session_factory
+from app.core.database import async_session_factory, database_manager
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """
+    Create an event loop for the test session.
+    """
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+async def initialize_database():
+    """
+    Initialize database connection for all tests.
+    This runs once per test session.
+    """
+    await database_manager.connect()
+    yield
+    await database_manager.disconnect()
 
 
 @pytest.fixture(scope="function")
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(initialize_database) -> AsyncGenerator[AsyncSession, None]:
     """
     Create a new database session for each test.
     Uses the app's actual MySQL database.
