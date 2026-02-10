@@ -61,10 +61,7 @@ class TestOnboardingIntegration:
         assert org is not None
         org_id = org.id
 
-        # Create default roles (including Super Admin)
-        await service._create_default_roles(org_id)
-
-        # Verify Super Admin role exists
+        # Verify Super Admin role exists (created automatically by create_organization)
         result = await db_session.execute(
             select(Role).where(
                 Role.organization_id == org_id,
@@ -170,10 +167,7 @@ class TestOnboardingIntegration:
         org = await service.create_organization(**org_data)
         assert org is not None
 
-        # Create default roles
-        await service._create_default_roles(org.id)
-
-        # Verify roles were created
+        # Verify roles were created (automatically by create_organization)
         result = await db_session.execute(
             select(Role).where(Role.organization_id == org.id)
         )
@@ -216,9 +210,8 @@ class TestOnboardingIntegration:
         }
 
         org = await service.create_organization(**org_data)
-        await service._create_default_roles(org.id)
 
-        # Create first admin user
+        # Create first admin user (roles already created by create_organization)
         admin_data = {
             "organization_id": org.id,
             "email": "admin4@test.com",
