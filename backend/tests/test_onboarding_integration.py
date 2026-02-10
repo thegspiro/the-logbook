@@ -43,21 +43,21 @@ class TestOnboardingIntegration:
         # Create organization first
         org_data = {
             "name": "Test Fire Department",
-            "type": "fire_department",
+            "slug": "test-fire-dept",
+            "organization_type": "fire_department",
             "identifier_type": "fdid",
-            "identifier_value": "12345",
-            "street_address": "123 Test St",
-            "city": "Test City",
-            "state": "NY",
-            "zip_code": "12345",
-            "country": "USA",
+            "fdid": "12345",
+            "mailing_address_line1": "123 Test St",
+            "mailing_city": "Test City",
+            "mailing_state": "NY",
+            "mailing_zip": "12345",
+            "mailing_country": "USA",
             "phone": "555-0100",
             "email": "test@example.com",
             "timezone": "America/New_York",
         }
 
-        org, error = await service.create_organization(**org_data)
-        assert error is None, f"Organization creation failed: {error}"
+        org = await service.create_organization(**org_data)
         assert org is not None
         org_id = org.id
 
@@ -87,12 +87,11 @@ class TestOnboardingIntegration:
         }
 
         try:
-            user, error = await service.create_admin_user(**admin_data)
+            user = await service.create_admin_user(**admin_data)
         except Exception as e:
             pytest.fail(f"Admin user creation raised exception: {type(e).__name__}: {e}")
 
         # Verify success
-        assert error is None, f"Admin user creation failed: {error}"
         assert user is not None
         assert user.email == admin_data["email"]
         assert user.username == admin_data["username"]
@@ -115,22 +114,22 @@ class TestOnboardingIntegration:
 
         org_data = {
             "name": "Test Fire Department 2",
-            "type": "fire_department",
+            "slug": "test-fire-dept-2",
+            "organization_type": "fire_department",
             "identifier_type": "fdid",
-            "identifier_value": "54321",
-            "street_address": "456 Test Ave",
-            "city": "Test Town",
-            "state": "CA",
-            "zip_code": "90210",
-            "country": "USA",
+            "fdid": "54321",
+            "mailing_address_line1": "456 Test Ave",
+            "mailing_city": "Test Town",
+            "mailing_state": "CA",
+            "mailing_zip": "90210",
+            "mailing_country": "USA",
             "phone": "555-0200",
             "email": "test2@example.com",
             "timezone": "America/Los_Angeles",
         }
 
-        org, error = await service.create_organization(**org_data)
+        org = await service.create_organization(**org_data)
 
-        assert error is None
         assert org is not None
         assert org.name == org_data["name"]
         assert org.phone == org_data["phone"]
@@ -154,21 +153,22 @@ class TestOnboardingIntegration:
         # Create organization
         org_data = {
             "name": "Test Fire Department 3",
-            "type": "fire_department",
+            "slug": "test-fire-dept-3",
+            "organization_type": "fire_department",
             "identifier_type": "state_id",
-            "identifier_value": "STATE-001",
-            "street_address": "789 Test Blvd",
-            "city": "Test Village",
-            "state": "TX",
-            "zip_code": "75001",
-            "country": "USA",
+            "state_id": "STATE-001",
+            "mailing_address_line1": "789 Test Blvd",
+            "mailing_city": "Test Village",
+            "mailing_state": "TX",
+            "mailing_zip": "75001",
+            "mailing_country": "USA",
             "phone": "555-0300",
             "email": "test3@example.com",
             "timezone": "America/Chicago",
         }
 
-        org, error = await service.create_organization(**org_data)
-        assert error is None
+        org = await service.create_organization(**org_data)
+        assert org is not None
 
         # Create default roles
         await service._create_default_roles(org.id)
@@ -201,20 +201,21 @@ class TestOnboardingIntegration:
         # Create organization and roles
         org_data = {
             "name": "Test Fire Department 4",
-            "type": "fire_department",
+            "slug": "test-fire-dept-4",
+            "organization_type": "fire_department",
             "identifier_type": "fdid",
-            "identifier_value": "99999",
-            "street_address": "999 Test Dr",
-            "city": "Test City",
-            "state": "FL",
-            "zip_code": "33101",
-            "country": "USA",
+            "fdid": "99999",
+            "mailing_address_line1": "999 Test Dr",
+            "mailing_city": "Test City",
+            "mailing_state": "FL",
+            "mailing_zip": "33101",
+            "mailing_country": "USA",
             "phone": "555-0400",
             "email": "test4@example.com",
             "timezone": "America/New_York",
         }
 
-        org, _ = await service.create_organization(**org_data)
+        org = await service.create_organization(**org_data)
         await service._create_default_roles(org.id)
 
         # Create first admin user
@@ -228,14 +229,13 @@ class TestOnboardingIntegration:
             "badge_number": "ADMIN-004",
         }
 
-        user1, error1 = await service.create_admin_user(**admin_data)
-        assert error1 is None
+        user1 = await service.create_admin_user(**admin_data)
         assert user1 is not None
 
         # Try to create duplicate with same username
-        user2, error2 = await service.create_admin_user(**admin_data)
-        assert error2 is not None, "Should return error for duplicate user"
-        assert user2 is None
+        # Should raise ValueError since create_admin_user raises exceptions on error
+        with pytest.raises(ValueError):
+            user2 = await service.create_admin_user(**admin_data)
 
     @pytest.mark.asyncio
     async def test_onboarding_status_tracking(
@@ -256,7 +256,6 @@ class TestOnboardingIntegration:
         if status is None:
             # Create initial status by starting onboarding
             initial_status = await service.start_onboarding(
-                session_id="test-session",
                 ip_address="127.0.0.1",
                 user_agent="pytest"
             )

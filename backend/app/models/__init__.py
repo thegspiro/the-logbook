@@ -34,6 +34,13 @@ from app.models.location import (
     Location
 )
 
+from app.models.public_portal import (
+    PublicPortalConfig,
+    PublicPortalAPIKey,
+    PublicPortalAccessLog,
+    PublicPortalDataWhitelist
+)
+
 from app.models.apparatus import (
     Apparatus,
     ApparatusType,
@@ -80,6 +87,11 @@ __all__ = [
     "EmailTemplateType",
     # Location models
     "Location",
+    # Public Portal models
+    "PublicPortalConfig",
+    "PublicPortalAPIKey",
+    "PublicPortalAccessLog",
+    "PublicPortalDataWhitelist",
     # Apparatus models
     "Apparatus",
     "ApparatusType",
