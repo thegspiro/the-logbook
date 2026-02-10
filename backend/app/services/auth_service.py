@@ -83,7 +83,7 @@ class AuthService:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=30)
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
-            await self.db.commit()
+            await self.db.flush()
             logger.warning("Authentication failed: invalid credentials")
             return None
 
@@ -91,7 +91,7 @@ class AuthService:
         user.failed_login_attempts = 0
         user.locked_until = None
         user.last_login_at = datetime.utcnow()
-        await self.db.commit()
+        await self.db.flush()
 
         return user
 
@@ -137,7 +137,7 @@ class AuthService:
         )
 
         self.db.add(session)
-        await self.db.commit()
+        await self.db.flush()
 
         logger.info(f"Created session for user: {user.username}")
 
@@ -213,7 +213,7 @@ class AuthService:
             session.expires_at = datetime.utcnow() + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
-            await self.db.commit()
+            await self.db.flush()
 
             return new_access_token, new_refresh_token
 
@@ -239,7 +239,7 @@ class AuthService:
         for session in sessions:
             await self.db.delete(session)
         if count:
-            await self.db.commit()
+            await self.db.flush()
             logger.info(f"Revoked {count} session(s) for user {user_id}")
         return count
 
@@ -315,7 +315,7 @@ class AuthService:
         )
 
         self.db.add(user)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(user)
 
         logger.info(f"User registered: {username}")
@@ -340,7 +340,7 @@ class AuthService:
 
             if session:
                 await self.db.delete(session)
-                await self.db.commit()
+                await self.db.flush()
                 logger.info(f"User logged out: session {session.id}")
                 return True
 
@@ -380,7 +380,7 @@ class AuthService:
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.utcnow()
 
-        await self.db.commit()
+        await self.db.flush()
 
         logger.info(f"Password changed for user: {user.username}")
 
@@ -500,7 +500,7 @@ class AuthService:
             minutes=RESET_TOKEN_EXPIRY_MINUTES
         )
 
-        await self.db.commit()
+        await self.db.flush()
         logger.info(
             f"Password reset token created (ip={ip_address})"
         )
@@ -539,7 +539,7 @@ class AuthService:
             # Clear expired token
             user.password_reset_token = None
             user.password_reset_expires_at = None
-            await self.db.commit()
+            await self.db.flush()
             return False, "Reset token has expired. Please request a new one."
 
         # Validate new password strength
@@ -555,7 +555,7 @@ class AuthService:
         user.failed_login_attempts = 0
         user.locked_until = None
 
-        await self.db.commit()
+        await self.db.flush()
         logger.info("Password successfully reset via token")
 
         return True, None
