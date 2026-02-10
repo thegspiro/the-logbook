@@ -292,17 +292,14 @@ class Role(Base):
 
 
 # User-Role Association Table (Many-to-Many)
-# Note: When inserting, you MUST provide the 'id' field explicitly since
-# Table objects don't auto-generate UUIDs like mapped classes do.
+# Uses composite primary key (user_id, role_id) as per standard many-to-many pattern
 user_roles = Table(
     'user_roles',
     Base.metadata,
-    Column('id', String(36), primary_key=True),  # Must be provided on insert
-    Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
-    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), nullable=False, index=True),
+    Column('user_id', String(36), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', String(36), ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
     Column('assigned_at', DateTime(timezone=True), server_default=func.now(), index=True),
     Column('assigned_by', String(36), ForeignKey('users.id'), index=True),
-    Index('idx_user_role', 'user_id', 'role_id', unique=True),
 )
 
 
