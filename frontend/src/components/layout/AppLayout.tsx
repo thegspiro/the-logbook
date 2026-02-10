@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
+import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -37,10 +39,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   }, [navigate]);
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = () => {
     localStorage.removeItem('auth_token');
     sessionStorage.clear();
     navigate('/login');
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutModal(false);
   };
 
   if (navigationLayout === 'left') {
@@ -56,11 +66,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <SideNavigation
           departmentName={departmentName}
           logoPreview={logoPreview}
-          onLogout={handleLogout}
+          onLogout={handleLogoutClick}
         />
         <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0" id="main-content" role="main">
           {children}
         </div>
+        <LogoutConfirmModal
+          isOpen={showLogoutModal}
+          onConfirm={handleLogoutConfirm}
+          onCancel={handleLogoutCancel}
+        />
       </div>
     );
   }
@@ -77,11 +92,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <TopNavigation
         departmentName={departmentName}
         logoPreview={logoPreview}
-        onLogout={handleLogout}
+        onLogout={handleLogoutClick}
       />
       <div id="main-content" role="main">
         {children}
       </div>
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onConfirm={handleLogoutConfirm}
+        onCancel={handleLogoutCancel}
+      />
     </div>
   );
 };
