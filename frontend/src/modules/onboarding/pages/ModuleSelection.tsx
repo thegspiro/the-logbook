@@ -188,23 +188,43 @@ const ModuleSelection: React.FC = () => {
                 <h3 className="text-lg font-bold text-white">{module.name}</h3>
                 {getCategoryBadge()}
               </div>
-              <p className="text-slate-300 text-sm mb-2">{module.description}</p>
+              <p className="text-slate-300 text-sm mb-3">{module.description}</p>
 
-              {/* Expand/Collapse Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleExpanded(module.id);
-                }}
-                className="text-cyan-400 text-sm font-medium hover:text-cyan-300 flex items-center space-x-1"
-              >
-                <span>{isExpanded ? 'Less' : 'More'} info</span>
-                {isExpanded ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
+              {/* Key Features - Always Visible */}
+              <div className="mb-3">
+                <h4 className="text-white text-xs font-semibold mb-1.5 uppercase tracking-wide">Key Features:</h4>
+                <ul className="space-y-1">
+                  {module.features.slice(0, 3).map((feature, index) => (
+                    <li key={index} className="text-slate-300 text-sm flex items-start space-x-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                  {module.features.length > 3 && !isExpanded && (
+                    <li className="text-slate-400 text-sm italic">
+                      + {module.features.length - 3} more feature{module.features.length - 3 !== 1 ? 's' : ''}
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              {/* Expand/Collapse Button - Only for additional details */}
+              {module.longDescription && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpanded(module.id);
+                  }}
+                  className="text-cyan-400 text-sm font-medium hover:text-cyan-300 flex items-center space-x-1 mb-2"
+                >
+                  <span>{isExpanded ? 'Hide' : 'View'} full details</span>
+                  {isExpanded ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+              )}
 
               {!module.canDisable && (
                 <p className="text-blue-400 text-xs mt-2 flex items-center space-x-1">
@@ -223,21 +243,25 @@ const ModuleSelection: React.FC = () => {
           </div>
         </div>
 
-        {/* Expanded Details */}
+        {/* Expanded Details - Full Description and All Features */}
         {isExpanded && (
           <div className="border-t border-white/10 p-4 bg-slate-900/30">
             <h4 className="text-white font-semibold mb-2">About this module</h4>
             <p className="text-slate-300 text-sm mb-4">{module.longDescription}</p>
 
-            <h4 className="text-white font-semibold mb-2">Key features</h4>
-            <ul className="space-y-1">
-              {module.features.map((feature, index) => (
-                <li key={index} className="text-slate-300 text-sm flex items-start space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
+            {module.features.length > 3 && (
+              <>
+                <h4 className="text-white font-semibold mb-2">All features ({module.features.length})</h4>
+                <ul className="space-y-1">
+                  {module.features.map((feature, index) => (
+                    <li key={index} className="text-slate-300 text-sm flex items-start space-x-2">
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         )}
       </div>
