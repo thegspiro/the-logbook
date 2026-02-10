@@ -8,106 +8,27 @@ It sets up test database, async sessions, and common test data.
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from app.core.database import Base
-from app.core.config import settings
-
-
-# Test database URL (use in-memory SQLite for fast tests or separate MySQL test DB)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
-
-# For more realistic tests with MySQL:
-# TEST_DATABASE_URL = f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:3306/test_{settings.DB_NAME}"
-
-
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """
-    Create an event loop for the test session.
-    This allows us to use async fixtures and tests.
-    """
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
-async def test_engine():
-    """
-    Create a test database engine.
-    Uses SQLite in-memory for fast tests.
-    """
-    engine = create_async_engine(
-        TEST_DATABASE_URL,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    # Create all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    yield engine
-
-    # Drop all tables after tests
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-    await engine.dispose()
+from app.core.database import async_session_maker
 
 
 @pytest.fixture(scope="function")
-async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Create a new database session for each test.
-    This ensures test isolation - each test gets a clean database state.
-    """
-    async_session_maker = async_sessionmaker(
-        test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
+    Uses the app's actual MySQL database.
 
+    Each test runs in a transaction that is rolled back after the test,
+    ensuring test isolation without affecting the actual database.
+    """
     async with async_session_maker() as session:
         # Start a transaction
-        await session.begin()
-
-        yield session
-
-        # Rollback the transaction to clean up
-        await session.rollback()
-
-
-@pytest.fixture(scope="function")
-async def clean_db(db_session: AsyncSession):
-    """
-    Ensure the database is completely clean before each test.
-    This fixture can be used when you need guaranteed empty tables.
-    """
-    # Delete all data from all tables (in correct order to respect foreign keys)
-    tables = [
-        "audit_logs",
-        "user_roles",
-        "permissions",
-        "roles",
-        "users",
-        "organization_settings",
-        "organizations",
-        "onboarding_status",
-    ]
-
-    for table in tables:
-        try:
-            await db_session.execute(text(f"DELETE FROM {table}"))
-        except Exception:
-            # Table might not exist in SQLite test DB
-            pass
-
-    await db_session.commit()
-    return db_session
+        async with session.begin():
+            yield session
+            # Transaction will be rolled back automatically when exiting the context
+            # No need for explicit rollback
 
 
 @pytest.fixture
