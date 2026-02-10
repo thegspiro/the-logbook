@@ -1,0 +1,431 @@
+# Election System Security Audit
+**Date:** 2026-02-10
+**Audited By:** Claude Code
+**Scope:** Ballot integrity, vote tampering prevention, double-voting protection
+
+---
+
+## Executive Summary
+
+The election system has **good foundational security** with proper authentication, eligibility checks, and anonymous voting implementation. However, there is **1 CRITICAL vulnerability** and several areas for improvement to ensure complete ballot integrity.
+
+**Overall Risk Level:** 🟡 **MEDIUM-HIGH** (due to critical double-voting vulnerability)
+
+---
+
+## 🔴 CRITICAL VULNERABILITIES
+
+### 1. **NO DATABASE-LEVEL DOUBLE-VOTING PREVENTION** ⚠️ CRITICAL
+
+**Location:** `backend/alembic/versions/20260118_0004_add_election_tables.py` (lines 73-93)
+
+**Issue:**
+The `votes` table **lacks a unique constraint** to prevent duplicate votes at the database level. The system only relies on application-level checks in `cast_vote()`, which can be bypassed through:
+
+- **Race conditions:** Two simultaneous vote submissions before the check completes
+- **Direct database manipulation:** Malicious admin or SQL injection
+- **API bypass:** If application logic fails or is compromised
+
+**Current Schema:**
+```sql
+CREATE TABLE votes (
+    id VARCHAR(36) PRIMARY KEY,
+    election_id VARCHAR(36) NOT NULL,
+    candidate_id VARCHAR(36) NOT NULL,
+    voter_id VARCHAR(36) NULL,        -- Nullable for anonymous voting
+    voter_hash VARCHAR(64) NULL,      -- For anonymous voting
+    position VARCHAR(100) NULL,
+    voted_at DATETIME NOT NULL,
+    ip_address VARCHAR(45) NULL,
+    user_agent VARCHAR(500) NULL
+);
+-- NO UNIQUE CONSTRAINT!
+```
+
+**Risk:**
+- User can vote multiple times for the same position
+- Ballot stuffing possible through race conditions
+- Election results can be manipulated
+
+**Recommended Fix:**
+```sql
+-- For NON-ANONYMOUS voting elections
+CREATE UNIQUE INDEX idx_votes_unique_non_anon
+ON votes (election_id, voter_id, position)
+WHERE voter_id IS NOT NULL AND position IS NOT NULL;
+
+-- For single-position non-anonymous elections
+CREATE UNIQUE INDEX idx_votes_unique_non_anon_single
+ON votes (election_id, voter_id)
+WHERE voter_id IS NOT NULL AND position IS NULL;
+
+-- For ANONYMOUS voting elections
+CREATE UNIQUE INDEX idx_votes_unique_anon
+ON votes (election_id, voter_hash, position)
+WHERE voter_hash IS NOT NULL AND position IS NOT NULL;
+
+-- For single-position anonymous elections
+CREATE UNIQUE INDEX idx_votes_unique_anon_single
+ON votes (election_id, voter_hash)
+WHERE voter_hash IS NOT NULL AND position IS NULL;
+```
+
+**Status:** 🔴 **NEEDS IMMEDIATE FIX**
+
+---
+
+## 🟡 MEDIUM PRIORITY ISSUES
+
+### 2. **Race Condition in vote_eligibility Check**
+
+**Location:** `backend/app/services/election_service.py:203-281`
+
+**Issue:**
+The `cast_vote()` method performs two separate database operations:
+1. Check if user has already voted (lines 169-174, 233-238)
+2. Insert the vote (lines 266-279)
+
+Between these operations, another concurrent vote could be inserted, allowing double voting.
+
+**Current Flow:**
+```python
+async def cast_vote(...):
+    # 1. Check eligibility (SELECT query)
+    eligibility = await self.check_voter_eligibility(...)
+
+    # ⚠️ RACE WINDOW: Another request could insert a vote here
+
+    # 2. Insert vote (INSERT query)
+    vote = Vote(...)
+    self.db.add(vote)
+    await self.db.commit()  # ⚠️ No database constraint to catch duplicate
+```
+
+**Recommended Fix:**
+Use database transactions with proper isolation level + unique constraints from issue #1:
+
+```python
+async def cast_vote(...):
+    async with self.db.begin():  # Transaction
+        # Check eligibility
+        eligibility = await self.check_voter_eligibility(...)
+
+        # Insert vote (protected by unique constraint)
+        try:
+            vote = Vote(...)
+            self.db.add(vote)
+            await self.db.commit()
+        except IntegrityError:
+            # Caught by unique constraint
+            return None, "You have already voted"
+```
+
+**Status:** 🟡 **MEDIUM PRIORITY** (Critical issue #1 must be fixed first)
+
+---
+
+### 3. **Voter Hash Salt Storage Risk**
+
+**Location:** `backend/app/models/election.py:124`
+
+**Issue:**
+The `voter_anonymity_salt` is stored in the database alongside votes. If the database is compromised, an attacker with:
+- The salt (from `elections.voter_anonymity_salt`)
+- Known user IDs
+- The hashing algorithm
+
+Could de-anonymize all votes by recomputing hashes.
+
+**Current Implementation:**
+```python
+voter_anonymity_salt = Column(String(64), nullable=True)
+# Stored in same database as votes!
+```
+
+**Risk Level:** MEDIUM (requires database access + knowledge)
+
+**Recommended Mitigations:**
+1. **✅ Already Implemented:** Documentation states salt can be destroyed after election closes
+2. **Additional:** Store salt in separate encrypted key management system (e.g., AWS KMS, HashiCorp Vault)
+3. **Additional:** Add automatic salt destruction 30 days after election closes
+
+**Status:** 🟡 **ACCEPTABLE** with documented salt destruction policy
+
+---
+
+## 🟢 GOOD SECURITY PRACTICES
+
+### 4. **Strong Anonymous Voting Implementation** ✅
+
+**Location:** `backend/app/services/election_service.py:292-308`
+
+**Strengths:**
+- Uses HMAC-SHA256 for voter hashing (cryptographically secure)
+- Per-election salt prevents rainbow table attacks
+- Voter ID is never stored when `anonymous_voting=True`
+- Salt can be destroyed to make de-anonymization impossible
+
+```python
+def _generate_voter_hash(self, user_id, election_id, salt=""):
+    import hmac
+    data = f"{user_id}:{election_id}"
+    return hmac.new(
+        key=salt.encode() if salt else b"",
+        msg=data.encode(),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+```
+
+**Status:** ✅ **EXCELLENT**
+
+---
+
+### 5. **Comprehensive Eligibility Checks** ✅
+
+**Location:** `backend/app/services/election_service.py:74-201`
+
+**Strengths:**
+- ✅ Validates election status is `OPEN` (line 99)
+- ✅ Checks start/end dates (lines 108-124)
+- ✅ Verifies user is in eligible voters list (lines 127-135)
+- ✅ Position-specific role checking (lines 155-166)
+- ✅ Prevents voting for same position twice (lines 233-234)
+- ✅ Enforces `max_votes_per_position` (lines 260-263)
+
+**Status:** ✅ **EXCELLENT**
+
+---
+
+### 6. **Election Closing Time Enforcement** ✅
+
+**Location:** `backend/app/services/election_service.py:310-355`
+
+**Strengths:**
+- ✅ Results ONLY visible after `end_date` has passed AND status is `CLOSED`
+- ✅ Prevents result leaks before voting ends
+- ✅ Separates ballot statistics (pre-close) from results (post-close)
+
+```python
+current_time = datetime.now()
+election_has_closed = current_time > election.end_date
+
+can_view = (
+    (election.status == ElectionStatus.CLOSED and election_has_closed)
+    or election.results_visible_immediately
+)
+```
+
+**Status:** ✅ **EXCELLENT** (recently fixed)
+
+---
+
+### 7. **Audit Trail Logging** ✅
+
+**Location:** `backend/app/models/election.py:252-253`
+
+**Strengths:**
+- ✅ IP address logged for each vote
+- ✅ User agent logged for forensic analysis
+- ✅ Timestamp on all votes
+- ✅ Rollback history tracked (line 127)
+
+**Status:** ✅ **GOOD**
+
+---
+
+### 8. **Candidate Validation** ✅
+
+**Location:** `backend/app/services/election_service.py:240-257`
+
+**Strengths:**
+- ✅ Verifies candidate exists and belongs to election
+- ✅ Checks candidate accepted nomination (unless write-in)
+- ✅ Validates position matches if specified
+- ✅ Prevents voting for non-accepted candidates
+
+**Status:** ✅ **EXCELLENT**
+
+---
+
+### 9. **Voting Token System for Email Ballots** ✅
+
+**Location:** `backend/app/models/election.py:189-226`
+
+**Strengths:**
+- ✅ Unique tokens per voter (128-char secure random)
+- ✅ Token expiration with `expires_at`
+- ✅ Single-use enforcement with `used` flag
+- ✅ Access tracking (`access_count`, `first_accessed_at`)
+- ✅ Voter hash separation from token
+
+**Status:** ✅ **EXCELLENT**
+
+---
+
+## 🔵 RECOMMENDATIONS FOR ENHANCEMENT
+
+### 10. **Add Vote Change Tampering Detection**
+
+**Priority:** LOW
+
+**Recommendation:**
+Add cryptographic signature to each vote to detect tampering:
+
+```python
+vote_signature = Column(String(128), nullable=True)  # HMAC of vote data
+
+def _sign_vote(self, vote: Vote, secret_key: str) -> str:
+    data = f"{vote.election_id}:{vote.candidate_id}:{vote.voter_hash}:{vote.voted_at.isoformat()}"
+    return hmac.new(secret_key.encode(), data.encode(), hashlib.sha256).hexdigest()
+```
+
+**Benefits:**
+- Detect if admin tampers with votes in database
+- Cryptographically prove vote integrity
+- Audit trail verification
+
+---
+
+### 11. **Implement Vote Deletion Prevention**
+
+**Priority:** LOW
+
+**Current:** Votes can be deleted from database by admin
+
+**Recommendation:**
+Add soft-delete with audit trail:
+
+```python
+deleted_at = Column(DateTime, nullable=True)
+deleted_by = Column(String(36), nullable=True)
+deletion_reason = Column(Text, nullable=True)
+```
+
+**Benefits:**
+- Maintain complete audit trail
+- Detect fraudulent vote removal
+- Enable investigation of deleted votes
+
+---
+
+### 12. **Add Ballot Encryption at Rest**
+
+**Priority:** LOW (if database is already encrypted)
+
+**Recommendation:**
+Encrypt candidate_id and voter information:
+
+```python
+from cryptography.fernet import Fernet
+
+# Encrypt candidate choice before storing
+encrypted_candidate_id = Column(String(256), nullable=False)
+```
+
+**Benefits:**
+- Protection even if database backup is stolen
+- Additional layer for anonymity
+- Compliance with data protection regulations
+
+---
+
+## 📊 SECURITY SCORE BY CATEGORY
+
+| Category | Score | Status |
+|----------|-------|--------|
+| **Double-Voting Prevention** | 🔴 **4/10** | DATABASE CONSTRAINT MISSING |
+| **Anonymous Voting** | 🟢 **9/10** | Excellent implementation |
+| **Eligibility Checks** | 🟢 **10/10** | Comprehensive validation |
+| **Result Access Control** | 🟢 **10/10** | Proper time-based enforcement |
+| **Audit Trail** | 🟢 **8/10** | Good logging, could add signatures |
+| **Race Condition Protection** | 🟡 **5/10** | Needs transaction isolation |
+| **Anonymity Protection** | 🟢 **8/10** | Strong, salt storage risk |
+
+**Overall:** 🟡 **7.1/10** - Good but needs critical fix
+
+---
+
+## ✅ ACTION ITEMS (Prioritized)
+
+### CRITICAL (Fix Immediately)
+1. ✅ **Add unique constraints to votes table** to prevent double-voting
+   - Create migration file with partial unique indexes
+   - Test with concurrent vote submissions
+   - Deploy to production
+
+### HIGH (Fix Within 1 Week)
+2. ⚠️ **Add transaction isolation** to `cast_vote()` method
+   - Wrap in database transaction
+   - Handle IntegrityError from unique constraint
+   - Add integration tests for race conditions
+
+### MEDIUM (Fix Within 1 Month)
+3. 📋 **Implement automatic salt destruction**
+   - Add cron job to destroy salts 30 days post-election
+   - Document salt destruction policy
+   - Add admin UI to manually destroy salt
+
+### LOW (Future Enhancements)
+4. 📝 **Add vote signatures** for tampering detection
+5. 📝 **Implement soft-delete** for votes with audit trail
+6. 📝 **Add integration tests** for security scenarios
+
+---
+
+## 🧪 TESTING RECOMMENDATIONS
+
+### Security Test Cases Needed
+
+1. **Double-Voting Prevention Tests**
+   ```python
+   async def test_concurrent_double_vote():
+       """Test two simultaneous votes don't both succeed"""
+       async with asyncio.TaskGroup() as tg:
+           task1 = tg.create_task(cast_vote(user, election, candidate1))
+           task2 = tg.create_task(cast_vote(user, election, candidate2))
+       # Only one should succeed
+   ```
+
+2. **Election Timing Tests**
+   ```python
+   async def test_cannot_vote_before_start()
+   async def test_cannot_vote_after_end()
+   async def test_cannot_view_results_before_close()
+   ```
+
+3. **Anonymous Voting Tests**
+   ```python
+   async def test_voter_id_not_stored_when_anonymous()
+   async def test_voter_hash_uniqueness()
+   async def test_cannot_correlate_voter_to_vote()
+   ```
+
+4. **Eligibility Tests**
+   ```python
+   async def test_ineligible_user_cannot_vote()
+   async def test_position_specific_eligibility()
+   async def test_max_votes_per_position_enforced()
+   ```
+
+---
+
+## 📚 REFERENCES
+
+- **OWASP Top 10:** A04:2021 - Insecure Design
+- **CWE-362:** Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')
+- **CWE-820:** Missing Synchronization
+- **Database Constraints:** PostgreSQL Partial Unique Indexes
+
+---
+
+## 🔐 CONCLUSION
+
+The election system has a **solid security foundation** with proper authentication, comprehensive eligibility checks, and well-implemented anonymous voting. However, the **lack of database-level double-voting prevention** is a critical vulnerability that must be addressed immediately.
+
+Once the unique constraints are added and race condition protection is implemented, the system will provide **strong ballot integrity guarantees** suitable for production use.
+
+**Recommended Priority:**
+1. 🔴 Add database unique constraints (THIS WEEK)
+2. 🟡 Add transaction isolation (NEXT WEEK)
+3. 🟢 Implement salt destruction automation (THIS MONTH)
+4. 🔵 Add vote signatures and soft-delete (FUTURE)
