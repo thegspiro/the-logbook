@@ -7,6 +7,7 @@ import { trainingProgramService, dashboardService } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { DashboardStats } from '../services/api';
+import { HelpLink } from '../components/HelpLink';
 
 /**
  * Main Dashboard Component
@@ -88,12 +89,22 @@ const Dashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 border border-white/20 mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">
-            Welcome to {departmentName}!
-          </h2>
-          <p className="text-slate-300 text-lg">
-            Your intranet platform is now set up and ready to use.
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Welcome to {departmentName}!
+              </h2>
+              <p className="text-slate-300 text-lg">
+                Your intranet platform is now set up and ready to use.
+              </p>
+            </div>
+            <HelpLink
+              topic="dashboard"
+              variant="icon"
+              tooltip="The dashboard shows your key metrics, training progress, and quick actions. Click the stat cards to navigate to detailed views."
+              tooltipPosition="left"
+            />
+          </div>
         </div>
 
         {/* Quick Stats Grid */}

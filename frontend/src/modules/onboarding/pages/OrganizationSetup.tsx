@@ -25,6 +25,7 @@ import {
   ErrorAlert,
   BackButton,
 } from '../components';
+import { HelpLink } from '../../../components/HelpLink';
 import { useOnboardingStore } from '../store';
 
 // Types
@@ -707,9 +708,17 @@ const OrganizationSetup: React.FC = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
-            Organization Setup
-          </h1>
+          <div className="flex items-center justify-center space-x-3 mb-3">
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              Organization Setup
+            </h1>
+            <HelpLink
+              topic="organization-setup"
+              variant="icon"
+              tooltip="Fill in your organization's information. Required fields are marked with *. You can update this later in Settings."
+              tooltipPosition="bottom"
+            />
+          </div>
           <p className="text-lg text-slate-300">
             Let's set up your fire department or emergency services organization
           </p>

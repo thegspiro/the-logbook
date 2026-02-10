@@ -14,6 +14,7 @@ import {
   Filter,
   AlertCircle,
 } from 'lucide-react';
+import { HelpLink } from '../components/HelpLink';
 
 interface ReportCard {
   id: string;
@@ -79,10 +80,20 @@ export const ReportsPage: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Reports</h1>
-        <p className="text-slate-300">
-          Generate and download reports for members, training, events, and compliance
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">Reports</h1>
+            <p className="text-slate-300">
+              Generate and download reports for members, training, events, and compliance
+            </p>
+          </div>
+          <HelpLink
+            topic="reports"
+            variant="icon"
+            tooltip="Click any report card to generate and download. Use the category filters to find specific report types. Reports with 'Coming Soon' badges are in development."
+            tooltipPosition="left"
+          />
+        </div>
       </div>
 
       {/* Category Filter */}
