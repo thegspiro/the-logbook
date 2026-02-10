@@ -8,7 +8,7 @@ with cryptographic integrity verification.
 import hashlib
 import time
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
@@ -78,7 +78,7 @@ class AuditLogger:
             previous_hash = last_log.current_hash if last_log else "0" * 64
             
             # Create log entry data
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(UTC)
             timestamp_nanos = time.time_ns()
             
             log_data = {
