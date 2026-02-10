@@ -8,7 +8,7 @@ This module guides users through initial setup and can be disabled once complete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, UTC
 import secrets
 import os
 
@@ -697,7 +697,7 @@ class OnboardingService:
 
         # Mark as completed
         status.is_completed = True
-        status.completed_at = datetime.utcnow()
+        status.completed_at = datetime.now(UTC)
         status.current_step = len(self.STEPS)
         status.setup_notes = notes
 
@@ -731,7 +731,7 @@ class OnboardingService:
         steps = status.steps_completed or {}
         steps[step_name] = {
             "completed": True,
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "step_number": step_number
         }
         status.steps_completed = steps
@@ -742,7 +742,7 @@ class OnboardingService:
         """Mark onboarding as completed for existing installations"""
         status = OnboardingStatus(
             is_completed=True,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(UTC),
             current_step=len(self.STEPS),
             steps_completed={"legacy": True},
             setup_notes="Auto-completed for existing installation"

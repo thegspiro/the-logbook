@@ -25,6 +25,7 @@ import {
   ErrorAlert,
   BackButton,
 } from '../components';
+import { HelpLink } from '../../../components/HelpLink';
 import { useOnboardingStore } from '../store';
 
 // Types
@@ -380,14 +381,15 @@ const OrganizationSetup: React.FC = () => {
   });
 
   // Section expansion state
+  // Start with more sections expanded to reduce clicks during onboarding
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
-    contact: false,
-    mailing: false,
+    contact: true,
+    mailing: true,
     physical: false,
     identifiers: false,
     additional: false,
-    logo: false,
+    logo: true, // Logo is important and small, show by default
   });
 
   // Zustand store
@@ -518,9 +520,9 @@ const OrganizationSetup: React.FC = () => {
       errors.mailingState = 'State is required';
     }
     if (!formData.mailingAddress.zipCode.trim()) {
-      errors.mailingZip = 'ZIP code is required';
-    } else if (!/^(\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d)$/.test(formData.mailingAddress.zipCode.trim())) {
-      errors.mailingZip = 'Invalid ZIP code format. Expected: 12345 or 12345-6789';
+      errors.mailingZip = 'ZIP/Postal code is required';
+    } else if (formData.mailingAddress.zipCode.trim().length < 3) {
+      errors.mailingZip = 'ZIP/Postal code must be at least 3 characters';
     }
 
     // Physical address validation (if different)
@@ -706,9 +708,17 @@ const OrganizationSetup: React.FC = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
-            Organization Setup
-          </h1>
+          <div className="flex items-center justify-center space-x-3 mb-3">
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              Organization Setup
+            </h1>
+            <HelpLink
+              topic="organization-setup"
+              variant="icon"
+              tooltip="Fill in your organization's information. Required fields are marked with *. You can update this later in Settings."
+              tooltipPosition="bottom"
+            />
+          </div>
           <p className="text-lg text-slate-300">
             Let's set up your fire department or emergency services organization
           </p>
@@ -846,7 +856,18 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-slate-900/30">
+              <div className="p-4 bg-slate-900/30 space-y-4">
+                {/* Info banner explaining why mailing address is required */}
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-blue-200">
+                      <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
+                      certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
+                      you can specify that separately below.
+                    </p>
+                  </div>
+                </div>
                 <AddressForm
                   address={formData.mailingAddress}
                   onChange={(addr) => updateFormData('mailingAddress', addr)}

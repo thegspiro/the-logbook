@@ -29,6 +29,10 @@ const PageLoadingFallback = () => (
 import Dashboard from './pages/Dashboard';
 import { LoginPage } from './pages/LoginPage';
 
+// Auth pages - loaded immediately for password reset flow
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+
 // Lazy-loaded pages - loaded on demand for better initial load performance
 // Membership Module
 const Members = lazy(() => import('./pages/Members'));
@@ -58,9 +62,11 @@ const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage
 const MembersAdminPage = lazy(() => import('./pages/MembersAdminPage').then(m => ({ default: m.MembersAdminPage })));
 const PublicPortalAdmin = lazy(() => import('./modules/public-portal/pages/PublicPortalAdmin'));
 
-// Settings
+// Settings & Reports
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })));
 const RoleManagementPage = lazy(() => import('./pages/RoleManagementPage').then(m => ({ default: m.RoleManagementPage })));
+const ReportsPage = lazy(() => import('./pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
 
 /**
  * Main Application Component
@@ -132,10 +138,18 @@ function App() {
 
             {/* Settings Module */}
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/settings/account" element={<ProtectedRoute><UserSettingsPage /></ProtectedRoute>} />
             <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RoleManagementPage /></ProtectedRoute>} />
+
+            {/* Reports */}
+            <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />
+
+            {/* Password Reset Pages */}
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Catch all - redirect to welcome */}
             <Route path="*" element={<Navigate to="/" replace />} />

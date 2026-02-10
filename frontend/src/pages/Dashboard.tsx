@@ -3,9 +3,11 @@ import toast from 'react-hot-toast';
 import { Users, FileText, Settings, GraduationCap, TrendingUp, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { AppLayout } from '../components/layout';
 import { useNavigate } from 'react-router-dom';
-import { trainingProgramService } from '../services/api';
+import { trainingProgramService, dashboardService } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
+import type { DashboardStats } from '../services/api';
+import { HelpLink } from '../components/HelpLink';
 
 /**
  * Main Dashboard Component
@@ -19,6 +21,8 @@ const Dashboard: React.FC = () => {
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   const [progressDetails, setProgressDetails] = useState<Map<string, MemberProgramProgress>>(new Map());
   const [loadingTraining, setLoadingTraining] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
     // Load department name for display
@@ -27,9 +31,31 @@ const Dashboard: React.FC = () => {
       setDepartmentName(savedDepartmentName);
     }
 
-    // Load training progress
+    // Load dashboard stats and training progress
+    loadDashboardStats();
     loadTrainingProgress();
   }, []);
+
+  const loadDashboardStats = async () => {
+    try {
+      const data = await dashboardService.getStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Failed to load dashboard stats:', error);
+      // Fallback to default values if API fails
+      setStats({
+        total_members: 1,
+        active_members: 1,
+        total_documents: 0,
+        setup_percentage: 100,
+        recent_events_count: 0,
+        pending_tasks_count: 0,
+      });
+      // Don't show error toast for stats - use fallback values silently
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   const loadTrainingProgress = async () => {
     try {
@@ -63,12 +89,22 @@ const Dashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 border border-white/20 mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">
-            Welcome to {departmentName}!
-          </h2>
-          <p className="text-slate-300 text-lg">
-            Your intranet platform is now set up and ready to use.
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Welcome to {departmentName}!
+              </h2>
+              <p className="text-slate-300 text-lg">
+                Your intranet platform is now set up and ready to use.
+              </p>
+            </div>
+            <HelpLink
+              topic="dashboard"
+              variant="icon"
+              tooltip="The dashboard shows your key metrics, training progress, and quick actions. Click the stat cards to navigate to detailed views."
+              tooltipPosition="left"
+            />
+          </div>
         </div>
 
         {/* Quick Stats Grid */}
@@ -76,44 +112,69 @@ const Dashboard: React.FC = () => {
           <button
             onClick={() => navigate('/members')}
             className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 cursor-pointer hover:bg-white/15 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-            aria-label="Total Members: 1. Click to manage members"
+            aria-label={`Total Members: ${stats?.total_members ?? 'loading'}. Click to manage members`}
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-slate-300 text-sm font-medium">Total Members</p>
-                <p className="text-white text-3xl font-bold mt-1">1</p>
+                {loadingStats ? (
+                  <div className="mt-1 h-9 w-16 bg-slate-700/50 animate-pulse rounded"></div>
+                ) : (
+                  <p className="text-white text-3xl font-bold mt-1">{stats?.total_members ?? 0}</p>
+                )}
               </div>
               <div className="bg-blue-600 rounded-full p-3" aria-hidden="true">
                 <Users className="w-6 h-6 text-white" />
               </div>
             </div>
-            <p className="text-slate-300 text-xs mt-2">Click to manage members →</p>
+            <p className="text-slate-300 text-xs mt-2">
+              {!loadingStats && stats && stats.active_members !== stats.total_members
+                ? `${stats.active_members} active • `
+                : ''}
+              Click to manage members →
+            </p>
           </button>
 
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-slate-300 text-sm font-medium">Documents</p>
-                <p className="text-white text-3xl font-bold mt-1">0</p>
+                {loadingStats ? (
+                  <div className="mt-1 h-9 w-16 bg-slate-700/50 animate-pulse rounded"></div>
+                ) : (
+                  <p className="text-white text-3xl font-bold mt-1">{stats?.total_documents ?? 0}</p>
+                )}
               </div>
-              <div className="bg-green-600 rounded-full p-3">
+              <div className="bg-green-600 rounded-full p-3" aria-hidden="true">
                 <FileText className="w-6 h-6 text-white" />
               </div>
             </div>
-            <p className="text-slate-300 text-xs mt-2">No documents yet</p>
+            <p className="text-slate-300 text-xs mt-2">
+              {!loadingStats && (stats?.total_documents ?? 0) === 0
+                ? 'No documents yet'
+                : 'Shared files and resources'}
+            </p>
           </div>
 
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-slate-300 text-sm font-medium">Setup Status</p>
-                <p className="text-white text-3xl font-bold mt-1">100%</p>
+                {loadingStats ? (
+                  <div className="mt-1 h-9 w-20 bg-slate-700/50 animate-pulse rounded"></div>
+                ) : (
+                  <p className="text-white text-3xl font-bold mt-1">{stats?.setup_percentage ?? 0}%</p>
+                )}
               </div>
-              <div className="bg-purple-600 rounded-full p-3">
+              <div className="bg-purple-600 rounded-full p-3" aria-hidden="true">
                 <Settings className="w-6 h-6 text-white" />
               </div>
             </div>
-            <p className="text-slate-300 text-xs mt-2">Configuration complete</p>
+            <p className="text-slate-300 text-xs mt-2">
+              {!loadingStats && (stats?.setup_percentage ?? 0) === 100
+                ? 'Configuration complete'
+                : 'Configuration in progress'}
+            </p>
           </div>
         </div>
 

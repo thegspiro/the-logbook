@@ -15,16 +15,6 @@ from app.core.database import async_session_factory, database_manager
 
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """
-    Create an event loop for the test session.
-    """
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
 async def initialize_database():
     """
     Initialize database connection for all tests.

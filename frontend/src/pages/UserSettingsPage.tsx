@@ -1,0 +1,467 @@
+/**
+ * User Settings Page
+ *
+ * Allows users to manage their personal account settings, password, and preferences.
+ */
+
+import React, { useState } from 'react';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { authService } from '../services/api';
+import { validatePasswordStrength } from '../utils/passwordValidation';
+import type { PasswordChangeData } from '../types/auth';
+
+type TabType = 'account' | 'password' | 'notifications';
+
+export const UserSettingsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<TabType>('account');
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Notification preferences state
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [eventReminders, setEventReminders] = useState(true);
+  const [trainingReminders, setTrainingReminders] = useState(true);
+  const [announcementNotifications, setAnnouncementNotifications] = useState(true);
+  const [savingPreferences, setSavingPreferences] = useState(false);
+
+  const passwordValidation = validatePasswordStrength(newPassword);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+
+    // Validate password strength
+    if (!passwordValidation.isValid) {
+      toast.error('Please ensure your password meets all the requirements');
+      return;
+    }
+
+    setChangingPassword(true);
+
+    try {
+      const data: PasswordChangeData = {
+        current_password: currentPassword,
+        new_password: newPassword,
+      };
+
+      await authService.changePassword(data);
+
+      // Clear form
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
+      toast.success('Password changed successfully!');
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.detail ||
+        'Failed to change password. Please check your current password and try again.'
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleSavePreferences = async () => {
+    setSavingPreferences(true);
+
+    try {
+      // TODO: Add API endpoint for saving notification preferences
+      // await userService.updateNotificationPreferences({
+      //   email_notifications: emailNotifications,
+      //   event_reminders: eventReminders,
+      //   training_reminders: trainingReminders,
+      //   announcement_notifications: announcementNotifications,
+      // });
+
+      // Simulated API call for now
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      toast.success('Preferences saved successfully!');
+    } catch (err: any) {
+      toast.error('Failed to save preferences. Please try again.');
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'account' as TabType, label: 'Account', icon: User },
+    { id: 'password' as TabType, label: 'Password', icon: Lock },
+    { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
+  ];
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">User Settings</h1>
+        <p className="text-slate-300">Manage your account settings and preferences</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-white/10 mb-6">
+        <nav className="flex space-x-6" aria-label="Settings tabs">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center space-x-2 pb-4 px-1 border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  activeTab === tab.id
+                    ? 'border-red-500 text-white'
+                    : 'border-transparent text-slate-400 hover:text-slate-300'
+                }`}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+              >
+                <Icon className="w-5 h-5" aria-hidden="true" />
+                <span className="font-medium">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-6">
+        {/* Account Tab */}
+        {activeTab === 'account' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Account Information</h2>
+              <p className="text-slate-300 text-sm mb-6">
+                Update your account details and personal information
+              </p>
+            </div>
+
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-blue-300 mb-1">
+                    Account Settings Coming Soon
+                  </h4>
+                  <p className="text-sm text-blue-200">
+                    Profile editing, email changes, and other account management features will be available in a future update. For now, contact your administrator to update your account information.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Password Tab */}
+        {activeTab === 'password' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Change Password</h2>
+              <p className="text-slate-300 text-sm mb-6">
+                Update your password to keep your account secure
+              </p>
+            </div>
+
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              {/* Current Password */}
+              <div>
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-slate-200 mb-2">
+                  Current Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                  </div>
+                  <input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    className="block w-full pl-10 pr-10 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    placeholder="Enter current password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    disabled={changingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white focus:outline-none"
+                    aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showCurrentPassword ? (
+                      <EyeOff className="h-5 w-5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* New Password */}
+              <div>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-slate-200 mb-2">
+                  New Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                  </div>
+                  <input
+                    id="newPassword"
+                    name="newPassword"
+                    type={showNewPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    className="block w-full pl-10 pr-10 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={changingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white focus:outline-none"
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-5 w-5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Password strength indicator */}
+                {newPassword && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs text-slate-300 font-medium">Password must contain:</p>
+                    <ul className="space-y-1 text-xs">
+                      {[
+                        { label: 'At least 8 characters', valid: passwordValidation.checks.length },
+                        { label: 'One uppercase letter', valid: passwordValidation.checks.uppercase },
+                        { label: 'One lowercase letter', valid: passwordValidation.checks.lowercase },
+                        { label: 'One number', valid: passwordValidation.checks.number },
+                        { label: 'One special character', valid: passwordValidation.checks.special },
+                      ].map((check, idx) => (
+                        <li key={idx} className="flex items-center space-x-2">
+                          {check.valid ? (
+                            <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" aria-hidden="true" />
+                          ) : (
+                            <div className="w-4 h-4 rounded-full border-2 border-slate-500 flex-shrink-0" aria-hidden="true" />
+                          )}
+                          <span className={check.valid ? 'text-green-300' : 'text-slate-400'}>
+                            {check.label}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-200 mb-2">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                  </div>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    className="block w-full pl-10 pr-10 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={changingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white focus:outline-none"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="mt-2 text-sm text-red-300">Passwords do not match</p>
+                )}
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={changingPassword || !passwordValidation.isValid || newPassword !== confirmPassword}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {changingPassword ? 'Changing Password...' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-white mb-4">Notification Preferences</h2>
+              <p className="text-slate-300 text-sm mb-6">
+                Manage how and when you receive notifications
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Email Notifications Toggle */}
+              <div className="flex items-center justify-between py-4 border-b border-white/10">
+                <div>
+                  <label htmlFor="emailNotifications" className="text-sm font-medium text-white">
+                    Email Notifications
+                  </label>
+                  <p className="text-sm text-slate-300">
+                    Receive email notifications for important updates
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEmailNotifications(!emailNotifications)}
+                  className={`${
+                    emailNotifications ? 'bg-red-600' : 'bg-slate-600'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900`}
+                  role="switch"
+                  aria-checked={emailNotifications}
+                >
+                  <span
+                    className={`${
+                      emailNotifications ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                  />
+                </button>
+              </div>
+
+              {/* Event Reminders Toggle */}
+              <div className="flex items-center justify-between py-4 border-b border-white/10">
+                <div>
+                  <label htmlFor="eventReminders" className="text-sm font-medium text-white">
+                    Event Reminders
+                  </label>
+                  <p className="text-sm text-slate-300">
+                    Get reminders before scheduled events
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEventReminders(!eventReminders)}
+                  className={`${
+                    eventReminders ? 'bg-red-600' : 'bg-slate-600'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900`}
+                  role="switch"
+                  aria-checked={eventReminders}
+                >
+                  <span
+                    className={`${
+                      eventReminders ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                  />
+                </button>
+              </div>
+
+              {/* Training Reminders Toggle */}
+              <div className="flex items-center justify-between py-4 border-b border-white/10">
+                <div>
+                  <label htmlFor="trainingReminders" className="text-sm font-medium text-white">
+                    Training Reminders
+                  </label>
+                  <p className="text-sm text-slate-300">
+                    Notifications for training deadlines and requirements
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTrainingReminders(!trainingReminders)}
+                  className={`${
+                    trainingReminders ? 'bg-red-600' : 'bg-slate-600'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900`}
+                  role="switch"
+                  aria-checked={trainingReminders}
+                >
+                  <span
+                    className={`${
+                      trainingReminders ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                  />
+                </button>
+              </div>
+
+              {/* Announcement Notifications Toggle */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-white">
+                    Announcement Notifications
+                  </label>
+                  <p className="text-sm text-slate-300">
+                    Stay updated with department announcements
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAnnouncementNotifications(!announcementNotifications)}
+                  className={`${
+                    announcementNotifications ? 'bg-red-600' : 'bg-slate-600'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900`}
+                  role="switch"
+                  aria-checked={announcementNotifications}
+                >
+                  <span
+                    className={`${
+                      announcementNotifications ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button
+                onClick={handleSavePreferences}
+                disabled={savingPreferences}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {savingPreferences ? 'Saving...' : 'Save Preferences'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default UserSettingsPage;
