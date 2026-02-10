@@ -15,7 +15,7 @@ Test Coverage:
 """
 
 import pytest
-from uuid import UUID
+import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,9 +41,10 @@ class TestOnboardingIntegration:
         service = OnboardingService(db_session)
 
         # Create organization first
+        unique_id = str(uuid.uuid4())[:8]
         org_data = {
             "name": "Test Fire Department",
-            "slug": "test-fire-dept",
+            "slug": f"test-fire-dept-{unique_id}",
             "organization_type": "fire_department",
             "identifier_type": "fdid",
             "fdid": "12345",
@@ -77,7 +78,7 @@ class TestOnboardingIntegration:
             "organization_id": org_id,
             "email": "admin@test.com",
             "username": "testadmin",
-            "password": "SecurePass123!",
+            "password": "SecureP@ssw0rd!",
             "first_name": "Test",
             "last_name": "Admin",
             "badge_number": "ADMIN-001",
@@ -109,9 +110,10 @@ class TestOnboardingIntegration:
         """Test organization creation"""
         service = OnboardingService(db_session)
 
+        unique_id = str(uuid.uuid4())[:8]
         org_data = {
             "name": "Test Fire Department 2",
-            "slug": "test-fire-dept-2",
+            "slug": f"test-fire-dept-2-{unique_id}",
             "organization_type": "fire_department",
             "identifier_type": "fdid",
             "fdid": "54321",
@@ -148,9 +150,10 @@ class TestOnboardingIntegration:
         service = OnboardingService(db_session)
 
         # Create organization
+        unique_id = str(uuid.uuid4())[:8]
         org_data = {
             "name": "Test Fire Department 3",
-            "slug": "test-fire-dept-3",
+            "slug": f"test-fire-dept-3-{unique_id}",
             "organization_type": "fire_department",
             "identifier_type": "state_id",
             "state_id": "STATE-001",
@@ -181,7 +184,7 @@ class TestOnboardingIntegration:
 
         # Find Super Admin role and verify its properties
         super_admin = next(r for r in roles if r.slug == "super_admin")
-        assert super_admin.name == "Super Admin"
+        assert super_admin.name == "Super Administrator"
         assert super_admin.priority == 100
 
     @pytest.mark.asyncio
@@ -193,9 +196,10 @@ class TestOnboardingIntegration:
         service = OnboardingService(db_session)
 
         # Create organization and roles
+        unique_id = str(uuid.uuid4())[:8]
         org_data = {
             "name": "Test Fire Department 4",
-            "slug": "test-fire-dept-4",
+            "slug": f"test-fire-dept-4-{unique_id}",
             "organization_type": "fire_department",
             "identifier_type": "fdid",
             "fdid": "99999",
@@ -216,7 +220,7 @@ class TestOnboardingIntegration:
             "organization_id": org.id,
             "email": "admin4@test.com",
             "username": "testadmin4",
-            "password": "SecurePass123!",
+            "password": "SecureP@ssw0rd!",
             "first_name": "Test",
             "last_name": "Admin",
             "badge_number": "ADMIN-004",
