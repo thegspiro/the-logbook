@@ -114,7 +114,7 @@ class AuditLogger:
             )
             
             db.add(log_entry)
-            await db.commit()
+            await db.flush()
             await db.refresh(log_entry)
             
             return log_entry
@@ -247,7 +247,7 @@ class AuditLogger:
         )
         
         db.add(checkpoint)
-        await db.commit()
+        await db.flush()
         await db.refresh(checkpoint)
         
         logger.info(f"Created checkpoint for logs {first_log_id}-{last_log_id}")
