@@ -5,11 +5,11 @@ This guide provides instructions for testing The Logbook, with special focus on 
 ## Quick Start
 
 ```bash
-# Test the complete onboarding flow (recommended before deployment)
+# Test the onboarding flow (recommended before deployment)
 docker compose exec backend pytest tests/test_onboarding_integration.py -v
 
-# Test specific functionality
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_role_assignment_async_handling -v
+# Test specific functionality (the critical MissingGreenlet fix)
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -v
 ```
 
 ## Onboarding Test Suite
@@ -18,10 +18,10 @@ docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnb
 
 The onboarding process is critical - if it fails, new deployments cannot be set up. These tests validate:
 
-1. **All 10 steps work correctly** - Organization setup through admin user creation
-2. **Async database operations** - Prevents errors like the MissingGreenlet issue
-3. **Role assignment** - Ensures admin users get proper permissions
-4. **Data persistence** - Validates database state throughout the process
+1. **Admin user creation works correctly** - Especially the async role assignment
+2. **MissingGreenlet fix** - Prevents the 500 error that was occurring at Step 10
+3. **Role assignment** - Ensures admin users get Super Admin permissions
+4. **Organization creation** - Validates basic organization setup
 5. **Error handling** - Prevents duplicate users, invalid data, etc.
 
 ### Running Tests Before Deployment
@@ -45,11 +45,11 @@ docker compose up --build
 If you've made changes to onboarding code, validate them:
 
 ```bash
-# Test the complete flow
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_complete_onboarding_flow -vv -s
-
 # Test admin user creation (where the MissingGreenlet error was)
-docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_role_assignment_async_handling -vv -s
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -vv -s
+
+# Test organization creation
+docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_create_organization -vv -s
 ```
 
 ### All Available Tests
@@ -81,22 +81,24 @@ Current onboarding test coverage:
 
 | Test | Purpose | Status |
 |------|---------|--------|
-| `test_complete_onboarding_flow` | All 10 steps end-to-end | ✅ |
-| `test_admin_user_role_assignment_async_handling` | MissingGreenlet fix validation | ✅ |
-| `test_onboarding_step_order_validation` | Step sequence enforcement | ✅ |
+| `test_admin_user_creation_with_role_assignment` | MissingGreenlet fix validation ⭐ | ✅ |
+| `test_create_organization` | Organization creation | ✅ |
+| `test_default_roles_creation` | Super Admin role creation | ✅ |
 | `test_duplicate_admin_user_prevention` | Duplicate user protection | ✅ |
-| `test_onboarding_status_persistence` | Status tracking | ✅ |
-| `test_role_configuration_creates_required_roles` | Super Admin role creation | ✅ |
+| `test_onboarding_status_tracking` | Status tracking | ✅ |
 
 ## Understanding Test Results
 
 ### ✅ All Tests Pass
 
 ```
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_complete_onboarding_flow PASSED
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_role_assignment_async_handling PASSED
-...
-========== 6 passed in 2.34s ==========
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_create_organization PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_default_roles_creation PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_duplicate_admin_user_prevention PASSED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_onboarding_status_tracking PASSED
+
+========== 5 passed in 2.34s ==========
 ```
 
 **Meaning:** Onboarding is working correctly. Safe to deploy.
@@ -104,7 +106,7 @@ tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user
 ### ❌ Test Failure Example
 
 ```
-tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_role_assignment_async_handling FAILED
+tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment FAILED
 
 E   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
 ```
@@ -138,10 +140,10 @@ ValueError: Cannot create admin user before organization
 
 When fixing issues like we did with the MissingGreenlet error:
 
-1. **Write a test that reproduces the issue** (test_admin_user_role_assignment_async_handling)
+1. **Write a test that reproduces the issue** (test_admin_user_creation_with_role_assignment)
 2. **Run the test and confirm it fails**
    ```bash
-   docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_role_assignment_async_handling -v
+   docker compose exec backend pytest tests/test_onboarding_integration.py::TestOnboardingIntegration::test_admin_user_creation_with_role_assignment -v
    ```
 3. **Fix the code** (add `await db.refresh(user, ['roles'])`)
 4. **Run the test again and confirm it passes**
@@ -162,14 +164,27 @@ When adding new onboarding features, add corresponding tests:
 async def test_your_new_feature(
     self,
     db_session: AsyncSession,
-    sample_org_data,
 ):
     """Test description"""
     service = OnboardingService(db_session)
 
-    # Setup
-    await service.initialize_onboarding()
-    await service.save_organization_info(sample_org_data)
+    # Create organization first (most tests need this)
+    org_data = {
+        "name": "Test Fire Department",
+        "type": "fire_department",
+        "identifier_type": "fdid",
+        "identifier_value": "12345",
+        "street_address": "123 Test St",
+        "city": "Test City",
+        "state": "NY",
+        "zip_code": "12345",
+        "country": "USA",
+        "phone": "555-0100",
+        "email": "test@example.com",
+        "timezone": "America/New_York",
+    }
+    org, error = await service.create_organization(**org_data)
+    assert error is None
 
     # Test your feature
     result = await service.your_new_feature()
@@ -194,14 +209,14 @@ These tests should be part of CI/CD:
 
 Expected test execution times:
 
-- **Single test:** < 1 second (SQLite in-memory)
-- **Complete suite:** < 5 seconds (6 tests)
-- **With MySQL:** < 10 seconds
+- **Single test:** < 1 second
+- **Complete suite:** < 5 seconds (5 tests)
+- **Database:** MySQL (same as production)
 
 If tests are slower, check:
-- Database connection issues
-- Excessive data creation
-- Missing test isolation
+- MySQL container health: `docker compose ps`
+- Database connection: `docker compose logs mysql | tail -20`
+- Network connectivity between containers
 
 ## Troubleshooting
 
@@ -219,8 +234,14 @@ docker compose exec backend pip install pytest pytest-asyncio
 
 ### Database errors in tests
 ```bash
-# Tests use SQLite in-memory by default
-# Check backend/tests/conftest.py if issues persist
+# Tests use MySQL database (same as production)
+# Ensure MySQL container is healthy
+docker compose ps
+docker compose logs mysql | tail -20
+
+# If database not initialized error:
+# Make sure backend container is running
+docker compose up -d backend
 ```
 
 ### Import errors
