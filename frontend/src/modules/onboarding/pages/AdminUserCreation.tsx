@@ -278,14 +278,34 @@ const AdminUserCreation: React.FC = () => {
               <Shield className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
-              Create Admin Account
+              Create IT Administrator Account
             </h2>
             <p className="text-xl text-slate-300 mb-2">
-              Set up the primary administrator account
+              Set up the primary IT administrator account
             </p>
             <p className="text-sm text-slate-400">
-              This account will have full access to all system settings
+              This account will have full access to all system settings and configurations
             </p>
+          </div>
+
+          {/* Administrator Type Clarification */}
+          <div className="bg-purple-500/10 border border-purple-500/50 rounded-lg p-4 mb-6">
+            <div className="flex items-start space-x-3">
+              <Info className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-purple-300 text-sm font-medium mb-1">
+                  IT Administrator vs. Administrative Member
+                </p>
+                <p className="text-purple-200 text-sm mb-2">
+                  This creates an <strong>IT Administrator</strong> account for system and technical administration.
+                  This is different from members who have an "Administrative" membership type.
+                </p>
+                <ul className="text-purple-200 text-sm space-y-1 list-disc list-inside ml-2">
+                  <li><strong>IT Administrator:</strong> System admin role with full technical access (what you're creating now)</li>
+                  <li><strong>Administrative Member:</strong> A member with administrative membership type (managed separately in the Members module)</li>
+                </ul>
+              </div>
+            </div>
           </div>
 
           {/* Security Notice */}
@@ -310,7 +330,7 @@ const AdminUserCreation: React.FC = () => {
             {/* Personal Information */}
             <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
               <h3 className="text-xl font-bold text-white mb-4">
-                Personal Information
+                IT Administrator Information
               </h3>
               <div className="grid md:grid-cols-2 gap-4">
                 {/* First Name */}
@@ -673,9 +693,9 @@ const AdminUserCreation: React.FC = () => {
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                     : 'bg-slate-700 text-slate-400 cursor-not-allowed'
                 }`}
-                aria-label="Create admin account and access dashboard"
+                aria-label="Create IT administrator account and access dashboard"
               >
-                {isSaving ? 'Creating Account & Finalizing Setup...' : 'Create Account & Access Dashboard'}
+                {isSaving ? 'Creating IT Admin Account & Finalizing Setup...' : 'Create IT Admin Account & Access Dashboard'}
               </button>
 
               {/* Help Text */}
