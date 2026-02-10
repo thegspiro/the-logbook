@@ -418,6 +418,7 @@ class OnboardingService:
 
         self.db.add(org)
         await self.db.flush()
+        await self.db.refresh(org)  # Refresh to load all attributes properly
 
         # Create default roles for organization
         await self._create_default_roles(org.id)
