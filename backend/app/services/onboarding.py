@@ -419,7 +419,6 @@ class OnboardingService:
 
         self.db.add(org)
         await self.db.commit()
-        await self.db.refresh(org)
 
         # Create default roles for organization
         await self._create_default_roles(org.id)
