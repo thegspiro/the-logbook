@@ -10,6 +10,8 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_in_production}
       TZ: ${TZ:-UTC}
+    # Note: host_cache_size is set via initialization script (database/schemas/00-init-settings.sql)
+    # instead of command-line flag to follow MySQL 8.0+ recommendations
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -17,7 +19,6 @@ services:
       --max_allowed_packet=256M
       --innodb_buffer_pool_size=256M
       --innodb_redo_log_capacity=134217728
-      --host-cache-size=0
       --skip-name-resolve
     # SEC-14: Database port is NOT exposed to the host by default.
     # Uncomment the ports mapping below only for local development with DB tools.
