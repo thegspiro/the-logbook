@@ -254,7 +254,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure notification templates and triggers',
       view: ['Receive notifications', 'Set personal preferences', 'View notification history'],
       manage: ['Configure templates', 'Set notification triggers', 'Manage global settings'],
-      defaultManageRoles: ['admin', 'it_administrator'],
+      defaultManageRoles: ['admin', 'it_administrator', 'communications_officer'],
     },
   },
   {
@@ -271,7 +271,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure mobile-specific features and settings',
       view: ['Use mobile app', 'Receive push notifications', 'Access mobile features'],
       manage: ['Configure mobile settings', 'Manage push notifications', 'Set mobile policies'],
-      defaultManageRoles: ['admin'],
+      defaultManageRoles: ['admin', 'it_administrator', 'communications_officer'],
     },
   },
 

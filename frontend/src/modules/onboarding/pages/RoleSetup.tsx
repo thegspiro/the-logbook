@@ -22,6 +22,7 @@ import {
   Monitor,
   UserPlus,
   BadgeCheck,
+  Megaphone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
@@ -290,6 +291,19 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents']),
       },
       {
+        id: 'communications_officer',
+        name: 'Communications Officer',
+        description: 'Website, social media, newsletters, and notification management',
+        icon: Megaphone,
+        priority: 55,
+        permissions: generateRolePermissions(modules, 'specialist', [
+          'notifications',
+          'mobile',
+          'events',
+          'documents',
+        ]),
+      },
+      {
         id: 'apparatus_manager',
         name: 'Apparatus Manager',
         description: 'Day-to-day fleet tracking, maintenance logging, and equipment checks',
@@ -357,7 +371,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
-  Truck, Monitor, UserPlus, BadgeCheck,
+  Truck, Monitor, UserPlus, BadgeCheck, Megaphone,
 };
 
 const getIconName = (icon: React.ElementType): string => {

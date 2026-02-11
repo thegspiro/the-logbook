@@ -609,6 +609,25 @@ DEFAULT_ROLES = {
             EVENTS_VIEW.name,
         ],
     },
+    "communications_officer": {
+        "name": "Communications Officer",
+        "slug": "communications_officer",
+        "description": "Website, social media, newsletters, and notification management",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            EVENTS_VIEW.name,
+            EVENTS_CREATE.name,
+            EVENTS_EDIT.name,
+            EVENTS_MANAGE.name,
+            LOCATIONS_VIEW.name,
+        ],
+    },
 }
 
 
