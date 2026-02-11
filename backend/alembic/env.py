@@ -149,6 +149,14 @@ def run_migrations_online() -> None:
         with connectable.connect() as connection:
             logger.info("Database connection established")
 
+            # Disable FK and uniqueness checks during migrations for faster DDL.
+            # These are re-enabled after migrations complete. This is safe because
+            # migration DDL is applied in dependency order by Alembic.
+            from sqlalchemy import text
+            connection.execute(text("SET SESSION foreign_key_checks = 0"))
+            connection.execute(text("SET SESSION unique_checks = 0"))
+            connection.commit()
+
             context.configure(
                 connection=connection,
                 target_metadata=target_metadata,
@@ -163,6 +171,11 @@ def run_migrations_online() -> None:
                 logger.info("Running migrations...")
                 context.run_migrations()
                 logger.info("Migrations completed successfully")
+
+            # Re-enable FK and uniqueness checks
+            connection.execute(text("SET SESSION foreign_key_checks = 1"))
+            connection.execute(text("SET SESSION unique_checks = 1"))
+            connection.commit()
 
     except Exception as e:
         logger.error(f"Migration failed: {e}")

@@ -137,7 +137,7 @@ class AuthService:
         )
 
         self.db.add(session)
-        await self.db.flush()
+        await self.db.commit()
 
         logger.info(f"Created session for user: {user.username}")
 
