@@ -110,6 +110,15 @@ api.interceptors.request.use(
   }
 );
 
+// Shared refresh promise to prevent concurrent refresh attempts.
+// With token rotation (SEC-11), each refresh invalidates the previous
+// refresh token.  If multiple 401s fire at the same time and each
+// independently tries to refresh, the second attempt looks like a
+// replay attack and the backend revokes all sessions.  By sharing a
+// single promise, only one refresh request is made and all waiting
+// callers receive the same new access token.
+let refreshPromise: Promise<string> | null = null;
+
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
   (response) => response,
@@ -120,23 +129,35 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
+
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-
-          const { access_token, refresh_token: new_refresh_token } = response.data;
-          localStorage.setItem('access_token', access_token);
-          // SEC-11: Store the rotated refresh token from the server
-          if (new_refresh_token) {
-            localStorage.setItem('refresh_token', new_refresh_token);
-          }
-
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return api(originalRequest);
+        // If a refresh is already in flight, wait for it
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post(`${API_BASE_URL}/auth/refresh`, {
+              refresh_token: refreshToken,
+            })
+            .then((response) => {
+              const { access_token, refresh_token: new_refresh_token } = response.data;
+              localStorage.setItem('access_token', access_token);
+              // SEC-11: Store the rotated refresh token from the server
+              if (new_refresh_token) {
+                localStorage.setItem('refresh_token', new_refresh_token);
+              }
+              return access_token;
+            })
+            .finally(() => {
+              refreshPromise = null;
+            });
         }
+
+        const newAccessToken = await refreshPromise;
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, clear tokens and redirect to login
         localStorage.removeItem('access_token');

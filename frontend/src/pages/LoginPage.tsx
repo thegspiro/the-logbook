@@ -17,7 +17,7 @@ interface OrgBranding {
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading, isAuthenticated, error, clearError } = useAuthStore();
 
   const [formData, setFormData] = useState({
     username: '',
@@ -29,6 +29,13 @@ export const LoginPage: React.FC = () => {
     googleEnabled: false,
     microsoftEnabled: false,
   });
+
+  // If user is already authenticated, redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   // Load branding and OAuth configuration on mount
   useEffect(() => {
