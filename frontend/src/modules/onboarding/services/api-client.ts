@@ -473,20 +473,21 @@ class SecureApiClient {
     first_name: string;
     last_name: string;
     badge_number?: string;
-  }): Promise<ApiResponse<{ access_token?: string }>> {
-    const response = await this.request<{ access_token?: string }>('POST', '/onboarding/admin-user', data, true);
+  }): Promise<ApiResponse<{ access_token?: string; refresh_token?: string }>> {
+    const response = await this.request<{ access_token?: string; refresh_token?: string }>('POST', '/onboarding/admin-user', data, true);
 
     // SECURITY: Clear password from memory immediately
     data.password = '';
     data.password_confirm = '';
 
-    // If successful, store auth token (backend should set httpOnly cookie)
-    // The token will be used for subsequent authenticated requests
+    // Store tokens using the same keys the main app auth flow expects
+    // ('access_token' and 'refresh_token') so the user is seamlessly
+    // authenticated after onboarding without needing to login again.
     if (response.data?.access_token) {
-      // SECURITY: Backend should set httpOnly cookie for token
-      // If token is returned in response body, store it temporarily
-      // (This is a fallback - httpOnly cookies are preferred)
-      localStorage.setItem('auth_token', response.data.access_token);
+      localStorage.setItem('access_token', response.data.access_token);
+    }
+    if (response.data?.refresh_token) {
+      localStorage.setItem('refresh_token', response.data.refresh_token);
     }
 
     return response;

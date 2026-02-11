@@ -16,15 +16,34 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const location = useLocation();
   const { isAuthenticated, isLoading, user, loadUser, checkPermission, hasRole } = useAuthStore();
 
+  // Check if there's a stored token that hasn't been validated yet.
+  // Without this, the first render sees isLoading=false + isAuthenticated=false
+  // and immediately redirects to /login before loadUser() in the useEffect
+  // gets a chance to validate the token.
+  const hasStoredToken = !!localStorage.getItem('access_token');
+
   useEffect(() => {
     // Try to load user from token on mount
-    if (!user && !isLoading) {
+    if (!user && !isLoading && hasStoredToken) {
       loadUser();
     }
-  }, [user, isLoading, loadUser]);
+  }, [user, isLoading, loadUser, hasStoredToken]);
 
   // Show loading state while checking authentication
   if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If there's a stored token but user isn't loaded yet, show spinner
+  // instead of redirecting. loadUser() will resolve this on the next render.
+  if (!isAuthenticated && hasStoredToken && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -50,10 +69,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             You do not have the required permissions to access this page.
           </p>
           <a
-            href="/"
+            href="/dashboard"
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
-            Return to Home
+            Return to Dashboard
           </a>
         </div>
       </div>
@@ -70,10 +89,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             You do not have the required role to access this page.
           </p>
           <a
-            href="/"
+            href="/dashboard"
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
-            Return to Home
+            Return to Dashboard
           </a>
         </div>
       </div>

@@ -20,6 +20,7 @@ from functools import partial
 
 from app.core.database import get_db
 from app.services.onboarding import OnboardingService
+from app.services.auth_service import AuthService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
 from app.api.v1.test_email_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
@@ -139,6 +140,7 @@ class AdminUserResponse(BaseModel):
     badge_number: Optional[str]
     status: str
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
 
     class Config:
@@ -768,15 +770,14 @@ async def create_admin_user(
         # to see the admin_user step as committed in a new DB session.
         await db.commit()
 
-        # Generate access token for automatic login
-        from app.core.security import create_access_token
-        access_token = create_access_token(
-            data={
-                "sub": str(user.id),
-                "username": user.username,
-                "email": user.email,
-                "org_id": str(org.id)
-            }
+        # Create a proper session so the token works with get_user_from_token().
+        # A bare create_access_token() would produce a JWT with no matching
+        # UserSession row, causing immediate 401 on any authenticated request.
+        auth_service = AuthService(db)
+        access_token, refresh_token = await auth_service.create_user_tokens(
+            user=user,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
 
         return AdminUserResponse(
@@ -787,7 +788,8 @@ async def create_admin_user(
             last_name=user.last_name,
             badge_number=user.badge_number,
             status=user.status.value,
-            access_token=access_token
+            access_token=access_token,
+            refresh_token=refresh_token,
         )
     except ValueError as e:
         logger.error(f"Admin user creation failed with ValueError: {e}")

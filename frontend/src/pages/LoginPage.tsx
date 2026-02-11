@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import axios from 'axios';
 
@@ -16,6 +16,7 @@ interface OrgBranding {
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isLoading, error, clearError } = useAuthStore();
 
   const [formData, setFormData] = useState({
@@ -90,7 +91,10 @@ export const LoginPage: React.FC = () => {
         username: formData.username,
         password: formData.password,
       });
-      navigate('/');
+      // Redirect to the page the user was trying to access (saved by
+      // ProtectedRoute), or default to /dashboard.
+      const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
     } catch (err) {
       // Error is handled by the store and displayed via error state
       console.error('Login failed:', err);
