@@ -22,6 +22,7 @@ import {
   Plug,
   Shield,
   UserCog,
+  Truck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -70,7 +71,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add/edit members, assign roles, update member status',
       view: ['View member directory', 'See contact information', 'View member profiles'],
       manage: ['Add new members', 'Edit member information', 'Assign roles', 'Manage member status'],
-      defaultManageRoles: ['admin', 'officers'],
+      defaultManageRoles: ['admin', 'officers', 'membership_coordinator'],
     },
   },
   {
@@ -163,6 +164,24 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     },
   },
 
+  {
+    id: 'apparatus',
+    name: 'Apparatus & Fleet',
+    description:
+      'Track vehicles and apparatus, schedule maintenance, log fuel usage, manage operator certifications, and monitor NFPA compliance.',
+    icon: Truck,
+    priority: 'recommended',
+    category: 'Operations',
+    configRoute: '/onboarding/modules/apparatus/config',
+    permissions: {
+      viewDescription: 'View fleet roster, apparatus details, and maintenance schedules',
+      manageDescription: 'Add/edit apparatus, log maintenance, manage operators and equipment',
+      view: ['View fleet roster', 'See apparatus details', 'Check maintenance schedules', 'View fuel logs'],
+      manage: ['Add/edit apparatus', 'Log maintenance and fuel', 'Manage operators', 'Change apparatus status'],
+      defaultManageRoles: ['admin', 'apparatus_manager', 'officers'],
+    },
+  },
+
   // ============================================
   // RECOMMENDED MODULES (Governance)
   // ============================================
@@ -235,7 +254,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure notification templates and triggers',
       view: ['Receive notifications', 'Set personal preferences', 'View notification history'],
       manage: ['Configure templates', 'Set notification triggers', 'Manage global settings'],
-      defaultManageRoles: ['admin'],
+      defaultManageRoles: ['admin', 'it_administrator'],
     },
   },
   {
@@ -290,7 +309,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Configure and manage external service connections',
       view: ['Use integrated features', 'Connect personal accounts'],
       manage: ['Configure integrations', 'Manage API connections', 'Set sync settings'],
-      defaultManageRoles: ['admin'],
+      defaultManageRoles: ['admin', 'it_administrator'],
     },
   },
 
@@ -324,7 +343,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Edit settings, manage integrations, configure modules',
       view: ['View settings'],
       manage: ['Edit settings', 'Manage integrations', 'Configure modules'],
-      defaultManageRoles: ['admin'],
+      defaultManageRoles: ['admin', 'it_administrator'],
     },
   },
 ];

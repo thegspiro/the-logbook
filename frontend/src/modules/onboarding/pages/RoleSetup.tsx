@@ -18,6 +18,10 @@ import {
   ClipboardList,
   Wrench,
   Info,
+  Truck,
+  Monitor,
+  UserPlus,
+  BadgeCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
@@ -137,6 +141,14 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         priority: 100,
         permissions: generateRolePermissions(modules, 'full_access'),
       },
+      {
+        id: 'it_administrator',
+        name: 'IT Administrator',
+        description: 'Manages integrations, notifications, and system settings',
+        icon: Monitor,
+        priority: 100,
+        permissions: generateRolePermissions(modules, 'full_access'),
+      },
     ],
   },
   leadership: {
@@ -231,6 +243,22 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
           'forms',
         ]),
       },
+      {
+        id: 'officers',
+        name: 'Officers',
+        description: 'General officer role with broad operational access',
+        icon: BadgeCheck,
+        priority: 70,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'members',
+          'events',
+          'documents',
+          'inventory',
+          'scheduling',
+          'reports',
+          'forms',
+        ]),
+      },
     ],
   },
   support: {
@@ -260,6 +288,22 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         icon: Users,
         priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents']),
+      },
+      {
+        id: 'apparatus_manager',
+        name: 'Apparatus Manager',
+        description: 'Day-to-day fleet tracking, maintenance logging, and equipment checks',
+        icon: Truck,
+        priority: 50,
+        permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory']),
+      },
+      {
+        id: 'membership_coordinator',
+        name: 'Membership Coordinator',
+        description: 'Manages member records, applications, and onboarding/offboarding',
+        icon: UserPlus,
+        priority: 55,
+        permissions: generateRolePermissions(modules, 'specialist', ['members']),
       },
     ],
   },
@@ -313,6 +357,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
+  Truck, Monitor, UserPlus, BadgeCheck,
 };
 
 const getIconName = (icon: React.ElementType): string => {
