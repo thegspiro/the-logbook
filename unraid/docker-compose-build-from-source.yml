@@ -122,7 +122,8 @@ services:
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       TZ: ${TZ:-America/New_York}
 
-    # Exec form CMD in Dockerfile ensures uvicorn is PID 1 and receives SIGTERM
+    # init: true ensures signals are forwarded even if CMD form changes
+    init: true
     stop_grace_period: 15s
     volumes:
       - /mnt/user/appdata/the-logbook/data:/app/data

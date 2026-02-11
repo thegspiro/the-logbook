@@ -111,8 +111,9 @@ services:
         condition: service_healthy
     networks:
       - intranet-network
-    # Exec form so uvicorn is PID 1 and receives SIGTERM for graceful shutdown
+    # Exec form so uvicorn receives SIGTERM for graceful shutdown
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001", "--reload"]
+    init: true
     stop_grace_period: 15s
 
   # Frontend Application

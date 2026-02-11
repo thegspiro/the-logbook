@@ -174,7 +174,8 @@ services:
       redis:
         condition: service_healthy
 
-    # Exec form CMD in Dockerfile ensures uvicorn is PID 1 and receives SIGTERM
+    # init: true ensures signals are forwarded even if CMD form changes
+    init: true
     stop_grace_period: 15s
 
     healthcheck:
