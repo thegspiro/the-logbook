@@ -283,7 +283,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'specialist', ['scheduling']),
       },
       {
-        id: 'public_outreach',
+        id: 'public_outreach_coordinator',
         name: 'Public Outreach Coordinator',
         description: 'Community events and public education',
         icon: Users,

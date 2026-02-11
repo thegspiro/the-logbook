@@ -564,7 +564,7 @@ class OnboardingService:
             # Essential modules
             "members", "events", "documents",
             # Operations modules
-            "training", "inventory", "scheduling",
+            "training", "inventory", "scheduling", "apparatus",
             # Governance modules
             "elections", "minutes", "reports",
             # Communication modules
