@@ -196,102 +196,231 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
     return (len(errors) == 0, errors)
 
 
+# The revision stamped by the initial SQL schema (001_initial_schema.sql)
+INITIAL_SQL_REVISION = '20260118_0001'
+
+# Tables created by the initial SQL that need to be dropped during fast-path
+# so they can be recreated from current model definitions (which have the latest schema)
+INITIAL_SQL_TABLES = [
+    'audit_log_checkpoints', 'audit_logs', 'sessions',
+    'user_roles', 'roles', 'users', 'organizations'
+]
+
+# Migration files that create tables without corresponding SQLAlchemy models.
+# These must be run explicitly during fast-path initialization since
+# Base.metadata.create_all() won't know about them.
+MIGRATION_ONLY_FILES = [
+    '20260201_0016_create_compliance_tables.py',
+    '20260201_0017_create_fundraising_tables.py',
+]
+
+# Migration file that seeds initial apparatus system data
+SEED_DATA_FILE = '20260203_0023_seed_apparatus_data.py'
+
+
+def _import_all_models():
+    """Import all SQLAlchemy models to ensure Base.metadata is complete."""
+    import app.models  # noqa: F401 - triggers __init__.py which imports all models
+
+
+def _run_migration_file(engine, migration_path):
+    """
+    Run a single Alembic migration file's upgrade() function outside of Alembic.
+
+    Uses Alembic's Operations context so migration code that calls
+    op.create_table(), op.bulk_insert(), etc. works correctly.
+    """
+    import importlib.util
+    from alembic.operations import Operations
+    from alembic.runtime.migration import MigrationContext
+
+    spec = importlib.util.spec_from_file_location("migration", migration_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    with engine.begin() as conn:
+        ctx = MigrationContext.configure(conn)
+        with Operations.context(ctx):
+            module.upgrade()
+
+
+def _fast_path_init(engine, alembic_cfg, base_dir):
+    """
+    Fast-path database initialization for fresh installs.
+
+    Instead of running 39+ individual Alembic migrations (which takes ~20 minutes),
+    this creates all tables at once from SQLAlchemy model definitions and then
+    handles tables/data that only exist in migration files.
+
+    This reduces first-boot database setup from ~20 minutes to seconds.
+    """
+    from sqlalchemy import text
+    from alembic import command
+    from alembic.script import ScriptDirectory
+
+    startup_status.set_phase(
+        "migrations",
+        "Fast-path: Initializing database schema...",
+        "Creating all database tables from model definitions. "
+        "This is much faster than running individual migrations."
+    )
+    logger.info("Fresh database detected - using fast-path initialization")
+
+    # 1. Import all models so Base.metadata has the complete schema
+    _import_all_models()
+    from app.core.database import Base
+
+    # 2. Drop tables from initial SQL so create_all() can recreate them
+    #    with the latest schema (the initial SQL tables may have outdated columns
+    #    since subsequent migrations ALTER them)
+    logger.info("Dropping initial SQL tables for recreation with latest schema...")
+    with engine.begin() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        for table_name in INITIAL_SQL_TABLES:
+            conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+
+    # 3. Create ALL tables from current model definitions
+    #    This handles ~90% of tables in one fast batch operation
+    logger.info("Creating all tables from model definitions...")
+    Base.metadata.create_all(engine)
+    logger.info("Model-based tables created")
+
+    # 4. Create tables that only exist in migration files (no SQLAlchemy models)
+    #    Currently: compliance module (5 tables) and fundraising module (5 tables)
+    versions_dir = os.path.join(base_dir, "alembic", "versions")
+    for migration_file in MIGRATION_ONLY_FILES:
+        migration_path = os.path.join(versions_dir, migration_file)
+        if os.path.exists(migration_path):
+            logger.info(f"Creating migration-only tables from {migration_file}...")
+            _run_migration_file(engine, migration_path)
+
+    # 5. Insert seed data (apparatus types, statuses, maintenance types)
+    seed_path = os.path.join(versions_dir, SEED_DATA_FILE)
+    if os.path.exists(seed_path):
+        logger.info("Inserting apparatus seed data...")
+        _run_migration_file(engine, seed_path)
+        logger.info("Apparatus seed data inserted")
+
+    # 6. Stamp alembic to head so future startups skip all migrations
+    command.stamp(alembic_cfg, "head")
+
+    head_rev = ScriptDirectory.from_config(alembic_cfg).get_current_head()
+    logger.info(f"Database stamped to head revision: {head_rev}")
+    logger.info("Fast-path database initialization complete")
+
+
 def run_migrations():
     """
     Run Alembic migrations to ensure database schema is up to date.
-    This runs synchronously before the async app starts.
+
+    Optimized with two paths:
+    - Fast-path: For fresh installs (detected by initial SQL revision stamp),
+      uses SQLAlchemy create_all() instead of running 39+ individual migrations.
+      Reduces first-boot setup from ~20 minutes to seconds.
+    - Normal path: For existing installs, runs only pending Alembic migrations.
     """
     from alembic.config import Config
     from alembic import command
     from alembic.script import ScriptDirectory
-    from alembic.runtime.migration import MigrationContext
     from sqlalchemy import create_engine, text
     import os
 
     startup_status.set_phase("migrations", "Preparing database migrations...")
 
     try:
-        # Get the directory where main.py is located
         base_dir = os.path.dirname(os.path.abspath(__file__))
         alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
         alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
 
-        # Count total migrations to run
         script_dir = ScriptDirectory.from_config(alembic_cfg)
         all_revisions = list(script_dir.walk_revisions())
         total_migrations = len(all_revisions)
         startup_status.migrations_total = total_migrations
 
-        # Check for revision mismatch (common when migration files are renamed)
+        head_revision = script_dir.get_current_head()
+        engine = create_engine(settings.SYNC_DATABASE_URL)
+
+        # Determine current database revision
+        current_rev = None
         try:
-            engine = create_engine(settings.SYNC_DATABASE_URL)
             with engine.connect() as conn:
-                # Check if alembic_version table exists
                 result = conn.execute(text(
                     "SELECT version_num FROM alembic_version LIMIT 1"
                 ))
                 row = result.fetchone()
-
                 if row:
                     current_rev = row[0]
+        except Exception:
+            pass  # Table doesn't exist yet
 
-                    # Check if current revision exists in our scripts
-                    try:
-                        script_dir.get_revision(current_rev)
-                    except Exception:
-                        # Revision not found - likely renamed migration files
-                        startup_status.set_phase("migrations", "Fixing migration version mismatch...")
-                        logger.warning(
-                            f"Migration revision '{current_rev}' not found. "
-                            "This may be due to renamed migration files. "
-                            "Stamping database with 'head' to fix..."
-                        )
-                        # Clear the version table so migrations can run fresh
-                        conn.execute(text("DELETE FROM alembic_version"))
-                        conn.commit()
-                        logger.info("✓ Cleared invalid migration version, will run fresh")
-        except Exception as e:
-            # Table might not exist yet, which is fine
-            logger.debug(f"Could not check alembic_version: {e}")
+        # Fast exit: already at head - nothing to do
+        if current_rev == head_revision:
+            startup_status.migrations_completed = total_migrations
+            startup_status.set_phase("migrations", "Database schema is up to date")
+            logger.info("Database schema is already up to date")
+            return
 
-        startup_status.set_phase("migrations", f"Running {total_migrations} database migrations...")
+        # Check for revision mismatch (renamed migration files)
+        if current_rev and current_rev != INITIAL_SQL_REVISION:
+            try:
+                script_dir.get_revision(current_rev)
+            except Exception:
+                startup_status.set_phase("migrations", "Fixing migration version mismatch...")
+                logger.warning(
+                    f"Migration revision '{current_rev}' not found. "
+                    "Clearing invalid version..."
+                )
+                with engine.connect() as conn:
+                    conn.execute(text("DELETE FROM alembic_version"))
+                    conn.commit()
+                current_rev = None
+                logger.info("Cleared invalid migration version")
+
+        # === FAST-PATH: Fresh database initialization ===
+        # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
+        # Instead of running 39+ individual migrations (~20 min), create all
+        # tables from model definitions in one batch (seconds).
+        if current_rev == INITIAL_SQL_REVISION or current_rev is None:
+            _fast_path_init(engine, alembic_cfg, base_dir)
+            startup_status.migrations_completed = total_migrations
+            startup_status.set_phase("migrations", "Database initialization complete")
+            return
+
+        # === NORMAL PATH: Run pending Alembic migrations ===
+        # For existing installations being upgraded
+        startup_status.set_phase("migrations", "Running database migrations...")
         logger.info("Running database migrations...")
 
         schema_was_stamped = False
 
         try:
-            # Run migrations with 30-minute timeout to prevent infinite hangs
-            # Normal migration time: ~23 minutes for 38 migrations
-            # This protects against deadlocks, infinite loops, or network issues
             with timeout_context(1800, "Database migrations"):
                 command.upgrade(alembic_cfg, "head")
 
             startup_status.migrations_completed = total_migrations
             startup_status.set_phase("migrations", "Database migrations complete")
-            logger.info("✓ Database migrations complete")
+            logger.info("Database migrations complete")
         except TimeoutError as timeout_error:
-            logger.error(f"⚠️  {timeout_error}")
+            logger.error(f"{timeout_error}")
             startup_status.add_error(str(timeout_error))
             startup_status.phase = "error"
-            startup_status.message = "Database migrations timed out - possible deadlock or hang"
+            startup_status.message = "Database migrations timed out"
             raise RuntimeError(
                 "Database migrations timed out after 30 minutes. "
-                "This may indicate a deadlock, infinite loop, or network issue. "
                 "Check database logs for locked tables or stuck queries."
             )
         except Exception as upgrade_error:
-            # If upgrade fails due to table already exists, stamp to head
             error_str = str(upgrade_error).lower()
             if "already exists" in error_str or "duplicate" in error_str:
                 logger.warning(
-                    f"Migration failed ({upgrade_error}). "
-                    "Tables may already exist. Stamping to head..."
+                    f"Migration failed ({upgrade_error}). Stamping to head..."
                 )
                 try:
                     command.stamp(alembic_cfg, "head")
                     schema_was_stamped = True
                     startup_status.migrations_completed = total_migrations
-                    logger.info("✓ Stamped database to head")
+                    logger.info("Stamped database to head")
                 except Exception as stamp_error:
                     logger.warning(f"Could not stamp database: {stamp_error}")
                     startup_status.add_error(f"Migration stamp failed: {stamp_error}")
@@ -299,21 +428,16 @@ def run_migrations():
                 startup_status.add_error(f"Migration failed: {upgrade_error}")
                 raise
 
-        # Validate schema after migrations or stamp
+        # Validate schema after migrations
         startup_status.set_phase("migrations", "Validating database schema...")
         schema_valid, schema_errors = validate_schema(engine)
 
         if not schema_valid:
             error_msg = (
                 "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
-                "The database schema does not match the expected structure.\n"
-                "This usually happens when migrations fail partway through.\n\n"
+                "The database schema does not match the expected structure.\n\n"
                 "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
-                "TO FIX THIS ISSUE:\n"
-                "  1. Stop all containers: docker compose down -v\n"
-                "  2. Rebuild: docker compose up --build\n\n"
-                "The -v flag removes database volumes for a fresh start.\n"
-                "Since onboarding hasn't completed, no data will be lost."
+                "TO FIX: docker compose down -v && docker compose up --build"
             )
             logger.error(error_msg)
             startup_status.add_error("Schema validation failed - database reset required")
@@ -321,18 +445,16 @@ def run_migrations():
             startup_status.message = "Database schema invalid - see logs for fix instructions"
 
             if schema_was_stamped:
-                # If we just stamped to head but schema is invalid, this is a critical issue
                 logger.critical(
                     "CRITICAL: Schema stamped to head but validation failed. "
                     "Database must be reset with 'docker compose down -v'"
                 )
         else:
-            logger.info("✓ Database schema validated successfully")
+            logger.info("Database schema validated successfully")
 
     except Exception as e:
         logger.warning(f"Migration warning: {e}")
         startup_status.add_error(f"Migration warning: {e}")
-        # Don't fail startup - tables might already exist
 
 
 def validate_security_configuration():

@@ -68,61 +68,66 @@ class AuditLogger:
         - Current entry's hash (calculated from all data + previous hash)
         """
         try:
-            # Get the last log entry to get previous hash
-            result = await db.execute(
-                select(AuditLog)
-                .order_by(AuditLog.id.desc())
-                .limit(1)
-            )
-            last_log = result.scalar_one_or_none()
-            previous_hash = last_log.current_hash if last_log else "0" * 64
-            
-            # Create log entry data
-            timestamp = datetime.now(UTC)
-            timestamp_nanos = time.time_ns()
-            
-            log_data = {
-                "timestamp": timestamp.isoformat(),
-                "timestamp_nanos": timestamp_nanos,
-                "event_type": event_type,
-                "event_category": event_category,
-                "severity": severity,
-                "user_id": user_id,
-                "ip_address": ip_address,
-                "event_data": event_data,
-            }
-            
-            # Calculate current hash
-            current_hash = self.calculate_hash(log_data, previous_hash)
-            
-            # Create log entry
-            log_entry = AuditLog(
-                timestamp=timestamp,
-                timestamp_nanos=timestamp_nanos,
-                event_type=event_type,
-                event_category=event_category,
-                severity=severity,
-                user_id=user_id,
-                username=username,
-                session_id=session_id,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                geo_location=geo_location,
-                event_data=event_data,
-                previous_hash=previous_hash,
-                current_hash=current_hash,
-            )
-            
-            db.add(log_entry)
-            await db.flush()
-            await db.refresh(log_entry)
-            
+            # Use a savepoint (nested transaction) so that audit log failures
+            # don't roll back the caller's transaction
+            async with db.begin_nested():
+                # Get the last log entry to get previous hash
+                result = await db.execute(
+                    select(AuditLog)
+                    .order_by(AuditLog.id.desc())
+                    .limit(1)
+                )
+                last_log = result.scalar_one_or_none()
+                previous_hash = last_log.current_hash if last_log else "0" * 64
+
+                # Create log entry data
+                timestamp = datetime.now(UTC)
+                timestamp_nanos = time.time_ns()
+
+                log_data = {
+                    "timestamp": timestamp.isoformat(),
+                    "timestamp_nanos": timestamp_nanos,
+                    "event_type": event_type,
+                    "event_category": event_category,
+                    "severity": severity,
+                    "user_id": user_id,
+                    "ip_address": ip_address,
+                    "event_data": event_data,
+                }
+
+                # Calculate current hash
+                current_hash = self.calculate_hash(log_data, previous_hash)
+
+                # Create log entry
+                log_entry = AuditLog(
+                    timestamp=timestamp,
+                    timestamp_nanos=timestamp_nanos,
+                    event_type=event_type,
+                    event_category=event_category,
+                    severity=severity,
+                    user_id=user_id,
+                    username=username,
+                    session_id=session_id,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    geo_location=geo_location,
+                    event_data=event_data,
+                    previous_hash=previous_hash,
+                    current_hash=current_hash,
+                )
+
+                db.add(log_entry)
+                await db.flush()
+                await db.refresh(log_entry)
+
             return log_entry
-            
+
         except Exception as e:
             logger.error(f"Failed to create audit log: {e}")
-            await db.rollback()
-            raise
+            # Don't re-raise - audit log failures should not break the caller's
+            # operation. The savepoint rollback already undid the audit changes
+            # without affecting the outer transaction.
+            return None
     
     async def verify_integrity(
         self,

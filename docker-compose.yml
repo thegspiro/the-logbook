@@ -20,6 +20,8 @@ services:
       --innodb_buffer_pool_size=256M
       --innodb_redo_log_capacity=134217728
       --skip-name-resolve
+      --skip-log-bin
+      --innodb_flush_log_at_trx_commit=2
     # SEC-14: Database port is NOT exposed to the host by default.
     # Uncomment the ports mapping below only for local development with DB tools.
     # ports:
@@ -35,8 +37,8 @@ services:
           mysql -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_in_production} -e 'SELECT 1' $${MYSQL_DATABASE:-intranet_db}
       interval: 5s
       timeout: 3s
-      retries: 24
-      start_period: 90s
+      retries: 30
+      start_period: 300s
     networks:
       - intranet-network
 

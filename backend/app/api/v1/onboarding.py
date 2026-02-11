@@ -495,7 +495,7 @@ async def _persist_session_data_to_org(
         org_settings["auth"]["provider"] = auth_data["platform"]
 
     organization.settings = org_settings
-    await db.commit()
+    await db.flush()
     logger.info("Persisted session data (IT team, auth) to Organization.settings")
 
 
@@ -881,6 +881,10 @@ async def complete_onboarding(
 
     try:
         onboarding_status = await service.complete_onboarding(notes=request_data.notes)
+
+        # Commit all changes (org settings, onboarding status, checklist items)
+        # before returning the response to ensure data is persisted
+        await db.commit()
 
         return {
             "message": "Onboarding completed successfully!",
