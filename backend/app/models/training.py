@@ -701,6 +701,7 @@ class ProgramEnrollment(Base):
 
     # Relationships
     program = relationship("TrainingProgram", back_populates="enrollments")
+    current_phase = relationship("ProgramPhase", foreign_keys=[current_phase_id])
     requirement_progress = relationship("RequirementProgress", back_populates="enrollment", cascade="all, delete-orphan")
 
     __table_args__ = (

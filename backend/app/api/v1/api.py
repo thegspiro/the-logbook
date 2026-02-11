@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
     auth,
+    dashboard,
     events,
     locations,
     roles,
@@ -38,6 +39,7 @@ api_router.include_router(organizations.router, prefix="/organization", tags=["o
 api_router.include_router(apparatus.router, prefix="/apparatus", tags=["apparatus"])
 api_router.include_router(security_monitoring.router, prefix="/security", tags=["security"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(training.router, prefix="/training", tags=["training"])
 api_router.include_router(training_programs.router, prefix="/training/programs", tags=["training-programs"])
 api_router.include_router(training_sessions.router, prefix="/training/sessions", tags=["training-sessions"])

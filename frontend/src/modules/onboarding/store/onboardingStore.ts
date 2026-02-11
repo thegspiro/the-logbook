@@ -50,6 +50,17 @@ export interface OnboardingState {
   backupPhone: string;
   secondaryAdminEmail: string;
 
+  // Role Configuration
+  rolesConfig: Record<string, {
+    id: string;
+    name: string;
+    description: string;
+    icon?: string;
+    priority: number;
+    permissions: Record<string, { view: boolean; manage: boolean }>;
+    isCustom?: boolean;
+  }> | null;
+
   // Module Selection
   selectedModules: string[];
   moduleStatuses: Record<string, 'enabled' | 'skipped' | 'ignored'>;
@@ -94,6 +105,9 @@ export interface OnboardingActions {
   setBackupPhone: (phone: string) => void;
   setSecondaryAdminEmail: (email: string) => void;
 
+  // Role Actions
+  setRolesConfig: (roles: OnboardingState['rolesConfig']) => void;
+
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
   toggleModule: (moduleId: string) => void;
@@ -134,6 +148,7 @@ const initialState: OnboardingState = {
   backupEmail: '',
   backupPhone: '',
   secondaryAdminEmail: '',
+  rolesConfig: null,
   selectedModules: [],
   moduleStatuses: {},
   sessionId: null,
@@ -236,6 +251,12 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
       setSecondaryAdminEmail: (email) => {
         set({ secondaryAdminEmail: email });
+        get().triggerAutoSave();
+      },
+
+      // Role Actions
+      setRolesConfig: (roles) => {
+        set({ rolesConfig: roles });
         get().triggerAutoSave();
       },
 
@@ -378,6 +399,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         backupEmail: state.backupEmail,
         backupPhone: state.backupPhone,
         secondaryAdminEmail: state.secondaryAdminEmail,
+        rolesConfig: state.rolesConfig,
         selectedModules: state.selectedModules,
         moduleStatuses: state.moduleStatuses,
         currentStep: state.currentStep,

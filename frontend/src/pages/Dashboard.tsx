@@ -29,6 +29,16 @@ const Dashboard: React.FC = () => {
     const savedDepartmentName = sessionStorage.getItem('departmentName');
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
+    } else {
+      // Fetch from backend if sessionStorage is empty (new tab or returning user)
+      import('axios').then(({ default: axios }) => {
+        axios.get('/api/v1/auth/branding').then((response) => {
+          if (response.data?.name) {
+            setDepartmentName(response.data.name);
+            sessionStorage.setItem('departmentName', response.data.name);
+          }
+        }).catch(() => { /* keep default */ });
+      });
     }
 
     // Load dashboard stats and training progress

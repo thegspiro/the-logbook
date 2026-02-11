@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
+import { useAuthStore } from '../../stores/authStore';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -10,6 +12,7 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const logout = useAuthStore((s) => s.logout);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
@@ -17,13 +20,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   useEffect(() => {
     // Check if user is authenticated
-    const authToken = localStorage.getItem('auth_token');
+    const authToken = localStorage.getItem('access_token');
     if (!authToken) {
       navigate('/login');
       return;
     }
 
-    // Load department info and navigation preference
+    // Load department info and navigation preference from sessionStorage first
     const savedDepartmentName = sessionStorage.getItem('departmentName');
     const savedLogo = sessionStorage.getItem('logoData');
     const savedLayout = sessionStorage.getItem('navigationLayout') as 'top' | 'left' | null;
@@ -37,14 +40,31 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     if (savedLayout) {
       setNavigationLayout(savedLayout);
     }
+
+    // If sessionStorage is empty (new tab, returning user), fetch branding from backend
+    if (!savedDepartmentName) {
+      axios.get('/api/v1/auth/branding').then((response) => {
+        const { name, logo } = response.data;
+        if (name) {
+          setDepartmentName(name);
+          sessionStorage.setItem('departmentName', name);
+        }
+        if (logo) {
+          setLogoPreview(logo);
+          sessionStorage.setItem('logoData', logo);
+        }
+      }).catch(() => {
+        // Branding is non-critical — keep defaults
+      });
+    }
   }, [navigate]);
 
   const handleLogoutClick = () => {
     setShowLogoutModal(true);
   };
 
-  const handleLogoutConfirm = () => {
-    localStorage.removeItem('auth_token');
+  const handleLogoutConfirm = async () => {
+    await logout();
     sessionStorage.clear();
     navigate('/login');
   };
