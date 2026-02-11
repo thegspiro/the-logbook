@@ -119,7 +119,7 @@ export const LoginPage: React.FC = () => {
   const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" id="main-content">
+    <main className="relative min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
           {branding.logo ? (
@@ -301,6 +301,13 @@ export const LoginPage: React.FC = () => {
           </div>
         </form>
       </div>
+
+      <footer className="absolute bottom-0 left-0 right-0 py-4 text-center">
+        <p className="text-gray-500 text-sm">
+          &copy; {new Date().getFullYear()} {branding.name || 'Your Organization'}. All rights reserved.
+        </p>
+        <p className="text-gray-400 text-xs mt-1">Powered by The Logbook</p>
+      </footer>
     </main>
   );
 };
