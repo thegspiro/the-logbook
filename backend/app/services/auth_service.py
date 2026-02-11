@@ -83,7 +83,10 @@ class AuthService:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=30)
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
-            await self.db.flush()
+            # Commit (not flush) so the counter persists even when the
+            # caller raises HTTPException, which triggers a rollback in
+            # the get_db() dependency cleanup.
+            await self.db.commit()
             logger.warning("Authentication failed: invalid credentials")
             return None
 
@@ -123,10 +126,10 @@ class AuthService:
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
 
-        # Store session
+        # Store session — use str() for id/user_id to match String(36) columns
         session = UserSession(
-            id=uuid4(),
-            user_id=user.id,
+            id=str(uuid4()),
+            user_id=str(user.id),
             token=access_token,
             refresh_token=refresh_token,
             ip_address=ip_address,
@@ -167,7 +170,8 @@ class AuthService:
             if payload.get("type") != "refresh":
                 return None, None
 
-            user_id = UUID(payload.get("sub"))
+            # Keep user_id as string to match the String(36) DB columns
+            user_id = payload.get("sub")
 
             # Look up the session by refresh token
             result = await self.db.execute(
@@ -183,13 +187,13 @@ class AuthService:
                     f"Refresh token replay detected for user {user_id}. "
                     "Revoking all sessions."
                 )
-                await self._revoke_all_user_sessions(user_id)
+                await self._revoke_all_user_sessions(str(user_id))
                 return None, None
 
             # Get user
             user_result = await self.db.execute(
                 select(User)
-                .where(User.id == user_id)
+                .where(User.id == str(user_id))
                 .where(User.deleted_at.is_(None))
             )
             user = user_result.scalar_one_or_none()
@@ -221,18 +225,21 @@ class AuthService:
             logger.error(f"Token refresh failed: {e}")
             return None, None
 
-    async def _revoke_all_user_sessions(self, user_id: UUID) -> int:
+    async def _revoke_all_user_sessions(self, user_id: str) -> int:
         """
         Revoke all active sessions for a user.
 
         Used when refresh token replay is detected (potential theft)
         or when a user's password is changed/account is deactivated.
 
+        Args:
+            user_id: User ID as string (matches String(36) DB column)
+
         Returns:
             Number of sessions revoked
         """
         result = await self.db.execute(
-            select(UserSession).where(UserSession.user_id == user_id)
+            select(UserSession).where(UserSession.user_id == str(user_id))
         )
         sessions = result.scalars().all()
         count = len(sessions)
@@ -300,10 +307,10 @@ class AuthService:
         if result.scalar_one_or_none():
             return None, _generic_conflict
 
-        # Create user
+        # Create user — use str() for id to match String(36) column
         user = User(
-            id=uuid4(),
-            organization_id=organization_id,
+            id=str(uuid4()),
+            organization_id=str(organization_id),
             username=username,
             email=email,
             password_hash=hash_password(password),
@@ -408,14 +415,15 @@ class AuthService:
             if payload.get("type") != "access":
                 return None
 
-            user_id = UUID(payload.get("sub"))
+            user_id = payload.get("sub")
 
             # SEC-03: Verify the token has an active session in the database.
             # This ensures logged-out or revoked tokens are rejected immediately.
+            # Query by token alone (unique index) to avoid type-mismatch issues
+            # between Python UUID objects and MySQL VARCHAR columns.
             session_result = await self.db.execute(
                 select(UserSession).where(
                     UserSession.token == token,
-                    UserSession.user_id == user_id,
                 )
             )
             session = session_result.scalar_one_or_none()
@@ -424,13 +432,18 @@ class AuthService:
                 logger.debug("Token rejected: no matching session found")
                 return None
 
+            # Verify the session belongs to the claimed user
+            if str(session.user_id) != str(user_id):
+                logger.debug("Token rejected: session user_id mismatch")
+                return None
+
             if session.expires_at and session.expires_at < datetime.utcnow():
                 logger.debug("Token rejected: session expired")
                 return None
 
             result = await self.db.execute(
                 select(User)
-                .where(User.id == user_id)
+                .where(User.id == str(user_id))
                 .where(User.deleted_at.is_(None))
                 .options(selectinload(User.roles))
             )

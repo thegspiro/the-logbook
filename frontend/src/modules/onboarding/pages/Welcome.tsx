@@ -4,9 +4,42 @@ import { useNavigate } from 'react-router-dom';
 const Welcome: React.FC = () => {
   const [showTitle, setShowTitle] = useState(false);
   const [showParagraph, setShowParagraph] = useState(false);
+  const [checking, setChecking] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // If the user is already authenticated, go straight to the dashboard
+    if (localStorage.getItem('access_token')) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
+    // Check if onboarding has already been completed by looking for an
+    // existing organization.  If one exists, the user should log in
+    // rather than seeing the "Get Started" onboarding splash.
+    const checkOnboardingStatus = async () => {
+      try {
+        const response = await fetch('/api/v1/auth/branding');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.name) {
+            // Organization exists → onboarding is done → go to login
+            navigate('/login', { replace: true });
+            return;
+          }
+        }
+      } catch {
+        // Backend not reachable yet — show the Welcome page normally
+      }
+      setChecking(false);
+    };
+
+    checkOnboardingStatus();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (checking) return;
+
     // Show title quickly so the user isn't staring at a blank screen
     const titleTimer = setTimeout(() => {
       setShowTitle(true);
@@ -21,7 +54,18 @@ const Welcome: React.FC = () => {
       clearTimeout(titleTimer);
       clearTimeout(paragraphTimer);
     };
-  }, []);
+  }, [checking]);
+
+  // Show a brief loading state while we check onboarding status
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
@@ -58,16 +102,16 @@ const Welcome: React.FC = () => {
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
             <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
-              🔒 HIPAA Compliant
+              HIPAA Compliant
             </span>
             <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
-              ♿ Section 508 Accessible
+              Section 508 Accessible
             </span>
             <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
-              🔐 Zero Plain Text Passwords
+              Zero Plain Text Passwords
             </span>
             <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
-              📋 Tamper-Proof Audit Logs
+              Tamper-Proof Audit Logs
             </span>
           </div>
 
@@ -84,11 +128,11 @@ const Welcome: React.FC = () => {
           {/* Footer */}
           <div className="mt-12 text-slate-400 text-sm">
             <p>
-              Built with ❤️ by volunteer firefighters, for volunteer
+              Built with care by volunteer firefighters, for volunteer
               firefighters
             </p>
             <p className="mt-2">
-              Open Source • MIT Licensed • Community Driven
+              Open Source | MIT Licensed | Community Driven
             </p>
           </div>
         </div>
