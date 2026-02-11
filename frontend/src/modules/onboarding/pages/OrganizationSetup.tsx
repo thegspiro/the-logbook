@@ -499,7 +499,7 @@ const OrganizationSetup: React.FC = () => {
   };
 
   // Validation
-  const validateForm = (): boolean => {
+  const validateForm = (): Record<string, string> => {
     const errors: Record<string, string> = {};
 
     // Required fields
@@ -591,7 +591,7 @@ const OrganizationSetup: React.FC = () => {
       setExpandedSections((prev) => ({ ...prev, identifiers: true }));
     }
 
-    return Object.keys(errors).length === 0;
+    return errors;
   };
 
   const handleContinue = async () => {
@@ -604,9 +604,10 @@ const OrganizationSetup: React.FC = () => {
       return;
     }
 
-    if (!validateForm()) {
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
       // Format validation errors into a readable list
-      const errorMessages = Object.values(validationErrors);
+      const errorMessages = Object.values(errors);
       const errorCount = errorMessages.length;
 
       if (errorCount === 1) {
