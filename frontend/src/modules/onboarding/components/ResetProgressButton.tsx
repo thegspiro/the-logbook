@@ -49,7 +49,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
       const localStorageKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.startsWith('onboarding') || key === 'csrf_token' || key === 'auth_token')) {
+        if (key && (key.startsWith('onboarding') || key === 'csrf_token' || key === 'access_token' || key === 'refresh_token')) {
           localStorageKeysToRemove.push(key);
         }
       }

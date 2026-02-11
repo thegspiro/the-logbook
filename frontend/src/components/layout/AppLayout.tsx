@@ -17,7 +17,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   useEffect(() => {
     // Check if user is authenticated
-    const authToken = localStorage.getItem('auth_token');
+    const authToken = localStorage.getItem('access_token');
     if (!authToken) {
       navigate('/login');
       return;
@@ -44,7 +44,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const handleLogoutConfirm = () => {
-    localStorage.removeItem('auth_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     sessionStorage.clear();
     navigate('/login');
   };
