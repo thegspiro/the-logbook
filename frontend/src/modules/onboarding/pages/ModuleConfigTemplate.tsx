@@ -44,10 +44,12 @@ const ModuleConfigTemplate: React.FC = () => {
       }));
   }, [rolesConfig]);
 
-  // Restore previously saved manage roles for this module, or use defaults
+  // Restore previously saved manage roles for this module, or use defaults.
+  // Filter out any roles that were removed since the config was saved.
+  const availableRoleIds = useMemo(() => new Set(availableRoles.map(r => r.id)), [availableRoles]);
   const [manageRoles, setManageRoles] = useState<string[]>(() => {
     if (moduleId && modulePermissionConfigs[moduleId]) {
-      return modulePermissionConfigs[moduleId];
+      return modulePermissionConfigs[moduleId].filter(id => availableRoleIds.has(id));
     }
     return config?.permissions.defaultManageRoles || ['admin'];
   });
@@ -208,7 +210,7 @@ const ModuleConfigTemplate: React.FC = () => {
           <div className="mt-4 p-3 bg-slate-800/50 rounded-lg">
             <p className="text-slate-400 text-sm">
               <strong className="text-white">Selected roles:</strong>{' '}
-              {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).join(', ')}
+              {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).filter(Boolean).join(', ')}
             </p>
           </div>
         </div>
