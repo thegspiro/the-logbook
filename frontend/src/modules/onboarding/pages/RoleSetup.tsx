@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -287,6 +287,18 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
   },
 });
 
+// Icon lookup map for serialization/deserialization
+const ICON_MAP: Record<string, React.ElementType> = {
+  Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
+};
+
+const getIconName = (icon: React.ElementType): string => {
+  for (const [name, component] of Object.entries(ICON_MAP)) {
+    if (component === icon) return name;
+  }
+  return 'UserCog';
+};
+
 interface RoleConfig {
   id: string;
   name: string;
@@ -302,14 +314,28 @@ const RoleSetup: React.FC = () => {
   const departmentName = useOnboardingStore(state => state.departmentName);
   const logoPreview = useOnboardingStore(state => state.logoData);
   const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const savedRolesConfig = useOnboardingStore(state => state.rolesConfig);
+  const setRolesConfig = useOnboardingStore(state => state.setRolesConfig);
 
   // Build permission categories and role templates from the module registry
   // This ensures new modules automatically appear in role configuration
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
   const roleTemplates = useMemo(() => buildRoleTemplates(MODULE_REGISTRY), []);
 
-  // Selected roles
+  // Selected roles - restore from Zustand store if available, otherwise use defaults
   const [selectedRoles, setSelectedRoles] = useState<Record<string, RoleConfig>>(() => {
+    // Restore from persisted store if available
+    if (savedRolesConfig) {
+      const restored: Record<string, RoleConfig> = {};
+      for (const [roleId, saved] of Object.entries(savedRolesConfig)) {
+        restored[roleId] = {
+          ...saved,
+          icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
+        };
+      }
+      return restored;
+    }
+
     // Build templates for initial state
     const templates = buildRoleTemplates(MODULE_REGISTRY);
 
@@ -338,6 +364,23 @@ const RoleSetup: React.FC = () => {
   const [customRoleDescription, setCustomRoleDescription] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // Persist role changes to Zustand store (survives navigation)
+  useEffect(() => {
+    const serializable: Record<string, any> = {};
+    for (const [roleId, role] of Object.entries(selectedRoles)) {
+      serializable[roleId] = {
+        id: role.id,
+        name: role.name,
+        description: role.description,
+        icon: getIconName(role.icon),
+        priority: role.priority,
+        permissions: role.permissions,
+        isCustom: role.isCustom,
+      };
+    }
+    setRolesConfig(serializable);
+  }, [selectedRoles, setRolesConfig]);
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev =>
