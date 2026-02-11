@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import axios from 'axios';
 
 // OAuth configuration - these would be loaded from organization settings
 interface OAuthConfig {
   googleEnabled: boolean;
   microsoftEnabled: boolean;
+}
+
+interface OrgBranding {
+  name: string | null;
+  logo: string | null;
 }
 
 export const LoginPage: React.FC = () => {
@@ -17,15 +23,26 @@ export const LoginPage: React.FC = () => {
     password: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [branding, setBranding] = useState<OrgBranding>({ name: null, logo: null });
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>({
     googleEnabled: false,
     microsoftEnabled: false,
   });
 
-  // Load OAuth configuration on mount
+  // Load branding and OAuth configuration on mount
   useEffect(() => {
     // Clear any previous errors when component mounts
     clearError();
+
+    // Load organization branding (logo + name) for the login page
+    const loadBranding = async () => {
+      try {
+        const response = await axios.get('/api/v1/auth/branding');
+        setBranding(response.data);
+      } catch (err) {
+        // Branding is optional - login page works fine without it
+      }
+    };
 
     // TODO: Load OAuth config from backend
     // For now, check if we have OAuth configured in organization settings
@@ -42,6 +59,7 @@ export const LoginPage: React.FC = () => {
       }
     };
 
+    loadBranding();
     loadOAuthConfig();
   }, [clearError]);
 
@@ -104,8 +122,25 @@ export const LoginPage: React.FC = () => {
     <main className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
+          {branding.logo ? (
+            <div className="flex justify-center">
+              <img
+                src={branding.logo}
+                alt={branding.name ? `${branding.name} logo` : 'Organization logo'}
+                className="h-24 w-24 rounded-full object-cover shadow-md"
+              />
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <div className="h-24 w-24 rounded-full bg-red-600 flex items-center justify-center shadow-md">
+                <svg className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4" />
+                </svg>
+              </div>
+            </div>
+          )}
+          <h1 className="mt-4 text-center text-3xl font-extrabold text-gray-900">
+            {branding.name ? `Sign in to ${branding.name}` : 'Sign in to your account'}
           </h1>
           <p className="mt-2 text-center text-sm text-gray-700">
             Access The Logbook platform
