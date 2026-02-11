@@ -17,6 +17,7 @@ from app.models.user import Organization, User, Role, UserStatus, OrganizationTy
 from app.services.auth_service import AuthService
 from app.core.config import settings
 from app.core.audit import log_audit_event
+from app.core.permissions import DEFAULT_ROLES
 
 
 class OnboardingService:
@@ -433,79 +434,34 @@ class OnboardingService:
         return org
 
     async def _create_default_roles(self, organization_id: str):
-        """Create default roles for an organization"""
-        default_roles = [
-            {
-                "name": "Super Administrator",
-                "slug": "super_admin",
-                "description": "Full system access and management",
-                "permissions": ["*"],  # All permissions
-                "is_system": True,
-                "priority": 100
-            },
-            {
-                "name": "Administrator",
-                "slug": "admin",
-                "description": "Organization management and user administration",
-                "permissions": [
-                    "users.*", "roles.*", "settings.*", "modules.*",
-                    "documents.*", "calendar.*", "communications.*"
-                ],
-                "is_system": True,
-                "priority": 90
-            },
-            {
-                "name": "Chief",
-                "slug": "chief",
-                "description": "Department chief with full operational access",
-                "permissions": [
-                    "users.view", "users.edit",
-                    "documents.*", "calendar.*", "training.*",
-                    "inventory.*", "incidents.*", "reports.view"
-                ],
-                "is_system": True,
-                "priority": 80
-            },
-            {
-                "name": "Officer",
-                "slug": "officer",
-                "description": "Officer with elevated permissions",
-                "permissions": [
-                    "users.view", "documents.*", "calendar.*",
-                    "training.view", "training.edit", "inventory.view",
-                    "incidents.*"
-                ],
-                "is_system": True,
-                "priority": 70
-            },
-            {
-                "name": "Member",
-                "slug": "member",
-                "description": "Regular member with standard access",
-                "permissions": [
-                    "users.view_own", "documents.view", "calendar.view",
-                    "training.view_own", "communications.view"
-                ],
-                "is_system": True,
-                "priority": 50
-            },
-            {
-                "name": "Probationary",
-                "slug": "probationary",
-                "description": "Probationary member with limited access",
-                "permissions": [
-                    "users.view_own", "documents.view_public",
-                    "calendar.view", "communications.view"
-                ],
-                "is_system": True,
-                "priority": 30
-            }
-        ]
+        """Create default roles for an organization.
 
-        for role_data in default_roles:
+        Uses DEFAULT_ROLES from permissions.py as the single source of truth,
+        plus a special super_admin bootstrap role. The user may later customize
+        which roles to keep during the RoleSetup onboarding step.
+        """
+        # Special bootstrap role not in DEFAULT_ROLES
+        super_admin = Role(
+            organization_id=organization_id,
+            name="Super Administrator",
+            slug="super_admin",
+            description="Full system access and management",
+            permissions=["*"],
+            is_system=True,
+            priority=100,
+        )
+        self.db.add(super_admin)
+
+        # Create all roles from the central DEFAULT_ROLES registry
+        for slug, role_data in DEFAULT_ROLES.items():
             role = Role(
                 organization_id=organization_id,
-                **role_data
+                name=role_data["name"],
+                slug=slug,
+                description=role_data["description"],
+                permissions=role_data["permissions"],
+                is_system=role_data.get("is_system", True),
+                priority=role_data["priority"],
             )
             self.db.add(role)
 

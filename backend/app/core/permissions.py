@@ -644,4 +644,6 @@ def get_admin_role_slugs() -> List[str]:
         "vice_president",
         "secretary",
         "assistant_secretary",
+        "officers",
+        "membership_coordinator",
     ]
