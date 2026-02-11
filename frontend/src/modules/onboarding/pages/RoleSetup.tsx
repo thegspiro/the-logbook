@@ -265,14 +265,37 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
   },
   members: {
     name: 'Member Roles',
-    description: 'Standard member and probationary roles',
+    description: 'Standard member, administrator, life member, and probationary roles',
     roles: [
+      {
+        id: 'administrator_member',
+        name: 'Administrator',
+        description: 'Organizational administrator handling day-to-day operations',
+        icon: UserCog,
+        priority: 30,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'members',
+          'events',
+          'documents',
+          'reports',
+          'forms',
+          'scheduling',
+        ]),
+      },
       {
         id: 'member',
         name: 'Member',
         description: 'Active member with standard access',
         icon: Users,
         priority: 20,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'life_member',
+        name: 'Life Member',
+        description: 'Long-standing member with honorary status and standard access',
+        icon: Star,
+        priority: 15,
         permissions: generateRolePermissions(modules, 'member'),
       },
       {
