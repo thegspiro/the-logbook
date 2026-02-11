@@ -763,6 +763,11 @@ async def create_admin_user(
             badge_number=user_data.badge_number
         )
 
+        # Commit all changes (user, role assignment, onboarding step) before
+        # returning — the frontend immediately calls /complete which needs
+        # to see the admin_user step as committed in a new DB session.
+        await db.commit()
+
         # Generate access token for automatic login
         from app.core.security import create_access_token
         access_token = create_access_token(
