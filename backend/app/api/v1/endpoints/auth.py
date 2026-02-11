@@ -29,6 +29,33 @@ from app.core.security_middleware import check_rate_limit
 router = APIRouter()
 
 
+@router.get("/branding")
+async def get_login_branding(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get organization branding for the login page.
+
+    Returns the organization name and logo so the login page can display
+    them without requiring authentication. Returns empty values if no
+    organization exists yet (pre-onboarding).
+    """
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Organization.name, Organization.logo)
+        .where(Organization.active == True)
+        .order_by(Organization.created_at.asc())
+        .limit(1)
+    )
+    row = result.first()
+
+    if not row:
+        return {"name": None, "logo": None}
+
+    return {"name": row.name, "logo": row.logo}
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(check_rate_limit)])
 async def register(
     user_data: UserRegister,
