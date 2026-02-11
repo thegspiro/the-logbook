@@ -83,7 +83,10 @@ class AuthService:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=30)
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
-            await self.db.flush()
+            # Commit (not flush) so the counter persists even when the
+            # caller raises HTTPException, which triggers a rollback in
+            # the get_db() dependency cleanup.
+            await self.db.commit()
             logger.warning("Authentication failed: invalid credentials")
             return None
 
@@ -167,7 +170,8 @@ class AuthService:
             if payload.get("type") != "refresh":
                 return None, None
 
-            user_id = UUID(payload.get("sub"))
+            # Keep user_id as string to match the String(36) DB columns
+            user_id = payload.get("sub")
 
             # Look up the session by refresh token
             result = await self.db.execute(
@@ -183,13 +187,13 @@ class AuthService:
                     f"Refresh token replay detected for user {user_id}. "
                     "Revoking all sessions."
                 )
-                await self._revoke_all_user_sessions(user_id)
+                await self._revoke_all_user_sessions(str(user_id))
                 return None, None
 
             # Get user
             user_result = await self.db.execute(
                 select(User)
-                .where(User.id == user_id)
+                .where(User.id == str(user_id))
                 .where(User.deleted_at.is_(None))
             )
             user = user_result.scalar_one_or_none()
@@ -221,18 +225,21 @@ class AuthService:
             logger.error(f"Token refresh failed: {e}")
             return None, None
 
-    async def _revoke_all_user_sessions(self, user_id: UUID) -> int:
+    async def _revoke_all_user_sessions(self, user_id: str) -> int:
         """
         Revoke all active sessions for a user.
 
         Used when refresh token replay is detected (potential theft)
         or when a user's password is changed/account is deactivated.
 
+        Args:
+            user_id: User ID as string (matches String(36) DB column)
+
         Returns:
             Number of sessions revoked
         """
         result = await self.db.execute(
-            select(UserSession).where(UserSession.user_id == user_id)
+            select(UserSession).where(UserSession.user_id == str(user_id))
         )
         sessions = result.scalars().all()
         count = len(sessions)
