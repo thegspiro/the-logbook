@@ -46,16 +46,9 @@ const Members: React.FC = () => {
   });
 
   useEffect(() => {
-    // Check authentication
-    const authToken = localStorage.getItem('access_token');
-    if (!authToken) {
-      navigate('/login');
-      return;
-    }
-
     loadMembers();
     checkContactInfoSettings();
-  }, [navigate]);
+  }, []);
 
   const loadMembers = async () => {
     setLoading(true);
@@ -132,30 +125,19 @@ const Members: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
-      {/* Header */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-600 rounded-lg p-2">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-white text-xl font-bold">Membership Management</h1>
-                <p className="text-slate-400 text-sm">Manage department members and records</p>
-              </div>
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Page Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-3">
+            <div className="bg-blue-600 rounded-lg p-2">
+              <Users className="w-6 h-6 text-white" />
             </div>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-slate-300 hover:text-white transition-colors text-sm"
-            >
-              Back to Dashboard
-            </button>
+            <div>
+              <h1 className="text-white text-2xl font-bold">Membership Management</h1>
+              <p className="text-slate-400 text-sm">Manage department members and records</p>
+            </div>
           </div>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">

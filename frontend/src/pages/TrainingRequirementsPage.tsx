@@ -18,7 +18,6 @@ import {
   Tag,
   Clock,
 } from 'lucide-react';
-import { AppLayout } from '../components/layout';
 import { trainingService } from '../services/api';
 import type {
   TrainingRequirement,
@@ -159,18 +158,18 @@ const TrainingRequirementsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <AppLayout>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-white">Loading requirements...</div>
           </div>
         </div>
-      </AppLayout>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -310,7 +309,7 @@ const TrainingRequirementsPage: React.FC = () => {
           />
         )}
       </main>
-    </AppLayout>
+    </div>
   );
 };
 

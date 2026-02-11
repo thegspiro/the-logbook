@@ -22,7 +22,6 @@ import {
   Edit2,
   PlayCircle,
 } from 'lucide-react';
-import { AppLayout } from '../components/layout';
 import { externalTrainingService } from '../services/api';
 import type {
   ExternalTrainingProvider,
@@ -707,7 +706,7 @@ const ExternalTrainingPage: React.FC = () => {
   };
 
   return (
-    <AppLayout>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       <div className="p-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
@@ -832,7 +831,7 @@ const ExternalTrainingPage: React.FC = () => {
         providerId={mappingsModal.providerId}
         providerName={mappingsModal.providerName}
       />
-    </AppLayout>
+    </div>
   );
 };
 

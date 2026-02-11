@@ -37,7 +37,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   };
 
   return (
-    <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10" role="banner">
+    <header className="bg-slate-900 border-b border-white/10" role="banner">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}

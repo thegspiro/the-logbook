@@ -11,7 +11,6 @@ import {
   Play,
   Circle,
 } from 'lucide-react';
-import { AppLayout } from '../components/layout';
 import { trainingProgramService } from '../services/api';
 import type {
   ProgramEnrollment,
@@ -386,19 +385,19 @@ const MemberProgressPage: React.FC = () => {
 
   if (selectedProgress) {
     return (
-      <AppLayout>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <DetailedProgressView
             progress={selectedProgress}
             onBack={() => setSelectedEnrollment(null)}
           />
         </main>
-      </AppLayout>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -465,7 +464,7 @@ const MemberProgressPage: React.FC = () => {
           </div>
         )}
       </main>
-    </AppLayout>
+    </div>
   );
 };
 

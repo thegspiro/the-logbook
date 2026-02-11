@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import axios from 'axios';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
@@ -7,7 +7,7 @@ import { LogoutConfirmModal } from '../LogoutConfirmModal';
 import { useAuthStore } from '../../stores/authStore';
 
 interface AppLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
@@ -19,13 +19,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
-    // Check if user is authenticated
-    const authToken = localStorage.getItem('access_token');
-    if (!authToken) {
-      navigate('/login');
-      return;
-    }
-
     // Load department info and navigation preference from sessionStorage first
     const savedDepartmentName = sessionStorage.getItem('departmentName');
     const savedLogo = sessionStorage.getItem('logoData');
@@ -57,7 +50,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         // Branding is non-critical — keep defaults
       });
     }
-  }, [navigate]);
+  }, []);
 
   const handleLogoutClick = () => {
     setShowLogoutModal(true);
@@ -73,9 +66,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     setShowLogoutModal(false);
   };
 
+  const content = children ?? <Outlet />;
+
   if (navigationLayout === 'left') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+      <div className="min-h-screen">
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
@@ -89,7 +84,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           onLogout={handleLogoutClick}
         />
         <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0" id="main-content" role="main">
-          {children}
+          {content}
         </div>
         <LogoutConfirmModal
           isOpen={showLogoutModal}
@@ -101,7 +96,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"
@@ -115,7 +110,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         onLogout={handleLogoutClick}
       />
       <div id="main-content" role="main">
-        {children}
+        {content}
       </div>
       <LogoutConfirmModal
         isOpen={showLogoutModal}
