@@ -65,6 +65,9 @@ export interface OnboardingState {
   selectedModules: string[];
   moduleStatuses: Record<string, 'enabled' | 'skipped' | 'ignored'>;
 
+  // Module Permission Configs (which roles can manage each module)
+  modulePermissionConfigs: Record<string, string[]>;
+
   // Session
   sessionId: string | null;
   csrfToken: string | null;
@@ -113,6 +116,7 @@ export interface OnboardingActions {
   toggleModule: (moduleId: string) => void;
   setModuleStatus: (moduleId: string, status: 'enabled' | 'skipped' | 'ignored') => void;
   setModuleStatuses: (statuses: Record<string, 'enabled' | 'skipped' | 'ignored'>) => void;
+  setModulePermissionConfig: (moduleId: string, manageRoles: string[]) => void;
 
   // Session Actions
   setSessionId: (id: string) => void;
@@ -151,6 +155,7 @@ const initialState: OnboardingState = {
   rolesConfig: null,
   selectedModules: [],
   moduleStatuses: {},
+  modulePermissionConfigs: {},
   sessionId: null,
   csrfToken: null,
   currentStep: 1,
@@ -302,6 +307,14 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         get().triggerAutoSave();
       },
 
+      setModulePermissionConfig: (moduleId, manageRoles) => {
+        const { modulePermissionConfigs } = get();
+        set({
+          modulePermissionConfigs: { ...modulePermissionConfigs, [moduleId]: manageRoles },
+        });
+        get().triggerAutoSave();
+      },
+
       // Session Actions
       setSessionId: (id) => {
         set({ sessionId: id });
@@ -402,6 +415,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         rolesConfig: state.rolesConfig,
         selectedModules: state.selectedModules,
         moduleStatuses: state.moduleStatuses,
+        modulePermissionConfigs: state.modulePermissionConfigs,
         currentStep: state.currentStep,
         completedSteps: state.completedSteps,
         lastSaved: state.lastSaved,
