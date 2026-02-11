@@ -64,7 +64,6 @@ interface OrganizationFormData {
   // Additional Info
   county: string;
   foundedYear: string;
-  taxId: string;
   logo: string | null;
 }
 
@@ -161,7 +160,6 @@ const initialFormData: OrganizationFormData = {
   departmentId: '',
   county: '',
   foundedYear: '',
-  taxId: '',
   logo: null,
 };
 
@@ -662,7 +660,6 @@ const OrganizationSetup: React.FC = () => {
         department_id: formData.departmentId || undefined,
         county: formData.county || undefined,
         founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
-        tax_id: formData.taxId || undefined,
         logo: formData.logo || undefined,
       };
 
@@ -1048,15 +1045,6 @@ const OrganizationSetup: React.FC = () => {
                     maxLength={4}
                   />
                 </div>
-                <InputField
-                  label="Tax ID (EIN)"
-                  id="org-taxid"
-                  value={formData.taxId}
-                  onChange={(v) => updateFormData('taxId', v)}
-                  placeholder="XX-XXXXXXX"
-                  maxLength={50}
-                  helpText="For 501(c)(3) organizations"
-                />
               </div>
             )}
           </div>
