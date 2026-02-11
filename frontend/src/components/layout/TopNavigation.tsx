@@ -19,9 +19,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
 
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', active: true },
+    { label: 'Dashboard', path: '/dashboard', active: false },
     { label: 'Members', path: '/members', active: false },
     { label: 'Events', path: '/events', active: false },
+    { label: 'Documents', path: '/documents', active: false },
+    { label: 'Training', path: '/training', active: false },
     { label: 'Reports', path: '/reports', active: false },
     { label: 'Settings', path: '/settings', active: false },
   ];

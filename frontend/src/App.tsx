@@ -63,6 +63,31 @@ const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage
 const MembersAdminPage = lazy(() => import('./pages/MembersAdminPage').then(m => ({ default: m.MembersAdminPage })));
 const PublicPortalAdmin = lazy(() => import('./modules/public-portal/pages/PublicPortalAdmin'));
 
+// Documents Module
+const DocumentsPage = lazy(() => import('./pages/DocumentsPage'));
+
+// Inventory Module
+const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+
+// Scheduling Module
+const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
+
+// Elections Module
+const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
+const ElectionDetailPage = lazy(() => import('./pages/ElectionDetailPage').then(m => ({ default: m.ElectionDetailPage })));
+
+// Minutes Module
+const MinutesPage = lazy(() => import('./pages/MinutesPage'));
+
+// Notifications Module
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+
+// Forms Module
+const FormsPage = lazy(() => import('./pages/FormsPage'));
+
+// Integrations Module
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
+
 // Settings & Reports
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })));
@@ -120,6 +145,9 @@ function App() {
               <Route path="/events/:id/monitoring" element={<ProtectedRoute requiredPermission="events.manage"><EventCheckInMonitoringPage /></ProtectedRoute>} />
               <Route path="/events/:id/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
 
+              {/* Documents Module */}
+              <Route path="/documents" element={<DocumentsPage />} />
+
               {/* Training Module */}
               <Route path="/training" element={<TrainingDashboardPage />} />
               <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
@@ -127,6 +155,28 @@ function App() {
               <Route path="/training/programs" element={<TrainingProgramsPage />} />
               <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
+
+              {/* Inventory Module */}
+              <Route path="/inventory" element={<InventoryPage />} />
+
+              {/* Scheduling Module */}
+              <Route path="/scheduling" element={<SchedulingPage />} />
+
+              {/* Elections Module */}
+              <Route path="/elections" element={<ElectionsPage />} />
+              <Route path="/elections/:id" element={<ElectionDetailPage />} />
+
+              {/* Minutes Module */}
+              <Route path="/minutes" element={<MinutesPage />} />
+
+              {/* Notifications Module */}
+              <Route path="/notifications" element={<NotificationsPage />} />
+
+              {/* Forms Module */}
+              <Route path="/forms" element={<FormsPage />} />
+
+              {/* Integrations Module */}
+              <Route path="/integrations" element={<IntegrationsPage />} />
 
               {/* Admin/Monitoring Routes */}
               <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="admin.errors"><ErrorMonitoringPage /></ProtectedRoute>} />

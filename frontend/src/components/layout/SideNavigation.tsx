@@ -14,7 +14,17 @@ import {
   Shield,
   Building2,
   UserCog,
-  Globe
+  Globe,
+  GraduationCap,
+  Package,
+  Clock,
+  Truck,
+  Vote,
+  ClipboardList,
+  BarChart3,
+  Bell,
+  FormInput,
+  Plug,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -47,7 +57,38 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     { label: 'Dashboard', path: '/dashboard', icon: Home },
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
-    { label: 'Reports', path: '/reports', icon: FileText },
+    { label: 'Documents', path: '/documents', icon: FileText },
+    { label: 'Training', path: '/training', icon: GraduationCap },
+    {
+      label: 'Operations',
+      path: '#',
+      icon: Package,
+      subItems: [
+        { label: 'Inventory', path: '/inventory', icon: Package },
+        { label: 'Scheduling', path: '/scheduling', icon: Clock },
+        { label: 'Apparatus', path: '/apparatus', icon: Truck },
+      ],
+    },
+    {
+      label: 'Governance',
+      path: '#',
+      icon: Vote,
+      subItems: [
+        { label: 'Elections', path: '/elections', icon: Vote },
+        { label: 'Minutes', path: '/minutes', icon: ClipboardList },
+        { label: 'Reports', path: '/reports', icon: BarChart3 },
+      ],
+    },
+    {
+      label: 'Communication',
+      path: '#',
+      icon: Bell,
+      subItems: [
+        { label: 'Notifications', path: '/notifications', icon: Bell },
+        { label: 'Forms', path: '/forms', icon: FormInput },
+        { label: 'Integrations', path: '/integrations', icon: Plug },
+      ],
+    },
     {
       label: 'Settings',
       path: '/settings',
