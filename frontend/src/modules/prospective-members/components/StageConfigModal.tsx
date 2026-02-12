@@ -22,8 +22,10 @@ import type {
   FormStageConfig,
   DocumentStageConfig,
   ElectionStageConfig,
+  ElectionPackageFieldConfig,
   ManualApprovalConfig,
 } from '../types';
+import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../types';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -415,6 +417,96 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Anonymous voting
                 </label>
+
+                {/* Election Package Fields */}
+                <div className="border-t border-white/10 pt-4 mt-4">
+                  <h4 className="text-sm font-medium text-slate-300 mb-2">
+                    Election Package Contents
+                  </h4>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Choose what applicant information is included in the election package for voters and the secretary.
+                  </p>
+                  {(() => {
+                    const fields: ElectionPackageFieldConfig =
+                      electionConfig.package_fields ?? { ...DEFAULT_ELECTION_PACKAGE_FIELDS };
+                    const updateField = (key: keyof ElectionPackageFieldConfig, value: boolean | string) => {
+                      setConfig({
+                        ...electionConfig,
+                        package_fields: { ...fields, [key]: value },
+                      });
+                    };
+                    return (
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={fields.include_email}
+                            onChange={(e) => updateField('include_email', e.target.checked)}
+                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          />
+                          Include email address
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={fields.include_phone}
+                            onChange={(e) => updateField('include_phone', e.target.checked)}
+                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          />
+                          Include phone number
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={fields.include_address}
+                            onChange={(e) => updateField('include_address', e.target.checked)}
+                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          />
+                          Include address
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={fields.include_date_of_birth}
+                            onChange={(e) => updateField('include_date_of_birth', e.target.checked)}
+                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          />
+                          Include date of birth
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={fields.include_documents}
+                            onChange={(e) => updateField('include_documents', e.target.checked)}
+                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          />
+                          Include uploaded documents
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={fields.include_stage_history}
+                            onChange={(e) => updateField('include_stage_history', e.target.checked)}
+                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          />
+                          Include stage completion history
+                        </label>
+                        <div className="pt-1">
+                          <label className="block text-xs text-slate-400 mb-1">
+                            Custom note prompt (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={fields.custom_note_prompt ?? ''}
+                            onChange={(e) => updateField('custom_note_prompt', e.target.value)}
+                            placeholder="e.g., Please describe the applicant's qualifications..."
+                            className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             )}
 

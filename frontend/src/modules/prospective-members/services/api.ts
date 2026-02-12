@@ -28,6 +28,9 @@ import type {
   ReactivateApplicantRequest,
   PurgeInactiveRequest,
   PurgeInactiveResponse,
+  ElectionPackage,
+  ElectionPackageCreate,
+  ElectionPackageUpdate,
 } from '../types';
 import { FILE_UPLOAD_LIMITS } from '../types';
 
@@ -407,5 +410,67 @@ export const applicantService = {
     await api.delete(
       `/prospective-members/applicants/${applicantId}/documents/${documentId}`
     );
+  },
+
+  // Election package management
+  async getElectionPackage(applicantId: string): Promise<ElectionPackage | null> {
+    try {
+      const response = await api.get<ElectionPackage>(
+        `/prospective-members/applicants/${applicantId}/election-package`
+      );
+      return response.data;
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  },
+
+  async createElectionPackage(
+    applicantId: string,
+    data: ElectionPackageCreate
+  ): Promise<ElectionPackage> {
+    const response = await api.post<ElectionPackage>(
+      `/prospective-members/applicants/${applicantId}/election-package`,
+      data
+    );
+    return response.data;
+  },
+
+  async updateElectionPackage(
+    applicantId: string,
+    data: ElectionPackageUpdate
+  ): Promise<ElectionPackage> {
+    const response = await api.patch<ElectionPackage>(
+      `/prospective-members/applicants/${applicantId}/election-package`,
+      data
+    );
+    return response.data;
+  },
+};
+
+// =============================================================================
+// Election Package Service (cross-module query for Elections module)
+// =============================================================================
+
+export const electionPackageService = {
+  async getPendingPackages(pipelineId?: string): Promise<ElectionPackage[]> {
+    const response = await api.get<ElectionPackage[]>(
+      '/prospective-members/election-packages',
+      { params: { pipeline_id: pipelineId, status: 'ready' } }
+    );
+    return response.data;
+  },
+
+  async getAllPackages(params?: {
+    pipeline_id?: string;
+    status?: string;
+  }): Promise<ElectionPackage[]> {
+    const response = await api.get<ElectionPackage[]>(
+      '/prospective-members/election-packages',
+      { params }
+    );
+    return response.data;
   },
 };

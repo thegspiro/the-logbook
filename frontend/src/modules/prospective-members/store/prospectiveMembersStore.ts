@@ -14,6 +14,9 @@ import type {
   ApplicantListItem,
   ApplicantListFilters,
   PipelineViewMode,
+  ElectionPackage,
+  ElectionPackageUpdate,
+  ElectionStageConfig,
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
 
@@ -55,6 +58,10 @@ interface ProspectiveMembersState {
   withdrawnCurrentPage: number;
   withdrawnTotalPages: number;
 
+  // Election package for current applicant
+  currentElectionPackage: ElectionPackage | null;
+  isLoadingElectionPackage: boolean;
+
   // Loading states
   isLoading: boolean;
   isLoadingPipelines: boolean;
@@ -94,6 +101,11 @@ interface ProspectiveMembersState {
   fetchWithdrawnApplicants: (page?: number) => Promise<void>;
   purgeInactiveApplicants: (applicantIds?: string[]) => Promise<void>;
   updateInactivitySettings: (config: InactivityConfig) => Promise<void>;
+
+  // Election package actions
+  fetchElectionPackage: (applicantId: string) => Promise<void>;
+  updateElectionPackage: (applicantId: string, data: ElectionPackageUpdate) => Promise<void>;
+  submitElectionPackage: (applicantId: string) => Promise<void>;
 
   // Filter & view actions
   setFilters: (filters: ApplicantListFilters) => void;
@@ -138,6 +150,9 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     withdrawnTotalApplicants: 0,
     withdrawnCurrentPage: 1,
     withdrawnTotalPages: 0,
+
+    currentElectionPackage: null,
+    isLoadingElectionPackage: false,
 
     isLoading: false,
     isLoadingPipelines: false,
@@ -267,13 +282,33 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     advanceApplicant: async (id: string, notes?: string) => {
       set({ isAdvancing: true, error: null });
       try {
-        await applicantService.advanceStage(id, notes ? { notes } : undefined);
-        // Refresh both the applicant and the list
+        const advanced = await applicantService.advanceStage(id, notes ? { notes } : undefined);
+        // Refresh applicant list
         await get().fetchApplicants();
         const currentApplicant = get().currentApplicant;
         if (currentApplicant?.id === id) {
           await get().fetchApplicant(id);
         }
+
+        // Auto-create election package if applicant landed on an election_vote stage
+        const pipeline = get().currentPipeline;
+        if (pipeline && advanced) {
+          const newStage = pipeline.stages.find(
+            (s) => s.id === advanced.current_stage_id
+          );
+          if (newStage?.stage_type === 'election_vote') {
+            try {
+              await applicantService.createElectionPackage(id, {
+                applicant_id: id,
+                pipeline_id: pipeline.id,
+                stage_id: newStage.id,
+              });
+            } catch {
+              // Package may already exist — not a blocking error
+            }
+          }
+        }
+
         set({ isAdvancing: false });
       } catch (error) {
         set({
@@ -510,6 +545,57 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
             error instanceof Error
               ? error.message
               : 'Failed to update inactivity settings',
+        });
+        throw error;
+      }
+    },
+
+    // Election package actions
+    fetchElectionPackage: async (applicantId: string) => {
+      set({ isLoadingElectionPackage: true });
+      try {
+        const pkg = await applicantService.getElectionPackage(applicantId);
+        set({ currentElectionPackage: pkg, isLoadingElectionPackage: false });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to fetch election package',
+          isLoadingElectionPackage: false,
+        });
+      }
+    },
+
+    updateElectionPackage: async (applicantId: string, data: ElectionPackageUpdate) => {
+      set({ error: null });
+      try {
+        const updated = await applicantService.updateElectionPackage(applicantId, data);
+        set({ currentElectionPackage: updated });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to update election package',
+        });
+        throw error;
+      }
+    },
+
+    submitElectionPackage: async (applicantId: string) => {
+      set({ error: null });
+      try {
+        const updated = await applicantService.updateElectionPackage(applicantId, {
+          status: 'ready',
+        });
+        set({ currentElectionPackage: updated });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to submit election package',
         });
         throw error;
       }
