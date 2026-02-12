@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     integrations,
     locations,
     meetings,
+    membership_pipeline,
     notifications,
     roles,
     reports,
@@ -57,6 +58,7 @@ api_router.include_router(inventory.router, prefix="/inventory", tags=["inventor
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
+api_router.include_router(membership_pipeline.router, prefix="/membership-pipeline", tags=["membership-pipeline"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
@@ -102,6 +104,7 @@ async def api_root():
             "analytics": "/api/v1/analytics",
             "errors": "/api/v1/errors",
             "integrations": "/api/v1/integrations",
+            "membership_pipeline": "/api/v1/membership-pipeline",
             "public_portal": "/api/v1/public-portal"
         }
     }

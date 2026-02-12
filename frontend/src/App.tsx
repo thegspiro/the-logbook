@@ -89,6 +89,11 @@ const PublicFormPage = lazy(() => import('./pages/PublicFormPage'));
 // Integrations Module
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 
+// Membership Pipeline Module
+const MembershipPipelinePage = lazy(() => import('./pages/MembershipPipelinePage'));
+const ProspectDetailPage = lazy(() => import('./pages/ProspectDetailPage'));
+const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage'));
+
 // Settings & Reports
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })));
@@ -137,6 +142,11 @@ function App() {
               <Route path="/members/import" element={<ProtectedRoute requiredPermission="members.create"><ImportMembers /></ProtectedRoute>} />
               <Route path="/members/:userId" element={<MemberProfilePage />} />
               <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
+
+              {/* Membership Pipeline Module */}
+              <Route path="/membership-pipeline" element={<MembershipPipelinePage />} />
+              <Route path="/membership-pipeline/prospects/:prospectId" element={<ProspectDetailPage />} />
+              <Route path="/membership-pipeline/settings" element={<ProtectedRoute requiredPermission="members.manage"><PipelineSettingsPage /></ProtectedRoute>} />
 
               {/* Events Module */}
               <Route path="/events" element={<EventsPage />} />

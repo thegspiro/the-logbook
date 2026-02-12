@@ -25,6 +25,7 @@ import {
   Bell,
   FormInput,
   Plug,
+  UserPlus,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -56,6 +57,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: Home },
     { label: 'Members', path: '/members', icon: Users },
+    { label: 'Membership Pipeline', path: '/membership-pipeline', icon: UserPlus },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
     { label: 'Training', path: '/training', icon: GraduationCap },
