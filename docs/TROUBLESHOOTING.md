@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-09 (includes critical onboarding fixes, migration timeout protection, and accurate startup timing)
+**Last Updated**: 2026-02-12 (includes security hardening, session management, error message improvements)
 
 ---
 
@@ -18,7 +18,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
 8. [Error Message Reference](#error-message-reference)
-9. [Getting Help](#getting-help)
+9. [Security & Session Management](#security--session-management)
+10. [Getting Help](#getting-help)
 
 ---
 
@@ -444,7 +445,7 @@ docker compose up --build
 **Message**: `"Session expired. Please log in again."`
 
 **Causes**:
-1. Onboarding session timed out (30 minutes of inactivity)
+1. Onboarding session timed out (30 minutes of inactivity, as of 2026-02-12)
 2. Browser was closed
 3. Cookies were cleared
 4. Server was restarted
@@ -835,6 +836,117 @@ The system now automatically translates technical errors:
 | `ECONNREFUSED` | Cannot connect to server at [address]. Verify the server is running. |
 | `ETIMEDOUT` | Request timed out. The server is taking too long to respond. |
 | `SSL: WRONG_VERSION_NUMBER` | SSL/TLS version mismatch. Try changing encryption method. |
+
+---
+
+## Security & Session Management
+
+**Last Updated**: 2026-02-12
+
+### Session Inactivity Timeout
+
+The application automatically logs users out after **30 minutes of inactivity** (no mouse, keyboard, scroll, or touch events).
+
+#### Symptom: "You have been logged out due to inactivity"
+
+**Cause**: No user activity detected for 30 minutes.
+
+**Solutions**:
+1. Log in again at the login page
+2. Keep the browser tab active during long workflows
+3. No data is lost -- unsaved form changes will need to be re-entered
+
+---
+
+### Onboarding Session Expiry
+
+Onboarding sessions now expire after **30 minutes of inactivity** (previously 2 hours).
+
+#### Symptom: "Your onboarding session has expired due to inactivity"
+
+**Cause**: Took too long between onboarding steps.
+
+**Solutions**:
+1. Refresh the page to start a new session
+2. Previously saved progress (organization, email config) is retained
+3. Complete each step promptly to avoid timeout
+
+---
+
+### Password Reset Links
+
+Password reset links expire after **30 minutes**.
+
+#### Symptom: "This password reset link has expired"
+
+**Cause**: Reset link was not used within 30 minutes of being sent.
+
+**Solutions**:
+1. Request a new reset link from the login page
+2. Check email promptly after requesting reset
+3. If emails are delayed, contact your administrator
+
+#### Symptom: "This password reset link is invalid or has already been used"
+
+**Cause**: Link was already used, or URL was corrupted.
+
+**Solutions**:
+1. Each reset link can only be used once
+2. Request a new link from the login page
+3. Copy the full URL from the email (don't modify it)
+
+---
+
+### Account Lockout
+
+After **5 failed login attempts**, accounts are temporarily locked for **30 minutes**.
+
+#### Symptom: "Account is temporarily locked"
+
+**Cause**: Too many incorrect password attempts.
+
+**Solutions**:
+1. Wait for the lockout period to expire (message shows remaining time)
+2. Use "Forgot Password" to reset your password
+3. Contact your administrator if you're locked out repeatedly
+
+---
+
+### Security Configuration (Administrators)
+
+#### Production Environment Requirements
+
+The following must be configured in production:
+
+| Setting | Requirement | Error if Missing |
+|---------|------------|------------------|
+| `ENCRYPTION_SALT` | Unique random value | Application will not start |
+| `SECRET_KEY` | Unique, 32+ characters | Startup warning/failure |
+| `ENCRYPTION_KEY` | Unique random value | Startup warning/failure |
+
+**Generate secure values**:
+```bash
+# Generate ENCRYPTION_SALT
+python -c "import secrets; print(secrets.token_hex(16))"
+
+# Generate SECRET_KEY
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Generate ENCRYPTION_KEY
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+#### Bulk Import Limits
+
+External training bulk imports are limited to **500 records** per request to prevent abuse.
+
+#### Form Submission Sanitization
+
+All form submissions are automatically sanitized with DOMPurify to strip HTML/script injection. If form data appears truncated, ensure inputs don't contain HTML tags.
+
+#### Password Requirements
+
+Login passwords must be at least **8 characters** (schema validation). New passwords during registration or reset must meet the full strength requirements (12+ characters, mixed case, numbers, special characters).
 
 ---
 

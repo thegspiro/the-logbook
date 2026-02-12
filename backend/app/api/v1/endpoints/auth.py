@@ -211,7 +211,7 @@ async def refresh_token(
     if not new_access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="Your session has expired. Please log in again.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -241,7 +241,7 @@ async def logout(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid authorization header"
+            detail="Unable to process logout. Please clear your browser data and log in again."
         )
 
     auth_service = AuthService(db)
@@ -250,7 +250,7 @@ async def logout(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Logout failed"
+            detail="Unable to end your session. Please close your browser and log in again."
         )
 
     return {"message": "Successfully logged out"}
@@ -522,7 +522,7 @@ async def validate_reset_token(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token is required"
+            detail="Invalid password reset link. Please request a new reset link from the login page."
         )
 
     auth_service = AuthService(db)
@@ -531,7 +531,7 @@ async def validate_reset_token(
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token"
+            detail="This password reset link is invalid or has expired. Please request a new one from the login page."
         )
 
     return {"valid": True, "email": email}

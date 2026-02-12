@@ -429,7 +429,7 @@ async def validate_session(
     if session.expires_at < datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired. Please restart onboarding."
+            detail="Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained."
         )
 
     # Validate CSRF token if required
@@ -739,7 +739,7 @@ async def create_admin_user(
     if not onboarding_status or not onboarding_status.organization_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization must be created first"
+            detail="Organization must be created before adding an admin user. Please complete the organization setup step first."
         )
 
     # Find organization — use first active org (single-org system).
@@ -757,7 +757,7 @@ async def create_admin_user(
     if not org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
+            detail="Organization not found. The organization setup may not have completed. Please go back and complete the organization setup step."
         )
 
     try:
@@ -810,7 +810,7 @@ async def create_admin_user(
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create admin user. Please try again or contact support."
+            detail="Failed to create admin user due to an unexpected error. Please try again. If the problem persists, check the server logs or contact support."
         )
 
 

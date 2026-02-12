@@ -14,10 +14,10 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-07 with latest error handling
+   - **Updated**: 2026-02-12 with security hardening, session management, error improvements
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
-   - Complete catalog of all 61 error messages in the application
+   - Complete catalog of all 75+ error messages in the application
    - Quality ratings and improvement status for each error
    - Troubleshooting steps for every error
    - Implementation roadmap
@@ -29,10 +29,16 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Testing procedures
 
 4. **[ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md)**
-   - Latest error message improvements (Feb 7, 2026)
+   - Error message improvements (Feb 7, 2026)
    - Before/after comparisons
    - New error handler features
    - Developer guidelines
+
+5. **[ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md)**
+   - Security hardening error messages (Feb 12, 2026)
+   - Session timeout and password reset messages
+   - Frontend error message standardization
+   - Updated error message guidelines
 
 ---
 
@@ -154,24 +160,31 @@ python backend/scripts/verify_database_enums.py
 
 ---
 
-## 📊 Error Message Quality (As of 2026-02-07)
+## 📊 Error Message Quality (As of 2026-02-12)
 
 Current Status:
 ```
-✅ Good: 40 errors (66%)
-⚠️  Needs Improvement: 14 errors (23%)
-❌ Poor: 7 errors (11%)
+✅ Good: 55+ errors (73%)
+⚠️  Needs Improvement: 14 errors (19%)
+❌ Poor: 6 errors (8%)
 
-Total: 61 errors documented
+Total: 75+ errors documented
 ```
 
-Recent Improvements:
-- ✅ Email/username duplicate errors - Now specific with suggestions
+Recent Improvements (2026-02-12):
+- ✅ Session timeout & inactivity messages - Show time limits and data retention
+- ✅ Password reset messages - Include expiry duration and clear next steps
+- ✅ Logout errors - Provide workaround actions
+- ✅ Onboarding errors - Guide users to correct step
+- ✅ Frontend errors standardized - "Unable to [action]. Please [fix]." pattern
+- ✅ 25+ messages improved across 15+ files
+
+Previous Improvements (2026-02-07):
+- ✅ Email/username duplicate errors - Specific with suggestions
 - ✅ Network error standardization - Comprehensive error handler
 - ✅ SMTP errors - User-friendly instead of technical
-- ✅ Soft-delete filtering - Prevents false duplicates
 
-See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md) for details.
+See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md) for latest details.
 
 ---
 
@@ -266,10 +279,11 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.1 | 2026-02-07 | Current |
-| ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
+| TROUBLESHOOTING.md | 1.2 | 2026-02-12 | Current |
+| ERROR_MESSAGES_COMPLETE.md | 1.1 | 2026-02-12 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
+| ERROR_MESSAGES_UPDATES_2026_02_12.md | 1.0 | 2026-02-12 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
 | ENUM_CONVENTIONS.md | 1.0 | 2026-02-07 | Current |
 | FORMS_MODULE.md | 1.0 | 2026-02-12 | Current |
@@ -306,6 +320,26 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-12 - Security Hardening & Error Message Review
+
+**What Changed**:
+- Added 30-minute frontend session inactivity auto-logout
+- Added DOMPurify sanitization for all form submissions
+- Added 500-item limit on bulk external training imports
+- Increased login password minimum from 1 to 8 characters
+- Reduced onboarding session expiry from 2 hours to 30 minutes
+- Blocked encryption salt fallback in production (hard failure)
+- Added POST `/validate-reset-token` endpoint (replaced GET to prevent token in logs)
+- Added bulk role replacement audit logging
+- Added wildcard permission check to admin access endpoint
+- Improved 25+ error messages across backend and frontend for clarity
+- Updated TROUBLESHOOTING.md with security & session management section
+- Updated ERROR_MESSAGES_COMPLETE.md with 14 new error entries
+
+See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md) for error message details.
+
+---
 
 ### 2026-02-12 - Forms Module & Public Forms
 

@@ -384,7 +384,7 @@ class AuthService:
         """
         # Verify current password
         if not user.password_hash or not verify_password(current_password, user.password_hash):
-            return False, "Current password is incorrect"
+            return False, "Current password is incorrect. Please verify your existing password and try again."
 
         # Validate new password
         is_valid, error_msg = validate_password_strength(new_password)
@@ -589,7 +589,7 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
-            return False, "Invalid or expired reset token"
+            return False, "This password reset link is invalid or has already been used. Please request a new reset link from the login page."
 
         if (
             not user.password_reset_expires_at
@@ -599,7 +599,7 @@ class AuthService:
             user.password_reset_token = None
             user.password_reset_expires_at = None
             await self.db.flush()
-            return False, "Reset token has expired. Please request a new one."
+            return False, "This password reset link has expired. Reset links are valid for 30 minutes. Please request a new one from the login page."
 
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)
