@@ -23,6 +23,7 @@ import {
   Shield,
   UserCog,
   Truck,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -310,6 +311,27 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       view: ['Use integrated features', 'Connect personal accounts'],
       manage: ['Configure integrations', 'Manage API connections', 'Set sync settings'],
       defaultManageRoles: ['admin', 'it_administrator'],
+    },
+  },
+
+  // ============================================
+  // OPTIONAL MODULES (Membership)
+  // ============================================
+  {
+    id: 'prospective_members',
+    name: 'Prospective Members Pipeline',
+    description:
+      'Manage the applicant-to-member pipeline with configurable stages, kanban/table views, and integration with forms, elections, and notifications.',
+    icon: UserPlus,
+    priority: 'optional',
+    category: 'Core',
+    configRoute: '/onboarding/modules/prospective-members/config',
+    permissions: {
+      viewDescription: 'View prospective member pipeline and applicant progress',
+      manageDescription: 'Manage applicants, configure pipeline stages, and convert members',
+      view: ['View applicant pipeline', 'See applicant progress', 'View pipeline statistics'],
+      manage: ['Add/edit applicants', 'Advance or reject applicants', 'Configure pipeline stages', 'Convert applicants to members'],
+      defaultManageRoles: ['admin', 'secretary', 'membership_coordinator'],
     },
   },
 

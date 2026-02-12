@@ -207,6 +207,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
           'elections',
           'minutes',
           'reports',
+          'prospective_members',
         ]),
       },
       {
@@ -317,7 +318,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Manages member records, applications, and onboarding/offboarding',
         icon: UserPlus,
         priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', ['members']),
+        permissions: generateRolePermissions(modules, 'specialist', ['members', 'prospective_members']),
       },
     ],
   },
