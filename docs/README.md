@@ -51,15 +51,43 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Automated validation and testing procedures
    - Prevents critical enum case mismatch bugs
 
+7. **[ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md)**
+   - Comprehensive election/voting system security review (rating: 7.1/10)
+   - Double-voting vulnerability analysis and database constraint fixes
+   - Anonymous voting implementation review (HMAC-SHA256)
+   - Election results timing enforcement
+
+---
+
+### 📋 Module Documentation
+
+8. **[FORMS_MODULE.md](./FORMS_MODULE.md)**
+   - Complete Forms module documentation
+   - Public-facing forms with QR code generation
+   - Cross-module integrations (Membership, Inventory)
+   - Security: input sanitization, rate limiting, honeypot bot detection
+   - API endpoint reference (20+ endpoints)
+   - Database models, migrations, and permissions
+
+9. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
+   - Public API v1.1.0 with public form endpoints
+   - Form retrieval and submission without authentication
+   - Rate limiting, security notes, integration examples
+
 ---
 
 ### 🛠️ Development & Operations
 
-7. **[ONBOARDING_REVIEW.md](../ONBOARDING_REVIEW.md)**
-   - Analysis of startup delays and optimization recommendations
-   - Docker Compose configuration improvements
-   - Database connection retry strategy
-   - Migration performance optimization
+10. **[ONBOARDING_REVIEW.md](../ONBOARDING_REVIEW.md)**
+    - Analysis of startup delays and optimization recommendations
+    - Docker Compose configuration improvements
+    - Database connection retry strategy
+    - Migration performance optimization
+
+11. **[ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md)**
+    - Full codebase audit of 32 flush() calls for greenlet errors
+    - 87.5% safe, 4 low-risk patterns identified, 0 critical issues
+    - Recommendations for async SQLAlchemy best practices
 
 ---
 
@@ -159,6 +187,10 @@ See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.m
 | Database errors | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#database--migration-issues) |
 | Network/connection issues | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems) |
 | Enum case mismatch | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md) |
+| Custom forms / public forms | [FORMS_MODULE.md](./FORMS_MODULE.md) |
+| Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
+| Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
+| Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
 | Security questions | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md) |
 
 ### By Error Message
@@ -240,7 +272,12 @@ docker-compose ps
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
 | ENUM_CONVENTIONS.md | 1.0 | 2026-02-07 | Current |
+| FORMS_MODULE.md | 1.0 | 2026-02-12 | Current |
+| PUBLIC_API_DOCUMENTATION.md | 1.1 | 2026-02-12 | Current |
 | ONBOARDING_REVIEW.md | 1.0 | 2026-02-07 | Current |
+| ELECTION_SECURITY_AUDIT.md | 1.0 | 2026-02-10 | Current |
+| ASYNC_SQLALCHEMY_REVIEW.md | 1.0 | 2026-02-10 | Current |
+| ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
 
 ---
 
@@ -269,6 +306,53 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-12 - Forms Module & Public Forms
+
+**What Changed**:
+- Added complete Custom Forms module with form builder, field management, and submissions
+- Added public-facing forms accessible via unique URL slugs without authentication
+- Added cross-module integrations (Membership, Inventory)
+- Added QR code generation for physical form distribution
+- Added comprehensive form security (input sanitization, rate limiting, honeypot bot detection)
+- Updated Public API Documentation to v1.1.0 with public form endpoints
+
+---
+
+### 2026-02-11 - Module UIs, Auth Fixes & Navigation
+
+**What Changed**:
+- Built 8 fully-featured module pages (Events, Inventory, Training, Documents, Scheduling, Reports, Minutes, Elections)
+- Added persistent side navigation and top navigation with configurable layout
+- Added dashboard stats API endpoint and training progress widget
+- Fixed critical auth redirect loop, login flow (account lockout, token refresh, session creation)
+- Added organization branding to login page
+- Added 8 new system roles (Officers, Quartermaster, Training Officer, and more)
+- Unified role initialization to single source of truth
+- Fixed onboarding state persistence (role permissions, module configs, orphaned role IDs)
+- Docker graceful shutdown (exec form CMD, stop_grace_period, init: true)
+- Optimized first-boot startup from ~20 minutes to seconds with fast-path database initialization
+
+---
+
+### 2026-02-10 - Election Security, UX Improvements & Testing
+
+**What Changed**:
+- Fixed critical double-voting vulnerability with database-level unique constraints
+- Enforced election closing time before revealing results
+- Added password reset flow, user settings page, live dashboard stats
+- Added logout confirmation modal, breadcrumb progress indicator, contextual help system
+- Improved onboarding UX (module features visible, simplified org setup, focus traps)
+- Added membership type field with prospective member warning
+- Fixed SQLAlchemy async issues (greenlet errors in org creation and admin user creation)
+- Added comprehensive onboarding test suite with MySQL database
+
+**New Documentation**:
+- Created [FORMS_MODULE.md](./FORMS_MODULE.md) - Complete forms documentation
+- Updated [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) - Added public form endpoints
+- Updated [SECURITY.md](../SECURITY.md) - Added public form security section
+
+---
 
 ### 2026-02-07 - Major Error Handling Update
 

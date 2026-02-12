@@ -42,18 +42,22 @@ async def get_login_branding(
     """
     from sqlalchemy import select
 
-    result = await db.execute(
-        select(Organization.name, Organization.logo)
-        .where(Organization.active == True)
-        .order_by(Organization.created_at.asc())
-        .limit(1)
-    )
-    row = result.first()
+    try:
+        result = await db.execute(
+            select(Organization.name, Organization.logo)
+            .where(Organization.active == True)
+            .order_by(Organization.created_at.asc())
+            .limit(1)
+        )
+        row = result.first()
 
-    if not row:
+        if not row:
+            return {"name": None, "logo": None}
+
+        return {"name": row.name, "logo": row.logo}
+    except Exception:
+        # Pre-onboarding or DB not ready — return empty branding gracefully
         return {"name": None, "logo": None}
-
-    return {"name": row.name, "logo": row.logo}
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(check_rate_limit)])
@@ -150,7 +154,7 @@ async def login(
     auth_service = AuthService(db)
 
     # Authenticate user
-    user = await auth_service.authenticate_user(
+    user, auth_error = await auth_service.authenticate_user(
         username=credentials.username,
         password=credentials.password,
     )
@@ -158,7 +162,7 @@ async def login(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail=auth_error or "Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -95,7 +95,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     id: 'documents',
     name: 'Documents & Files',
     description:
-      'Centralized document storage for SOPs, policies, forms, and department files. Keep everything organized and accessible.',
+      'Centralized document storage for SOPs, policies, forms, and department files. Used across training, compliance, and other modules.',
     icon: FileText,
     priority: 'essential',
     category: 'Core',
@@ -105,6 +105,23 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Upload documents, manage folders, set visibility',
       view: ['Browse documents', 'Download files', 'View document history'],
       manage: ['Upload documents', 'Create folders', 'Edit/delete files', 'Set document visibility'],
+      defaultManageRoles: ['admin', 'officers'],
+    },
+  },
+  {
+    id: 'forms',
+    name: 'Custom Forms',
+    description:
+      'Cross-module form builder for shift checkouts, equipment inspections, training updates, surveys, and more. Powers structured data collection across all modules.',
+    icon: FormInput,
+    priority: 'essential',
+    category: 'Core',
+    configRoute: '/onboarding/modules/forms/config',
+    permissions: {
+      viewDescription: 'Fill out and submit forms across all modules',
+      manageDescription: 'Create forms, design fields, view submissions, export data',
+      view: ['View available forms', 'Submit forms', 'See personal submissions'],
+      manage: ['Create form templates', 'Design form fields', 'View all submissions', 'Export responses', 'Manage form settings'],
       defaultManageRoles: ['admin', 'officers'],
     },
   },
@@ -278,23 +295,6 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   // ============================================
   // OPTIONAL MODULES (Advanced)
   // ============================================
-  {
-    id: 'forms',
-    name: 'Custom Forms',
-    description:
-      'Create custom forms for incident reports, surveys, feedback, and more. Collect structured data easily.',
-    icon: FormInput,
-    priority: 'optional',
-    category: 'Advanced',
-    configRoute: '/onboarding/modules/forms/config',
-    permissions: {
-      viewDescription: 'Fill out and submit forms',
-      manageDescription: 'Create forms, view submissions, export data',
-      view: ['View available forms', 'Submit forms', 'See personal submissions'],
-      manage: ['Create form templates', 'View all submissions', 'Export responses', 'Manage form settings'],
-      defaultManageRoles: ['admin', 'officers'],
-    },
-  },
   {
     id: 'integrations',
     name: 'External Integrations',

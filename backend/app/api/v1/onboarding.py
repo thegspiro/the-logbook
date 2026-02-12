@@ -741,10 +741,15 @@ async def create_admin_user(
             detail="Organization must be created first"
         )
 
-    # Find organization
+    # Find organization — use first active org (single-org system).
+    # Matching by name is fragile; onboarding creates exactly one org,
+    # so look it up the same robust way as /auth/register.
     from app.models.user import Organization
     result = await db.execute(
-        select(Organization).where(Organization.name == onboarding_status.organization_name)
+        select(Organization)
+        .where(Organization.deleted_at.is_(None))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
     )
     org = result.scalar_one_or_none()
 

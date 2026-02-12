@@ -56,51 +56,107 @@ The following roles are automatically created for each organization:
 ### Leadership Roles
 
 1. **IT Administrator** (Priority: 100)
-   - Full system access
-   - All permissions enabled
+   - Full system access — all 45+ permissions enabled
+   - Manages system configuration, integrations, and technical infrastructure
    - Cannot be deleted
 
 2. **Chief** (Priority: 95)
    - Full administrative access (equal authority to President)
    - Can manage all aspects except IT-specific tasks
    - Can create and manage roles
-   - Can manage all modules including training, compliance, scheduling, inventory
+   - Can manage all modules including training, compliance, scheduling, inventory, forms
    - Cannot be deleted
 
 3. **President** (Priority: 95)
    - Full administrative access (equal authority to Chief)
    - Can manage all aspects except IT-specific tasks
    - Can create and manage roles
-   - Can manage all modules including training, compliance, scheduling, inventory
+   - Can manage all modules including training, compliance, scheduling, inventory, forms
    - Cannot be deleted
 
 4. **Assistant Chief** (Priority: 90)
    - Broad administrative access
-   - Can manage members and most modules
+   - Can manage members and most modules (training, compliance, scheduling, inventory, events, forms)
    - Cannot create roles
    - Cannot be deleted
 
-5. **Vice President** (Priority: 80)
-   - Similar to President but cannot edit organization settings
+5. **Quartermaster** (Priority: 85)
+   - Manages department inventory, equipment, and gear assignments
+   - Inventory and compliance management access
    - Cannot be deleted
 
-6. **Secretary** (Priority: 75)
+6. **Vice President** (Priority: 80)
+   - Similar to President but cannot edit organization settings
+   - Meetings and fundraising management
+   - Cannot be deleted
+
+7. **Secretary** (Priority: 75)
    - Record-keeping access
    - Can manage contact information visibility
-   - Can manage meetings and compliance records
+   - Can manage meetings, elections, events, compliance records, and forms
+   - Can create users and assign roles
    - Cannot be deleted
 
-7. **Assistant Secretary** (Priority: 70)
+8. **Assistant Secretary** (Priority: 70)
    - Assists the secretary
    - View-only for most areas
    - Can manage meetings
    - Cannot be deleted
 
-8. **Member** (Priority: 10)
-   - Basic member access
-   - Can view members, training, compliance, schedules
-   - Cannot modify most settings
+### Operational Roles
+
+9. **Officers** (Priority: 70)
+   - General officer role with broad operational access
+   - Can manage scheduling, inventory, events, and forms
+   - View access to training, compliance, and meetings
+   - Cannot create roles or manage organization settings
    - Cannot be deleted
+
+10. **Training Officer** (Priority: 65)
+    - Manages training programs, sessions, and certifications
+    - Can create and manage events and locations
+    - View access to compliance records
+    - Cannot be deleted
+
+11. **Public Outreach Coordinator** (Priority: 65)
+    - Manages public education and outreach events
+    - Can create and manage events and locations
+    - No access to internal operations modules
+    - Cannot be deleted
+
+12. **Meeting Hall Coordinator** (Priority: 60)
+    - Manages meeting hall and location bookings
+    - Can create and edit events and locations
+    - Limited to event and location management
+    - Cannot be deleted
+
+### Specialized Roles
+
+13. **Membership Coordinator** (Priority: 55)
+    - Manages member records, applications, and onboarding/offboarding
+    - Can create, edit, and view users and members
+    - Can assign roles to members
+    - Cannot be deleted
+
+14. **Communications Officer** (Priority: 55)
+    - Website, social media, newsletters, and notification management
+    - Can create and manage events
+    - View access to members and organization info
+    - Cannot be deleted
+
+15. **Apparatus Manager** (Priority: 50)
+    - Day-to-day fleet tracking, maintenance logging, and equipment checks
+    - Full inventory management access
+    - View access to compliance and locations
+    - Cannot be deleted
+
+### Base Role
+
+16. **Member** (Priority: 10)
+    - Basic member access
+    - Can view members, training, compliance, schedules, meetings, events, and forms
+    - Cannot modify settings or manage any modules
+    - Cannot be deleted
 
 ## Permission Categories
 
@@ -112,6 +168,7 @@ Permissions are organized into the following categories:
 - `users.edit` - Edit user information
 - `users.delete` - Delete users
 - `users.view_contact` - View contact information
+- `users.update_roles` - Update user roles
 - `members.view` - View member list
 - `members.manage` - Manage member profiles
 - `members.assign_roles` - Assign roles to members
@@ -120,12 +177,14 @@ Permissions are organized into the following categories:
 - `roles.view` - View roles
 - `roles.create` - Create new roles
 - `roles.edit` - Edit roles
+- `roles.update` - Update roles
 - `roles.delete` - Delete custom roles
 - `roles.manage_permissions` - Manage role permissions
 
 ### Organization & Settings
 - `organization.view` - View organization info
 - `organization.edit` - Edit organization info
+- `organization.update_settings` - Update organization settings
 - `settings.view` - View settings
 - `settings.edit` - Edit settings
 - `settings.manage_contact_visibility` - Control contact info display
@@ -135,13 +194,14 @@ Each module has view and manage permissions:
 
 **Essential Modules:**
 - Members (`members.view`, `members.manage`)
-- Events (`events.view`, `events.manage`)
+- Events (`events.view`, `events.create`, `events.edit`, `events.delete`, `events.manage`)
 - Documents (`documents.view`, `documents.manage`)
 
 **Operations Modules:**
 - Training (`training.view`, `training.manage`)
 - Inventory (`inventory.view`, `inventory.manage`)
 - Scheduling (`scheduling.view`, `scheduling.manage`)
+- Locations (`locations.view`, `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`)
 
 **Governance Modules:**
 - Elections (`elections.view`, `elections.manage`)
@@ -155,6 +215,9 @@ Each module has view and manage permissions:
 
 **Advanced Modules:**
 - Forms (`forms.view`, `forms.manage`)
+  - `forms.view`: View forms list, form details, and submissions
+  - `forms.manage`: Create/edit/delete forms, manage fields, publish/archive, configure public access, manage cross-module integrations
+  - Note: Public form submission requires no permissions (accessible by anyone with the form URL)
 - Integrations (`integrations.view`, `integrations.manage`)
 
 **Legacy/Additional Modules:**
@@ -174,9 +237,11 @@ After onboarding, role management is accessible from the main application's Sett
 
 ```
 Settings (expandable menu)
+├── My Account        → /settings/account (User account settings)
 ├── Organization      → /settings         (Organization settings)
 ├── Role Management   → /settings/roles   (Create/edit/delete roles)
-└── Member Admin      → /admin/members    (Assign roles to users)
+├── Member Admin      → /admin/members    (Assign roles to users)
+└── Public Portal     → /admin/public-portal (Public portal configuration)
 ```
 
 ### Accessing Admin Pages
@@ -197,7 +262,7 @@ The following pages are available from the Settings navigation:
 - **Members Admin** (`/admin/members`)
   - Assign roles to members
   - View all members with their current roles
-  - Accessible to: IT Admin, Chief, Assistant Chief, President, Vice President, Secretary, Assistant Secretary
+  - Accessible to: IT Admin, Chief, Assistant Chief, President, Vice President, Secretary, Assistant Secretary, Officers, Membership Coordinator, Quartermaster
 
 ### Creating Custom Roles
 

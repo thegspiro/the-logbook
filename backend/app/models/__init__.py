@@ -41,6 +41,18 @@ from app.models.public_portal import (
     PublicPortalDataWhitelist
 )
 
+from app.models.forms import (
+    Form,
+    FormField,
+    FormSubmission,
+    FormIntegration,
+    FormStatus,
+    FormCategory,
+    FieldType,
+    IntegrationTarget,
+    IntegrationType,
+)
+
 from app.models.apparatus import (
     Apparatus,
     ApparatusType,
@@ -92,6 +104,16 @@ __all__ = [
     "PublicPortalAPIKey",
     "PublicPortalAccessLog",
     "PublicPortalDataWhitelist",
+    # Forms models
+    "Form",
+    "FormField",
+    "FormSubmission",
+    "FormIntegration",
+    "FormStatus",
+    "FormCategory",
+    "FieldType",
+    "IntegrationTarget",
+    "IntegrationType",
     # Apparatus models
     "Apparatus",
     "ApparatusType",

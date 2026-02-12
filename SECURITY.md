@@ -431,6 +431,91 @@ Examples:
 
 ---
 
+## Public Form Security
+
+### Overview
+
+The Logbook supports public-facing forms that can be accessed without authentication via unique URL slugs (`/f/:slug`). These forms require additional security measures since they are exposed to the public internet.
+
+### Protection Layers
+
+#### Input Sanitization
+- All submitted values are HTML-escaped before storage (prevents stored XSS)
+- Null bytes are stripped from all input
+- Per-field length limits enforced (5,000 chars for text, 50,000 for textarea, 254 for email)
+- Submitter name and email are independently sanitized
+
+#### Type-Specific Validation
+- **Email fields**: Format validation + header injection prevention (rejects newlines/carriage returns)
+- **Phone fields**: Character whitelist (digits, +, -, parentheses, spaces only)
+- **Number fields**: Range validation against configured min/max values
+- **Select/Radio/Checkbox fields**: Values validated against the form's allowed options (prevents arbitrary value injection)
+- **Regex patterns**: Optional custom validation patterns per field
+
+#### Rate Limiting
+- **Form views**: 60 requests per minute per IP (5-minute lockout)
+- **Form submissions**: 10 requests per minute per IP (10-minute lockout)
+- Uses the application's existing in-memory rate limiter infrastructure
+
+#### Bot Detection
+- **Honeypot field**: A hidden `website` field is included in public forms
+- Real users never see or fill this field (positioned off-screen, `aria-hidden`, `tabIndex=-1`)
+- Bots that auto-fill all fields will populate it, triggering silent rejection
+- Rejected submissions receive a fake success response to avoid tipping off the bot
+
+#### Slug Validation
+- Form slugs are validated against a strict regex pattern (`^[a-f0-9]{12}$`)
+- Invalid slugs are rejected with a 404 before any database query executes
+- Prevents path traversal, SQL injection, and other injection attacks via the URL
+
+#### Frontend Defense-in-Depth
+- All server-provided text (form names, descriptions, field labels, help text) is sanitized through DOMPurify before display
+- DOMPurify strips all HTML tags and attributes, complementing React's built-in JSX escaping
+- Public form page uses a separate React component with no access to authenticated application state
+
+#### Data Isolation
+- Public form submissions are marked with `is_public_submission = true`
+- IP address and user agent are captured for audit purposes
+- `member_lookup` field types are excluded from public form display
+- Internal field IDs (UUIDs) are exposed but contain no sensitive information
+
+### QR Code Access
+
+Public forms support QR code generation for physical distribution:
+- QR codes encode the full public URL including the form slug
+- Downloadable as PNG or SVG for printing
+- Error correction level "H" (high) for reliability when scanned from printed materials
+- Designed for placement in physical locations (inventory rooms, station entrances, etc.)
+
+---
+
+## Election & Voting Security
+
+### Double-Voting Prevention
+
+The election system uses database-level constraints to prevent double-voting:
+
+- **4 Partial Unique Indexes**: Unique indexes on the votes table enforce one vote per user per ballot at the database level — prevents race conditions and direct database manipulation
+- **IntegrityError Handling**: `cast_vote()` catches constraint violations and returns a user-friendly error message instead of a 500 error
+- **Anonymous Voting**: Votes are linked to users via HMAC-SHA256 hashed identifiers, preventing direct association between votes and voters while still enforcing uniqueness
+
+### Election Results Timing
+
+- Results require both `status=CLOSED` AND `end_date` to have passed before vote counts are revealed
+- During active elections, only aggregate ballot statistics (turnout, total votes cast) are visible
+- Prevents premature result leaks that could influence remaining voters
+
+### Authentication & Token Security
+
+- **Token Storage**: Auth tokens stored as `access_token` in localStorage with separate `refresh_token`
+- **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
+- **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
+- **Session Revocation**: Logout properly invalidates the server-side session record
+
+For a comprehensive security review, see [ELECTION_SECURITY_AUDIT.md](ELECTION_SECURITY_AUDIT.md).
+
+---
+
 ## Error Handling & Information Disclosure Prevention
 
 ### API Error Responses

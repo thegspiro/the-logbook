@@ -32,20 +32,31 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
   - Training session creation with approval workflow
   - Check-in/check-out tracking integrated with events
   - Milestone system with conditional reminders
-- Compliance Management
-- Scheduling & Shift Management
-- Inventory Management
-- Member Directory & Tracking
-- Meeting Management
+  - Officer dashboard, requirements management, and external training integration pages
+- **Compliance Management** - Compliance tracking and auditing
+- **Scheduling & Shift Management** - Week/month calendar views, shift templates (day, night, morning), staffing requirements
+- **Inventory Management** - Full CRUD with item types, status/condition tracking, category management, search and filtering
+- **Member Directory & Tracking** - Member list, profiles, add/import, training history per member
+- **Meeting Minutes** - Minutes management with type filtering, quick stats, search
 - **Elections & Voting** - Full election system with ballots and candidate management
 - Incident Reporting
 - Equipment Maintenance
 - Fundraising & Donations
 - Vehicle/Apparatus Management
 - Budget & Finance Tracking
-- **Event Management** - QR code check-in, self-check-in pages, check-out functionality
+- **Event Management** - Event creation with type filtering, RSVP settings, reminders, QR code check-in, self-check-in pages, check-out, analytics
+- **Reports** - Reports catalog with member, training, event, and compliance report categories
+- **Documents** - Folder-based document management with 6 default categories, grid/list views, upload and folder creation
+- **Custom Forms** ([Documentation](docs/FORMS_MODULE.md))
+  - Drag-and-drop form builder with 15+ field types
+  - Public-facing forms via unique URL slugs with QR code generation
+  - Cross-module integrations (Membership interest, Equipment assignment)
+  - Submission management with filtering and export
+  - Member lookup fields for internal workflows
+  - Bot protection (honeypot), rate limiting, and input sanitization
 - **Module Configuration** - Priority-based module overview system
 - **Navigation Options** - Configurable top and side navigation layouts
+- **Dashboard** - Organization stats (members, events, documents), training progress widget
 
 ## 🚀 Quick Start
 
@@ -225,8 +236,11 @@ The wiki includes:
 
 ### Modules & Features
 - [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
-- [Role System](ROLE_SYSTEM_README.md) - Role-based access control
+- [Custom Forms Module](docs/FORMS_MODULE.md) - Form builder, public forms, cross-module integrations
+- [Role System](ROLE_SYSTEM_README.md) - Role-based access control (16 system roles)
 - [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details
+- [Election Security Audit](ELECTION_SECURITY_AUDIT.md) - Voting system security review
+- [Async SQLAlchemy Review](ASYNC_SQLALCHEMY_REVIEW.md) - Codebase async safety audit
 
 ### Security & Troubleshooting
 - [Security Guide](SECURITY.md) - Security policy and compliance

@@ -1,7 +1,220 @@
-import React from 'react';
-import { Package, Wrench, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  Package,
+  Plus,
+  Search,
+  Filter,
+  RefreshCw,
+  AlertCircle,
+  X,
+  Tag,
+} from 'lucide-react';
+import {
+  inventoryService,
+  type InventoryItem,
+  type InventoryCategory,
+  type InventorySummary,
+  type InventoryItemCreate,
+  type InventoryCategoryCreate,
+} from '../services/api';
+import { useAuthStore } from '../stores/authStore';
+
+const ITEM_TYPES = [
+  { value: 'uniform', label: 'Uniform' },
+  { value: 'ppe', label: 'PPE' },
+  { value: 'tool', label: 'Tool' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'vehicle', label: 'Vehicle' },
+  { value: 'electronics', label: 'Electronics' },
+  { value: 'consumable', label: 'Consumable' },
+  { value: 'other', label: 'Other' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'available', label: 'Available', color: 'bg-green-500/10 text-green-400 border-green-500/30' },
+  { value: 'assigned', label: 'Assigned', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+  { value: 'checked_out', label: 'Checked Out', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' },
+  { value: 'in_maintenance', label: 'In Maintenance', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
+  { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-400 border-red-500/30' },
+  { value: 'retired', label: 'Retired', color: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+];
+
+const CONDITION_OPTIONS = [
+  { value: 'excellent', label: 'Excellent' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
+  { value: 'poor', label: 'Poor' },
+  { value: 'damaged', label: 'Damaged' },
+  { value: 'out_of_service', label: 'Out of Service' },
+];
+
+const getStatusStyle = (status: string) => {
+  const found = STATUS_OPTIONS.find(s => s.value === status);
+  return found?.color || 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+};
+
+const getConditionColor = (condition: string) => {
+  switch (condition) {
+    case 'excellent': return 'text-green-400';
+    case 'good': return 'text-emerald-400';
+    case 'fair': return 'text-yellow-400';
+    case 'poor': return 'text-orange-400';
+    case 'damaged': return 'text-red-400';
+    case 'out_of_service': return 'text-red-500';
+    default: return 'text-slate-400';
+  }
+};
+
+type Tab = 'items' | 'categories';
 
 const InventoryPage: React.FC = () => {
+  const { checkPermission } = useAuthStore();
+  const canManage = checkPermission('inventory.manage');
+
+  const [activeTab, setActiveTab] = useState<Tab>('items');
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [summary, setSummary] = useState<InventorySummary | null>(null);
+  const [totalItems, setTotalItems] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+
+  // Modals
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+
+  // Add item form
+  const [itemForm, setItemForm] = useState<InventoryItemCreate>({
+    name: '',
+    description: '',
+    category_id: '',
+    manufacturer: '',
+    model_number: '',
+    serial_number: '',
+    storage_location: '',
+    condition: 'good',
+    status: 'available',
+    quantity: 1,
+  });
+
+  // Add category form
+  const [categoryForm, setCategoryForm] = useState<InventoryCategoryCreate>({
+    name: '',
+    description: '',
+    item_type: 'equipment',
+    requires_serial_number: false,
+    requires_maintenance: false,
+    requires_assignment: false,
+  });
+
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      loadItems();
+    }
+  }, [searchQuery, statusFilter, categoryFilter]);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [summaryData, categoriesData, itemsData] = await Promise.all([
+        inventoryService.getSummary(),
+        inventoryService.getCategories(),
+        inventoryService.getItems({ limit: 100 }),
+      ]);
+      setSummary(summaryData);
+      setCategories(categoriesData);
+      setItems(itemsData.items);
+      setTotalItems(itemsData.total);
+    } catch (err: any) {
+      console.error('Error loading inventory:', err);
+      setError(err.response?.data?.detail || 'Failed to load inventory data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadItems = async () => {
+    try {
+      const data = await inventoryService.getItems({
+        search: searchQuery || undefined,
+        status: statusFilter || undefined,
+        category_id: categoryFilter || undefined,
+        limit: 100,
+      });
+      setItems(data.items);
+      setTotalItems(data.total);
+    } catch (err: any) {
+      console.error('Error loading items:', err);
+    }
+  };
+
+  const handleCreateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    try {
+      await inventoryService.createItem({
+        ...itemForm,
+        category_id: itemForm.category_id || undefined,
+      });
+      setShowAddItem(false);
+      setItemForm({
+        name: '', description: '', category_id: '', manufacturer: '',
+        model_number: '', serial_number: '', storage_location: '',
+        condition: 'good', status: 'available', quantity: 1,
+      });
+      loadData();
+    } catch (err: any) {
+      setFormError(err.response?.data?.detail || 'Failed to create item.');
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    try {
+      await inventoryService.createCategory(categoryForm);
+      setShowAddCategory(false);
+      setCategoryForm({
+        name: '', description: '', item_type: 'equipment',
+        requires_serial_number: false, requires_maintenance: false, requires_assignment: false,
+      });
+      loadData();
+    } catch (err: any) {
+      setFormError(err.response?.data?.detail || 'Failed to create category.');
+    }
+  };
+
+  const getCategoryName = (categoryId?: string) => {
+    if (!categoryId) return '-';
+    const cat = categories.find(c => c.id === categoryId);
+    return cat?.name || '-';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <p className="text-slate-300">Loading inventory...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       <main className="max-w-7xl mx-auto px-6 py-8">
@@ -18,47 +231,522 @@ const InventoryPage: React.FC = () => {
               </p>
             </div>
           </div>
+          {canManage && (
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowAddCategory(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Category</span>
+              </button>
+              <button
+                onClick={() => setShowAddItem(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Item</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <ClipboardCheck className="w-8 h-8 text-emerald-400 mb-4" />
-            <h3 className="text-white font-semibold text-lg mb-2">Equipment Tracking</h3>
-            <p className="text-slate-300 text-sm">
-              Track all equipment with serial numbers, locations, and assignment history.
-            </p>
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <p className="text-red-300 text-sm flex-1">{error}</p>
+            <button onClick={loadData} className="flex items-center gap-1 text-red-400 hover:text-red-300 text-sm">
+              <RefreshCw className="w-4 h-4" /> Retry
+            </button>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <Wrench className="w-8 h-8 text-blue-400 mb-4" />
-            <h3 className="text-white font-semibold text-lg mb-2">Maintenance Schedules</h3>
-            <p className="text-slate-300 text-sm">
-              Set up maintenance schedules and receive alerts when equipment is due for service.
-            </p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <AlertTriangle className="w-8 h-8 text-yellow-400 mb-4" />
-            <h3 className="text-white font-semibold text-lg mb-2">Low Stock Alerts</h3>
-            <p className="text-slate-300 text-sm">
-              Monitor inventory levels and get notified when supplies are running low.
-            </p>
-          </div>
-        </div>
+        )}
 
-        {/* Empty State */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-          <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-white text-xl font-bold mb-2">No Equipment Tracked</h3>
-          <p className="text-slate-300 mb-6">
-            Start tracking your department's equipment, tools, and supplies.
-          </p>
+        {/* Summary Stats */}
+        {summary && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Total Items</p>
+              <p className="text-white text-2xl font-bold mt-1">{summary.total_items}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Total Value</p>
+              <p className="text-emerald-400 text-2xl font-bold mt-1">
+                ${summary.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Active Checkouts</p>
+              <p className="text-yellow-400 text-2xl font-bold mt-1">{summary.active_checkouts}</p>
+              {summary.overdue_checkouts > 0 && (
+                <p className="text-red-400 text-xs mt-1">{summary.overdue_checkouts} overdue</p>
+              )}
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Maintenance Due</p>
+              <p className="text-orange-400 text-2xl font-bold mt-1">{summary.maintenance_due_count}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
           <button
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
-            disabled
+            onClick={() => setActiveTab('items')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'items'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
           >
-            Add Equipment (Coming Soon)
+            Items ({totalItems})
+          </button>
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'categories'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Categories ({categories.length})
           </button>
         </div>
+
+        {/* Items Tab */}
+        {activeTab === 'items' && (
+          <>
+            {/* Search & Filters */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="relative flex-1 w-full md:max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, serial number, asset tag..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-5 h-5 text-slate-400" />
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">All Statuses</option>
+                    {STATUS_OPTIONS.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">All Categories</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            {items.length === 0 ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">No Items Found</h3>
+                <p className="text-slate-300 mb-6">
+                  {searchQuery || statusFilter || categoryFilter
+                    ? 'Try adjusting your search or filters.'
+                    : 'Get started by adding your first inventory item.'}
+                </p>
+                {canManage && !searchQuery && !statusFilter && !categoryFilter && (
+                  <button
+                    onClick={() => setShowAddItem(true)}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                  >
+                    Add First Item
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-900/50 border-b border-white/10">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Item</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Category</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Serial #</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Location</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Condition</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {items.map((item) => (
+                        <tr key={item.id} className="hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="text-white font-medium">{item.name}</div>
+                              {item.manufacturer && (
+                                <div className="text-slate-400 text-sm">{item.manufacturer} {item.model_number || ''}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-slate-300 text-sm">{getCategoryName(item.category_id)}</td>
+                          <td className="px-6 py-4">
+                            <span className="text-slate-300 font-mono text-sm">{item.serial_number || '-'}</span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-300 text-sm">{item.storage_location || item.station || '-'}</td>
+                          <td className="px-6 py-4">
+                            <span className={`text-sm capitalize ${getConditionColor(item.condition)}`}>
+                              {item.condition.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded border ${getStatusStyle(item.status)}`}>
+                              {item.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-white text-sm">{item.quantity}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Categories Tab */}
+        {activeTab === 'categories' && (
+          <>
+            {categories.length === 0 ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <Tag className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">No Categories</h3>
+                <p className="text-slate-300 mb-6">
+                  Create categories to organize your inventory items.
+                </p>
+                {canManage && (
+                  <button
+                    onClick={() => setShowAddCategory(true)}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                  >
+                    Create First Category
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {categories.map((cat) => (
+                  <div key={cat.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="text-white font-semibold text-lg">{cat.name}</h3>
+                      <span className="px-2 py-1 text-xs font-medium rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 capitalize">
+                        {cat.item_type}
+                      </span>
+                    </div>
+                    {cat.description && (
+                      <p className="text-slate-300 text-sm mb-3">{cat.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {cat.requires_serial_number && (
+                        <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-400 rounded">Serial # Required</span>
+                      )}
+                      {cat.requires_maintenance && (
+                        <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-400 rounded">Maintenance Tracked</span>
+                      )}
+                      {cat.requires_assignment && (
+                        <span className="px-2 py-0.5 text-xs bg-purple-500/10 text-purple-400 rounded">Assignment Required</span>
+                      )}
+                      {cat.low_stock_threshold != null && (
+                        <span className="px-2 py-0.5 text-xs bg-yellow-500/10 text-yellow-400 rounded">
+                          Low Stock: {cat.low_stock_threshold}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Add Item Modal */}
+        {showAddItem && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddItem(false)} />
+              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full border border-white/20">
+                <form onSubmit={handleCreateItem}>
+                  <div className="px-6 pt-5 pb-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium text-white">Add Inventory Item</h3>
+                      <button type="button" onClick={() => setShowAddItem(false)} className="text-slate-400 hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {formError && (
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                        <p className="text-sm text-red-300">{formError}</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
+                        <input
+                          type="text" required value={itemForm.name}
+                          onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+                        <select
+                          value={itemForm.category_id}
+                          onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">No Category</option>
+                          {categories.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                        <textarea
+                          rows={2} value={itemForm.description}
+                          onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Manufacturer</label>
+                          <input
+                            type="text" value={itemForm.manufacturer}
+                            onChange={(e) => setItemForm({ ...itemForm, manufacturer: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Model Number</label>
+                          <input
+                            type="text" value={itemForm.model_number}
+                            onChange={(e) => setItemForm({ ...itemForm, model_number: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Serial Number</label>
+                          <input
+                            type="text" value={itemForm.serial_number}
+                            onChange={(e) => setItemForm({ ...itemForm, serial_number: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
+                          <input
+                            type="text" value={itemForm.storage_location}
+                            onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Condition</label>
+                          <select
+                            value={itemForm.condition}
+                            onChange={(e) => setItemForm({ ...itemForm, condition: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            {CONDITION_OPTIONS.map(c => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
+                          <select
+                            value={itemForm.status}
+                            onChange={(e) => setItemForm({ ...itemForm, status: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            {STATUS_OPTIONS.map(s => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">Quantity</label>
+                          <input
+                            type="number" min="1" value={itemForm.quantity}
+                            onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 1 })}
+                            className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+                        <textarea
+                          rows={2} value={itemForm.notes}
+                          onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                    <button
+                      type="button" onClick={() => setShowAddItem(false)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                    >
+                      Add Item
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Category Modal */}
+        {showAddCategory && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} />
+              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+                <form onSubmit={handleCreateCategory}>
+                  <div className="px-6 pt-5 pb-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium text-white">Add Category</h3>
+                      <button type="button" onClick={() => setShowAddCategory(false)} className="text-slate-400 hover:text-white">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {formError && (
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                        <p className="text-sm text-red-300">{formError}</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
+                        <input
+                          type="text" required value={categoryForm.name}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          placeholder="e.g., Bunker Gear, SCBA, Radios"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Item Type *</label>
+                        <select
+                          value={categoryForm.item_type}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, item_type: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {ITEM_TYPES.map(t => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                        <textarea
+                          rows={2} value={categoryForm.description}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox" checked={categoryForm.requires_serial_number}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, requires_serial_number: e.target.checked })}
+                            className="rounded border-slate-600 bg-slate-900/50 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm text-slate-300">Requires serial number</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox" checked={categoryForm.requires_maintenance}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, requires_maintenance: e.target.checked })}
+                            className="rounded border-slate-600 bg-slate-900/50 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm text-slate-300">Requires maintenance tracking</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox" checked={categoryForm.requires_assignment}
+                            onChange={(e) => setCategoryForm({ ...categoryForm, requires_assignment: e.target.checked })}
+                            className="rounded border-slate-600 bg-slate-900/50 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm text-slate-300">Requires member assignment</span>
+                        </label>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Low Stock Threshold</label>
+                        <input
+                          type="number" min="0" value={categoryForm.low_stock_threshold || ''}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, low_stock_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Optional - alert when stock falls below"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                    <button
+                      type="button" onClick={() => setShowAddCategory(false)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                    >
+                      Create Category
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

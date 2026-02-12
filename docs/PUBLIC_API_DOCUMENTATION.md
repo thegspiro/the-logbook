@@ -1,6 +1,6 @@
 # The Logbook Public API Documentation
 
-Version 1.0.0
+Version 1.1.0
 
 ## Introduction
 
@@ -202,6 +202,155 @@ curl https://your-logbook-instance.com/api/public/v1/health
   "timestamp": "2026-02-07T20:00:00Z"
 }
 ```
+
+---
+
+### 5. Get Public Form
+
+Retrieve a public form by its URL slug. Returns the form definition with all fields for rendering.
+
+**Endpoint:** `GET /forms/{slug}`
+
+**Authentication:** Not required
+
+**Rate Limit:** 60 requests/minute per IP
+
+**Example Request:**
+```bash
+curl https://your-logbook-instance.com/api/public/v1/forms/a1b2c3d4e5f6
+```
+
+**Example Response:**
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Membership Interest Form",
+  "description": "Interested in joining? Fill out this form and we'll be in touch.",
+  "category": "membership",
+  "allow_multiple_submissions": true,
+  "organization_name": "Springfield Volunteer Fire Department",
+  "fields": [
+    {
+      "id": "field-uuid-1",
+      "label": "Full Name",
+      "field_type": "text",
+      "placeholder": "Your full name",
+      "required": true,
+      "min_length": 2,
+      "max_length": 100,
+      "sort_order": 0,
+      "width": "full"
+    },
+    {
+      "id": "field-uuid-2",
+      "label": "Email Address",
+      "field_type": "email",
+      "placeholder": "your@email.com",
+      "required": true,
+      "sort_order": 1,
+      "width": "half"
+    },
+    {
+      "id": "field-uuid-3",
+      "label": "Experience Level",
+      "field_type": "select",
+      "required": true,
+      "options": [
+        { "value": "none", "label": "No experience" },
+        { "value": "some", "label": "Some training" },
+        { "value": "experienced", "label": "Active/former firefighter" }
+      ],
+      "sort_order": 2,
+      "width": "full"
+    }
+  ]
+}
+```
+
+**Notes:**
+- Only published forms with `is_public = true` are accessible
+- `member_lookup` field types are excluded from public responses
+- Slugs are 12-character hex strings (e.g., `a1b2c3d4e5f6`)
+- Returns 404 if the form is not found, not published, or not public
+
+---
+
+### 6. Submit Public Form
+
+Submit data to a public form. No authentication required.
+
+**Endpoint:** `POST /forms/{slug}/submit`
+
+**Authentication:** Not required
+
+**Rate Limit:** 10 submissions/minute per IP (10-minute lockout if exceeded)
+
+**Request Body:**
+```json
+{
+  "data": {
+    "field-uuid-1": "John Smith",
+    "field-uuid-2": "john@example.com",
+    "field-uuid-3": "some"
+  },
+  "submitter_name": "John Smith",
+  "submitter_email": "john@example.com"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `data` | object | Yes | Key-value pairs of field ID to submitted value |
+| `submitter_name` | string | No | Name of the person submitting (max 255 chars) |
+| `submitter_email` | string | No | Email of the person submitting (max 255 chars) |
+
+**Example Request:**
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"field-uuid-1": "John Smith", "field-uuid-2": "john@example.com"}, "submitter_name": "John Smith"}' \
+  https://your-logbook-instance.com/api/public/v1/forms/a1b2c3d4e5f6/submit
+```
+
+**Example Response (201 Created):**
+```json
+{
+  "id": "submission-uuid",
+  "form_name": "Membership Interest Form",
+  "submitted_at": "2026-02-12T15:30:00Z",
+  "message": "Thank you for your submission!"
+}
+```
+
+**Security Notes:**
+- All submitted values are HTML-escaped and sanitized before storage
+- Required field validation is enforced server-side
+- Email fields are validated for format and header injection
+- Select/radio/checkbox values are validated against allowed options
+- A honeypot field is used for bot detection (see [Security](#security-notes) below)
+- IP address and user agent are captured for audit purposes
+
+**Error Responses:**
+
+| Status | Description |
+|--------|-------------|
+| 400 | Validation error (missing required field, invalid format) |
+| 404 | Form not found or not available |
+| 429 | Rate limit exceeded (try again in 10 minutes) |
+
+---
+
+### Security Notes
+
+#### Public Form Protection
+
+Public form endpoints include multiple layers of protection:
+
+1. **Rate Limiting**: Separate rate limits for viewing (60/min) and submitting (10/min) per IP address, with automatic lockout periods
+2. **Input Sanitization**: All submitted data is HTML-escaped, null bytes removed, and length-limited per field type
+3. **Type Validation**: Server-side validation of email formats, phone numbers, numeric ranges, and allowed options for select/radio/checkbox fields
+4. **Honeypot Detection**: A hidden `website` field is included in the form. Bots that fill it in are silently rejected with a fake success response
+5. **Slug Validation**: Form slugs are validated against a strict 12-character hex pattern before any database query
 
 ---
 
@@ -443,6 +592,13 @@ For API support:
 - API Status: Check `/health` endpoint
 
 ## Changelog
+
+### Version 1.1.0 (2026-02-12)
+- Added public form retrieval endpoint (`GET /forms/{slug}`)
+- Added public form submission endpoint (`POST /forms/{slug}/submit`)
+- Rate limiting for public form endpoints (60 views/min, 10 submits/min per IP)
+- Honeypot bot detection for form submissions
+- Input sanitization and type validation on all submitted data
 
 ### Version 1.0.0 (2026-02-07)
 - Initial release

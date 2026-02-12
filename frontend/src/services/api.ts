@@ -1356,12 +1356,483 @@ export interface UserInventoryResponse {
   active_checkouts: UserCheckoutItem[];
 }
 
+export interface InventoryCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  item_type: string;
+  parent_category_id?: string;
+  requires_assignment: boolean;
+  requires_serial_number: boolean;
+  requires_maintenance: boolean;
+  low_stock_threshold?: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  organization_id: string;
+  category_id?: string;
+  name: string;
+  description?: string;
+  manufacturer?: string;
+  model_number?: string;
+  serial_number?: string;
+  asset_tag?: string;
+  barcode?: string;
+  purchase_date?: string;
+  purchase_price?: number;
+  vendor?: string;
+  warranty_expiration?: string;
+  storage_location?: string;
+  station?: string;
+  condition: string;
+  status: string;
+  status_notes?: string;
+  quantity: number;
+  unit_of_measure?: string;
+  last_inspection_date?: string;
+  next_inspection_due?: string;
+  inspection_interval_days?: number;
+  assigned_to_user_id?: string;
+  assigned_date?: string;
+  notes?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItemCreate {
+  category_id?: string;
+  name: string;
+  description?: string;
+  manufacturer?: string;
+  model_number?: string;
+  serial_number?: string;
+  asset_tag?: string;
+  purchase_date?: string;
+  purchase_price?: number;
+  vendor?: string;
+  storage_location?: string;
+  station?: string;
+  condition?: string;
+  status?: string;
+  quantity?: number;
+  unit_of_measure?: string;
+  inspection_interval_days?: number;
+  notes?: string;
+}
+
+export interface InventoryItemsListResponse {
+  items: InventoryItem[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface InventorySummary {
+  total_items: number;
+  items_by_status: Record<string, number>;
+  items_by_condition: Record<string, number>;
+  total_value: number;
+  active_checkouts: number;
+  overdue_checkouts: number;
+  maintenance_due_count: number;
+}
+
+export interface InventoryCategoryCreate {
+  name: string;
+  description?: string;
+  item_type: string;
+  requires_assignment?: boolean;
+  requires_serial_number?: boolean;
+  requires_maintenance?: boolean;
+  low_stock_threshold?: number;
+}
+
 export const inventoryService = {
-  /**
-   * Get a user's complete inventory (permanent assignments + active checkouts)
-   */
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
+    return response.data;
+  },
+
+  async getSummary(): Promise<InventorySummary> {
+    const response = await api.get<InventorySummary>('/inventory/summary');
+    return response.data;
+  },
+
+  async getCategories(itemType?: string, activeOnly: boolean = true): Promise<InventoryCategory[]> {
+    const response = await api.get<InventoryCategory[]>('/inventory/categories', {
+      params: { item_type: itemType, active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async createCategory(data: InventoryCategoryCreate): Promise<InventoryCategory> {
+    const response = await api.post<InventoryCategory>('/inventory/categories', data);
+    return response.data;
+  },
+
+  async getItems(params?: {
+    category_id?: string;
+    status?: string;
+    search?: string;
+    active_only?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<InventoryItemsListResponse> {
+    const response = await api.get<InventoryItemsListResponse>('/inventory/items', { params });
+    return response.data;
+  },
+
+  async getItem(itemId: string): Promise<InventoryItem> {
+    const response = await api.get<InventoryItem>(`/inventory/items/${itemId}`);
+    return response.data;
+  },
+
+  async createItem(data: InventoryItemCreate): Promise<InventoryItem> {
+    const response = await api.post<InventoryItem>('/inventory/items', data);
+    return response.data;
+  },
+
+  async updateItem(itemId: string, data: Partial<InventoryItemCreate>): Promise<InventoryItem> {
+    const response = await api.patch<InventoryItem>(`/inventory/items/${itemId}`, data);
+    return response.data;
+  },
+
+  async retireItem(itemId: string, notes?: string): Promise<void> {
+    await api.post(`/inventory/items/${itemId}/retire`, { notes });
+  },
+};
+
+// ============================================
+// Forms Types & Service
+// ============================================
+
+export interface FormFieldOption {
+  value: string;
+  label: string;
+}
+
+export interface FormField {
+  id: string;
+  form_id: string;
+  label: string;
+  field_type: string;
+  placeholder?: string;
+  help_text?: string;
+  default_value?: string;
+  required: boolean;
+  min_length?: number;
+  max_length?: number;
+  min_value?: number;
+  max_value?: number;
+  validation_pattern?: string;
+  options?: FormFieldOption[];
+  sort_order: number;
+  width: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormFieldCreate {
+  label: string;
+  field_type: string;
+  placeholder?: string;
+  help_text?: string;
+  default_value?: string;
+  required?: boolean;
+  min_length?: number;
+  max_length?: number;
+  options?: FormFieldOption[];
+  sort_order?: number;
+  width?: string;
+}
+
+export interface FormIntegration {
+  id: string;
+  form_id: string;
+  organization_id: string;
+  target_module: string;
+  integration_type: string;
+  field_mappings: Record<string, string>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormIntegrationCreate {
+  target_module: string;
+  integration_type: string;
+  field_mappings: Record<string, string>;
+  is_active?: boolean;
+}
+
+export interface MemberLookupResult {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  badge_number?: string;
+  rank?: string;
+  station?: string;
+  email?: string;
+}
+
+export interface MemberLookupResponse {
+  members: MemberLookupResult[];
+  total: number;
+}
+
+export interface FormDef {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  category: string;
+  status: string;
+  allow_multiple_submissions: boolean;
+  require_authentication: boolean;
+  notify_on_submission: boolean;
+  notification_emails?: string[];
+  is_public: boolean;
+  public_slug?: string;
+  version: number;
+  is_template: boolean;
+  field_count?: number;
+  submission_count?: number;
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+  created_by?: string;
+}
+
+export interface FormDetailDef extends FormDef {
+  fields: FormField[];
+  integrations: FormIntegration[];
+}
+
+export interface FormCreate {
+  name: string;
+  description?: string;
+  category?: string;
+  allow_multiple_submissions?: boolean;
+  require_authentication?: boolean;
+  notify_on_submission?: boolean;
+  notification_emails?: string[];
+  is_public?: boolean;
+  fields?: FormFieldCreate[];
+}
+
+export interface FormUpdate {
+  name?: string;
+  description?: string;
+  category?: string;
+  status?: string;
+  allow_multiple_submissions?: boolean;
+  require_authentication?: boolean;
+  notify_on_submission?: boolean;
+  notification_emails?: string[];
+  is_public?: boolean;
+}
+
+export interface FormsListResponse {
+  forms: FormDef[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface FormSubmission {
+  id: string;
+  organization_id: string;
+  form_id: string;
+  submitted_by?: string;
+  submitted_at: string;
+  data: Record<string, unknown>;
+  submitter_name?: string;
+  submitter_email?: string;
+  is_public_submission: boolean;
+  integration_processed: boolean;
+  integration_result?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SubmissionsListResponse {
+  submissions: FormSubmission[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface FormsSummary {
+  total_forms: number;
+  published_forms: number;
+  draft_forms: number;
+  total_submissions: number;
+  submissions_this_month: number;
+  public_forms: number;
+}
+
+// Public form types (no auth required)
+export interface PublicFormField {
+  id: string;
+  label: string;
+  field_type: string;
+  placeholder?: string;
+  help_text?: string;
+  default_value?: string;
+  required: boolean;
+  min_length?: number;
+  max_length?: number;
+  min_value?: number;
+  max_value?: number;
+  options?: FormFieldOption[];
+  sort_order: number;
+  width: string;
+}
+
+export interface PublicFormDef {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  allow_multiple_submissions: boolean;
+  fields: PublicFormField[];
+  organization_name?: string;
+}
+
+export interface PublicFormSubmissionResponse {
+  id: string;
+  form_name: string;
+  submitted_at: string;
+  message: string;
+}
+
+export const formsService = {
+  async getSummary(): Promise<FormsSummary> {
+    const response = await api.get<FormsSummary>('/forms/summary');
+    return response.data;
+  },
+
+  async getForms(params?: {
+    status?: string;
+    category?: string;
+    search?: string;
+    is_template?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<FormsListResponse> {
+    const response = await api.get<FormsListResponse>('/forms/', { params });
+    return response.data;
+  },
+
+  async getForm(formId: string): Promise<FormDetailDef> {
+    const response = await api.get<FormDetailDef>(`/forms/${formId}`);
+    return response.data;
+  },
+
+  async createForm(data: FormCreate): Promise<FormDetailDef> {
+    const response = await api.post<FormDetailDef>('/forms/', data);
+    return response.data;
+  },
+
+  async updateForm(formId: string, data: FormUpdate): Promise<FormDetailDef> {
+    const response = await api.patch<FormDetailDef>(`/forms/${formId}`, data);
+    return response.data;
+  },
+
+  async deleteForm(formId: string): Promise<void> {
+    await api.delete(`/forms/${formId}`);
+  },
+
+  async publishForm(formId: string): Promise<FormDetailDef> {
+    const response = await api.post<FormDetailDef>(`/forms/${formId}/publish`);
+    return response.data;
+  },
+
+  async archiveForm(formId: string): Promise<FormDetailDef> {
+    const response = await api.post<FormDetailDef>(`/forms/${formId}/archive`);
+    return response.data;
+  },
+
+  async addField(formId: string, data: FormFieldCreate): Promise<FormField> {
+    const response = await api.post<FormField>(`/forms/${formId}/fields`, data);
+    return response.data;
+  },
+
+  async updateField(formId: string, fieldId: string, data: Partial<FormFieldCreate>): Promise<FormField> {
+    const response = await api.patch<FormField>(`/forms/${formId}/fields/${fieldId}`, data);
+    return response.data;
+  },
+
+  async deleteField(formId: string, fieldId: string): Promise<void> {
+    await api.delete(`/forms/${formId}/fields/${fieldId}`);
+  },
+
+  async submitForm(formId: string, data: Record<string, unknown>): Promise<FormSubmission> {
+    const response = await api.post<FormSubmission>(`/forms/${formId}/submit`, { data });
+    return response.data;
+  },
+
+  async getSubmissions(formId: string, params?: {
+    skip?: number;
+    limit?: number;
+  }): Promise<SubmissionsListResponse> {
+    const response = await api.get<SubmissionsListResponse>(`/forms/${formId}/submissions`, { params });
+    return response.data;
+  },
+
+  async deleteSubmission(formId: string, submissionId: string): Promise<void> {
+    await api.delete(`/forms/${formId}/submissions/${submissionId}`);
+  },
+
+  // Integration methods
+  async addIntegration(formId: string, data: FormIntegrationCreate): Promise<FormIntegration> {
+    const response = await api.post<FormIntegration>(`/forms/${formId}/integrations`, data);
+    return response.data;
+  },
+
+  async updateIntegration(formId: string, integrationId: string, data: Partial<FormIntegrationCreate>): Promise<FormIntegration> {
+    const response = await api.patch<FormIntegration>(`/forms/${formId}/integrations/${integrationId}`, data);
+    return response.data;
+  },
+
+  async deleteIntegration(formId: string, integrationId: string): Promise<void> {
+    await api.delete(`/forms/${formId}/integrations/${integrationId}`);
+  },
+
+  // Member lookup
+  async memberLookup(query: string, limit?: number): Promise<MemberLookupResponse> {
+    const response = await api.get<MemberLookupResponse>('/forms/member-lookup', {
+      params: { q: query, limit: limit || 20 },
+    });
+    return response.data;
+  },
+};
+
+// Public forms service (no auth required)
+export const publicFormsService = {
+  async getForm(slug: string): Promise<PublicFormDef> {
+    const response = await axios.get<PublicFormDef>(
+      `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}`
+    );
+    return response.data;
+  },
+
+  async submitForm(slug: string, data: Record<string, unknown>, submitterName?: string, submitterEmail?: string, honeypot?: string): Promise<PublicFormSubmissionResponse> {
+    const payload: Record<string, unknown> = { data, submitter_name: submitterName, submitter_email: submitterEmail };
+    // Honeypot field - only sent if bot filled it in (real users never will)
+    if (honeypot) {
+      payload.website = honeypot;
+    }
+    const response = await axios.post<PublicFormSubmissionResponse>(
+      `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}/submit`,
+      payload
+    );
     return response.data;
   },
 };
