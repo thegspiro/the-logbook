@@ -10,9 +10,10 @@ export interface BallotItem {
   title: string;
   description?: string;
   position?: string;
-  eligible_voter_types: string[]; // ['operational'], ['administrative'], ['all'], or specific role slugs
+  eligible_voter_types: string[]; // ['all'], ['regular'], ['life'], ['probationary'], ['operational'], ['administrative'], or specific role slugs
   vote_type: string; // approval, candidate_selection
   required_for_approval?: number;
+  require_attendance?: boolean; // If true, voter must be checked in as present at the meeting
 }
 
 export interface PositionEligibility {
@@ -33,6 +34,7 @@ export interface Election {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
+  attendees?: Attendee[];
   start_date: string;
   end_date: string;
   status: ElectionStatus;
@@ -245,4 +247,34 @@ export interface EmailBallotResponse {
   recipients_count: number;
   failed_count: number;
   message: string;
+}
+
+// Attendance types
+
+export interface Attendee {
+  user_id: string;
+  name: string;
+  checked_in_at: string;
+  checked_in_by: string;
+}
+
+export interface AttendeeCheckInResponse {
+  success: boolean;
+  attendee: Attendee;
+  message: string;
+  total_attendees: number;
+}
+
+// Ballot template types
+
+export interface BallotTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  vote_type: string;
+  eligible_voter_types: string[];
+  require_attendance: boolean;
+  title_template: string;
+  description_template?: string;
 }

@@ -41,6 +41,9 @@ from app.schemas.election import (
     EmailBallotResponse,
     ElectionRollback,
     ElectionRollbackResponse,
+    AttendeeCheckIn,
+    AttendeeCheckInResponse,
+    BallotTemplatesResponse,
 )
 from app.services.election_service import ElectionService
 from app.api.dependencies import get_current_user, require_permission
@@ -160,6 +163,27 @@ async def create_election(
     )
 
     return new_election
+
+
+# ============================================
+# Ballot Templates (must be before /{election_id} wildcard)
+# ============================================
+
+@router.get("/templates/ballot-items", response_model=BallotTemplatesResponse)
+async def get_ballot_templates(
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Get available ballot item templates
+
+    Returns pre-configured templates for common ballot items like
+    membership approvals, officer elections, and general resolutions.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    templates = ElectionService.get_ballot_templates()
+    return BallotTemplatesResponse(templates=templates)
 
 
 @router.get("/{election_id}", response_model=ElectionResponse)
@@ -1050,3 +1074,99 @@ async def get_election_forensics(
     logger.info(f"Forensics report requested | election={election_id} by={current_user.id}")
 
     return report
+
+
+# ============================================
+# Meeting Attendance Endpoints
+# ============================================
+
+@router.get("/{election_id}/attendees")
+async def get_attendees(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Get the attendance list for an election/meeting
+
+    **Authentication required**
+    **Requires permission: elections.view**
+    """
+    service = ElectionService(db)
+    attendees = await service.get_attendees(election_id, current_user.organization_id)
+
+    if attendees is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found"
+        )
+
+    return {"attendees": attendees, "total": len(attendees)}
+
+
+@router.post("/{election_id}/attendees", response_model=AttendeeCheckInResponse, status_code=status.HTTP_201_CREATED)
+async def check_in_attendee(
+    election_id: UUID,
+    check_in: AttendeeCheckIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Check in a member as present at the meeting
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    attendee, error = await service.check_in_attendee(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        user_id=UUID(check_in.user_id),
+        checked_in_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    # Get updated total
+    attendees = await service.get_attendees(election_id, current_user.organization_id)
+
+    return AttendeeCheckInResponse(
+        success=True,
+        attendee=attendee,
+        message=f"{attendee['name']} checked in successfully",
+        total_attendees=len(attendees) if attendees else 1,
+    )
+
+
+@router.delete("/{election_id}/attendees/{user_id}", status_code=status.HTTP_200_OK)
+async def remove_attendee(
+    election_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Remove a member from the attendance list
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    success, error = await service.remove_attendee(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        user_id=user_id,
+        removed_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return {"success": True, "message": "Attendee removed"}

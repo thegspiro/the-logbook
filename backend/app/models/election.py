@@ -123,6 +123,11 @@ class Election(Base):
     # the election closes to make de-anonymization impossible.
     voter_anonymity_salt = Column(String(64), nullable=True)
 
+    # Meeting attendance tracking
+    # Format: [{"user_id": "abc-123", "name": "John Doe", "checked_in_at": "2026-02-10T09:00:00",
+    #           "checked_in_by": "user-456"}]
+    attendees = Column(JSON, nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",

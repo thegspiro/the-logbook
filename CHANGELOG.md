@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Enhanced - Ballot Builder, Meeting Attendance & Member Class Eligibility (2026-02-12)
+
+#### Meeting Attendance Tracking
+- **Attendance management endpoints**: `POST /elections/{id}/attendees` (check in), `DELETE /elections/{id}/attendees/{user_id}` (remove), `GET /elections/{id}/attendees` (list)
+- **`attendees` JSON column** on Election model to track who is present at meetings
+- **Audit logging**: All attendance check-ins and removals are logged to the tamper-proof audit trail
+
+#### Member Class Eligibility System
+- **Extended `_user_has_role_type()`** with member class categories: `regular` (active non-probationary), `life` (life_member role), `probationary` (probationary status)
+- **Per-ballot-item eligibility**: Each ballot item can specify which member classes may vote (e.g., only regular + life members for membership approvals)
+- **Attendance requirement**: Ballot items can require meeting attendance (`require_attendance` flag) — voters must be checked in to participate
+- **Combined checks**: Voting eligibility now evaluates both member class AND attendance for each ballot item
+
+#### Ballot Templates API
+- **7 pre-configured templates**: Probationary to Regular, Admin Member Acceptance, Officer Election, Board Election, General Resolution, Bylaw Amendment, Budget Approval
+- **`GET /elections/templates/ballot-items`** endpoint returns templates with title/description placeholders
+- **One-click creation**: Secretary selects a template, fills in the name/topic, and the ballot item is created with correct eligibility rules
+
+#### Ballot Builder UI (`BallotBuilder.tsx`)
+- **Template picker**: Visual grid of available templates with eligibility badges
+- **Custom item form**: Create custom ballot items with configurable type, vote type, voter eligibility, and attendance requirements
+- **Reorder and remove**: Drag items up/down, remove unwanted items
+- **Live preview**: Shows title preview as secretary types the name/topic
+
+#### Meeting Attendance UI (`MeetingAttendance.tsx`)
+- **Check-in interface**: Search members by name or badge number, one-click check-in
+- **Attendance display**: Green pills showing checked-in members with timestamps
+- **Attendance percentage**: Shows percentage of organization members present
+- **Remove capability**: Remove accidentally checked-in members
+
+#### Database Migration
+- Migration `20260212_0400`: Adds `attendees` JSON column to elections table
+
 ### Enhanced - Elections Audit Logging & Ballot Forensics (2026-02-12)
 
 #### Tamper-Proof Audit Logging

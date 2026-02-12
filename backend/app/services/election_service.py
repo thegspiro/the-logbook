@@ -73,10 +73,15 @@ class ElectionService:
         - "all" - everyone is eligible
         - "operational" - users with operational roles (firefighter, driver, officer roles)
         - "administrative" - users with administrative roles (secretary, treasurer, etc.)
+        - "regular" - active members who are not probationary (regular + life)
+        - "life" - life members only
+        - "probationary" - probationary members only
         - Specific role slugs like "chief", "president", etc.
         """
         if not role_types or "all" in role_types:
             return True
+
+        from app.models.user import UserStatus
 
         user_role_slugs = [role.slug for role in user.roles]
 
@@ -97,7 +102,237 @@ class ElectionService:
             if any(slug in administrative_roles for slug in user_role_slugs):
                 return True
 
+        # Member class categories based on user status
+        # "regular" = active members who are not probationary (includes life members)
+        if "regular" in role_types:
+            if user.status == UserStatus.ACTIVE:
+                return True
+
+        # "life" = members with a "life_member" role slug
+        if "life" in role_types:
+            if "life_member" in user_role_slugs:
+                return True
+
+        # "probationary" = members with probationary status
+        if "probationary" in role_types:
+            if user.status == UserStatus.PROBATIONARY:
+                return True
+
         return False
+
+    def _is_user_attending(self, user_id: str, election: Election) -> bool:
+        """Check if a user is checked in as present at the meeting."""
+        if not election.attendees:
+            return False
+        return any(a.get("user_id") == str(user_id) for a in election.attendees)
+
+    # ------------------------------------------------------------------
+    # Meeting attendance management
+    # ------------------------------------------------------------------
+
+    async def check_in_attendee(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        user_id: UUID,
+        checked_in_by: UUID,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        Check in a member as present at the meeting for this election.
+
+        Returns: (attendee_record, error_message)
+        """
+        # Get the election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+
+        # Get the user being checked in
+        user_result = await self.db.execute(
+            select(User).where(User.id == user_id).where(User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return None, "User not found"
+
+        # Initialize attendees list
+        attendees = election.attendees or []
+
+        # Check if already checked in
+        if any(a.get("user_id") == str(user_id) for a in attendees):
+            return None, "Member is already checked in"
+
+        # Create attendee record
+        attendee_record = {
+            "user_id": str(user_id),
+            "name": user.full_name,
+            "checked_in_at": datetime.utcnow().isoformat(),
+            "checked_in_by": str(checked_in_by),
+        }
+        attendees.append(attendee_record)
+        election.attendees = attendees
+
+        await self.db.commit()
+        await self.db.refresh(election)
+
+        logger.info(f"Attendee checked in | election={election_id} user={user_id} by={checked_in_by}")
+        await self._audit("meeting_attendee_checked_in", {
+            "election_id": str(election_id),
+            "user_id": str(user_id),
+            "name": user.full_name,
+        }, user_id=str(checked_in_by))
+
+        return attendee_record, None
+
+    async def remove_attendee(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        user_id: UUID,
+        removed_by: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Remove a member from the attendance list.
+
+        Returns: (success, error_message)
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return False, "Election not found"
+
+        attendees = election.attendees or []
+        original_count = len(attendees)
+        attendees = [a for a in attendees if a.get("user_id") != str(user_id)]
+
+        if len(attendees) == original_count:
+            return False, "Member is not in the attendance list"
+
+        election.attendees = attendees
+        await self.db.commit()
+
+        logger.info(f"Attendee removed | election={election_id} user={user_id} by={removed_by}")
+        await self._audit("meeting_attendee_removed", {
+            "election_id": str(election_id),
+            "user_id": str(user_id),
+        }, user_id=str(removed_by))
+
+        return True, None
+
+    async def get_attendees(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Optional[List[Dict]]:
+        """Get the attendance list for an election."""
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None
+        return election.attendees or []
+
+    # ------------------------------------------------------------------
+    # Ballot templates
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_ballot_templates() -> List[Dict]:
+        """
+        Return the available ballot item templates.
+
+        Templates cover common fire department meeting agenda items that
+        the secretary can drop onto a ballot with one click.
+        """
+        return [
+            {
+                "id": "probationary_to_regular",
+                "name": "Probationary to Regular Member",
+                "description": "Vote to confirm the transition of a probationary member to regular membership.",
+                "type": "membership_approval",
+                "vote_type": "approval",
+                "eligible_voter_types": ["regular", "life"],
+                "require_attendance": True,
+                "title_template": "Approve {name} for Regular Membership",
+                "description_template": "Vote to approve the transition of {name} from probationary to regular member status.",
+            },
+            {
+                "id": "admin_member_acceptance",
+                "name": "Accept Administrative Member",
+                "description": "Vote to accept a new administrative (non-operational) member into the roster.",
+                "type": "membership_approval",
+                "vote_type": "approval",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "Accept {name} as Administrative Member",
+                "description_template": "Vote to accept {name} into the organization as an administrative member.",
+            },
+            {
+                "id": "officer_election",
+                "name": "Officer Election",
+                "description": "Elect an officer for a specific position. Only operational members vote for operational officers.",
+                "type": "officer_election",
+                "vote_type": "candidate_selection",
+                "eligible_voter_types": ["operational"],
+                "require_attendance": True,
+                "title_template": "Election for {name}",
+                "description_template": "Vote for the {name} position.",
+            },
+            {
+                "id": "board_election",
+                "name": "Board/Administrative Election",
+                "description": "Elect a board or administrative position. All members may vote.",
+                "type": "officer_election",
+                "vote_type": "candidate_selection",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "Election for {name}",
+                "description_template": "Vote for the {name} position.",
+            },
+            {
+                "id": "general_resolution",
+                "name": "General Resolution",
+                "description": "A general yes/no vote on any topic. All present members can vote.",
+                "type": "general_vote",
+                "vote_type": "approval",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "{name}",
+                "description_template": None,
+            },
+            {
+                "id": "bylaw_amendment",
+                "name": "Bylaw Amendment",
+                "description": "Vote on a proposed change to the organization's bylaws. Typically requires supermajority.",
+                "type": "general_vote",
+                "vote_type": "approval",
+                "eligible_voter_types": ["regular", "life"],
+                "require_attendance": True,
+                "title_template": "Bylaw Amendment: {name}",
+                "description_template": "Vote on the proposed bylaw amendment regarding {name}.",
+            },
+            {
+                "id": "budget_approval",
+                "name": "Budget Approval",
+                "description": "Vote to approve a budget or expenditure. All present members can vote.",
+                "type": "general_vote",
+                "vote_type": "approval",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "Approve {name}",
+                "description_template": "Vote to approve the proposed budget/expenditure: {name}.",
+            },
+        ]
 
     async def check_voter_eligibility(
         self, user_id: UUID, election_id: UUID, organization_id: UUID, position: Optional[str] = None
@@ -192,6 +427,34 @@ class ElectionService:
                         positions_remaining=[],
                         reason=f"You do not have the required role type to vote for {position}",
                     )
+
+        # Check ballot item eligibility (member class + attendance)
+        if position and election.ballot_items:
+            matching_items = [
+                item for item in election.ballot_items
+                if item.get("position") == position or item.get("title") == position
+            ]
+            for item in matching_items:
+                # Check member class / role eligibility
+                eligible_types = item.get("eligible_voter_types", ["all"])
+                if not await self._user_has_role_type(user, eligible_types):
+                    return VoterEligibility(
+                        is_eligible=False,
+                        has_voted=False,
+                        positions_voted=[],
+                        positions_remaining=[],
+                        reason=f"Your member class is not eligible to vote on this item",
+                    )
+                # Check attendance requirement
+                if item.get("require_attendance", False):
+                    if not self._is_user_attending(str(user_id), election):
+                        return VoterEligibility(
+                            is_eligible=False,
+                            has_voted=False,
+                            positions_voted=[],
+                            positions_remaining=[],
+                            reason="You must be checked in as present at the meeting to vote on this item",
+                        )
 
         # Check what positions they've already voted for
         # For anonymous elections, lookup by voter_hash since voter_id is NULL

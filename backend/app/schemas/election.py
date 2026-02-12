@@ -24,9 +24,10 @@ class BallotItem(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     position: Optional[str] = Field(None, description="Position name for officer elections")
-    eligible_voter_types: List[str] = Field(default=["all"], description="Role slugs like 'operational', 'administrative', or 'all'")
+    eligible_voter_types: List[str] = Field(default=["all"], description="Member class or role slug: 'all', 'regular', 'life', 'probationary', 'operational', 'administrative', or specific role slugs")
     vote_type: str = Field(default="approval", description="approval, candidate_selection")
     required_for_approval: Optional[int] = Field(None, description="Number of yes votes required")
+    require_attendance: bool = Field(default=False, description="If true, voter must be checked in as present at the meeting")
 
 
 class PositionEligibility(BaseModel):
@@ -46,6 +47,7 @@ class ElectionBase(BaseModel):
     ballot_items: Optional[List[BallotItem]] = Field(default=None, description="Structured ballot items with per-item eligibility")
     position_eligibility: Optional[Dict[str, PositionEligibility]] = Field(default=None, description="Eligibility rules per position")
     meeting_date: Optional[datetime] = Field(default=None, description="Meeting date for ballot")
+    attendees: Optional[List[Dict[str, Any]]] = Field(default=None, description="Meeting attendees checked in for voting")
     start_date: datetime
     end_date: datetime
     anonymous_voting: bool = Field(default=True)
@@ -351,3 +353,46 @@ class ElectionRollbackResponse(BaseModel):
     election: ElectionResponse
     message: str
     notifications_sent: int
+
+
+# Attendance Schemas
+
+class AttendeeRecord(BaseModel):
+    """Schema for a meeting attendee"""
+    user_id: str
+    name: str
+    checked_in_at: str
+    checked_in_by: str
+
+
+class AttendeeCheckIn(BaseModel):
+    """Schema for checking in an attendee"""
+    user_id: str = Field(..., description="User ID of the member to check in")
+
+
+class AttendeeCheckInResponse(BaseModel):
+    """Response after checking in an attendee"""
+    success: bool
+    attendee: AttendeeRecord
+    message: str
+    total_attendees: int
+
+
+# Ballot Template Schemas
+
+class BallotTemplate(BaseModel):
+    """Schema for a pre-configured ballot item template"""
+    id: str
+    name: str
+    description: str
+    type: str
+    vote_type: str
+    eligible_voter_types: List[str]
+    require_attendance: bool
+    title_template: str = Field(..., description="Template string for the ballot item title, may contain {name} placeholder")
+    description_template: Optional[str] = None
+
+
+class BallotTemplatesResponse(BaseModel):
+    """Response containing available ballot templates"""
+    templates: List[BallotTemplate]

@@ -1217,6 +1217,45 @@ export const electionService = {
     const response = await api.get<import('../types/election').VoteIntegrityResult>(`/elections/${electionId}/integrity`);
     return response.data;
   },
+
+  // ========================================
+  // Meeting Attendance
+  // ========================================
+
+  /**
+   * Get attendees for an election/meeting
+   */
+  async getAttendees(electionId: string): Promise<{ attendees: import('../types/election').Attendee[]; total: number }> {
+    const response = await api.get(`/elections/${electionId}/attendees`);
+    return response.data;
+  },
+
+  /**
+   * Check in a member as present at the meeting
+   */
+  async checkInAttendee(electionId: string, userId: string): Promise<import('../types/election').AttendeeCheckInResponse> {
+    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees`, { user_id: userId });
+    return response.data;
+  },
+
+  /**
+   * Remove a member from the attendance list
+   */
+  async removeAttendee(electionId: string, userId: string): Promise<void> {
+    await api.delete(`/elections/${electionId}/attendees/${userId}`);
+  },
+
+  // ========================================
+  // Ballot Templates
+  // ========================================
+
+  /**
+   * Get available ballot item templates
+   */
+  async getBallotTemplates(): Promise<import('../types/election').BallotTemplate[]> {
+    const response = await api.get<{ templates: import('../types/election').BallotTemplate[] }>('/elections/templates/ballot-items');
+    return response.data.templates;
+  },
 };
 
 export const eventService = {

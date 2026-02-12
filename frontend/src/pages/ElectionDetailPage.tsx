@@ -12,6 +12,8 @@ import type { Election } from '../types/election';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
+import { BallotBuilder } from '../components/BallotBuilder';
+import { MeetingAttendance } from '../components/MeetingAttendance';
 import { useAuthStore } from '../stores/authStore';
 
 export const ElectionDetailPage: React.FC = () => {
@@ -381,6 +383,28 @@ export const ElectionDetailPage: React.FC = () => {
       {canManage && electionId && (
         <div className="mb-6">
           <CandidateManagement electionId={electionId} election={election} />
+        </div>
+      )}
+
+      {/* Ballot Builder (Admin - draft/open elections) */}
+      {canManage && electionId && election.status !== 'cancelled' && (
+        <div className="mb-6">
+          <BallotBuilder
+            electionId={electionId}
+            election={election}
+            onUpdate={setElection}
+          />
+        </div>
+      )}
+
+      {/* Meeting Attendance (Admin) */}
+      {canManage && electionId && election.status !== 'cancelled' && (
+        <div className="mb-6">
+          <MeetingAttendance
+            electionId={electionId}
+            election={election}
+            onUpdate={setElection}
+          />
         </div>
       )}
 
