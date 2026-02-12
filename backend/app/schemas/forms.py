@@ -187,6 +187,8 @@ class PublicFormSubmissionCreate(BaseModel):
     data: Dict[str, Any]  # {field_id: value}
     submitter_name: Optional[str] = Field(None, max_length=255)
     submitter_email: Optional[str] = Field(None, max_length=255)
+    # Honeypot field - hidden from real users, bots will fill it in
+    hp_website: Optional[str] = Field(None, alias="website")
 
 
 class FormSubmissionResponse(BaseModel):

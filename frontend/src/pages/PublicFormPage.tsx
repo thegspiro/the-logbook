@@ -1,7 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';
+
+// Sanitize any text content that came from the server
+const clean = (text: string | null | undefined): string => {
+  if (!text) return '';
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+};
 
 const PublicFormPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -14,6 +21,8 @@ const PublicFormPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState('');
+  // Honeypot ref - hidden from real users, bots will fill it
+  const honeypotRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (slug) {
@@ -61,7 +70,8 @@ const PublicFormPage = () => {
         slug!,
         formData,
         submitterName || undefined,
-        submitterEmail || undefined
+        submitterEmail || undefined,
+        honeypotRef.current?.value || undefined
       );
       setSubmitted(true);
       setSubmitMessage(result.message);
@@ -224,8 +234,8 @@ const PublicFormPage = () => {
       case 'section_header':
         return (
           <div className="border-b border-gray-200 pb-2 -mb-2">
-            <h3 className="text-lg font-semibold text-gray-800">{field.label}</h3>
-            {field.help_text && <p className="text-sm text-gray-500 mt-1">{field.help_text}</p>}
+            <h3 className="text-lg font-semibold text-gray-800">{clean(field.label)}</h3>
+            {field.help_text && <p className="text-sm text-gray-500 mt-1">{clean(field.help_text)}</p>}
           </div>
         );
 
@@ -308,11 +318,11 @@ const PublicFormPage = () => {
         <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
             {form.organization_name && (
-              <p className="text-blue-100 text-sm mb-1">{form.organization_name}</p>
+              <p className="text-blue-100 text-sm mb-1">{clean(form.organization_name)}</p>
             )}
-            <h1 className="text-2xl font-bold text-white">{form.name}</h1>
+            <h1 className="text-2xl font-bold text-white">{clean(form.name)}</h1>
             {form.description && (
-              <p className="text-blue-100 mt-2">{form.description}</p>
+              <p className="text-blue-100 mt-2">{clean(form.description)}</p>
             )}
           </div>
         </div>
@@ -366,16 +376,29 @@ const PublicFormPage = () => {
               return (
                 <div key={field.id} className={field.width === 'half' ? 'w-1/2 inline-block pr-2' : field.width === 'third' ? 'w-1/3 inline-block pr-2' : ''}>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {field.label}
+                    {clean(field.label)}
                     {field.required && <span className="text-red-500 ml-1">*</span>}
                   </label>
                   {field.help_text && (
-                    <p className="text-xs text-gray-500 mb-2">{field.help_text}</p>
+                    <p className="text-xs text-gray-500 mb-2">{clean(field.help_text)}</p>
                   )}
                   {renderField(field)}
                 </div>
               );
             })}
+          </div>
+
+          {/* Honeypot field - hidden from real users, catches bots */}
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px', opacity: 0, height: 0, overflow: 'hidden' }}>
+            <label htmlFor="website">Website</label>
+            <input
+              type="text"
+              id="website"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              ref={honeypotRef}
+            />
           </div>
 
           {/* Submit */}

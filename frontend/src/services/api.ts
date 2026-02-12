@@ -1823,10 +1823,15 @@ export const publicFormsService = {
     return response.data;
   },
 
-  async submitForm(slug: string, data: Record<string, unknown>, submitterName?: string, submitterEmail?: string): Promise<PublicFormSubmissionResponse> {
+  async submitForm(slug: string, data: Record<string, unknown>, submitterName?: string, submitterEmail?: string, honeypot?: string): Promise<PublicFormSubmissionResponse> {
+    const payload: Record<string, unknown> = { data, submitter_name: submitterName, submitter_email: submitterEmail };
+    // Honeypot field - only sent if bot filled it in (real users never will)
+    if (honeypot) {
+      payload.website = honeypot;
+    }
     const response = await axios.post<PublicFormSubmissionResponse>(
       `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}/submit`,
-      { data, submitter_name: submitterName, submitter_email: submitterEmail }
+      payload
     );
     return response.data;
   },

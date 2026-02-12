@@ -22,7 +22,10 @@ import {
   ExternalLink,
   Plug,
   Check,
+  Download,
+  QrCode,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
 import {
   formsService,
@@ -982,6 +985,69 @@ const FormsPage: React.FC = () => {
                                   <ExternalLink className="w-4 h-4" />
                                 </a>
                               </div>
+                            </div>
+
+                            {/* QR Code */}
+                            <div>
+                              <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center space-x-2">
+                                <QrCode className="w-4 h-4" />
+                                <span>QR Code</span>
+                              </label>
+                              <div className="flex flex-col items-center p-4 bg-white rounded-lg">
+                                <QRCodeSVG
+                                  id={`qr-${form.public_slug}`}
+                                  value={getPublicUrl(form.public_slug)}
+                                  size={200}
+                                  level="H"
+                                  includeMargin
+                                />
+                              </div>
+                              <div className="flex items-center justify-center space-x-2 mt-2">
+                                <button
+                                  onClick={() => {
+                                    const svg = document.getElementById(`qr-${form.public_slug}`);
+                                    if (!svg) return;
+                                    const svgData = new XMLSerializer().serializeToString(svg);
+                                    const canvas = document.createElement('canvas');
+                                    const ctx = canvas.getContext('2d');
+                                    const img = new Image();
+                                    img.onload = () => {
+                                      canvas.width = img.width;
+                                      canvas.height = img.height;
+                                      ctx?.drawImage(img, 0, 0);
+                                      const a = document.createElement('a');
+                                      a.download = `${form.name.replace(/[^a-z0-9]/gi, '_')}_qr.png`;
+                                      a.href = canvas.toDataURL('image/png');
+                                      a.click();
+                                    };
+                                    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                                  }}
+                                  className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download PNG</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const svg = document.getElementById(`qr-${form.public_slug}`);
+                                    if (!svg) return;
+                                    const svgData = new XMLSerializer().serializeToString(svg);
+                                    const blob = new Blob([svgData], { type: 'image/svg+xml' });
+                                    const a = document.createElement('a');
+                                    a.download = `${form.name.replace(/[^a-z0-9]/gi, '_')}_qr.svg`;
+                                    a.href = URL.createObjectURL(blob);
+                                    a.click();
+                                    URL.revokeObjectURL(a.href);
+                                  }}
+                                  className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download SVG</span>
+                                </button>
+                              </div>
+                              <p className="text-slate-400 text-xs text-center mt-2">
+                                Print this QR code and place it where users can scan to access the form.
+                              </p>
                             </div>
 
                             {form.status !== 'published' && (

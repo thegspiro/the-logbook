@@ -24,13 +24,157 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.core.security_middleware import InputSanitizer
+
+import re
+import html as html_lib
 
 
 class FormsService:
     """Service for forms management"""
 
+    # Maximum lengths for submitted field values
+    MAX_TEXT_LENGTH = 5000
+    MAX_TEXTAREA_LENGTH = 50000
+    MAX_NAME_LENGTH = 255
+    MAX_EMAIL_LENGTH = 254
+
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ============================================
+    # Input Sanitization & Validation
+    # ============================================
+
+    @staticmethod
+    def _sanitize_submission_data(
+        data: Dict[str, Any], fields: list
+    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        """
+        Sanitize all submitted form values against their field definitions.
+        Returns (sanitized_data, error_message).
+        """
+        field_map = {str(f.id): f for f in fields}
+        sanitized = {}
+
+        for field_id, value in data.items():
+            if field_id not in field_map:
+                # Ignore values for unknown field IDs (don't store arbitrary keys)
+                continue
+
+            field = field_map[field_id]
+
+            # Coerce to string for sanitization
+            if value is None:
+                sanitized[field_id] = ""
+                continue
+
+            str_value = str(value)
+
+            # Remove null bytes
+            str_value = str_value.replace('\x00', '')
+
+            # HTML-escape to prevent stored XSS
+            str_value = html_lib.escape(str_value)
+
+            # Enforce length limits by field type
+            field_type = field.field_type if isinstance(field.field_type, str) else field.field_type.value
+            if field_type == "textarea":
+                max_len = field.max_length or FormsService.MAX_TEXTAREA_LENGTH
+            elif field_type == "email":
+                max_len = FormsService.MAX_EMAIL_LENGTH
+            else:
+                max_len = field.max_length or FormsService.MAX_TEXT_LENGTH
+
+            if len(str_value) > max_len:
+                return {}, f"Value for '{field.label}' exceeds maximum length of {max_len} characters"
+
+            # Enforce min_length if set
+            if field.min_length and field.required and len(str_value.strip()) < field.min_length:
+                return {}, f"Value for '{field.label}' must be at least {field.min_length} characters"
+
+            # Type-specific validation
+            if field_type == "email" and str_value.strip():
+                email_pattern = r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$'
+                raw_value = html_lib.unescape(str_value)
+                if not re.match(email_pattern, raw_value):
+                    return {}, f"Invalid email format for '{field.label}'"
+                # Check for header injection
+                if '\n' in raw_value or '\r' in raw_value:
+                    return {}, f"Invalid email format for '{field.label}'"
+
+            if field_type == "phone" and str_value.strip():
+                raw_value = html_lib.unescape(str_value)
+                digits_only = re.sub(r'[^\d+\-() ]', '', raw_value)
+                if digits_only != raw_value:
+                    return {}, f"Invalid phone number for '{field.label}'"
+
+            if field_type == "number" and str_value.strip():
+                try:
+                    num_val = float(html_lib.unescape(str_value))
+                    if field.min_value is not None and num_val < field.min_value:
+                        return {}, f"Value for '{field.label}' must be at least {field.min_value}"
+                    if field.max_value is not None and num_val > field.max_value:
+                        return {}, f"Value for '{field.label}' must be at most {field.max_value}"
+                except ValueError:
+                    return {}, f"Invalid number for '{field.label}'"
+
+            if field_type in ("select", "radio") and str_value.strip():
+                # Validate against allowed options
+                if field.options:
+                    allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
+                    raw_value = html_lib.unescape(str_value)
+                    if raw_value not in allowed:
+                        return {}, f"Invalid option for '{field.label}'"
+
+            if field_type == "checkbox" and str_value.strip():
+                # Validate each comma-separated value against allowed options
+                if field.options:
+                    allowed = {opt.value if hasattr(opt, 'value') else opt.get('value', '') for opt in field.options}
+                    raw_value = html_lib.unescape(str_value)
+                    for part in raw_value.split(','):
+                        if part and part not in allowed:
+                            return {}, f"Invalid option for '{field.label}'"
+
+            # Validation pattern check
+            if field.validation_pattern and str_value.strip():
+                try:
+                    raw_value = html_lib.unescape(str_value)
+                    if not re.match(field.validation_pattern, raw_value):
+                        return {}, f"Value for '{field.label}' does not match the required format"
+                except re.error:
+                    pass  # Skip invalid regex patterns
+
+            sanitized[field_id] = str_value
+
+        return sanitized, None
+
+    @staticmethod
+    def _sanitize_submitter_info(
+        name: Optional[str], email: Optional[str]
+    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Sanitize submitter name and email.
+        Returns (sanitized_name, sanitized_email, error).
+        """
+        clean_name = None
+        clean_email = None
+
+        if name:
+            clean_name = InputSanitizer.sanitize_string(name, max_length=255)
+
+        if email:
+            raw_email = email.strip()[:254]
+            # Basic format check
+            if raw_email:
+                email_pattern = r'^[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$'
+                if not re.match(email_pattern, raw_email):
+                    return None, None, "Invalid submitter email format"
+                if '\n' in raw_email or '\r' in raw_email:
+                    return None, None, "Invalid submitter email format"
+                clean_email = html_lib.escape(raw_email.lower())
+
+        return clean_name, clean_email, None
 
     # ============================================
     # Form Management
@@ -323,11 +467,16 @@ class FormsService:
                 if field.required and str(field.id) not in data:
                     return None, f"Required field '{field.label}' is missing"
 
+            # Sanitize and validate all submitted values
+            sanitized_data, sanitize_error = self._sanitize_submission_data(data, form.fields)
+            if sanitize_error:
+                return None, sanitize_error
+
             submission = FormSubmission(
                 organization_id=organization_id,
                 form_id=form_id,
                 submitted_by=submitted_by,
-                data=data,
+                data=sanitized_data,
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
@@ -351,9 +500,15 @@ class FormsService:
         submitter_email: Optional[str] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
+        honeypot_value: Optional[str] = None,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
         """Submit a public form (no authentication required)"""
         try:
+            # Honeypot bot detection - if the hidden field has a value, it's a bot
+            if honeypot_value:
+                # Silently reject but return success to not tip off the bot
+                return None, None
+
             form = await self.get_form_by_slug(slug)
             if not form:
                 return None, "Form not found or not available"
@@ -363,12 +518,24 @@ class FormsService:
                 if field.required and str(field.id) not in data:
                     return None, f"Required field '{field.label}' is missing"
 
+            # Sanitize and validate all submitted values
+            sanitized_data, sanitize_error = self._sanitize_submission_data(data, form.fields)
+            if sanitize_error:
+                return None, sanitize_error
+
+            # Sanitize submitter info
+            clean_name, clean_email, info_error = self._sanitize_submitter_info(
+                submitter_name, submitter_email
+            )
+            if info_error:
+                return None, info_error
+
             submission = FormSubmission(
                 organization_id=form.organization_id,
                 form_id=form.id,
-                data=data,
-                submitter_name=submitter_name,
-                submitter_email=submitter_email,
+                data=sanitized_data,
+                submitter_name=clean_name,
+                submitter_email=clean_email,
                 is_public_submission=True,
                 ip_address=ip_address,
                 user_agent=user_agent,
