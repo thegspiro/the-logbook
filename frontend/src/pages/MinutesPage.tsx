@@ -13,7 +13,7 @@ import {
   FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { minutesService } from '../services/api';
+import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type {
   MinutesListItem,
@@ -21,6 +21,7 @@ import type {
   MeetingType,
   MinutesSearchResult,
 } from '../types/minutes';
+import type { EventListItem } from '../types/event';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800' },
@@ -52,6 +53,8 @@ const MinutesPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [meetingEvents, setMeetingEvents] = useState<EventListItem[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
   const [form, setForm] = useState({
     title: '',
@@ -61,11 +64,23 @@ const MinutesPage: React.FC = () => {
     location: '',
     calledBy: '',
     notes: '',
+    eventId: '',
   });
 
   useEffect(() => {
     fetchData();
   }, [typeFilter, statusFilter]);
+
+  // Fetch meeting events when create modal opens
+  useEffect(() => {
+    if (showCreateModal && meetingEvents.length === 0) {
+      setLoadingEvents(true);
+      eventService.getEvents({ event_type: 'business_meeting' })
+        .then(events => setMeetingEvents(events))
+        .catch(() => {}) // non-critical
+        .finally(() => setLoadingEvents(false));
+    }
+  }, [showCreateModal]);
 
   const fetchData = async () => {
     try {
@@ -134,10 +149,11 @@ const MinutesPage: React.FC = () => {
         location: form.location || undefined,
         called_by: form.calledBy || undefined,
         notes: form.notes || undefined,
+        event_id: form.eventId || undefined,
       });
 
       setShowCreateModal(false);
-      setForm({ title: '', meetingType: 'business', meetingDate: '', meetingTime: '', location: '', calledBy: '', notes: '' });
+      setForm({ title: '', meetingType: 'business', meetingDate: '', meetingTime: '', location: '', calledBy: '', notes: '', eventId: '' });
       toast.success('Minutes created successfully');
       navigate(`/minutes/${created.id}`);
     } catch (err: any) {
@@ -463,6 +479,46 @@ const MinutesPage: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   placeholder="e.g., Station 1 Meeting Room"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Link to Event</label>
+                <select
+                  value={form.eventId}
+                  onChange={(e) => {
+                    const eventId = e.target.value;
+                    setForm(prev => ({ ...prev, eventId }));
+                    if (eventId) {
+                      const ev = meetingEvents.find(ev => ev.id === eventId);
+                      if (ev) {
+                        const start = new Date(ev.start_datetime);
+                        setForm(prev => ({
+                          ...prev,
+                          eventId,
+                          title: prev.title || ev.title,
+                          meetingDate: prev.meetingDate || start.toISOString().split('T')[0],
+                          meetingTime: prev.meetingTime || start.toTimeString().slice(0, 5),
+                          location: prev.location || ev.location || '',
+                        }));
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <option value="">None — standalone minutes</option>
+                  {loadingEvents ? (
+                    <option disabled>Loading events...</option>
+                  ) : (
+                    meetingEvents.map(ev => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.title} ({new Date(ev.start_datetime).toLocaleDateString()})
+                      </option>
+                    ))
+                  )}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Optionally link these minutes to a scheduled meeting event. Fields will auto-populate.
+                </p>
               </div>
 
               <div>

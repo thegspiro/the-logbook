@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { minutesService } from '../services/api';
+import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type {
   MeetingMinutes,
@@ -16,6 +16,7 @@ import type {
   ActionItemCreate,
   ActionItemPriority,
 } from '../types/minutes';
+import type { Event as EventDetail, EventListItem } from '../types/event';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800',
@@ -85,6 +86,12 @@ export const MinutesDetailPage: React.FC = () => {
     description: '', assignee_name: '', due_date: undefined, priority: 'medium',
   });
 
+  // Linked event
+  const [linkedEvent, setLinkedEvent] = useState<EventDetail | null>(null);
+  const [showLinkEventModal, setShowLinkEventModal] = useState(false);
+  const [availableEvents, setAvailableEvents] = useState<EventListItem[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
   // Approval
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -92,6 +99,17 @@ export const MinutesDetailPage: React.FC = () => {
   useEffect(() => {
     if (minutesId) fetchMinutes();
   }, [minutesId]);
+
+  // Fetch linked event details when minutes load
+  useEffect(() => {
+    if (minutes?.event_id) {
+      eventService.getEvent(minutes.event_id)
+        .then(ev => setLinkedEvent(ev))
+        .catch(() => setLinkedEvent(null));
+    } else {
+      setLinkedEvent(null);
+    }
+  }, [minutes?.event_id]);
 
   const fetchMinutes = async () => {
     if (!minutesId) return;
@@ -219,6 +237,45 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
+  const handleOpenLinkEvent = async () => {
+    setShowLinkEventModal(true);
+    if (availableEvents.length === 0) {
+      setLoadingEvents(true);
+      try {
+        const events = await eventService.getEvents({ event_type: 'business_meeting' });
+        setAvailableEvents(events);
+      } catch {
+        toast.error('Failed to load events');
+      } finally {
+        setLoadingEvents(false);
+      }
+    }
+  };
+
+  const handleLinkEvent = async (eventId: string) => {
+    if (!minutesId) return;
+    try {
+      const updated = await minutesService.updateMinutes(minutesId, { event_id: eventId });
+      setMinutes(updated);
+      setShowLinkEventModal(false);
+      toast.success('Linked to event');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to link event');
+    }
+  };
+
+  const handleUnlinkEvent = async () => {
+    if (!minutesId) return;
+    try {
+      const updated = await minutesService.updateMinutes(minutesId, { event_id: '' as any });
+      setMinutes(updated);
+      setLinkedEvent(null);
+      toast.success('Event unlinked');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to unlink event');
+    }
+  };
+
   const handleDelete = async () => {
     if (!minutesId || !confirm('Delete these draft minutes? This cannot be undone.')) return;
     try {
@@ -283,6 +340,56 @@ export const MinutesDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Linked Event */}
+      {(linkedEvent || (canManage && isEditable)) && (
+        <div className="bg-white shadow rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-medium text-gray-700">Linked Meeting Event</h3>
+            {canManage && isEditable && (
+              <div className="flex gap-2">
+                {linkedEvent && (
+                  <button
+                    onClick={handleUnlinkEvent}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Unlink
+                  </button>
+                )}
+                <button
+                  onClick={handleOpenLinkEvent}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  {linkedEvent ? 'Change' : 'Link to Event'}
+                </button>
+              </div>
+            )}
+          </div>
+          {linkedEvent ? (
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">Business Meeting</span>
+              <Link
+                to={`/events/${linkedEvent.id}`}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {linkedEvent.title}
+              </Link>
+              <span className="text-xs text-gray-500">
+                {new Date(linkedEvent.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+              </span>
+              {linkedEvent.location && (
+                <span className="text-xs text-gray-500">{linkedEvent.location}</span>
+              )}
+            </div>
+          ) : (
+            canManage && isEditable && (
+              <p className="mt-1 text-xs text-gray-400 italic">
+                No event linked. Link to a scheduled meeting to connect attendance and event data.
+              </p>
+            )
+          )}
+        </div>
+      )}
 
       {/* Workflow Actions */}
       {canManage && (
@@ -672,6 +779,53 @@ export const MinutesDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Link Event Modal */}
+      {showLinkEventModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-medium text-gray-900">Link to Meeting Event</h3>
+              <button onClick={() => setShowLinkEventModal(false)} className="text-gray-400 hover:text-gray-600">
+                &times;
+              </button>
+            </div>
+            <div className="px-6 py-4 max-h-96 overflow-y-auto">
+              {loadingEvents ? (
+                <p className="text-sm text-gray-500">Loading events...</p>
+              ) : availableEvents.length === 0 ? (
+                <p className="text-sm text-gray-500">No business meeting events found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {availableEvents.map(ev => (
+                    <button
+                      key={ev.id}
+                      onClick={() => handleLinkEvent(ev.id)}
+                      className={`w-full text-left p-3 border rounded-lg hover:bg-cyan-50 hover:border-cyan-300 transition-colors ${
+                        minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-50' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="text-sm font-medium text-gray-900">{ev.title}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {new Date(ev.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {ev.location && ` \u00b7 ${ev.location}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 bg-gray-50 flex justify-end rounded-b-lg">
+              <button
+                onClick={() => setShowLinkEventModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reject Modal */}
       {showRejectModal && (

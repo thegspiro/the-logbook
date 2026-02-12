@@ -167,6 +167,10 @@ class MinuteService:
 
         update_data = data.model_dump(exclude_unset=True)
 
+        # Clear event_id if empty string
+        if "event_id" in update_data and not update_data["event_id"]:
+            update_data["event_id"] = None
+
         # Serialize attendees
         if "attendees" in update_data and update_data["attendees"]:
             update_data["attendees"] = [
