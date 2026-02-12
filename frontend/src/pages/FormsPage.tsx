@@ -17,6 +17,11 @@ import {
   Send,
   Archive,
   Trash2,
+  Globe,
+  Link,
+  ExternalLink,
+  Plug,
+  Check,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import {
@@ -24,7 +29,9 @@ import {
   type FormDef,
   type FormsSummary,
   type FormCreate,
+  type FormDetailDef,
   type SubmissionsListResponse,
+  type FormIntegrationCreate,
 } from '../services/api';
 
 interface StarterTemplate {
@@ -35,6 +42,8 @@ interface StarterTemplate {
   fields: { label: string; field_type: string; required: boolean }[];
   icon: React.ReactNode;
   color: string;
+  isPublic?: boolean;
+  integrationHint?: string;
 }
 
 const STARTER_TEMPLATES: StarterTemplate[] = [
@@ -64,6 +73,33 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
     color: 'text-red-400',
   },
   {
+    id: 'membership-interest',
+    name: 'Membership Interest Form',
+    description: 'Public form for prospective members to express interest in joining your department',
+    category: 'Administration',
+    fields: [
+      { label: 'First Name', field_type: 'text', required: true },
+      { label: 'Last Name', field_type: 'text', required: true },
+      { label: 'Email Address', field_type: 'email', required: true },
+      { label: 'Phone Number', field_type: 'phone', required: true },
+      { label: 'Date of Birth', field_type: 'date', required: false },
+      { label: 'Street Address', field_type: 'text', required: false },
+      { label: 'City', field_type: 'text', required: false },
+      { label: 'State', field_type: 'text', required: false },
+      { label: 'Zip Code', field_type: 'text', required: false },
+      { label: 'Previous Fire/EMS Experience', field_type: 'radio', required: true },
+      { label: 'Experience Details', field_type: 'textarea', required: false },
+      { label: 'Why are you interested in joining?', field_type: 'textarea', required: true },
+      { label: 'How did you hear about us?', field_type: 'select', required: false },
+      { label: 'Availability', field_type: 'select', required: true },
+      { label: 'Additional Information', field_type: 'textarea', required: false },
+    ],
+    icon: <Globe className="w-6 h-6" />,
+    color: 'text-cyan-400',
+    isPublic: true,
+    integrationHint: 'membership_interest',
+  },
+  {
     id: 'equipment-inspection',
     name: 'Equipment Inspection',
     description: 'Pre-use and periodic equipment inspection checklist',
@@ -84,6 +120,27 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
     ],
     icon: <ClipboardCheck className="w-6 h-6" />,
     color: 'text-emerald-400',
+  },
+  {
+    id: 'equipment-assignment',
+    name: 'Equipment Assignment',
+    description: 'Quartermaster form for assigning equipment to members - integrates with inventory',
+    category: 'Operations',
+    fields: [
+      { label: 'Assigned Member', field_type: 'member_lookup', required: true },
+      { label: 'Equipment Item', field_type: 'text', required: true },
+      { label: 'Serial/Asset Number', field_type: 'text', required: true },
+      { label: 'Assignment Date', field_type: 'date', required: true },
+      { label: 'Assignment Type', field_type: 'select', required: true },
+      { label: 'Condition at Assignment', field_type: 'select', required: true },
+      { label: 'Expected Return Date', field_type: 'date', required: false },
+      { label: 'Reason for Assignment', field_type: 'textarea', required: false },
+      { label: 'Acknowledgment', field_type: 'checkbox', required: true },
+      { label: 'Notes', field_type: 'textarea', required: false },
+    ],
+    icon: <Plug className="w-6 h-6" />,
+    color: 'text-orange-400',
+    integrationHint: 'equipment_assignment',
   },
   {
     id: 'vehicle-check',
@@ -147,21 +204,30 @@ const FormsPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<FormCategory>('all');
   const [activeTab, setActiveTab] = useState<'templates' | 'forms' | 'submissions'>('forms');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showIntegrationModal, setShowIntegrationModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   // Data
   const [forms, setForms] = useState<FormDef[]>([]);
   const [summary, setSummary] = useState<FormsSummary | null>(null);
   const [selectedFormSubmissions, setSelectedFormSubmissions] = useState<SubmissionsListResponse | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [selectedFormDetail, setSelectedFormDetail] = useState<FormDetailDef | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     category: 'Operations',
+    is_public: false,
   });
+
+  // Integration state
+  const [integrationTarget, setIntegrationTarget] = useState('membership');
+  const [integrationType, setIntegrationType] = useState('membership_interest');
 
   const loadData = async () => {
     setLoading(true);
@@ -196,9 +262,10 @@ const FormsPage: React.FC = () => {
         name: formData.name,
         description: formData.description || undefined,
         category: formData.category,
+        is_public: formData.is_public,
       });
       setShowCreateModal(false);
-      setFormData({ name: '', description: '', category: 'Operations' });
+      setFormData({ name: '', description: '', category: 'Operations', is_public: false });
       await loadData();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create form';
@@ -215,6 +282,7 @@ const FormsPage: React.FC = () => {
         name: template.name,
         description: template.description,
         category: template.category,
+        is_public: template.isPublic || false,
         fields: template.fields.map((f, i) => ({
           label: f.label,
           field_type: f.field_type,
@@ -263,6 +331,16 @@ const FormsPage: React.FC = () => {
     }
   };
 
+  const handleTogglePublic = async (form: FormDef) => {
+    try {
+      await formsService.updateForm(form.id, { is_public: !form.is_public });
+      await loadData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update form';
+      setError(message);
+    }
+  };
+
   const handleViewSubmissions = async (formId: string) => {
     try {
       const res = await formsService.getSubmissions(formId);
@@ -274,6 +352,63 @@ const FormsPage: React.FC = () => {
       setError(message);
     }
   };
+
+  const handleShareForm = (form: FormDef) => {
+    setSelectedFormDetail(null);
+    setSelectedFormId(form.id);
+    setShowShareModal(true);
+  };
+
+  const handleOpenIntegrationModal = async (formId: string) => {
+    try {
+      const detail = await formsService.getForm(formId);
+      setSelectedFormDetail(detail);
+      setSelectedFormId(formId);
+      setShowIntegrationModal(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load form details';
+      setError(message);
+    }
+  };
+
+  const handleAddIntegration = async () => {
+    if (!selectedFormId) return;
+    try {
+      const data: FormIntegrationCreate = {
+        target_module: integrationTarget,
+        integration_type: integrationType,
+        field_mappings: {},
+        is_active: true,
+      };
+      await formsService.addIntegration(selectedFormId, data);
+      const detail = await formsService.getForm(selectedFormId);
+      setSelectedFormDetail(detail);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add integration';
+      setError(message);
+    }
+  };
+
+  const handleDeleteIntegration = async (integrationId: string) => {
+    if (!selectedFormId) return;
+    try {
+      await formsService.deleteIntegration(selectedFormId, integrationId);
+      const detail = await formsService.getForm(selectedFormId);
+      setSelectedFormDetail(detail);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete integration';
+      setError(message);
+    }
+  };
+
+  const copyPublicUrl = (slug: string) => {
+    const url = `${window.location.origin}/f/${slug}`;
+    navigator.clipboard.writeText(url);
+    setCopiedSlug(slug);
+    setTimeout(() => setCopiedSlug(null), 2000);
+  };
+
+  const getPublicUrl = (slug: string) => `${window.location.origin}/f/${slug}`;
 
   const filteredTemplates = STARTER_TEMPLATES.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -303,7 +438,7 @@ const FormsPage: React.FC = () => {
             <div>
               <h1 className="text-white text-2xl font-bold">Custom Forms</h1>
               <p className="text-slate-400 text-sm">
-                Create custom forms for incident reports, surveys, feedback, and more
+                Create custom forms, public-facing pages, and cross-module integrations
               </p>
             </div>
           </div>
@@ -328,7 +463,7 @@ const FormsPage: React.FC = () => {
 
         {/* Stats */}
         {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-slate-400 text-xs font-medium uppercase">Total Forms</p>
               <p className="text-white text-2xl font-bold mt-1">{summary.total_forms}</p>
@@ -340,6 +475,10 @@ const FormsPage: React.FC = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-slate-400 text-xs font-medium uppercase">Drafts</p>
               <p className="text-yellow-400 text-2xl font-bold mt-1">{summary.draft_forms}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Public Forms</p>
+              <p className="text-cyan-400 text-2xl font-bold mt-1">{summary.public_forms}</p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-slate-400 text-xs font-medium uppercase">Submissions This Month</p>
@@ -460,19 +599,45 @@ const FormsPage: React.FC = () => {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h3 className="text-white font-semibold">{form.name}</h3>
-                        <div className="flex items-center space-x-2 mt-1">
+                        <div className="flex items-center space-x-2 mt-1 flex-wrap gap-y-1">
                           <span className={`px-2 py-0.5 text-xs rounded border ${statusColor(form.status)}`}>
                             {form.status}
                           </span>
                           <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
                             {form.category}
                           </span>
+                          {form.is_public && (
+                            <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30 inline-flex items-center space-x-1">
+                              <Globe className="w-3 h-3" />
+                              <span>Public</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                     {form.description && (
-                      <p className="text-slate-300 text-sm mb-3">{form.description}</p>
+                      <p className="text-slate-300 text-sm mb-3 line-clamp-2">{form.description}</p>
                     )}
+
+                    {/* Public URL */}
+                    {form.is_public && form.public_slug && form.status === 'published' && (
+                      <div className="flex items-center space-x-2 mb-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-3 py-2">
+                        <Link className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                        <span className="text-cyan-300 text-xs truncate flex-1">{getPublicUrl(form.public_slug)}</span>
+                        <button
+                          onClick={() => copyPublicUrl(form.public_slug!)}
+                          className="flex-shrink-0 text-cyan-400 hover:text-cyan-300 transition-colors"
+                          title="Copy public URL"
+                        >
+                          {copiedSlug === form.public_slug ? (
+                            <Check className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4 text-xs text-slate-400">
                         <span>{form.field_count ?? 0} fields</span>
@@ -486,6 +651,24 @@ const FormsPage: React.FC = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+                        {canManage && (
+                          <button
+                            onClick={() => handleShareForm(form)}
+                            className="p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
+                            title="Public sharing settings"
+                          >
+                            <Globe className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => handleOpenIntegrationModal(form.id)}
+                            className="p-1.5 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
+                            title="Manage integrations"
+                          >
+                            <Plug className="w-4 h-4" />
+                          </button>
+                        )}
                         {canManage && form.status === 'draft' && (
                           <button
                             onClick={() => handlePublish(form.id)}
@@ -534,11 +717,24 @@ const FormsPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <h3 className="text-white font-semibold">{template.name}</h3>
-                      <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
-                        {template.category}
-                      </span>
+                      <div className="flex items-center space-x-1">
+                        {template.isPublic && (
+                          <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30">
+                            Public
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
+                          {template.category}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-slate-300 text-sm mt-1">{template.description}</p>
+                    {template.integrationHint && (
+                      <div className="flex items-center space-x-1 mt-2">
+                        <Plug className="w-3 h-3 text-orange-400" />
+                        <span className="text-orange-400 text-xs">Supports cross-module integration</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-3">
                       <span className="text-slate-400 text-xs">{template.fields.length} fields</span>
                       <div className="flex space-x-2">
@@ -591,11 +787,25 @@ const FormsPage: React.FC = () => {
                       <div key={sub.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-white text-sm font-medium">
-                              Submission #{sub.id.slice(0, 8)}
-                            </p>
+                            <div className="flex items-center space-x-2">
+                              <p className="text-white text-sm font-medium">
+                                Submission #{sub.id.slice(0, 8)}
+                              </p>
+                              {sub.is_public_submission && (
+                                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30">
+                                  Public
+                                </span>
+                              )}
+                              {sub.integration_processed && (
+                                <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-400 rounded border border-orange-500/30">
+                                  Integrated
+                                </span>
+                              )}
+                            </div>
                             <p className="text-slate-400 text-xs mt-0.5">
                               {new Date(sub.submitted_at).toLocaleString()}
+                              {sub.submitter_name && ` - ${sub.submitter_name}`}
+                              {sub.submitter_email && ` (${sub.submitter_email})`}
                             </p>
                           </div>
                           <div className="flex items-center space-x-2 text-xs text-slate-400">
@@ -670,6 +880,21 @@ const FormsPage: React.FC = () => {
                         placeholder="Describe the purpose of this form..."
                       />
                     </div>
+                    <div className="flex items-center space-x-3 p-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg">
+                      <input
+                        type="checkbox"
+                        id="is_public"
+                        checked={formData.is_public}
+                        onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
+                        className="w-4 h-4 text-cyan-600 rounded"
+                      />
+                      <label htmlFor="is_public" className="text-sm cursor-pointer">
+                        <span className="text-cyan-300 font-medium">Public Form</span>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                          Allow anyone to fill out this form via a public URL (no login required)
+                        </p>
+                      </label>
+                    </div>
                   </div>
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
@@ -685,6 +910,217 @@ const FormsPage: React.FC = () => {
                     className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {creating ? 'Creating...' : 'Create Form'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Share / Public Settings Modal */}
+        {showShareModal && selectedFormId && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} />
+              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+                <div className="px-6 pt-5 pb-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-white flex items-center space-x-2">
+                      <Globe className="w-5 h-5 text-cyan-400" />
+                      <span>Public Sharing Settings</span>
+                    </h3>
+                    <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-white">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {(() => {
+                    const form = forms.find(f => f.id === selectedFormId);
+                    if (!form) return null;
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                          <div>
+                            <p className="text-white font-medium">Public Access</p>
+                            <p className="text-slate-400 text-xs mt-0.5">
+                              Anyone with the link can view and submit this form
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleTogglePublic(form)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              form.is_public ? 'bg-cyan-600' : 'bg-slate-600'
+                            }`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              form.is_public ? 'translate-x-6' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </div>
+
+                        {form.is_public && form.public_slug && (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-300 mb-2">Public URL</label>
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  readOnly
+                                  value={getPublicUrl(form.public_slug)}
+                                  className="flex-1 px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-cyan-300 text-sm"
+                                />
+                                <button
+                                  onClick={() => copyPublicUrl(form.public_slug!)}
+                                  className="px-3 py-2 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
+                                >
+                                  {copiedSlug === form.public_slug ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                </button>
+                                <a
+                                  href={getPublicUrl(form.public_slug)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-2 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              </div>
+                            </div>
+
+                            {form.status !== 'published' && (
+                              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                <p className="text-yellow-300 text-sm">
+                                  This form must be published before the public URL will be active.
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        <div className="p-3 bg-white/5 border border-white/10 rounded-lg">
+                          <p className="text-slate-300 text-sm">
+                            Public forms allow anyone to submit without logging in. Submissions include the
+                            submitter&apos;s name and email (optional) and are marked as &quot;Public&quot; in your submissions list.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="bg-slate-900/50 px-6 py-3 flex justify-end rounded-b-lg">
+                  <button
+                    onClick={() => setShowShareModal(false)}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Integration Modal */}
+        {showIntegrationModal && selectedFormId && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowIntegrationModal(false)} />
+              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+                <div className="px-6 pt-5 pb-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-white flex items-center space-x-2">
+                      <Plug className="w-5 h-5 text-orange-400" />
+                      <span>Cross-Module Integrations</span>
+                    </h3>
+                    <button onClick={() => setShowIntegrationModal(false)} className="text-slate-400 hover:text-white">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Current integrations */}
+                  {selectedFormDetail?.integrations && selectedFormDetail.integrations.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-slate-300 text-sm font-medium mb-2">Active Integrations</p>
+                      <div className="space-y-2">
+                        {selectedFormDetail.integrations.map((integ) => (
+                          <div key={integ.id} className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
+                            <div>
+                              <p className="text-orange-300 text-sm font-medium capitalize">
+                                {integ.target_module} - {integ.integration_type.replace(/_/g, ' ')}
+                              </p>
+                              <p className="text-slate-400 text-xs">
+                                {integ.is_active ? 'Active' : 'Inactive'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteIntegration(integ.id)}
+                              className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add integration */}
+                  <div className="border-t border-white/10 pt-4">
+                    <p className="text-slate-300 text-sm font-medium mb-3">Add Integration</p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Target Module</label>
+                        <select
+                          value={integrationTarget}
+                          onChange={(e) => {
+                            setIntegrationTarget(e.target.value);
+                            setIntegrationType(
+                              e.target.value === 'membership' ? 'membership_interest' : 'equipment_assignment'
+                            );
+                          }}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        >
+                          <option value="membership">Membership</option>
+                          <option value="inventory">Inventory</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Integration Type</label>
+                        <select
+                          value={integrationType}
+                          onChange={(e) => setIntegrationType(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        >
+                          {integrationTarget === 'membership' ? (
+                            <option value="membership_interest">Membership Interest (captures prospective member data)</option>
+                          ) : (
+                            <option value="equipment_assignment">Equipment Assignment (assigns items to members)</option>
+                          )}
+                        </select>
+                      </div>
+
+                      <div className="p-3 bg-white/5 border border-white/10 rounded-lg">
+                        <p className="text-slate-300 text-xs">
+                          {integrationTarget === 'membership'
+                            ? 'Membership interest integration captures form submissions as prospective member records. Admins can review and process them from the submissions view.'
+                            : 'Equipment assignment integration maps form fields to inventory assignments. Use member_lookup fields to select members and map equipment fields to create assignments automatically.'
+                          }
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={handleAddIntegration}
+                        className="w-full px-4 py-2 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add Integration</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-slate-900/50 px-6 py-3 flex justify-end rounded-b-lg">
+                  <button
+                    onClick={() => setShowIntegrationModal(false)}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  >
+                    Done
                   </button>
                 </div>
               </div>

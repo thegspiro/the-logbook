@@ -84,6 +84,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 
 // Forms Module
 const FormsPage = lazy(() => import('./pages/FormsPage'));
+const PublicFormPage = lazy(() => import('./pages/PublicFormPage'));
 
 // Integrations Module
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
@@ -192,6 +193,9 @@ function App() {
               {/* Reports */}
               <Route path="/reports" element={<ReportsPage />} />
             </Route>
+
+            {/* Public Form Page (no auth required) */}
+            <Route path="/f/:slug" element={<PublicFormPage />} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />

@@ -1,7 +1,8 @@
 """
 Forms Pydantic Schemas
 
-Request and response schemas for forms-related endpoints.
+Request and response schemas for forms-related endpoints,
+including public forms and cross-module integrations.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -72,6 +73,39 @@ class FormFieldResponse(FormFieldBase):
 
 
 # ============================================
+# Form Integration Schemas
+# ============================================
+
+class FormIntegrationCreate(BaseModel):
+    """Schema for creating a form integration"""
+    target_module: str  # "membership" or "inventory"
+    integration_type: str  # "membership_interest" or "equipment_assignment"
+    field_mappings: Dict[str, str]  # {form_field_id: target_field_name}
+    is_active: bool = True
+
+
+class FormIntegrationUpdate(BaseModel):
+    """Schema for updating a form integration"""
+    field_mappings: Optional[Dict[str, str]] = None
+    is_active: Optional[bool] = None
+
+
+class FormIntegrationResponse(BaseModel):
+    """Schema for form integration response"""
+    id: UUID
+    form_id: UUID
+    organization_id: UUID
+    target_module: str
+    integration_type: str
+    field_mappings: Dict[str, str]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================
 # Form Schemas
 # ============================================
 
@@ -84,6 +118,7 @@ class FormBase(BaseModel):
     require_authentication: bool = True
     notify_on_submission: bool = False
     notification_emails: Optional[List[str]] = None
+    is_public: bool = False
 
 
 class FormCreate(FormBase):
@@ -101,6 +136,7 @@ class FormUpdate(BaseModel):
     require_authentication: Optional[bool] = None
     notify_on_submission: Optional[bool] = None
     notification_emails: Optional[List[str]] = None
+    is_public: Optional[bool] = None
 
 
 class FormResponse(FormBase):
@@ -110,6 +146,7 @@ class FormResponse(FormBase):
     status: str
     version: int
     is_template: bool
+    public_slug: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None
@@ -121,8 +158,9 @@ class FormResponse(FormBase):
 
 
 class FormDetailResponse(FormResponse):
-    """Extended form response with fields"""
+    """Extended form response with fields and integrations"""
     fields: List[FormFieldResponse] = []
+    integrations: List[FormIntegrationResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,6 +182,13 @@ class FormSubmissionCreate(BaseModel):
     data: Dict[str, Any]  # {field_id: value}
 
 
+class PublicFormSubmissionCreate(BaseModel):
+    """Schema for submitting a public form (no auth required)"""
+    data: Dict[str, Any]  # {field_id: value}
+    submitter_name: Optional[str] = Field(None, max_length=255)
+    submitter_email: Optional[str] = Field(None, max_length=255)
+
+
 class FormSubmissionResponse(BaseModel):
     """Schema for submission response"""
     id: UUID
@@ -152,6 +197,11 @@ class FormSubmissionResponse(BaseModel):
     submitted_by: Optional[UUID] = None
     submitted_at: datetime
     data: Dict[str, Any]
+    submitter_name: Optional[str] = None
+    submitter_email: Optional[str] = None
+    is_public_submission: bool = False
+    integration_processed: bool = False
+    integration_result: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -159,7 +209,7 @@ class FormSubmissionResponse(BaseModel):
 
 class FormSubmissionDetailResponse(FormSubmissionResponse):
     """Extended submission with submitter info"""
-    submitter_name: Optional[str] = None
+    submitter_display_name: Optional[str] = None
     form_name: Optional[str] = None
 
 
@@ -169,6 +219,73 @@ class SubmissionsListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+# ============================================
+# Public Form Schemas
+# ============================================
+
+class PublicFormFieldResponse(BaseModel):
+    """Public form field response (limited info for public display)"""
+    id: UUID
+    label: str
+    field_type: str
+    placeholder: Optional[str] = None
+    help_text: Optional[str] = None
+    default_value: Optional[str] = None
+    required: bool = False
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    options: Optional[List[FormFieldOption]] = None
+    sort_order: int = 0
+    width: str = "full"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublicFormResponse(BaseModel):
+    """Public form response (limited info for public display)"""
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    category: str
+    allow_multiple_submissions: bool = True
+    fields: List[PublicFormFieldResponse] = []
+    organization_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublicFormSubmissionResponse(BaseModel):
+    """Response after submitting a public form"""
+    id: UUID
+    form_name: str
+    submitted_at: datetime
+    message: str = "Thank you for your submission!"
+
+
+# ============================================
+# Member Lookup Schemas
+# ============================================
+
+class MemberLookupResult(BaseModel):
+    """Member search result for member_lookup fields"""
+    id: str
+    first_name: str
+    last_name: str
+    full_name: str
+    badge_number: Optional[str] = None
+    rank: Optional[str] = None
+    station: Optional[str] = None
+    email: Optional[str] = None
+
+
+class MemberLookupResponse(BaseModel):
+    """Response for member lookup search"""
+    members: List[MemberLookupResult]
+    total: int
 
 
 # ============================================
@@ -182,3 +299,4 @@ class FormsSummary(BaseModel):
     draft_forms: int
     total_submissions: int
     submissions_this_month: int
+    public_forms: int = 0

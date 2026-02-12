@@ -45,9 +45,12 @@ from app.models.forms import (
     Form,
     FormField,
     FormSubmission,
+    FormIntegration,
     FormStatus,
     FormCategory,
     FieldType,
+    IntegrationTarget,
+    IntegrationType,
 )
 
 from app.models.apparatus import (
@@ -105,9 +108,12 @@ __all__ = [
     "Form",
     "FormField",
     "FormSubmission",
+    "FormIntegration",
     "FormStatus",
     "FormCategory",
     "FieldType",
+    "IntegrationTarget",
+    "IntegrationType",
     # Apparatus models
     "Apparatus",
     "ApparatusType",

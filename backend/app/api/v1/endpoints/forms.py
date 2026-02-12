@@ -2,7 +2,7 @@
 Forms API Endpoints
 
 Endpoints for custom forms including form definitions, fields,
-submissions, and reporting.
+submissions, integrations, member lookup, and reporting.
 """
 
 from typing import List, Optional
@@ -28,6 +28,12 @@ from app.schemas.forms import (
     FormSubmissionCreate,
     FormSubmissionResponse,
     SubmissionsListResponse,
+    # Integration schemas
+    FormIntegrationCreate,
+    FormIntegrationUpdate,
+    FormIntegrationResponse,
+    # Member lookup
+    MemberLookupResponse,
     # Summary
     FormsSummary,
 )
@@ -149,6 +155,28 @@ async def get_forms_summary(
         organization_id=current_user.organization_id,
     )
     return summary
+
+
+@router.get("/member-lookup", response_model=MemberLookupResponse)
+async def member_lookup(
+    q: str = Query(..., min_length=1, max_length=100, description="Search query"),
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Search members for member_lookup form fields
+
+    **Authentication required**
+    Returns matching members by name, badge number, or email.
+    """
+    service = FormsService(db)
+    members = await service.search_members(
+        organization_id=current_user.organization_id,
+        query=q,
+        limit=limit,
+    )
+    return MemberLookupResponse(members=members, total=len(members))
 
 
 @router.get("/{form_id}", response_model=FormDetailResponse)
@@ -404,6 +432,97 @@ async def reorder_fields(
         )
 
     return {"message": "Fields reordered successfully"}
+
+
+# ============================================
+# Integration Endpoints
+# ============================================
+
+@router.post("/{form_id}/integrations", response_model=FormIntegrationResponse, status_code=status.HTTP_201_CREATED)
+async def add_integration(
+    form_id: UUID,
+    integration_data: FormIntegrationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("forms.manage")),
+):
+    """
+    Add a cross-module integration to a form
+
+    **Authentication required**
+    **Requires permission: forms.manage**
+    """
+    service = FormsService(db)
+    integration, error = await service.add_integration(
+        form_id=form_id,
+        organization_id=current_user.organization_id,
+        integration_data=integration_data.model_dump(exclude_unset=True),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return integration
+
+
+@router.patch("/{form_id}/integrations/{integration_id}", response_model=FormIntegrationResponse)
+async def update_integration(
+    form_id: UUID,
+    integration_id: UUID,
+    update_data: FormIntegrationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("forms.manage")),
+):
+    """
+    Update a form integration
+
+    **Authentication required**
+    **Requires permission: forms.manage**
+    """
+    service = FormsService(db)
+    integration, error = await service.update_integration(
+        integration_id=integration_id,
+        form_id=form_id,
+        organization_id=current_user.organization_id,
+        update_data=update_data.model_dump(exclude_unset=True),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return integration
+
+
+@router.delete("/{form_id}/integrations/{integration_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_integration(
+    form_id: UUID,
+    integration_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("forms.manage")),
+):
+    """
+    Delete a form integration
+
+    **Authentication required**
+    **Requires permission: forms.manage**
+    """
+    service = FormsService(db)
+    success, error = await service.delete_integration(
+        integration_id=integration_id,
+        form_id=form_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
 
 
 # ============================================

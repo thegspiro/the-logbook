@@ -1552,6 +1552,41 @@ export interface FormFieldCreate {
   width?: string;
 }
 
+export interface FormIntegration {
+  id: string;
+  form_id: string;
+  organization_id: string;
+  target_module: string;
+  integration_type: string;
+  field_mappings: Record<string, string>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormIntegrationCreate {
+  target_module: string;
+  integration_type: string;
+  field_mappings: Record<string, string>;
+  is_active?: boolean;
+}
+
+export interface MemberLookupResult {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  badge_number?: string;
+  rank?: string;
+  station?: string;
+  email?: string;
+}
+
+export interface MemberLookupResponse {
+  members: MemberLookupResult[];
+  total: number;
+}
+
 export interface FormDef {
   id: string;
   organization_id: string;
@@ -1563,6 +1598,8 @@ export interface FormDef {
   require_authentication: boolean;
   notify_on_submission: boolean;
   notification_emails?: string[];
+  is_public: boolean;
+  public_slug?: string;
   version: number;
   is_template: boolean;
   field_count?: number;
@@ -1575,6 +1612,7 @@ export interface FormDef {
 
 export interface FormDetailDef extends FormDef {
   fields: FormField[];
+  integrations: FormIntegration[];
 }
 
 export interface FormCreate {
@@ -1585,6 +1623,7 @@ export interface FormCreate {
   require_authentication?: boolean;
   notify_on_submission?: boolean;
   notification_emails?: string[];
+  is_public?: boolean;
   fields?: FormFieldCreate[];
 }
 
@@ -1597,6 +1636,7 @@ export interface FormUpdate {
   require_authentication?: boolean;
   notify_on_submission?: boolean;
   notification_emails?: string[];
+  is_public?: boolean;
 }
 
 export interface FormsListResponse {
@@ -1613,6 +1653,11 @@ export interface FormSubmission {
   submitted_by?: string;
   submitted_at: string;
   data: Record<string, unknown>;
+  submitter_name?: string;
+  submitter_email?: string;
+  is_public_submission: boolean;
+  integration_processed: boolean;
+  integration_result?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -1629,6 +1674,42 @@ export interface FormsSummary {
   draft_forms: number;
   total_submissions: number;
   submissions_this_month: number;
+  public_forms: number;
+}
+
+// Public form types (no auth required)
+export interface PublicFormField {
+  id: string;
+  label: string;
+  field_type: string;
+  placeholder?: string;
+  help_text?: string;
+  default_value?: string;
+  required: boolean;
+  min_length?: number;
+  max_length?: number;
+  min_value?: number;
+  max_value?: number;
+  options?: FormFieldOption[];
+  sort_order: number;
+  width: string;
+}
+
+export interface PublicFormDef {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  allow_multiple_submissions: boolean;
+  fields: PublicFormField[];
+  organization_name?: string;
+}
+
+export interface PublicFormSubmissionResponse {
+  id: string;
+  form_name: string;
+  submitted_at: string;
+  message: string;
 }
 
 export const formsService = {
@@ -1707,6 +1788,47 @@ export const formsService = {
 
   async deleteSubmission(formId: string, submissionId: string): Promise<void> {
     await api.delete(`/forms/${formId}/submissions/${submissionId}`);
+  },
+
+  // Integration methods
+  async addIntegration(formId: string, data: FormIntegrationCreate): Promise<FormIntegration> {
+    const response = await api.post<FormIntegration>(`/forms/${formId}/integrations`, data);
+    return response.data;
+  },
+
+  async updateIntegration(formId: string, integrationId: string, data: Partial<FormIntegrationCreate>): Promise<FormIntegration> {
+    const response = await api.patch<FormIntegration>(`/forms/${formId}/integrations/${integrationId}`, data);
+    return response.data;
+  },
+
+  async deleteIntegration(formId: string, integrationId: string): Promise<void> {
+    await api.delete(`/forms/${formId}/integrations/${integrationId}`);
+  },
+
+  // Member lookup
+  async memberLookup(query: string, limit?: number): Promise<MemberLookupResponse> {
+    const response = await api.get<MemberLookupResponse>('/forms/member-lookup', {
+      params: { q: query, limit: limit || 20 },
+    });
+    return response.data;
+  },
+};
+
+// Public forms service (no auth required)
+export const publicFormsService = {
+  async getForm(slug: string): Promise<PublicFormDef> {
+    const response = await axios.get<PublicFormDef>(
+      `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}`
+    );
+    return response.data;
+  },
+
+  async submitForm(slug: string, data: Record<string, unknown>, submitterName?: string, submitterEmail?: string): Promise<PublicFormSubmissionResponse> {
+    const response = await axios.post<PublicFormSubmissionResponse>(
+      `${import.meta.env.VITE_API_URL || '/api'}/public/v1/forms/${slug}/submit`,
+      { data, submitter_name: submitterName, submitter_email: submitterEmail }
+    );
+    return response.data;
   },
 };
 
