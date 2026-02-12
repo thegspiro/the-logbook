@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-09 (includes critical onboarding fixes, migration timeout protection, and accurate startup timing)
+**Last Updated**: 2026-02-12 (includes prospective members module, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -17,8 +17,9 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 5. [Network & Connection Problems](#network--connection-problems)
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
-8. [Error Message Reference](#error-message-reference)
-9. [Getting Help](#getting-help)
+8. [Prospective Members Module Issues](#prospective-members-module-issues)
+9. [Error Message Reference](#error-message-reference)
+10. [Getting Help](#getting-help)
 
 ---
 
@@ -990,7 +991,138 @@ docker logs the-logbook-backend-1 | grep "slow"
 
 ---
 
+## Prospective Members Module Issues
+
+### Inactivity Timeout Not Triggering
+
+**Symptoms**: Applicants stay active despite no activity beyond the configured timeout period.
+
+**Causes**:
+1. Inactivity timeout not configured for the pipeline
+2. Timeout preset set to "never"
+3. Per-stage override extending the timeout beyond expected
+4. Backend cron/scheduled job not running
+
+**Solutions**:
+
+**Check pipeline inactivity configuration:**
+1. Navigate to Prospective Members → Pipeline Settings
+2. Scroll to "Inactivity Timeout Configuration"
+3. Verify a timeout preset is selected (not "never")
+4. If using custom, verify the custom days value is set
+
+**Check per-stage overrides:**
+- Open each stage's configuration (pencil icon in Pipeline Builder)
+- Look for "Custom timeout for this stage" checkbox
+- A stage with a very long override can keep applicants active longer than the pipeline default
+
+**Check backend logs:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "inactivity\|timeout\|deactivat"
+```
+
+---
+
+### Applicants Incorrectly Marked Inactive
+
+**Symptoms**: Active applicants with recent activity being marked inactive prematurely.
+
+**Causes**:
+1. `last_activity_at` not being updated on certain actions
+2. Per-stage timeout too short
+3. Warning threshold set too high
+
+**Solutions**:
+
+**Verify activity timestamps:**
+1. Open the applicant's detail drawer
+2. Check "Last Activity" in the metadata section
+3. If the timestamp is outdated despite recent actions, check backend logs for errors
+
+**Adjust warning threshold:**
+1. Pipeline Settings → Inactivity Timeout Configuration
+2. Warning threshold slider controls when amber warnings appear (default: 80%)
+3. Consider increasing the threshold if false positives are common
+
+---
+
+### Cannot Reactivate an Applicant
+
+**Symptoms**: Reactivate button doesn't work or returns an error.
+
+**Causes**:
+1. User doesn't have `prospective_members.manage` permission
+2. Applicant has been purged (permanently deleted)
+3. Backend API endpoint returning error
+
+**Solutions**:
+
+**Check permissions:**
+```sql
+SELECT rp.permission FROM role_permissions rp
+  JOIN user_roles ur ON ur.role_id = rp.role_id
+  WHERE ur.user_id = 'YOUR_USER_ID' AND rp.permission LIKE 'prospective_members%';
+```
+
+**Check if applicant still exists:**
+- Purged applicants are permanently deleted and cannot be reactivated
+- The individual would need to resubmit an interest form to start a new application
+
+**Check backend logs:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "reactivat"
+```
+
+---
+
+### Pipeline Statistics Not Updating
+
+**Symptoms**: Stats bar shows stale numbers or counts don't match visible applicants.
+
+**Causes**:
+1. Browser cache serving stale data
+2. Stats API endpoint returning cached results
+3. Inactive applicants being inadvertently included
+
+**Solutions**:
+
+**Refresh data:**
+1. Click the browser refresh button or press F5
+2. The stats bar fetches fresh data on each page load
+
+**Understand stats annotations:**
+- Statistics include **active applicants only**
+- Inactive, rejected, and withdrawn applicants are **excluded** from conversion rate and averages
+- The "Approaching Timeout" count shows applicants in warning state
+- The "Inactive" count shows deactivated applicants
+
+---
+
+### Purge Operation Safety
+
+**Important**: Purging applicants is a **permanent, irreversible** operation.
+
+**Before purging:**
+1. Review the list of inactive applicants carefully
+2. Consider reactivating any that may have legitimate reasons for inactivity
+3. Note that purged applicant data cannot be recovered
+4. The purge confirmation modal will show the count and warn about permanent deletion
+
+**Data privacy note:**
+- Purging helps comply with data minimization principles
+- Old applicant records contain private information (name, email, phone, documents)
+- Regular purging reduces the impact of potential security incidents
+
+---
+
 ## Version History
+
+**v1.3** - 2026-02-12
+- Added Prospective Members module troubleshooting section
+- Added inactivity timeout troubleshooting
+- Added applicant reactivation troubleshooting
+- Added pipeline statistics explanation
+- Added purge operation safety guidance
 
 **v1.2** - 2026-02-08
 - ✅ Added backend configuration issues section

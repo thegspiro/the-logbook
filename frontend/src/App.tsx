@@ -15,6 +15,8 @@ import { AppLayout } from './components/layout';
 // Modules (keep these as they're router functions, not components)
 import { getOnboardingRoutes } from './modules/onboarding';
 import { getApparatusRoutes } from './modules/apparatus';
+import { getMembershipRoutes } from './modules/membership';
+import { getProspectiveMembersRoutes } from './modules/prospective-members';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -35,13 +37,6 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 // Lazy-loaded pages - loaded on demand for better initial load performance
-// Membership Module
-const Members = lazy(() => import('./pages/Members'));
-const AddMember = lazy(() => import('./pages/AddMember'));
-const ImportMembers = lazy(() => import('./pages/ImportMembers'));
-const MemberProfilePage = lazy(() => import('./pages/MemberProfilePage').then(m => ({ default: m.MemberProfilePage })));
-const MemberTrainingHistoryPage = lazy(() => import('./pages/MemberTrainingHistoryPage').then(m => ({ default: m.MemberTrainingHistoryPage })));
-
 // Events Module
 const EventsPage = lazy(() => import('./pages/EventsPage').then(m => ({ default: m.EventsPage })));
 const EventDetailPage = lazy(() => import('./pages/EventDetailPage').then(m => ({ default: m.EventDetailPage })));
@@ -60,7 +55,6 @@ const ExternalTrainingPage = lazy(() => import('./pages/ExternalTrainingPage'));
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'));
-const MembersAdminPage = lazy(() => import('./pages/MembersAdminPage').then(m => ({ default: m.MembersAdminPage })));
 const PublicPortalAdmin = lazy(() => import('./modules/public-portal/pages/PublicPortalAdmin'));
 
 // Documents Module
@@ -128,15 +122,14 @@ function App() {
               {/* Apparatus Module */}
               {getApparatusRoutes()}
 
+              {/* Membership Module */}
+              {getMembershipRoutes()}
+
+              {/* Prospective Members Module */}
+              {getProspectiveMembersRoutes()}
+
               {/* Main Dashboard */}
               <Route path="/dashboard" element={<Dashboard />} />
-
-              {/* Membership Module */}
-              <Route path="/members" element={<Members />} />
-              <Route path="/members/add" element={<ProtectedRoute requiredPermission="members.create"><AddMember /></ProtectedRoute>} />
-              <Route path="/members/import" element={<ProtectedRoute requiredPermission="members.create"><ImportMembers /></ProtectedRoute>} />
-              <Route path="/members/:userId" element={<MemberProfilePage />} />
-              <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
 
               {/* Events Module */}
               <Route path="/events" element={<EventsPage />} />
@@ -182,7 +175,6 @@ function App() {
               {/* Admin/Monitoring Routes */}
               <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="admin.errors"><ErrorMonitoringPage /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
-              <Route path="/admin/members" element={<ProtectedRoute requiredPermission="members.manage"><MembersAdminPage /></ProtectedRoute>} />
               <Route path="/admin/public-portal" element={<ProtectedRoute requiredPermission="admin.settings"><PublicPortalAdmin /></ProtectedRoute>} />
 
               {/* Settings Module */}

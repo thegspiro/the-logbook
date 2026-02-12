@@ -69,10 +69,19 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - API endpoint reference (20+ endpoints)
    - Database models, migrations, and permissions
 
-9. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
-   - Public API v1.1.0 with public form endpoints
-   - Form retrieval and submission without authentication
-   - Rate limiting, security notes, integration examples
+9. **[PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md)**
+   - Prospective Members Pipeline module documentation
+   - Configurable pipeline stages (form submission, document upload, election/vote, manual approval)
+   - Inactivity timeout system with per-stage overrides
+   - Applicant lifecycle (active, on_hold, withdrawn, converted, rejected, inactive)
+   - Conversion flow, reactivation, and auto-purge for data privacy
+   - Kanban board and table view modes
+   - Zustand store architecture and frontend components
+
+10. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
+    - Public API v1.1.0 with public form endpoints
+    - Form retrieval and submission without authentication
+    - Rate limiting, security notes, integration examples
 
 ---
 
@@ -188,6 +197,8 @@ See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.m
 | Network/connection issues | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems) |
 | Enum case mismatch | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md) |
 | Custom forms / public forms | [FORMS_MODULE.md](./FORMS_MODULE.md) |
+| Prospective members pipeline | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md) |
+| Inactivity timeouts / purging | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
 | Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
@@ -266,7 +277,7 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.1 | 2026-02-07 | Current |
+| TROUBLESHOOTING.md | 1.3 | 2026-02-12 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
@@ -277,6 +288,7 @@ docker-compose ps
 | ONBOARDING_REVIEW.md | 1.0 | 2026-02-07 | Current |
 | ELECTION_SECURITY_AUDIT.md | 1.0 | 2026-02-10 | Current |
 | ASYNC_SQLALCHEMY_REVIEW.md | 1.0 | 2026-02-10 | Current |
+| PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
 
 ---
@@ -307,15 +319,22 @@ docker-compose ps
 
 ## 🔄 Recent Updates
 
-### 2026-02-12 - Forms Module & Public Forms
+### 2026-02-12 - Prospective Members Module, Inactivity System & Forms
 
 **What Changed**:
+- Added Prospective Members Pipeline module with configurable stages, kanban/table views, and conversion flow
+- Added inactivity timeout system with per-stage overrides, two-phase warnings, reactivation, and auto-purge
+- Added prospective members module to onboarding as optional; Secretary and Membership Coordinator given manage permissions
 - Added complete Custom Forms module with form builder, field management, and submissions
 - Added public-facing forms accessible via unique URL slugs without authentication
 - Added cross-module integrations (Membership, Inventory)
 - Added QR code generation for physical form distribution
 - Added comprehensive form security (input sanitization, rate limiting, honeypot bot detection)
 - Updated Public API Documentation to v1.1.0 with public form endpoints
+
+**New Documentation**:
+- Created [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md) - Complete prospective members documentation
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Added prospective members troubleshooting section
 
 ---
 

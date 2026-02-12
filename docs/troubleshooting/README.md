@@ -27,6 +27,7 @@ This guide covers common issues and their solutions for The Logbook deployment.
 21. [Email & Notification Issues](#email--notification-issues)
 22. [Security Configuration Issues](#security-configuration-issues)
 23. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
+24. [Prospective Members Module Issues](#prospective-members-module-issues)
 
 ---
 
@@ -2398,6 +2399,150 @@ If issues persist after trying these solutions:
    - Docker logs
    - Browser console output
    - Steps to reproduce
+
+---
+
+## Prospective Members Module Issues
+
+### Problem: Pipeline stages not saving
+**Symptom:** Creating or reordering pipeline stages doesn't persist after page refresh.
+
+### Root Cause
+The pipeline builder sends updates to the backend API. If the API call fails silently, changes won't persist.
+
+### Solution
+1. **Check backend logs for errors:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "pipeline\|stage"
+```
+
+2. **Verify user permissions:**
+```sql
+SELECT rp.permission FROM role_permissions rp
+  JOIN user_roles ur ON ur.role_id = rp.role_id
+  WHERE ur.user_id = 'YOUR_USER_ID' AND rp.permission LIKE 'prospective_members%';
+```
+
+User needs `prospective_members.manage` permission to modify pipeline stages.
+
+3. **Check API response:**
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://YOUR-IP:7881/api/v1/prospective-members/pipelines
+```
+
+---
+
+### Problem: Inactivity timeout not deactivating applicants
+**Symptom:** Applicants remain active despite exceeding the configured inactivity period.
+
+### Root Cause
+- Timeout preset set to "never"
+- Per-stage timeout override extending beyond the pipeline default
+- `last_activity_at` being updated by background processes
+
+### Solution
+1. **Check pipeline inactivity settings:**
+   - Navigate to Pipeline Settings page
+   - Verify timeout preset is not "never"
+   - Check custom timeout value if using "custom" preset
+
+2. **Check per-stage overrides:**
+   - Each stage can override the pipeline default
+   - Open stage configuration to verify per-stage timeout
+   - Background check stages may have intentionally longer timeouts
+
+3. **Verify applicant activity timestamps:**
+```bash
+# Check backend logs for activity updates
+docker logs intranet-backend 2>&1 | grep -i "activity\|inactiv"
+```
+
+---
+
+### Problem: Cannot reactivate inactive applicant
+**Symptom:** Reactivate button grayed out or returns error.
+
+### Root Cause
+- Missing `prospective_members.manage` permission
+- Applicant has been permanently purged
+- API error during reactivation
+
+### Solution
+1. **Check permissions:** User needs `prospective_members.manage` to reactivate.
+
+2. **Check if applicant was purged:** Purged applicants are permanently deleted. The individual must resubmit an interest form to create a new application.
+
+3. **Check backend logs:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "reactivat"
+```
+
+---
+
+### Problem: Bulk purge deleting wrong applicants
+**Symptom:** Purge operation affected applicants that shouldn't have been included.
+
+### Root Cause
+Purge operates on all inactive applicants matching the criteria, or the selected set in bulk mode.
+
+### Solution
+**Prevention (before purging):**
+- Always review the inactive applicants list before purging
+- Use the checkbox selection to select specific applicants for purge
+- Read the confirmation modal carefully — it shows the count of applicants to be purged
+- Purge is **permanent and irreversible**
+
+**Recovery:**
+- Purged data cannot be recovered from the application
+- If database backups exist, contact your administrator for point-in-time recovery:
+```bash
+# Restore from backup (see Backup & Recovery section)
+docker exec -i intranet-mysql mysql -u root -p the_logbook < backup.sql
+```
+
+---
+
+### Problem: Applicant conversion fails
+**Symptom:** Converting an applicant to member (administrative or probationary) returns an error.
+
+### Root Cause
+- Target membership type not configured
+- Backend membership module not available
+- Applicant data incomplete for conversion
+
+### Solution
+1. **Verify membership module is enabled:**
+   - Check that the membership module was selected during onboarding
+   - API endpoint requires membership module to be active
+
+2. **Check required applicant data:**
+   - First name, last name, and email are required for conversion
+   - The conversion modal shows which membership type to assign
+
+3. **Check backend logs:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "convert\|conversion"
+```
+
+---
+
+### Problem: Pipeline statistics show unexpected values
+**Symptom:** Stats bar shows counts that don't match visible applicants.
+
+### Root Cause
+Statistics are calculated based on specific inclusion rules.
+
+### Solution
+**Understand what's included:**
+- **Total Active**: Only applicants with `status = 'active'`
+- **Converted**: Applicants successfully converted to members
+- **Avg Days to Convert**: Average across all converted applicants (excludes active/inactive)
+- **Conversion Rate**: Converted / (Total - Active - On Hold) — excludes applicants still in progress
+- **Approaching Timeout**: Active applicants in warning or critical inactivity state
+- **Inactive**: Applicants deactivated due to inactivity timeout
+
+The stats annotation at the bottom of the stats bar explains: "Statistics include active applicants only. Inactive, rejected, and withdrawn applicants are excluded from conversion rate and averages."
 
 ---
 

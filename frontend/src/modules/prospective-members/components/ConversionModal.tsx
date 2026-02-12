@@ -1,0 +1,281 @@
+/**
+ * Conversion Modal
+ *
+ * Modal for converting an applicant who has completed the pipeline
+ * into an administrative or probationary member.
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  UserCheck,
+  Mail,
+  Phone,
+  Calendar,
+  Shield,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import type { Applicant, TargetMembershipType } from '../types';
+import { applicantService } from '../services/api';
+import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+
+interface ConversionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  applicant: Applicant | null;
+}
+
+export const ConversionModal: React.FC<ConversionModalProps> = ({
+  isOpen,
+  onClose,
+  applicant,
+}) => {
+  const { fetchApplicants } = useProspectiveMembersStore();
+  const [membershipType, setMembershipType] = useState<TargetMembershipType>(
+    applicant?.target_membership_type ?? 'probationary'
+  );
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
+  const [notes, setNotes] = useState('');
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionResult, setConversionResult] = useState<{
+    user_id: string;
+    message: string;
+  } | null>(null);
+
+  // Reset state when applicant changes or modal opens
+  useEffect(() => {
+    if (applicant && isOpen) {
+      setMembershipType(applicant.target_membership_type ?? 'probationary');
+      setSendWelcomeEmail(true);
+      setNotes('');
+      setIsConverting(false);
+      setConversionResult(null);
+    }
+  }, [applicant?.id, isOpen]);
+
+  if (!isOpen || !applicant) return null;
+
+  const handleConvert = async () => {
+    setIsConverting(true);
+    try {
+      const result = await applicantService.convertToMember(applicant.id, {
+        target_membership_type: membershipType,
+        target_role_id: applicant.target_role_id,
+        send_welcome_email: sendWelcomeEmail,
+        notes: notes || undefined,
+      });
+      setConversionResult(result);
+      await fetchApplicants();
+      toast.success(
+        `${applicant.first_name} ${applicant.last_name} converted to ${membershipType} member`
+      );
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to convert applicant';
+      toast.error(message);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 border border-white/10 rounded-xl max-w-lg w-full">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <UserCheck className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">
+                Convert to Member
+              </h2>
+              <p className="text-sm text-slate-400">
+                {applicant.first_name} {applicant.last_name}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Success State */}
+        {conversionResult ? (
+          <div className="p-6">
+            <div className="text-center py-6">
+              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">
+                Conversion Complete
+              </h3>
+              <p className="text-slate-400 mb-4">{conversionResult.message}</p>
+              <p className="text-sm text-slate-500">
+                Member ID: {conversionResult.user_id}
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={onClose}
+                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              {/* Applicant Summary */}
+              <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="w-4 h-4 text-slate-500" />
+                  <span className="text-slate-300">{applicant.email}</span>
+                </div>
+                {applicant.phone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="w-4 h-4 text-slate-500" />
+                    <span className="text-slate-300">{applicant.phone}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <span className="text-slate-300">
+                    Applied {formatDate(applicant.created_at)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Shield className="w-4 h-4 text-slate-500" />
+                  <span className="text-slate-300">
+                    Completed {applicant.stage_history.filter(s => s.completed_at).length} stages
+                  </span>
+                </div>
+              </div>
+
+              {/* Membership Type */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Membership Type
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setMembershipType('probationary')}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      membershipType === 'probationary'
+                        ? 'border-red-500 bg-red-500/10'
+                        : 'border-white/10 bg-slate-700/50 hover:border-white/20'
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-white">
+                      Probationary
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      New member in trial period
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => setMembershipType('administrative')}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      membershipType === 'administrative'
+                        ? 'border-red-500 bg-red-500/10'
+                        : 'border-white/10 bg-slate-700/50 hover:border-white/20'
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-white">
+                      Administrative
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Non-operational support role
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Target Role */}
+              {applicant.target_role_name && (
+                <div className="flex items-center gap-2 text-sm bg-slate-700/30 rounded-lg p-3">
+                  <Shield className="w-4 h-4 text-slate-500" />
+                  <span className="text-slate-400">Assigned role:</span>
+                  <span className="text-white font-medium">
+                    {applicant.target_role_name}
+                  </span>
+                </div>
+              )}
+
+              {/* Welcome Email */}
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={sendWelcomeEmail}
+                  onChange={(e) => setSendWelcomeEmail(e.target.checked)}
+                  className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                />
+                Send welcome email with login credentials
+              </label>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Conversion Notes (optional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Any notes about this conversion..."
+                  rows={2}
+                  className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                />
+              </div>
+
+              {/* Warning */}
+              <div className="flex items-start gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <p>
+                  This will create a new member account and mark this applicant
+                  as converted. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConvert}
+                disabled={isConverting}
+                className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isConverting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UserCheck className="w-4 h-4" />
+                )}
+                Convert to Member
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
