@@ -1198,6 +1198,25 @@ export const electionService = {
     const response = await api.post<import('../types/election').EmailBallotResponse>(`/elections/${electionId}/send-ballot`, emailData);
     return response.data;
   },
+
+  /**
+   * Cast multiple votes at once (bulk, atomic)
+   */
+  async castBulkVotes(electionId: string, votes: Array<Record<string, string>>): Promise<import('../types/election').Vote[]> {
+    const response = await api.post<import('../types/election').Vote[]>(`/elections/${electionId}/vote/bulk`, {
+      election_id: electionId,
+      votes,
+    });
+    return response.data;
+  },
+
+  /**
+   * Verify vote integrity (admin only)
+   */
+  async verifyIntegrity(electionId: string): Promise<import('../types/election').VoteIntegrityResult> {
+    const response = await api.get<import('../types/election').VoteIntegrityResult>(`/elections/${electionId}/integrity`);
+    return response.data;
+  },
 };
 
 export const eventService = {

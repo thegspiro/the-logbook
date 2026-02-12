@@ -159,6 +159,7 @@ export interface Vote {
   election_id: string;
   candidate_id: string;
   position?: string;
+  vote_rank?: number; // For ranked-choice voting (1 = first choice)
   voted_at: string;
   voter_id?: string;
 }
@@ -167,6 +168,17 @@ export interface VoteCreate {
   election_id: string;
   candidate_id: string;
   position?: string;
+  vote_rank?: number; // For ranked-choice voting (1 = first choice)
+}
+
+export interface VoteIntegrityResult {
+  election_id: string;
+  total_votes: number;
+  valid_signatures: number;
+  unsigned_votes: number;
+  tampered_votes: number;
+  tampered_vote_ids: string[];
+  integrity_status: 'PASS' | 'FAIL';
 }
 
 export interface VoterEligibility {

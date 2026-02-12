@@ -81,12 +81,13 @@ async def list_elections(
     result = await db.execute(query)
     elections = result.scalars().all()
 
-    # Add vote counts if available
+    # Add vote counts if available (exclude soft-deleted votes)
     response_elections = []
     for election in elections:
         votes_result = await db.execute(
             select(func.count(Vote.id))
             .where(Vote.election_id == election.id)
+            .where(Vote.deleted_at.is_(None))
         )
         total_votes = votes_result.scalar() or 0
 
@@ -302,10 +303,11 @@ async def delete_election(
             detail="Can only delete draft elections"
         )
 
-    # Check for votes
+    # Check for active (non-deleted) votes
     votes_result = await db.execute(
         select(func.count(Vote.id))
         .where(Vote.election_id == election_id)
+        .where(Vote.deleted_at.is_(None))
     )
     vote_count = votes_result.scalar() or 0
 
@@ -574,10 +576,11 @@ async def delete_candidate(
             detail="Candidate not found"
         )
 
-    # Check for votes
+    # Check for active (non-deleted) votes
     votes_result = await db.execute(
         select(func.count(Vote.id))
         .where(Vote.candidate_id == candidate_id)
+        .where(Vote.deleted_at.is_(None))
     )
     vote_count = votes_result.scalar() or 0
 
@@ -641,6 +644,7 @@ async def cast_vote(
         organization_id=current_user.organization_id,
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
+        vote_rank=vote.vote_rank,
     )
 
     if error:
@@ -663,6 +667,9 @@ async def cast_bulk_votes(
     """
     Cast multiple votes at once (for multi-position elections)
 
+    All votes are wrapped in a single transaction for atomicity —
+    either all succeed or none are committed.
+
     **Authentication required**
     """
     # Verify election_id matches
@@ -676,29 +683,45 @@ async def cast_bulk_votes(
     votes = []
     errors = []
 
-    for vote_data in bulk_vote.votes:
-        position = list(vote_data.keys())[0]
-        candidate_id = vote_data[position]
+    # Use savepoint so we can roll back all votes if any fail
+    savepoint = await db.begin_nested()
 
-        vote, error = await service.cast_vote(
-            user_id=current_user.id,
-            election_id=election_id,
-            candidate_id=candidate_id,
-            position=position,
-            organization_id=current_user.organization_id,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
+    try:
+        for vote_data in bulk_vote.votes:
+            position = list(vote_data.keys())[0]
+            candidate_id = vote_data[position]
 
-        if error:
-            errors.append(f"{position}: {error}")
-        elif vote:
-            votes.append(vote)
+            vote, error = await service.cast_vote(
+                user_id=current_user.id,
+                election_id=election_id,
+                candidate_id=candidate_id,
+                position=position,
+                organization_id=current_user.organization_id,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            )
 
-    if errors:
+            if error:
+                errors.append(f"{position}: {error}")
+            elif vote:
+                votes.append(vote)
+
+        if errors:
+            # Roll back all votes from this batch
+            await savepoint.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="; ".join(errors)
+            )
+
+        await savepoint.commit()
+    except HTTPException:
+        raise
+    except Exception:
+        await savepoint.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="; ".join(errors)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cast bulk votes — all votes rolled back"
         )
 
     return votes
@@ -909,3 +932,62 @@ async def cast_vote_with_token(
         voted_at=vote.voted_at,
         voter_id=None,  # Never reveal voter ID for anonymous voting
     )
+
+
+# ============================================
+# Vote Integrity and Audit Endpoints
+# ============================================
+
+@router.get("/{election_id}/integrity")
+async def verify_vote_integrity(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Verify cryptographic integrity of all votes in an election.
+
+    Checks HMAC-SHA256 signatures on every vote to detect tampering.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    result = await service.verify_vote_integrity(election_id, current_user.organization_id)
+
+    if "error" in result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=result["error"]
+        )
+
+    return result
+
+
+@router.delete("/{election_id}/votes/{vote_id}")
+async def soft_delete_vote(
+    election_id: UUID,
+    vote_id: UUID,
+    reason: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Soft-delete a vote with audit trail.
+
+    The vote is not physically deleted — it is marked with deleted_at,
+    deleted_by, and deletion_reason for full accountability.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    vote = await service.soft_delete_vote(vote_id, current_user.id, reason)
+
+    if not vote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vote not found or already deleted"
+        )
+
+    return {"message": "Vote soft-deleted successfully", "vote_id": str(vote.id)}

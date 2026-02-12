@@ -10,6 +10,8 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { Election } from '../types/election';
 import { ElectionResults } from '../components/ElectionResults';
+import { ElectionBallot } from '../components/ElectionBallot';
+import { CandidateManagement } from '../components/CandidateManagement';
 import { useAuthStore } from '../stores/authStore';
 
 export const ElectionDetailPage: React.FC = () => {
@@ -374,6 +376,24 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Candidate Management (Admin) */}
+      {canManage && electionId && (
+        <div className="mb-6">
+          <CandidateManagement electionId={electionId} election={election} />
+        </div>
+      )}
+
+      {/* Voter Ballot (when election is open) */}
+      {election.status === 'open' && electionId && (
+        <div className="mb-6">
+          <ElectionBallot
+            electionId={electionId}
+            election={election}
+            onVoteCast={fetchElection}
+          />
+        </div>
+      )}
 
       {/* Results Toggle for All Users */}
       {resultsAvailable && (

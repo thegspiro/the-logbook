@@ -243,6 +243,7 @@ class VoteCreate(BaseModel):
     election_id: UUID
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
+    vote_rank: Optional[int] = Field(None, ge=1, description="Rank for ranked-choice voting (1 = first choice)")
 
 
 class VoteResponse(BaseModel):

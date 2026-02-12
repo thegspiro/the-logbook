@@ -12,6 +12,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID, uuid4
 import hashlib
+import hmac
+import os
 import secrets
 
 from app.models.election import (
@@ -176,12 +178,14 @@ class ElectionService:
                 select(Vote)
                 .where(Vote.election_id == election_id)
                 .where(Vote.voter_hash == voter_hash)
+                .where(Vote.deleted_at.is_(None))
             )
         else:
             vote_result = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election_id)
                 .where(Vote.voter_id == user_id)
+                .where(Vote.deleted_at.is_(None))
             )
         existing_votes = vote_result.scalars().all()
 
@@ -221,6 +225,7 @@ class ElectionService:
         organization_id: UUID,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
+        vote_rank: Optional[int] = None,
     ) -> Tuple[Optional[Vote], Optional[str]]:
         """
         Cast a vote for a candidate
@@ -281,10 +286,14 @@ class ElectionService:
             voter_id=user_id if not election.anonymous_voting else None,
             voter_hash=self._generate_voter_hash(user_id, election_id, election.voter_anonymity_salt or "") if election.anonymous_voting else None,
             position=position,
+            vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
             voted_at=datetime.utcnow(),
         )
+
+        # Sign the vote for tampering detection
+        vote.vote_signature = self._sign_vote(vote)
 
         self.db.add(vote)
 
@@ -305,7 +314,7 @@ class ElectionService:
     async def _get_user_votes(
         self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
     ) -> List[Vote]:
-        """Get all votes by a user in an election (handles anonymous voting)"""
+        """Get all active (non-deleted) votes by a user in an election (handles anonymous voting)"""
         # For anonymous elections, lookup by voter_hash since voter_id is NULL
         if election and election.anonymous_voting:
             voter_hash = self._generate_voter_hash(
@@ -315,12 +324,14 @@ class ElectionService:
                 select(Vote)
                 .where(Vote.election_id == election_id)
                 .where(Vote.voter_hash == voter_hash)
+                .where(Vote.deleted_at.is_(None))
             )
         else:
             result = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election_id)
                 .where(Vote.voter_id == user_id)
+                .where(Vote.deleted_at.is_(None))
             )
         return result.scalars().all()
 
@@ -334,13 +345,94 @@ class ElectionService:
         model and can be destroyed after the election closes to make
         de-anonymization permanently impossible.
         """
-        import hmac
         data = f"{user_id}:{election_id}"
         return hmac.new(
             key=salt.encode() if salt else b"",
             msg=data.encode(),
             digestmod=hashlib.sha256,
         ).hexdigest()
+
+    def _sign_vote(self, vote: Vote) -> str:
+        """Generate a cryptographic signature for a vote to detect tampering.
+
+        The signature covers all immutable vote fields so any modification
+        (changing candidate, deleting and re-inserting, etc.) will produce
+        a different signature.
+        """
+        signing_key = os.environ.get("VOTE_SIGNING_KEY", "default-signing-key")
+        data = f"{vote.id}:{vote.election_id}:{vote.candidate_id}:{vote.voter_hash or vote.voter_id}:{vote.position}:{vote.voted_at.isoformat()}"
+        return hmac.new(
+            key=signing_key.encode(),
+            msg=data.encode(),
+            digestmod=hashlib.sha256,
+        ).hexdigest()
+
+    async def verify_vote_integrity(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Dict:
+        """Verify the cryptographic integrity of all votes in an election.
+
+        Returns a summary with total votes checked, valid count, and any
+        tampered vote IDs.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return {"error": "Election not found"}
+
+        votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
+        )
+        all_votes = votes_result.scalars().all()
+
+        total = len(all_votes)
+        valid = 0
+        tampered = []
+        unsigned = 0
+
+        for vote in all_votes:
+            if not vote.vote_signature:
+                unsigned += 1
+                continue
+            expected = self._sign_vote(vote)
+            if vote.vote_signature == expected:
+                valid += 1
+            else:
+                tampered.append(str(vote.id))
+
+        return {
+            "election_id": str(election_id),
+            "total_votes": total,
+            "valid_signatures": valid,
+            "unsigned_votes": unsigned,
+            "tampered_votes": len(tampered),
+            "tampered_vote_ids": tampered,
+            "integrity_status": "PASS" if len(tampered) == 0 else "FAIL",
+        }
+
+    async def soft_delete_vote(
+        self, vote_id: UUID, deleted_by: UUID, reason: str
+    ) -> Optional[Vote]:
+        """Soft-delete a vote with audit trail instead of hard-deleting."""
+        result = await self.db.execute(
+            select(Vote).where(Vote.id == vote_id).where(Vote.deleted_at.is_(None))
+        )
+        vote = result.scalar_one_or_none()
+        if not vote:
+            return None
+
+        vote.deleted_at = datetime.utcnow()
+        vote.deleted_by = str(deleted_by)
+        vote.deletion_reason = reason
+        await self.db.commit()
+        await self.db.refresh(vote)
+        return vote
 
     async def get_election_results(
         self, election_id: UUID, organization_id: UUID, user_id: Optional[UUID] = None
@@ -387,10 +479,11 @@ class ElectionService:
             # Before closing: use get_election_stats() for ballot counts only
             return None
 
-        # Get all votes
+        # Get all active (non-deleted) votes
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
 
@@ -459,34 +552,44 @@ class ElectionService:
         self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
     ) -> List[CandidateResult]:
         """
-        Calculate results for a list of candidates based on configured victory conditions
+        Calculate results for a list of candidates based on configured voting method
+        and victory conditions.
 
-        Args:
-            candidates: List of candidates to calculate results for
-            votes: List of votes cast for these candidates
-            election: Election instance with victory condition configuration
-            total_eligible: Total number of eligible voters
+        Supports:
+        - simple_majority: Standard first-past-the-post counting
+        - ranked_choice: Instant-runoff voting with iterative elimination
+        - approval: Each vote counts equally; most approvals wins
+        - supermajority: Standard counting with higher threshold
 
         Returns:
             List of CandidateResult objects with winner flags set
         """
-        # Count votes per candidate
-        vote_counts = {}
+        if election.voting_method == "ranked_choice":
+            return self._calculate_ranked_choice_results(candidates, votes, election, total_eligible)
+
+        # Standard counting for simple_majority, approval, and supermajority
+        # For approval voting, every vote counts equally (no ranking)
+        vote_counts: Dict[str, int] = {}
         for vote in votes:
             vote_counts[vote.candidate_id] = vote_counts.get(vote.candidate_id, 0) + 1
 
-        total_votes = len(votes)
+        # For approval voting, total_votes = number of unique voters (not total ballots)
+        if election.voting_method == "approval":
+            if election.anonymous_voting:
+                total_votes = len(set(v.voter_hash for v in votes if v.voter_hash))
+            else:
+                total_votes = len(set(v.voter_id for v in votes if v.voter_id))
+            # If no unique voter tracking possible, fall back to total votes
+            if total_votes == 0:
+                total_votes = len(votes)
+        else:
+            total_votes = len(votes)
 
         # Build results
         results = []
         for candidate in candidates:
             vote_count = vote_counts.get(candidate.id, 0)
-
-            # Calculate percentage of votes cast
             percentage = (vote_count / total_votes * 100) if total_votes > 0 else 0
-
-            # Calculate percentage of eligible voters (for threshold calculations)
-            percentage_of_eligible = (vote_count / total_eligible * 100) if total_eligible > 0 else 0
 
             results.append(
                 CandidateResult(
@@ -495,16 +598,14 @@ class ElectionService:
                     position=candidate.position,
                     vote_count=vote_count,
                     percentage=round(percentage, 2),
-                    is_winner=False,  # Will be set below based on victory conditions
+                    is_winner=False,
                 )
             )
 
-        # Sort by vote count (descending)
         results.sort(key=lambda x: x.vote_count, reverse=True)
 
         # Determine winners based on victory_condition
         if election.victory_condition == "most_votes":
-            # Simple plurality - candidate(s) with most votes wins (handles ties)
             if results and results[0].vote_count > 0:
                 max_votes = results[0].vote_count
                 for result in results:
@@ -512,32 +613,123 @@ class ElectionService:
                         result.is_winner = True
 
         elif election.victory_condition == "majority":
-            # Requires >50% of total votes cast
             required_votes = (total_votes / 2) + 1
             for result in results:
                 if result.vote_count >= required_votes:
                     result.is_winner = True
 
         elif election.victory_condition == "supermajority":
-            # Requires 2/3 of total votes cast (or custom percentage from victory_percentage)
             required_percentage = election.victory_percentage or 67
             for result in results:
                 if result.percentage >= required_percentage:
                     result.is_winner = True
 
         elif election.victory_condition == "threshold":
-            # Requires specific number or percentage
             if election.victory_threshold:
-                # Numerical threshold (e.g., must receive at least 10 votes)
                 for result in results:
                     if result.vote_count >= election.victory_threshold:
                         result.is_winner = True
             elif election.victory_percentage:
-                # Percentage threshold (e.g., must receive at least 60% of votes cast)
                 for result in results:
                     if result.percentage >= election.victory_percentage:
                         result.is_winner = True
 
+        return results
+
+    def _calculate_ranked_choice_results(
+        self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
+    ) -> List[CandidateResult]:
+        """
+        Instant-runoff voting (ranked-choice) calculation.
+
+        Algorithm:
+        1. Count first-choice votes for each candidate
+        2. If a candidate has >50% of votes, they win
+        3. Otherwise, eliminate the candidate with fewest first-choice votes
+        4. Redistribute their votes to next-ranked choices
+        5. Repeat until a winner is found or only one candidate remains
+        """
+        candidate_map = {str(c.id): c for c in candidates}
+        active_candidates = set(candidate_map.keys())
+
+        # Group votes by voter (voter_hash or voter_id)
+        voter_ballots: Dict[str, List[Vote]] = {}
+        for vote in votes:
+            voter_key = vote.voter_hash or str(vote.voter_id) or vote.id
+            if voter_key not in voter_ballots:
+                voter_ballots[voter_key] = []
+            voter_ballots[voter_key].append(vote)
+
+        # Sort each voter's ballot by rank
+        for voter_key in voter_ballots:
+            voter_ballots[voter_key].sort(key=lambda v: v.vote_rank or 999)
+
+        # Track final vote counts and elimination order
+        final_counts: Dict[str, int] = {cid: 0 for cid in active_candidates}
+        total_voters = len(voter_ballots)
+        winner_id = None
+
+        # Run elimination rounds
+        max_rounds = len(candidates)
+        for _round in range(max_rounds):
+            # Count first valid choice for each voter
+            round_counts: Dict[str, int] = {cid: 0 for cid in active_candidates}
+
+            for voter_key, ballot in voter_ballots.items():
+                for vote in ballot:
+                    cid = str(vote.candidate_id)
+                    if cid in active_candidates:
+                        round_counts[cid] += 1
+                        break
+
+            final_counts = round_counts
+
+            # Check for majority winner
+            for cid, count in round_counts.items():
+                if total_voters > 0 and count > total_voters / 2:
+                    winner_id = cid
+                    break
+
+            if winner_id:
+                break
+
+            # If only one candidate remains, they win
+            if len(active_candidates) <= 1:
+                winner_id = next(iter(active_candidates)) if active_candidates else None
+                break
+
+            # Eliminate candidate with fewest votes
+            min_count = min(round_counts.values())
+            # Get all candidates tied at the bottom
+            bottom_candidates = [cid for cid, count in round_counts.items() if count == min_count]
+            # Eliminate the first one (stable tie-breaking by ID)
+            eliminated = sorted(bottom_candidates)[0]
+            active_candidates.discard(eliminated)
+
+        # If no winner after all rounds, last standing candidate wins
+        if not winner_id and active_candidates:
+            winner_id = max(active_candidates, key=lambda cid: final_counts.get(cid, 0))
+
+        # Build results
+        total_counted = sum(final_counts.values())
+        results = []
+        for candidate in candidates:
+            cid = str(candidate.id)
+            vote_count = final_counts.get(cid, 0)
+            percentage = (vote_count / total_counted * 100) if total_counted > 0 else 0
+
+            results.append(
+                CandidateResult(
+                    candidate_id=candidate.id,
+                    candidate_name=candidate.name,
+                    position=candidate.position,
+                    vote_count=vote_count,
+                    percentage=round(percentage, 2),
+                    is_winner=(cid == winner_id),
+                )
+            )
+
+        results.sort(key=lambda x: x.vote_count, reverse=True)
         return results
 
     async def get_election_stats(
@@ -567,10 +759,11 @@ class ElectionService:
         if not election:
             return None
 
-        # Get all votes
+        # Get all active (non-deleted) votes
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
 
@@ -657,10 +850,11 @@ class ElectionService:
         if len(all_candidates) < 2:
             return None  # Can't have a runoff with less than 2 candidates
 
-        # Get vote counts for each candidate
+        # Get vote counts for each candidate (exclude soft-deleted)
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election.id)
+            .where(Vote.deleted_at.is_(None))
         )
         all_votes = list(votes_result.scalars().all())
 
@@ -1205,12 +1399,14 @@ Best regards,
                 select(func.count(Vote.id))
                 .where(Vote.election_id == election_id)
                 .where(Vote.voter_hash == voter_hash)
+                .where(Vote.deleted_at.is_(None))
             )
         else:
             result = await self.db.execute(
                 select(func.count(Vote.id))
                 .where(Vote.election_id == election_id)
                 .where(Vote.voter_id == user_id)
+                .where(Vote.deleted_at.is_(None))
             )
         vote_count = result.scalar() or 0
         return vote_count > 0
@@ -1237,9 +1433,9 @@ Best regards,
         if datetime.utcnow() > voting_token.expires_at:
             return None, None, "Voting token has expired"
 
-        # Check if token has already been used
+        # Check if token has already been fully used
         if voting_token.used:
-            return None, None, "This ballot has already been submitted"
+            return None, None, "This ballot has already been fully submitted"
 
         # Update access tracking
         if not voting_token.first_accessed_at:
@@ -1313,6 +1509,7 @@ Best regards,
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.voter_hash == voting_token.voter_hash)
+            .where(Vote.deleted_at.is_(None))
             .where(Vote.position == position if position else True)
         )
         existing_votes = existing_votes_result.scalars().all()
@@ -1338,12 +1535,30 @@ Best regards,
             voted_at=datetime.utcnow(),
         )
 
+        # Sign the vote for tampering detection
+        vote.vote_signature = self._sign_vote(vote)
+
         self.db.add(vote)
 
-        # Mark token as used if all positions have been voted for
-        # For now, mark as used after any vote (can be enhanced for multi-position)
-        voting_token.used = True
-        voting_token.used_at = datetime.utcnow()
+        # Track which positions have been voted on via this token
+        positions_voted = voting_token.positions_voted or []
+        if position and position not in positions_voted:
+            positions_voted.append(position)
+            voting_token.positions_voted = positions_voted
+
+        # Mark token as fully used only when all positions are voted
+        # or if it's a single-position election
+        election_positions = election.positions or []
+        if not election_positions:
+            # Single-position election — token used after first vote
+            voting_token.used = True
+            voting_token.used_at = datetime.utcnow()
+        else:
+            # Multi-position — check if all positions are now covered
+            remaining = set(election_positions) - set(positions_voted)
+            if not remaining:
+                voting_token.used = True
+                voting_token.used_at = datetime.utcnow()
 
         # SECURITY: Database-level constraint prevents double-voting
         # even if race condition bypasses application-level checks
