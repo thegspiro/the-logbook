@@ -559,10 +559,13 @@ class OnboardingService:
         Returns:
             Dictionary of module name to enabled status
         """
+        # Core modules are always enabled — they power cross-module features
+        core_modules = ["members", "events", "documents", "forms"]
+
         # Define available modules - must match API endpoint and frontend module registry
         available_modules = [
-            # Essential modules
-            "members", "events", "documents",
+            # Core modules (always enabled)
+            *core_modules,
             # Operations modules
             "training", "inventory", "scheduling", "apparatus",
             # Governance modules
@@ -570,7 +573,7 @@ class OnboardingService:
             # Communication modules
             "notifications", "mobile",
             # Advanced modules
-            "forms", "integrations",
+            "integrations",
             # Legacy/additional modules (for backwards compatibility)
             "compliance", "meetings", "fundraising", "incidents",
             "equipment", "vehicles", "budget"
@@ -581,13 +584,16 @@ class OnboardingService:
         if invalid_modules:
             raise ValueError(f"Invalid modules: {', '.join(invalid_modules)}")
 
+        # Ensure core modules are always included
+        final_modules = list(set(enabled_modules) | set(core_modules))
+
         # Update onboarding status
         status = await self.get_onboarding_status()
         if status:
-            status.enabled_modules = enabled_modules
+            status.enabled_modules = final_modules
             await self._mark_step_completed(status, 9, "modules")  # Step 9 in new flow
 
-        return {module: module in enabled_modules for module in available_modules}
+        return {module: module in final_modules for module in available_modules}
 
     async def verify_database_connection(self) -> Dict[str, Any]:
         """

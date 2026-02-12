@@ -130,6 +130,46 @@ export const AVAILABLE_MODULES: Module[] = [
       'System health monitoring',
     ],
   },
+  {
+    id: 'documents',
+    name: 'Documents & Files',
+    description: 'Centralized document storage for SOPs, policies, and department files',
+    longDescription:
+      'Centralized document management for all department policies, procedures, and files. Used across training, compliance, and other modules for shared document access.',
+    category: 'core',
+    enabled: true,
+    canDisable: false,
+    icon: 'FileText',
+    route: '/documents',
+    features: [
+      'Standard Operating Procedures',
+      'Department policies',
+      'Forms and templates library',
+      'Document version control',
+      'Access permissions',
+      'Folder-based organization',
+    ],
+  },
+  {
+    id: 'forms',
+    name: 'Custom Forms',
+    description: 'Cross-module form builder for structured data collection',
+    longDescription:
+      'Reusable form builder that powers data collection across all modules. Create shift checkout forms, equipment inspections, training updates, incident reports, surveys, and any custom workflow.',
+    category: 'core',
+    enabled: true,
+    canDisable: false,
+    icon: 'FormInput',
+    route: '/forms',
+    features: [
+      'Visual form builder with 16+ field types',
+      'Cross-module deployment (scheduling, training, inventory)',
+      'Public-facing forms with QR codes',
+      'Submission management and CSV export',
+      'Member lookup fields',
+      'Cross-module integrations',
+    ],
+  },
 
   // ============================================
   // RECOMMENDED MODULES (Enabled by Default)
@@ -237,26 +277,6 @@ export const AVAILABLE_MODULES: Module[] = [
       'Incident statistics and analytics',
       'NFIRS reporting',
       'Mutual aid tracking',
-    ],
-  },
-  {
-    id: 'documents',
-    name: 'Documents & SOPs',
-    description: 'Standard Operating Procedures, policies, and forms library',
-    longDescription:
-      'Centralized document management for all department policies, procedures, and forms. Version control ensures everyone has access to the latest documents.',
-    category: 'optional',
-    enabled: false,
-    canDisable: true,
-    icon: 'FolderOpen',
-    route: '/documents',
-    features: [
-      'Standard Operating Procedures',
-      'Department policies',
-      'Forms and templates library',
-      'Document version control',
-      'Access permissions',
-      'Document approval workflows',
     ],
   },
   {
