@@ -1508,6 +1508,208 @@ export const inventoryService = {
   },
 };
 
+// ============================================
+// Forms Types & Service
+// ============================================
+
+export interface FormFieldOption {
+  value: string;
+  label: string;
+}
+
+export interface FormField {
+  id: string;
+  form_id: string;
+  label: string;
+  field_type: string;
+  placeholder?: string;
+  help_text?: string;
+  default_value?: string;
+  required: boolean;
+  min_length?: number;
+  max_length?: number;
+  min_value?: number;
+  max_value?: number;
+  validation_pattern?: string;
+  options?: FormFieldOption[];
+  sort_order: number;
+  width: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormFieldCreate {
+  label: string;
+  field_type: string;
+  placeholder?: string;
+  help_text?: string;
+  default_value?: string;
+  required?: boolean;
+  min_length?: number;
+  max_length?: number;
+  options?: FormFieldOption[];
+  sort_order?: number;
+  width?: string;
+}
+
+export interface FormDef {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  category: string;
+  status: string;
+  allow_multiple_submissions: boolean;
+  require_authentication: boolean;
+  notify_on_submission: boolean;
+  notification_emails?: string[];
+  version: number;
+  is_template: boolean;
+  field_count?: number;
+  submission_count?: number;
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+  created_by?: string;
+}
+
+export interface FormDetailDef extends FormDef {
+  fields: FormField[];
+}
+
+export interface FormCreate {
+  name: string;
+  description?: string;
+  category?: string;
+  allow_multiple_submissions?: boolean;
+  require_authentication?: boolean;
+  notify_on_submission?: boolean;
+  notification_emails?: string[];
+  fields?: FormFieldCreate[];
+}
+
+export interface FormUpdate {
+  name?: string;
+  description?: string;
+  category?: string;
+  status?: string;
+  allow_multiple_submissions?: boolean;
+  require_authentication?: boolean;
+  notify_on_submission?: boolean;
+  notification_emails?: string[];
+}
+
+export interface FormsListResponse {
+  forms: FormDef[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface FormSubmission {
+  id: string;
+  organization_id: string;
+  form_id: string;
+  submitted_by?: string;
+  submitted_at: string;
+  data: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SubmissionsListResponse {
+  submissions: FormSubmission[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface FormsSummary {
+  total_forms: number;
+  published_forms: number;
+  draft_forms: number;
+  total_submissions: number;
+  submissions_this_month: number;
+}
+
+export const formsService = {
+  async getSummary(): Promise<FormsSummary> {
+    const response = await api.get<FormsSummary>('/forms/summary');
+    return response.data;
+  },
+
+  async getForms(params?: {
+    status?: string;
+    category?: string;
+    search?: string;
+    is_template?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<FormsListResponse> {
+    const response = await api.get<FormsListResponse>('/forms/', { params });
+    return response.data;
+  },
+
+  async getForm(formId: string): Promise<FormDetailDef> {
+    const response = await api.get<FormDetailDef>(`/forms/${formId}`);
+    return response.data;
+  },
+
+  async createForm(data: FormCreate): Promise<FormDetailDef> {
+    const response = await api.post<FormDetailDef>('/forms/', data);
+    return response.data;
+  },
+
+  async updateForm(formId: string, data: FormUpdate): Promise<FormDetailDef> {
+    const response = await api.patch<FormDetailDef>(`/forms/${formId}`, data);
+    return response.data;
+  },
+
+  async deleteForm(formId: string): Promise<void> {
+    await api.delete(`/forms/${formId}`);
+  },
+
+  async publishForm(formId: string): Promise<FormDetailDef> {
+    const response = await api.post<FormDetailDef>(`/forms/${formId}/publish`);
+    return response.data;
+  },
+
+  async archiveForm(formId: string): Promise<FormDetailDef> {
+    const response = await api.post<FormDetailDef>(`/forms/${formId}/archive`);
+    return response.data;
+  },
+
+  async addField(formId: string, data: FormFieldCreate): Promise<FormField> {
+    const response = await api.post<FormField>(`/forms/${formId}/fields`, data);
+    return response.data;
+  },
+
+  async updateField(formId: string, fieldId: string, data: Partial<FormFieldCreate>): Promise<FormField> {
+    const response = await api.patch<FormField>(`/forms/${formId}/fields/${fieldId}`, data);
+    return response.data;
+  },
+
+  async deleteField(formId: string, fieldId: string): Promise<void> {
+    await api.delete(`/forms/${formId}/fields/${fieldId}`);
+  },
+
+  async submitForm(formId: string, data: Record<string, unknown>): Promise<FormSubmission> {
+    const response = await api.post<FormSubmission>(`/forms/${formId}/submit`, { data });
+    return response.data;
+  },
+
+  async getSubmissions(formId: string, params?: {
+    skip?: number;
+    limit?: number;
+  }): Promise<SubmissionsListResponse> {
+    const response = await api.get<SubmissionsListResponse>(`/forms/${formId}/submissions`, { params });
+    return response.data;
+  },
+
+  async deleteSubmission(formId: string, submissionId: string): Promise<void> {
+    await api.delete(`/forms/${formId}/submissions/${submissionId}`);
+  },
+};
+
 export interface DashboardStats {
   total_members: number;
   active_members: number;

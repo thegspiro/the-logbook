@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FormInput,
   Plus,
@@ -13,26 +13,53 @@ import {
   X,
   AlertCircle,
   ClipboardCheck,
+  RefreshCw,
+  Send,
+  Archive,
+  Trash2,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import {
+  formsService,
+  type FormDef,
+  type FormsSummary,
+  type FormCreate,
+  type SubmissionsListResponse,
+} from '../services/api';
 
-interface FormTemplate {
+interface StarterTemplate {
   id: string;
   name: string;
   description: string;
   category: string;
-  fields: number;
+  fields: { label: string; field_type: string; required: boolean }[];
   icon: React.ReactNode;
   color: string;
 }
 
-const FORM_TEMPLATES: FormTemplate[] = [
+const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     id: 'incident-report',
     name: 'Incident Report',
     description: 'Standard incident/accident report form with injury details and witnesses',
     category: 'Safety',
-    fields: 15,
+    fields: [
+      { label: 'Date of Incident', field_type: 'date', required: true },
+      { label: 'Time of Incident', field_type: 'time', required: true },
+      { label: 'Location', field_type: 'text', required: true },
+      { label: 'Type of Incident', field_type: 'select', required: true },
+      { label: 'Description', field_type: 'textarea', required: true },
+      { label: 'Injuries Reported', field_type: 'radio', required: true },
+      { label: 'Injury Details', field_type: 'textarea', required: false },
+      { label: 'Witnesses', field_type: 'textarea', required: false },
+      { label: 'Equipment Involved', field_type: 'text', required: false },
+      { label: 'Immediate Actions Taken', field_type: 'textarea', required: true },
+      { label: 'Follow-Up Required', field_type: 'checkbox', required: false },
+      { label: 'Photos Attached', field_type: 'file', required: false },
+      { label: 'Reported By', field_type: 'text', required: true },
+      { label: 'Supervisor Notified', field_type: 'radio', required: true },
+      { label: 'Additional Notes', field_type: 'textarea', required: false },
+    ],
     icon: <AlertTriangle className="w-6 h-6" />,
     color: 'text-red-400',
   },
@@ -41,7 +68,20 @@ const FORM_TEMPLATES: FormTemplate[] = [
     name: 'Equipment Inspection',
     description: 'Pre-use and periodic equipment inspection checklist',
     category: 'Operations',
-    fields: 12,
+    fields: [
+      { label: 'Equipment Name', field_type: 'text', required: true },
+      { label: 'Serial Number', field_type: 'text', required: true },
+      { label: 'Inspection Date', field_type: 'date', required: true },
+      { label: 'Inspector', field_type: 'text', required: true },
+      { label: 'Visual Condition', field_type: 'select', required: true },
+      { label: 'Functional Test', field_type: 'radio', required: true },
+      { label: 'Safety Features Check', field_type: 'radio', required: true },
+      { label: 'Cleanliness', field_type: 'select', required: true },
+      { label: 'Defects Found', field_type: 'textarea', required: false },
+      { label: 'Action Required', field_type: 'textarea', required: false },
+      { label: 'Pass/Fail', field_type: 'radio', required: true },
+      { label: 'Next Inspection Due', field_type: 'date', required: false },
+    ],
     icon: <ClipboardCheck className="w-6 h-6" />,
     color: 'text-emerald-400',
   },
@@ -50,7 +90,28 @@ const FORM_TEMPLATES: FormTemplate[] = [
     name: 'Apparatus Check-off',
     description: 'Daily apparatus/vehicle check-off form',
     category: 'Operations',
-    fields: 20,
+    fields: [
+      { label: 'Apparatus Number', field_type: 'text', required: true },
+      { label: 'Date', field_type: 'date', required: true },
+      { label: 'Shift', field_type: 'select', required: true },
+      { label: 'Checked By', field_type: 'text', required: true },
+      { label: 'Mileage', field_type: 'number', required: true },
+      { label: 'Fuel Level', field_type: 'select', required: true },
+      { label: 'Engine Oil', field_type: 'radio', required: true },
+      { label: 'Coolant Level', field_type: 'radio', required: true },
+      { label: 'Tire Condition', field_type: 'radio', required: true },
+      { label: 'Lights & Sirens', field_type: 'radio', required: true },
+      { label: 'Pump Test', field_type: 'radio', required: true },
+      { label: 'Hose Inventory', field_type: 'radio', required: true },
+      { label: 'SCBA Check', field_type: 'radio', required: true },
+      { label: 'Medical Supplies', field_type: 'radio', required: true },
+      { label: 'Tools & Equipment', field_type: 'radio', required: true },
+      { label: 'Radio Check', field_type: 'radio', required: true },
+      { label: 'Body/Cab Condition', field_type: 'radio', required: true },
+      { label: 'Deficiencies Found', field_type: 'textarea', required: false },
+      { label: 'Actions Taken', field_type: 'textarea', required: false },
+      { label: 'Overall Status', field_type: 'radio', required: true },
+    ],
     icon: <Clipboard className="w-6 h-6" />,
     color: 'text-blue-400',
   },
@@ -59,7 +120,18 @@ const FORM_TEMPLATES: FormTemplate[] = [
     name: 'Member Feedback Survey',
     description: 'Anonymous feedback survey for department improvement',
     category: 'Administration',
-    fields: 10,
+    fields: [
+      { label: 'Overall Satisfaction', field_type: 'radio', required: true },
+      { label: 'Training Quality', field_type: 'radio', required: true },
+      { label: 'Equipment Availability', field_type: 'radio', required: true },
+      { label: 'Leadership Effectiveness', field_type: 'radio', required: true },
+      { label: 'Communication Quality', field_type: 'radio', required: true },
+      { label: 'What is working well?', field_type: 'textarea', required: false },
+      { label: 'What needs improvement?', field_type: 'textarea', required: false },
+      { label: 'Suggestions for training topics', field_type: 'textarea', required: false },
+      { label: 'Equipment requests', field_type: 'textarea', required: false },
+      { label: 'Additional comments', field_type: 'textarea', required: false },
+    ],
     icon: <FileText className="w-6 h-6" />,
     color: 'text-purple-400',
   },
@@ -73,8 +145,17 @@ const FormsPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<FormCategory>('all');
-  const [activeTab, setActiveTab] = useState<'templates' | 'submissions'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'forms' | 'submissions'>('forms');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  // Data
+  const [forms, setForms] = useState<FormDef[]>([]);
+  const [summary, setSummary] = useState<FormsSummary | null>(null);
+  const [selectedFormSubmissions, setSelectedFormSubmissions] = useState<SubmissionsListResponse | null>(null);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -82,12 +163,133 @@ const FormsPage: React.FC = () => {
     category: 'Operations',
   });
 
-  const filteredTemplates = FORM_TEMPLATES.filter(t => {
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [formsRes, summaryRes] = await Promise.all([
+        formsService.getForms({
+          search: searchQuery || undefined,
+          category: categoryFilter !== 'all' ? categoryFilter : undefined,
+        }),
+        formsService.getSummary(),
+      ]);
+      setForms(formsRes.forms);
+      setSummary(summaryRes);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load forms';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [searchQuery, categoryFilter]);
+
+  const handleCreateForm = async () => {
+    if (!formData.name.trim()) return;
+    setCreating(true);
+    try {
+      await formsService.createForm({
+        name: formData.name,
+        description: formData.description || undefined,
+        category: formData.category,
+      });
+      setShowCreateModal(false);
+      setFormData({ name: '', description: '', category: 'Operations' });
+      await loadData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create form';
+      setError(message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleUseTemplate = async (template: StarterTemplate) => {
+    setCreating(true);
+    try {
+      const createData: FormCreate = {
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        fields: template.fields.map((f, i) => ({
+          label: f.label,
+          field_type: f.field_type,
+          required: f.required,
+          sort_order: i,
+        })),
+      };
+      await formsService.createForm(createData);
+      setActiveTab('forms');
+      await loadData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create from template';
+      setError(message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handlePublish = async (formId: string) => {
+    try {
+      await formsService.publishForm(formId);
+      await loadData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to publish form';
+      setError(message);
+    }
+  };
+
+  const handleArchive = async (formId: string) => {
+    try {
+      await formsService.archiveForm(formId);
+      await loadData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to archive form';
+      setError(message);
+    }
+  };
+
+  const handleDelete = async (formId: string) => {
+    try {
+      await formsService.deleteForm(formId);
+      await loadData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete form';
+      setError(message);
+    }
+  };
+
+  const handleViewSubmissions = async (formId: string) => {
+    try {
+      const res = await formsService.getSubmissions(formId);
+      setSelectedFormSubmissions(res);
+      setSelectedFormId(formId);
+      setActiveTab('submissions');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load submissions';
+      setError(message);
+    }
+  };
+
+  const filteredTemplates = STARTER_TEMPLATES.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || t.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const statusColor = (s: string) => {
+    switch (s) {
+      case 'published': return 'bg-green-500/10 text-green-400 border-green-500/30';
+      case 'draft': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30';
+      case 'archived': return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
@@ -105,26 +307,77 @@ const FormsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          {canManage && (
+          <div className="flex items-center space-x-2">
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors"
+              onClick={loadData}
+              className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              <span>Create Form</span>
+              <RefreshCw className="w-5 h-5" />
             </button>
-          )}
+            {canManage && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Form</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Stats */}
+        {summary && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Total Forms</p>
+              <p className="text-white text-2xl font-bold mt-1">{summary.total_forms}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Published</p>
+              <p className="text-green-400 text-2xl font-bold mt-1">{summary.published_forms}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Drafts</p>
+              <p className="text-yellow-400 text-2xl font-bold mt-1">{summary.draft_forms}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <p className="text-slate-400 text-xs font-medium uppercase">Submissions This Month</p>
+              <p className="text-pink-400 text-2xl font-bold mt-1">{summary.submissions_this_month}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <p className="text-red-300 text-sm">{error}</p>
+              <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('forms')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            My Forms
+          </button>
           <button
             onClick={() => setActiveTab('templates')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Form Templates
+            Starter Templates
           </button>
           <button
             onClick={() => setActiveTab('submissions')}
@@ -166,79 +419,210 @@ const FormsPage: React.FC = () => {
           </div>
         </div>
 
-        {activeTab === 'templates' && (
+        {/* Forms Tab */}
+        {activeTab === 'forms' && (
           <>
-            {/* Starter Templates */}
-            <div className="mb-8">
-              <h2 className="text-white text-lg font-semibold mb-4">Starter Templates</h2>
+            {loading ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <RefreshCw className="w-8 h-8 text-slate-400 mx-auto mb-3 animate-spin" />
+                <p className="text-slate-300">Loading forms...</p>
+              </div>
+            ) : forms.length === 0 ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <FormInput className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">No Custom Forms</h3>
+                <p className="text-slate-300 mb-6">
+                  Create a custom form from scratch or start from a starter template.
+                </p>
+                {canManage && (
+                  <div className="flex items-center justify-center space-x-3">
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
+                    >
+                      <Plus className="w-5 h-5" />
+                      <span>Create Form</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('templates')}
+                      className="px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg transition-colors inline-flex items-center space-x-2"
+                    >
+                      <Copy className="w-5 h-5" />
+                      <span>Use Template</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredTemplates.map((template) => (
-                  <div key={template.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:border-pink-500/30 transition-all">
-                    <div className="flex items-start space-x-4">
-                      <div className={`p-3 rounded-lg bg-white/5 ${template.color}`}>
-                        {template.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between">
-                          <h3 className="text-white font-semibold">{template.name}</h3>
+                {forms.map((form) => (
+                  <div key={form.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:border-pink-500/30 transition-all">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="text-white font-semibold">{form.name}</h3>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <span className={`px-2 py-0.5 text-xs rounded border ${statusColor(form.status)}`}>
+                            {form.status}
+                          </span>
                           <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
-                            {template.category}
+                            {form.category}
                           </span>
                         </div>
-                        <p className="text-slate-300 text-sm mt-1">{template.description}</p>
-                        <div className="flex items-center justify-between mt-3">
-                          <span className="text-slate-400 text-xs">{template.fields} fields</span>
-                          <div className="flex space-x-2">
-                            <button className="px-3 py-1 text-xs bg-white/5 text-slate-300 hover:bg-white/10 rounded transition-colors flex items-center space-x-1">
-                              <Eye className="w-3 h-3" />
-                              <span>Preview</span>
-                            </button>
-                            {canManage && (
-                              <button className="px-3 py-1 text-xs bg-pink-600/20 text-pink-400 hover:bg-pink-600/30 rounded transition-colors flex items-center space-x-1">
-                                <Copy className="w-3 h-3" />
-                                <span>Use Template</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                      </div>
+                    </div>
+                    {form.description && (
+                      <p className="text-slate-300 text-sm mb-3">{form.description}</p>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4 text-xs text-slate-400">
+                        <span>{form.field_count ?? 0} fields</span>
+                        <span>{form.submission_count ?? 0} submissions</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleViewSubmissions(form.id)}
+                          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          title="View submissions"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {canManage && form.status === 'draft' && (
+                          <button
+                            onClick={() => handlePublish(form.id)}
+                            className="p-1.5 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                            title="Publish form"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canManage && form.status === 'published' && (
+                          <button
+                            onClick={() => handleArchive(form.id)}
+                            className="p-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
+                            title="Archive form"
+                          >
+                            <Archive className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => handleDelete(form.id)}
+                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                            title="Delete form"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Custom Forms - Empty State */}
-            <div className="mb-4">
-              <h2 className="text-white text-lg font-semibold mb-4">Your Custom Forms</h2>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-              <FormInput className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-              <h3 className="text-white text-xl font-bold mb-2">No Custom Forms</h3>
-              <p className="text-slate-300 mb-6">
-                Create a custom form from scratch or start from a template above.
-              </p>
-              {canManage && (
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>Create Custom Form</span>
-                </button>
-              )}
-            </div>
+            )}
           </>
         )}
 
-        {activeTab === 'submissions' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-            <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-white text-xl font-bold mb-2">No Submissions</h3>
-            <p className="text-slate-300 mb-6">
-              Form submissions will appear here once members start filling out forms.
-            </p>
+        {/* Templates Tab */}
+        {activeTab === 'templates' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredTemplates.map((template) => (
+              <div key={template.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:border-pink-500/30 transition-all">
+                <div className="flex items-start space-x-4">
+                  <div className={`p-3 rounded-lg bg-white/5 ${template.color}`}>
+                    {template.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
+                      <h3 className="text-white font-semibold">{template.name}</h3>
+                      <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
+                        {template.category}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-sm mt-1">{template.description}</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-slate-400 text-xs">{template.fields.length} fields</span>
+                      <div className="flex space-x-2">
+                        {canManage && (
+                          <button
+                            onClick={() => handleUseTemplate(template)}
+                            disabled={creating}
+                            className="px-3 py-1 text-xs bg-pink-600/20 text-pink-400 hover:bg-pink-600/30 rounded transition-colors flex items-center space-x-1 disabled:opacity-50"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>{creating ? 'Creating...' : 'Use Template'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* Submissions Tab */}
+        {activeTab === 'submissions' && (
+          <>
+            {selectedFormId && selectedFormSubmissions ? (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-white text-lg font-semibold">
+                    Submissions ({selectedFormSubmissions.total})
+                  </h2>
+                  <button
+                    onClick={() => { setSelectedFormId(null); setSelectedFormSubmissions(null); }}
+                    className="text-slate-400 hover:text-white text-sm"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+                {selectedFormSubmissions.submissions.length === 0 ? (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                    <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                    <h3 className="text-white text-xl font-bold mb-2">No Submissions</h3>
+                    <p className="text-slate-300">
+                      No submissions have been received for this form yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedFormSubmissions.submissions.map((sub) => (
+                      <div key={sub.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-white text-sm font-medium">
+                              Submission #{sub.id.slice(0, 8)}
+                            </p>
+                            <p className="text-slate-400 text-xs mt-0.5">
+                              {new Date(sub.submitted_at).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2 text-xs text-slate-400">
+                            <span>{Object.keys(sub.data).length} responses</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">View Submissions</h3>
+                <p className="text-slate-300 mb-6">
+                  Select a form from the &quot;My Forms&quot; tab to view its submissions.
+                </p>
+                <button
+                  onClick={() => setActiveTab('forms')}
+                  className="px-4 py-2 bg-pink-600/20 text-pink-400 hover:bg-pink-600/30 rounded-lg transition-colors"
+                >
+                  Go to My Forms
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Create Form Modal */}
@@ -286,14 +670,6 @@ const FormsPage: React.FC = () => {
                         placeholder="Describe the purpose of this form..."
                       />
                     </div>
-                    <div className="bg-pink-500/10 border border-pink-500/30 rounded-lg p-3">
-                      <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-pink-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-pink-300 text-sm">
-                          The form builder backend is being developed. The drag-and-drop form builder will be available soon.
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
@@ -304,10 +680,11 @@ const FormsPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    disabled
-                    className="px-4 py-2 bg-pink-600/50 text-white/50 rounded-lg cursor-not-allowed"
+                    onClick={handleCreateForm}
+                    disabled={!formData.name.trim() || creating}
+                    className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Create Form
+                    {creating ? 'Creating...' : 'Create Form'}
                   </button>
                 </div>
               </div>

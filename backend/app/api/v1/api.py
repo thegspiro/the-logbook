@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     auth,
     dashboard,
     events,
+    forms,
     locations,
     roles,
     users,
@@ -45,6 +46,7 @@ api_router.include_router(training_programs.router, prefix="/training/programs",
 api_router.include_router(training_sessions.router, prefix="/training/sessions", tags=["training-sessions"])
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
 api_router.include_router(public_portal_admin.router)
@@ -75,6 +77,7 @@ async def api_root():
             "apparatus": "/api/v1/apparatus",
             "security": "/api/v1/security",
             "email_templates": "/api/v1/email-templates",
+            "forms": "/api/v1/forms",
             "public_portal": "/api/v1/public-portal"
         }
     }

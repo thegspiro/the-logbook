@@ -25,6 +25,7 @@ class PermissionCategory(str, Enum):
     AUDIT = "audit"
     EVENTS = "events"
     LOCATIONS = "locations"
+    FORMS = "forms"
 
 
 class Permission:
@@ -126,6 +127,10 @@ LOCATIONS_EDIT = Permission("locations.edit", "Edit locations", PermissionCatego
 LOCATIONS_DELETE = Permission("locations.delete", "Delete locations", PermissionCategory.LOCATIONS)
 LOCATIONS_MANAGE = Permission("locations.manage", "Manage all locations", PermissionCategory.LOCATIONS)
 
+# Forms
+FORMS_VIEW = Permission("forms.view", "View forms and submissions", PermissionCategory.FORMS)
+FORMS_MANAGE = Permission("forms.manage", "Create, edit, and manage forms", PermissionCategory.FORMS)
+
 
 # ============================================
 # All Permissions Registry
@@ -190,6 +195,10 @@ ALL_PERMISSIONS: List[Permission] = [
     LOCATIONS_EDIT,
     LOCATIONS_DELETE,
     LOCATIONS_MANAGE,
+
+    # Forms
+    FORMS_VIEW,
+    FORMS_MANAGE,
 ]
 
 
@@ -283,6 +292,8 @@ DEFAULT_ROLES = {
             LOCATIONS_EDIT.name,
             LOCATIONS_DELETE.name,
             LOCATIONS_MANAGE.name,
+            FORMS_VIEW.name,
+            FORMS_MANAGE.name,
         ],
     },
     "assistant_chief": {
@@ -321,6 +332,8 @@ DEFAULT_ROLES = {
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_MANAGE.name,
+            FORMS_VIEW.name,
+            FORMS_MANAGE.name,
         ],
     },
     "president": {
@@ -372,6 +385,8 @@ DEFAULT_ROLES = {
             LOCATIONS_EDIT.name,
             LOCATIONS_DELETE.name,
             LOCATIONS_MANAGE.name,
+            FORMS_VIEW.name,
+            FORMS_MANAGE.name,
         ],
     },
     "vice_president": {
@@ -439,6 +454,8 @@ DEFAULT_ROLES = {
             EVENTS_VIEW.name,
             EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
+            FORMS_VIEW.name,
+            FORMS_MANAGE.name,
         ],
     },
     "assistant_secretary": {
@@ -474,6 +491,7 @@ DEFAULT_ROLES = {
             SCHEDULING_VIEW.name,
             MEETINGS_VIEW.name,
             EVENTS_VIEW.name,
+            FORMS_VIEW.name,
         ],
     },
     "training_officer": {
@@ -570,6 +588,8 @@ DEFAULT_ROLES = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
+            FORMS_VIEW.name,
+            FORMS_MANAGE.name,
         ],
     },
     "apparatus_manager": {
