@@ -32,6 +32,8 @@ from app.schemas.election import (
     VoterEligibility,
 )
 from app.services.email_service import EmailService
+from app.core.audit import log_audit_event
+from loguru import logger
 
 
 class ElectionService:
@@ -39,6 +41,29 @@ class ElectionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ------------------------------------------------------------------
+    # Audit helpers
+    # ------------------------------------------------------------------
+
+    async def _audit(
+        self,
+        event_type: str,
+        event_data: Dict,
+        severity: str = "info",
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log an election event to the tamper-proof audit log."""
+        await log_audit_event(
+            db=self.db,
+            event_type=event_type,
+            event_category="elections",
+            severity=severity,
+            event_data=event_data,
+            user_id=user_id,
+            ip_address=ip_address,
+        )
 
     async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
         """
@@ -305,9 +330,30 @@ class ElectionService:
         except IntegrityError:
             # Caught by unique constraint - duplicate vote attempted
             await self.db.rollback()
+            logger.warning(
+                "Double-vote attempt blocked by DB constraint | "
+                f"election={election_id} position={position} anonymous={election.anonymous_voting}"
+            )
+            await self._audit("vote_double_attempt", {
+                "election_id": str(election_id),
+                "position": position,
+                "anonymous": election.anonymous_voting,
+            }, severity="warning", user_id=str(user_id), ip_address=ip_address)
             if position:
                 return None, f"Database integrity check: You have already voted for {position}"
             return None, "Database integrity check: You have already voted in this election"
+
+        # Audit & log the successful vote
+        logger.info(
+            f"Vote cast | election={election_id} position={position} "
+            f"anonymous={election.anonymous_voting} vote_id={vote.id}"
+        )
+        await self._audit("vote_cast", {
+            "election_id": str(election_id),
+            "vote_id": str(vote.id),
+            "position": position,
+            "anonymous": election.anonymous_voting,
+        }, user_id=str(user_id), ip_address=ip_address)
 
         return vote, None
 
@@ -406,6 +452,24 @@ class ElectionService:
             else:
                 tampered.append(str(vote.id))
 
+        integrity_status = "PASS" if len(tampered) == 0 else "FAIL"
+
+        if tampered:
+            logger.critical(
+                f"VOTE INTEGRITY FAILURE | election={election_id} "
+                f"tampered={len(tampered)} ids={tampered}"
+            )
+        else:
+            logger.info(f"Vote integrity check PASS | election={election_id} total={total}")
+
+        await self._audit("vote_integrity_check", {
+            "election_id": str(election_id),
+            "total_votes": total,
+            "valid_signatures": valid,
+            "tampered_votes": len(tampered),
+            "integrity_status": integrity_status,
+        }, severity="critical" if tampered else "info")
+
         return {
             "election_id": str(election_id),
             "total_votes": total,
@@ -413,7 +477,7 @@ class ElectionService:
             "unsigned_votes": unsigned,
             "tampered_votes": len(tampered),
             "tampered_vote_ids": tampered,
-            "integrity_status": "PASS" if len(tampered) == 0 else "FAIL",
+            "integrity_status": integrity_status,
         }
 
     async def soft_delete_vote(
@@ -432,7 +496,175 @@ class ElectionService:
         vote.deletion_reason = reason
         await self.db.commit()
         await self.db.refresh(vote)
+
+        logger.warning(
+            f"Vote soft-deleted | vote={vote_id} election={vote.election_id} "
+            f"by={deleted_by} reason={reason!r}"
+        )
+        await self._audit("vote_soft_deleted", {
+            "vote_id": str(vote_id),
+            "election_id": str(vote.election_id),
+            "reason": reason,
+        }, severity="warning", user_id=str(deleted_by))
+
         return vote
+
+    async def get_election_forensics(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Optional[Dict]:
+        """
+        Aggregate all forensic data for an election into a single report.
+
+        Pulls together:
+        - Election metadata and configuration
+        - Vote integrity check results
+        - Soft-deleted votes with reasons
+        - Rollback history
+        - Voting token access logs
+        - Audit log entries for this election
+        """
+        from app.models.audit import AuditLog
+
+        # Get election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None
+
+        # 1. Vote integrity
+        integrity = await self.verify_vote_integrity(election_id, organization_id)
+
+        # 2. Soft-deleted votes
+        deleted_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.isnot(None))
+        )
+        deleted_votes = deleted_result.scalars().all()
+
+        deleted_records = [
+            {
+                "vote_id": str(v.id),
+                "candidate_id": str(v.candidate_id),
+                "position": v.position,
+                "deleted_at": v.deleted_at.isoformat() if v.deleted_at else None,
+                "deleted_by": v.deleted_by,
+                "deletion_reason": v.deletion_reason,
+            }
+            for v in deleted_votes
+        ]
+
+        # 3. Voting token access logs
+        token_result = await self.db.execute(
+            select(VotingToken)
+            .where(VotingToken.election_id == election_id)
+        )
+        tokens = token_result.scalars().all()
+
+        token_records = [
+            {
+                "token_id": str(t.id),
+                "used": t.used,
+                "used_at": t.used_at.isoformat() if t.used_at else None,
+                "first_accessed_at": t.first_accessed_at.isoformat() if t.first_accessed_at else None,
+                "access_count": t.access_count,
+                "positions_voted": t.positions_voted,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+            }
+            for t in tokens
+        ]
+
+        # 4. Audit log entries for this election
+        audit_result = await self.db.execute(
+            select(AuditLog)
+            .where(AuditLog.event_category == "elections")
+            .where(AuditLog.event_data["election_id"].as_string() == str(election_id))
+            .order_by(AuditLog.timestamp.desc())
+            .limit(200)
+        )
+        audit_entries = audit_result.scalars().all()
+
+        audit_records = [
+            {
+                "id": entry.id,
+                "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+                "event_type": entry.event_type,
+                "severity": entry.severity.value if entry.severity else None,
+                "user_id": entry.user_id,
+                "ip_address": entry.ip_address,
+                "event_data": entry.event_data,
+            }
+            for entry in audit_entries
+        ]
+
+        # 5. Active vote statistics by IP (detect ballot stuffing patterns)
+        active_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
+        )
+        active_votes = active_result.scalars().all()
+
+        ip_vote_counts: Dict[str, int] = {}
+        for v in active_votes:
+            ip = v.ip_address or "unknown"
+            ip_vote_counts[ip] = ip_vote_counts.get(ip, 0) + 1
+
+        # Flag IPs with suspiciously high vote counts (> 5 from same IP)
+        suspicious_ips = {ip: count for ip, count in ip_vote_counts.items() if count > 5 and ip != "unknown"}
+
+        # 6. Voting timeline (votes per hour)
+        voting_timeline: Dict[str, int] = {}
+        for v in active_votes:
+            hour_key = v.voted_at.strftime("%Y-%m-%d %H:00") if v.voted_at else "unknown"
+            voting_timeline[hour_key] = voting_timeline.get(hour_key, 0) + 1
+
+        logger.info(f"Forensics report generated | election={election_id}")
+        await self._audit("forensics_report_generated", {
+            "election_id": str(election_id),
+            "title": election.title,
+        })
+
+        return {
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "election_status": election.status.value,
+            "anonymous_voting": election.anonymous_voting,
+            "voting_method": election.voting_method,
+            "created_at": election.created_at.isoformat() if election.created_at else None,
+
+            "vote_integrity": integrity,
+
+            "deleted_votes": {
+                "count": len(deleted_records),
+                "records": deleted_records,
+            },
+
+            "rollback_history": election.rollback_history or [],
+
+            "voting_tokens": {
+                "total_issued": len(token_records),
+                "total_used": sum(1 for t in token_records if t["used"]),
+                "records": token_records,
+            },
+
+            "audit_log": {
+                "total_entries": len(audit_records),
+                "entries": audit_records,
+            },
+
+            "anomaly_detection": {
+                "suspicious_ips": suspicious_ips,
+                "ip_vote_distribution": ip_vote_counts,
+            },
+
+            "voting_timeline": voting_timeline,
+        }
 
     async def get_election_results(
         self, election_id: UUID, organization_id: UUID, user_id: Optional[UUID] = None
@@ -963,9 +1195,24 @@ class ElectionService:
         await self.db.commit()
         await self.db.refresh(election)
 
+        logger.info(f"Election closed | election={election_id} title={election.title!r}")
+        await self._audit("election_closed", {
+            "election_id": str(election_id),
+            "title": election.title,
+        })
+
         # Check if runoffs are enabled and if we should create one
         if election.enable_runoffs and election.runoff_round < election.max_runoff_rounds:
-            await self._check_and_create_runoff(election, organization_id)
+            runoff = await self._check_and_create_runoff(election, organization_id)
+            if runoff:
+                logger.info(
+                    f"Runoff created | parent={election_id} runoff={runoff.id} round={runoff.runoff_round}"
+                )
+                await self._audit("runoff_election_created", {
+                    "parent_election_id": str(election_id),
+                    "runoff_election_id": str(runoff.id),
+                    "runoff_round": runoff.runoff_round,
+                })
 
         return election
 
@@ -1000,6 +1247,13 @@ class ElectionService:
         election.status = ElectionStatus.OPEN
         await self.db.commit()
         await self.db.refresh(election)
+
+        logger.info(f"Election opened | election={election_id} title={election.title!r}")
+        await self._audit("election_opened", {
+            "election_id": str(election_id),
+            "title": election.title,
+            "candidate_count": candidate_count,
+        })
 
         return election, None
 
@@ -1063,6 +1317,18 @@ class ElectionService:
 
         await self.db.commit()
         await self.db.refresh(election)
+
+        logger.warning(
+            f"Election rolled back | election={election_id} "
+            f"{from_status} -> {to_status} by={performed_by} reason={reason!r}"
+        )
+        await self._audit("election_rollback", {
+            "election_id": str(election_id),
+            "title": election.title,
+            "from_status": from_status,
+            "to_status": to_status,
+            "reason": reason,
+        }, severity="warning", user_id=str(performed_by))
 
         # Send email notifications to leadership
         notifications_sent = await self._notify_leadership_of_rollback(
@@ -1241,8 +1507,7 @@ Best regards,
                 if success_count_user > 0:
                     sent_count += 1
             except Exception as e:
-                # Log error but continue
-                print(f"Failed to send rollback notification to {user.email}: {str(e)}")
+                logger.error(f"Failed to send rollback notification to {user.email}: {e}")
                 continue
 
         return sent_count
@@ -1384,6 +1649,17 @@ Best regards,
         # Commit all voting tokens and election updates
         await self.db.commit()
         await self.db.refresh(election)
+
+        logger.info(
+            f"Ballot emails sent | election={election_id} "
+            f"success={success_count} failed={failed_count}"
+        )
+        await self._audit("ballot_emails_sent", {
+            "election_id": str(election_id),
+            "title": election.title,
+            "recipients": success_count,
+            "failed": failed_count,
+        })
 
         return success_count, failed_count
 
@@ -1567,8 +1843,24 @@ Best regards,
             await self.db.refresh(vote)
         except IntegrityError:
             await self.db.rollback()
+            logger.warning(
+                f"Token double-vote attempt blocked | election={election.id} position={position}"
+            )
+            await self._audit("vote_double_attempt_token", {
+                "election_id": str(election.id),
+                "position": position,
+            }, severity="warning", ip_address=ip_address)
             if position:
                 return None, f"Database integrity check: You have already voted for {position}"
             return None, "Database integrity check: You have already voted in this election"
+
+        logger.info(
+            f"Token vote cast | election={election.id} position={position} vote_id={vote.id}"
+        )
+        await self._audit("vote_cast_token", {
+            "election_id": str(election.id),
+            "vote_id": str(vote.id),
+            "position": position,
+        }, ip_address=ip_address)
 
         return vote, None

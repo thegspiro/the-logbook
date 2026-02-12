@@ -315,13 +315,13 @@ encrypted_candidate_id = Column(String(256), nullable=False)
 | **Anonymous Voting** | 🟢 **9/10** | Excellent HMAC-SHA256 implementation |
 | **Eligibility Checks** | 🟢 **10/10** | Comprehensive validation + anonymous-aware |
 | **Result Access Control** | 🟢 **10/10** | Proper UTC time-based enforcement (FIXED) |
-| **Audit Trail** | 🟢 **10/10** | Vote signatures + soft-delete audit trail |
+| **Audit Trail** | 🟢 **10/10** | Vote signatures + soft-delete + tamper-proof audit log + forensics |
 | **Race Condition Protection** | 🟢 **8/10** | DB constraint + IntegrityError handling |
 | **Anonymity Protection** | 🟢 **9/10** | Strong, voter_hash queries fixed |
 | **Input Validation** | 🟢 **9/10** | Enum validation, position checks, HTML escaping |
 | **Status Transition Security** | 🟢 **9/10** | Status bypass removed, close_election guarded |
 
-**Overall:** 🟢 **9.4/10** - Production-ready with comprehensive ballot integrity
+**Overall:** 🟢 **9.6/10** - Production-ready with comprehensive ballot integrity and forensics
 
 ---
 
@@ -442,3 +442,4 @@ The election system has a **strong security foundation** with proper authenticat
 - 2026-02-10: DB unique constraints added (migration 20260210_0023)
 - 2026-02-12: Comprehensive review — 11 fixes applied, Score 9.0/10
 - 2026-02-12: Low-priority improvements — Vote signatures, soft-delete, ranked-choice/approval voting, bulk atomicity, multi-position tokens, ballot UI, candidate management UI, Score 9.4/10
+- 2026-02-12: Audit logging & forensics — Tamper-proof audit trail integration, forensics aggregation endpoint, anomaly detection, BALLOT_FORENSICS_GUIDE.md, Score 9.6/10

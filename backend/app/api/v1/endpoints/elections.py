@@ -11,8 +11,10 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from uuid import UUID, uuid4
 from datetime import datetime
+from loguru import logger
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.election import (
     Election,
     Candidate,
@@ -140,6 +142,22 @@ async def create_election(
     db.add(new_election)
     await db.commit()
     await db.refresh(new_election)
+
+    logger.info(f"Election created | id={new_election.id} title={election.title!r} by={current_user.id}")
+    await log_audit_event(
+        db=db,
+        event_type="election_created",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(new_election.id),
+            "title": election.title,
+            "election_type": election.election_type,
+            "voting_method": election.voting_method,
+            "anonymous": election.anonymous_voting,
+        },
+        user_id=str(current_user.id),
+    )
 
     return new_election
 
@@ -317,8 +335,19 @@ async def delete_election(
             detail="Cannot delete election with existing votes"
         )
 
+    election_title = election.title
     await db.delete(election)
     await db.commit()
+
+    logger.info(f"Election deleted | id={election_id} title={election_title!r} by={current_user.id}")
+    await log_audit_event(
+        db=db,
+        event_type="election_deleted",
+        event_category="elections",
+        severity="warning",
+        event_data={"election_id": str(election_id), "title": election_title},
+        user_id=str(current_user.id),
+    )
 
 
 @router.post("/{election_id}/open", response_model=ElectionResponse)
@@ -991,3 +1020,33 @@ async def soft_delete_vote(
         )
 
     return {"message": "Vote soft-deleted successfully", "vote_id": str(vote.id)}
+
+
+@router.get("/{election_id}/forensics")
+async def get_election_forensics(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Get a comprehensive forensics report for an election.
+
+    Aggregates vote integrity, soft-deleted votes, rollback history,
+    token access logs, audit trail entries, anomaly detection (suspicious
+    IPs), and a voting timeline into a single response.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    report = await service.get_election_forensics(election_id, current_user.organization_id)
+
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found"
+        )
+
+    logger.info(f"Forensics report requested | election={election_id} by={current_user.id}")
+
+    return report
