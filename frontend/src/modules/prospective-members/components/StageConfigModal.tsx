@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Plus,
   Trash2,
+  Clock,
 } from 'lucide-react';
 import type {
   PipelineStage,
@@ -85,6 +86,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     DEFAULT_CONFIGS.manual_approval()
   );
   const [isRequired, setIsRequired] = useState(true);
+  const [hasTimeoutOverride, setHasTimeoutOverride] = useState(false);
+  const [timeoutOverrideDays, setTimeoutOverrideDays] = useState<number>(180);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -94,12 +97,21 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       setStageType(editingStage.stage_type);
       setConfig(editingStage.config);
       setIsRequired(editingStage.is_required);
+      if (editingStage.inactivity_timeout_days != null) {
+        setHasTimeoutOverride(true);
+        setTimeoutOverrideDays(editingStage.inactivity_timeout_days);
+      } else {
+        setHasTimeoutOverride(false);
+        setTimeoutOverrideDays(180);
+      }
     } else {
       setName('');
       setDescription('');
       setStageType('manual_approval');
       setConfig(DEFAULT_CONFIGS.manual_approval());
       setIsRequired(true);
+      setHasTimeoutOverride(false);
+      setTimeoutOverrideDays(180);
     }
     setErrors({});
   }, [editingStage, isOpen]);
@@ -140,6 +152,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         ? editingStage.sort_order
         : existingStageCount,
       is_required: isRequired,
+      inactivity_timeout_days: hasTimeoutOverride ? timeoutOverrideDays : null,
     };
 
     onSave(stageData);
@@ -399,6 +412,40 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   Approver roles can be configured in the organization settings.
                   Any user with the <code className="text-slate-400">prospective_members.manage</code> permission can approve.
                 </p>
+              </div>
+            )}
+          </div>
+
+          {/* Inactivity Timeout Override */}
+          <div className="border-t border-white/10 pt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <h3 className="text-sm font-medium text-slate-300">Inactivity Timeout Override</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              Override the pipeline's default inactivity timeout for this stage.
+              Useful for stages that naturally take longer (e.g., background checks, scheduling votes).
+            </p>
+            <label className="flex items-center gap-2 text-sm text-slate-300 mb-3">
+              <input
+                type="checkbox"
+                checked={hasTimeoutOverride}
+                onChange={(e) => setHasTimeoutOverride(e.target.checked)}
+                className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+              />
+              Use a custom timeout for this stage
+            </label>
+            {hasTimeoutOverride && (
+              <div className="flex items-center gap-3 ml-6">
+                <input
+                  type="number"
+                  min={1}
+                  max={730}
+                  value={timeoutOverrideDays}
+                  onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
+                  className="w-24 bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <span className="text-sm text-slate-400">days before marked inactive</span>
               </div>
             )}
           </div>

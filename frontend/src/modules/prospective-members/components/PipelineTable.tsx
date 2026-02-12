@@ -16,6 +16,7 @@ import {
   Pause,
   XCircle,
   MoreHorizontal,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ApplicantListItem, ApplicantStatus } from '../types';
@@ -36,6 +37,7 @@ const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string 
   withdrawn: { label: 'Withdrawn', className: 'bg-slate-500/20 text-slate-400' },
   converted: { label: 'Converted', className: 'bg-blue-500/20 text-blue-400' },
   rejected: { label: 'Rejected', className: 'bg-red-500/20 text-red-400' },
+  inactive: { label: 'Inactive', className: 'bg-slate-500/20 text-slate-500' },
 };
 
 export const PipelineTable: React.FC<PipelineTableProps> = ({
@@ -270,7 +272,15 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         className="p-3 text-sm text-slate-400"
                         onClick={() => onApplicantClick(applicant)}
                       >
-                        {applicant.days_in_stage}d
+                        <span className="flex items-center gap-1">
+                          {applicant.days_in_stage}d
+                          {applicant.inactivity_alert_level === 'critical' && (
+                            <AlertTriangle className="w-3 h-3 text-red-400" title="Approaching timeout" />
+                          )}
+                          {applicant.inactivity_alert_level === 'warning' && (
+                            <AlertTriangle className="w-3 h-3 text-amber-400" title="Activity slowing" />
+                          )}
+                        </span>
                       </td>
                       <td
                         className="p-3 text-sm text-slate-400 capitalize"

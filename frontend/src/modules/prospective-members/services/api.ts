@@ -14,6 +14,7 @@ import type {
   PipelineStageCreate,
   PipelineStageUpdate,
   PipelineStats,
+  InactivityConfig,
   Applicant,
   ApplicantCreate,
   ApplicantUpdate,
@@ -23,6 +24,9 @@ import type {
   ConvertApplicantRequest,
   ConvertApplicantResponse,
   ApplicantDocument,
+  ReactivateApplicantRequest,
+  PurgeInactiveRequest,
+  PurgeInactiveResponse,
 } from '../types';
 
 const api = axios.create({
@@ -140,6 +144,18 @@ export const pipelineService = {
     );
     return response.data;
   },
+
+  // Inactivity configuration
+  async updateInactivitySettings(
+    pipelineId: string,
+    config: InactivityConfig
+  ): Promise<Pipeline> {
+    const response = await api.patch<Pipeline>(
+      `/prospective-members/pipelines/${pipelineId}`,
+      { inactivity_config: config }
+    );
+    return response.data;
+  },
 };
 
 // =============================================================================
@@ -161,6 +177,7 @@ export const applicantService = {
           status: params?.filters?.status,
           target_membership_type: params?.filters?.target_membership_type,
           search: params?.filters?.search,
+          include_inactive: params?.filters?.include_inactive,
           page: params?.page ?? 1,
           page_size: params?.pageSize ?? 25,
         },
@@ -235,6 +252,49 @@ export const applicantService = {
   async resumeApplicant(applicantId: string): Promise<Applicant> {
     const response = await api.post<Applicant>(
       `/prospective-members/applicants/${applicantId}/resume`
+    );
+    return response.data;
+  },
+
+  async reactivateApplicant(
+    applicantId: string,
+    data?: ReactivateApplicantRequest
+  ): Promise<Applicant> {
+    const response = await api.post<Applicant>(
+      `/prospective-members/applicants/${applicantId}/reactivate`,
+      data ?? {}
+    );
+    return response.data;
+  },
+
+  async getInactiveApplicants(params?: {
+    pipeline_id?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedApplicantList> {
+    const response = await api.get<PaginatedApplicantList>(
+      '/prospective-members/applicants',
+      {
+        params: {
+          pipeline_id: params?.pipeline_id,
+          status: 'inactive',
+          search: params?.search,
+          page: params?.page ?? 1,
+          page_size: params?.pageSize ?? 25,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  async purgeInactiveApplicants(
+    pipelineId: string,
+    data: PurgeInactiveRequest
+  ): Promise<PurgeInactiveResponse> {
+    const response = await api.post<PurgeInactiveResponse>(
+      `/prospective-members/pipelines/${pipelineId}/purge-inactive`,
+      data
     );
     return response.data;
   },

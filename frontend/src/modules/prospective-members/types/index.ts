@@ -19,11 +19,65 @@ export type ApplicantStatus =
   | 'on_hold'
   | 'withdrawn'
   | 'converted'
-  | 'rejected';
+  | 'rejected'
+  | 'inactive';
+
+export type InactivityTimeoutPreset = '3_months' | '6_months' | '1_year' | 'never' | 'custom';
+
+export type InactivityAlertLevel = 'normal' | 'warning' | 'critical';
+
+export const TIMEOUT_PRESET_DAYS: Record<InactivityTimeoutPreset, number | null> = {
+  '3_months': 90,
+  '6_months': 180,
+  '1_year': 365,
+  'never': null,
+  'custom': null,
+};
+
+export const TIMEOUT_PRESET_LABELS: Record<InactivityTimeoutPreset, string> = {
+  '3_months': '3 Months',
+  '6_months': '6 Months',
+  '1_year': '1 Year',
+  'never': 'Never',
+  'custom': 'Custom',
+};
 
 export type TargetMembershipType = 'administrative' | 'probationary';
 
 export type PipelineViewMode = 'kanban' | 'table';
+
+// =============================================================================
+// Inactivity Configuration
+// =============================================================================
+
+export interface InactivityConfig {
+  timeout_preset: InactivityTimeoutPreset;
+  custom_timeout_days?: number;
+  warning_threshold_percent: number; // default 80 — warn at 80% of timeout
+  notify_coordinator: boolean;
+  notify_applicant: boolean;
+  auto_purge_enabled: boolean;
+  purge_days_after_inactive: number; // days after going inactive before purge
+}
+
+export const DEFAULT_INACTIVITY_CONFIG: InactivityConfig = {
+  timeout_preset: '3_months',
+  warning_threshold_percent: 80,
+  notify_coordinator: true,
+  notify_applicant: false,
+  auto_purge_enabled: false,
+  purge_days_after_inactive: 365,
+};
+
+/**
+ * Compute effective timeout days from an InactivityConfig.
+ * Returns null if the timeout is disabled ('never').
+ */
+export function getEffectiveTimeoutDays(config: InactivityConfig): number | null {
+  if (config.timeout_preset === 'never') return null;
+  if (config.timeout_preset === 'custom') return config.custom_timeout_days ?? null;
+  return TIMEOUT_PRESET_DAYS[config.timeout_preset];
+}
 
 // =============================================================================
 // Pipeline Stage Configuration
@@ -71,6 +125,7 @@ export interface PipelineStage {
   config: StageConfig;
   sort_order: number;
   is_required: boolean;
+  inactivity_timeout_days?: number | null; // null = use pipeline default
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +137,7 @@ export interface PipelineStageCreate {
   config: StageConfig;
   sort_order: number;
   is_required?: boolean;
+  inactivity_timeout_days?: number | null;
 }
 
 export interface PipelineStageUpdate {
@@ -91,6 +147,7 @@ export interface PipelineStageUpdate {
   config?: StageConfig;
   sort_order?: number;
   is_required?: boolean;
+  inactivity_timeout_days?: number | null;
 }
 
 // =============================================================================
@@ -103,6 +160,7 @@ export interface Pipeline {
   name: string;
   description?: string;
   is_active: boolean;
+  inactivity_config: InactivityConfig;
   stages: PipelineStage[];
   applicant_count?: number;
   created_at: string;
@@ -113,12 +171,14 @@ export interface PipelineCreate {
   name: string;
   description?: string;
   is_active?: boolean;
+  inactivity_config?: InactivityConfig;
 }
 
 export interface PipelineUpdate {
   name?: string;
   description?: string;
   is_active?: boolean;
+  inactivity_config?: InactivityConfig;
 }
 
 export interface PipelineListItem {
@@ -192,6 +252,10 @@ export interface Applicant {
   status: ApplicantStatus;
   notes?: string;
   stage_history: StageHistoryEntry[];
+  last_activity_at: string;
+  deactivated_at?: string;
+  deactivated_reason?: string;
+  reactivated_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -212,6 +276,11 @@ export interface ApplicantListItem {
   status: ApplicantStatus;
   days_in_stage: number;
   days_in_pipeline: number;
+  last_activity_at: string;
+  days_since_activity: number;
+  inactivity_alert_level: InactivityAlertLevel;
+  inactivity_timeout_days?: number; // effective timeout for this applicant's current stage
+  deactivated_at?: string;
   created_at: string;
 }
 
@@ -298,6 +367,7 @@ export interface ApplicantListFilters {
   status?: ApplicantStatus;
   target_membership_type?: TargetMembershipType;
   search?: string;
+  include_inactive?: boolean;
 }
 
 // =============================================================================
@@ -312,6 +382,8 @@ export interface PipelineStats {
   rejected_count: number;
   withdrawn_count: number;
   on_hold_count: number;
+  inactive_count: number;
+  warning_count: number;
   avg_days_to_convert: number;
   by_stage: {
     stage_id: string;
@@ -342,4 +414,22 @@ export interface DocumentUploadRequest {
   stage_id: string;
   document_type: string;
   file: File;
+}
+
+// =============================================================================
+// Inactivity Actions
+// =============================================================================
+
+export interface ReactivateApplicantRequest {
+  notes?: string;
+}
+
+export interface PurgeInactiveRequest {
+  applicant_ids?: string[]; // specific IDs, or omit to purge all eligible
+  confirm: boolean;
+}
+
+export interface PurgeInactiveResponse {
+  purged_count: number;
+  message: string;
 }

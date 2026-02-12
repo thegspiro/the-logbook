@@ -17,12 +17,26 @@ import {
   Power,
   PowerOff,
   Save,
+  Clock,
+  Bell,
+  AlertTriangle,
+  Trash,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { pipelineService } from '../services/api';
 import { PipelineBuilder } from '../components/PipelineBuilder';
-import type { Pipeline, PipelineListItem } from '../types';
+import type {
+  Pipeline,
+  PipelineListItem,
+  InactivityConfig,
+  InactivityTimeoutPreset,
+} from '../types';
+import {
+  DEFAULT_INACTIVITY_CONFIG,
+  TIMEOUT_PRESET_LABELS,
+  getEffectiveTimeoutDays,
+} from '../types';
 
 export const PipelineSettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -41,6 +55,8 @@ export const PipelineSettingsPage: React.FC = () => {
   const [pipelineName, setPipelineName] = useState('');
   const [pipelineDescription, setPipelineDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [inactivityConfig, setInactivityConfig] = useState<InactivityConfig>(DEFAULT_INACTIVITY_CONFIG);
+  const [isSavingInactivity, setIsSavingInactivity] = useState(false);
 
   useEffect(() => {
     fetchPipelines();
@@ -50,6 +66,7 @@ export const PipelineSettingsPage: React.FC = () => {
     if (currentPipeline) {
       setPipelineName(currentPipeline.name);
       setPipelineDescription(currentPipeline.description ?? '');
+      setInactivityConfig(currentPipeline.inactivity_config ?? DEFAULT_INACTIVITY_CONFIG);
     }
   }, [currentPipeline]);
 
@@ -128,6 +145,28 @@ export const PipelineSettingsPage: React.FC = () => {
       toast.error(msg);
     }
   };
+
+  const handleSaveInactivitySettings = async () => {
+    if (!currentPipeline) return;
+    setIsSavingInactivity(true);
+    try {
+      const updated = await pipelineService.updatePipeline(currentPipeline.id, {
+        inactivity_config: inactivityConfig,
+      });
+      setCurrentPipeline(updated);
+      toast.success('Inactivity settings saved');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save inactivity settings';
+      toast.error(msg);
+    } finally {
+      setIsSavingInactivity(false);
+    }
+  };
+
+  const effectiveTimeoutDays = getEffectiveTimeoutDays(inactivityConfig);
+  const warningDays = effectiveTimeoutDays
+    ? Math.round(effectiveTimeoutDays * (inactivityConfig.warning_threshold_percent / 100))
+    : null;
 
   const handlePipelineUpdated = (pipeline: Pipeline) => {
     setCurrentPipeline(pipeline);
@@ -351,6 +390,209 @@ export const PipelineSettingsPage: React.FC = () => {
                   pipeline={currentPipeline}
                   onPipelineUpdated={handlePipelineUpdated}
                 />
+              </div>
+
+              {/* Inactivity Configuration */}
+              <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4 mt-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-medium text-slate-300">
+                    Inactivity Timeout
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mb-5">
+                  Applications with no activity within the timeout period will be automatically
+                  marked inactive. Individual stages can override this default in their settings.
+                </p>
+
+                {/* Timeout Preset */}
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Default Inactivity Period
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {(Object.keys(TIMEOUT_PRESET_LABELS) as InactivityTimeoutPreset[]).map(
+                        (preset) => (
+                          <button
+                            key={preset}
+                            onClick={() =>
+                              setInactivityConfig({ ...inactivityConfig, timeout_preset: preset })
+                            }
+                            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                              inactivityConfig.timeout_preset === preset
+                                ? 'border-red-500 bg-red-500/10 text-red-400'
+                                : 'border-white/10 text-slate-300 hover:border-white/20'
+                            }`}
+                          >
+                            {TIMEOUT_PRESET_LABELS[preset]}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Custom Days Input */}
+                  {inactivityConfig.timeout_preset === 'custom' && (
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">
+                        Custom Timeout (days)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={1095}
+                        value={inactivityConfig.custom_timeout_days ?? 90}
+                        onChange={(e) =>
+                          setInactivityConfig({
+                            ...inactivityConfig,
+                            custom_timeout_days: Math.max(1, Number(e.target.value)),
+                          })
+                        }
+                        className="w-32 bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* Warning Threshold */}
+                  {inactivityConfig.timeout_preset !== 'never' && (
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">
+                        Warning Threshold
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={50}
+                          max={95}
+                          step={5}
+                          value={inactivityConfig.warning_threshold_percent}
+                          onChange={(e) =>
+                            setInactivityConfig({
+                              ...inactivityConfig,
+                              warning_threshold_percent: Number(e.target.value),
+                            })
+                          }
+                          className="flex-1 accent-red-500"
+                        />
+                        <span className="text-sm text-slate-300 w-12 text-right">
+                          {inactivityConfig.warning_threshold_percent}%
+                        </span>
+                      </div>
+                      {warningDays && effectiveTimeoutDays && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Warning at {warningDays} days, inactive at {effectiveTimeoutDays} days
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Notifications */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Bell className="w-3.5 h-3.5 text-slate-400" />
+                      <label className="text-sm text-slate-400">Notifications</label>
+                    </div>
+                    <div className="space-y-2 ml-5">
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={inactivityConfig.notify_coordinator}
+                          onChange={(e) =>
+                            setInactivityConfig({
+                              ...inactivityConfig,
+                              notify_coordinator: e.target.checked,
+                            })
+                          }
+                          className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                        />
+                        Notify membership coordinator when applications approach timeout
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={inactivityConfig.notify_applicant}
+                          onChange={(e) =>
+                            setInactivityConfig({
+                              ...inactivityConfig,
+                              notify_applicant: e.target.checked,
+                            })
+                          }
+                          className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                        />
+                        Notify the applicant that their application is going inactive
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Auto-Purge */}
+                  <div className="border-t border-white/10 pt-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Trash className="w-3.5 h-3.5 text-red-400" />
+                      <label className="text-sm text-slate-400">Auto-Purge</label>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-slate-300 mb-3">
+                      <input
+                        type="checkbox"
+                        checked={inactivityConfig.auto_purge_enabled}
+                        onChange={(e) =>
+                          setInactivityConfig({
+                            ...inactivityConfig,
+                            auto_purge_enabled: e.target.checked,
+                          })
+                        }
+                        className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                      />
+                      Permanently delete inactive applications after a set period
+                    </label>
+                    {inactivityConfig.auto_purge_enabled && (
+                      <>
+                        <div className="flex items-center gap-3 ml-6 mb-3">
+                          <input
+                            type="number"
+                            min={30}
+                            max={1095}
+                            value={inactivityConfig.purge_days_after_inactive}
+                            onChange={(e) =>
+                              setInactivityConfig({
+                                ...inactivityConfig,
+                                purge_days_after_inactive: Math.max(30, Number(e.target.value)),
+                              })
+                            }
+                            className="w-24 bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                          />
+                          <span className="text-sm text-slate-400">
+                            days after becoming inactive
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2 ml-6 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-300/80">
+                            Purged applications are permanently deleted and cannot be recovered. This
+                            helps reduce the amount of private information stored in the event of a
+                            security incident.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="flex items-center justify-end pt-2">
+                    <button
+                      onClick={handleSaveInactivitySettings}
+                      disabled={isSavingInactivity}
+                      className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isSavingInactivity ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      Save Inactivity Settings
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

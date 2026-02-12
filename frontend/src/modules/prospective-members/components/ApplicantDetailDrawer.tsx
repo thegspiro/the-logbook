@@ -26,6 +26,8 @@ import {
   User,
   Loader2,
   MessageSquare,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -62,7 +64,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     rejectApplicant,
     holdApplicant,
     resumeApplicant,
+    reactivateApplicant,
     isAdvancing,
+    isReactivating,
     isLoadingApplicant,
   } = useProspectiveMembersStore();
 
@@ -120,6 +124,18 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       toast.success('Applicant resumed');
     } catch {
       toast.error('Failed to resume applicant');
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!applicant) return;
+    try {
+      await reactivateApplicant(applicant.id, actionNotes || undefined);
+      toast.success('Application reactivated');
+      setActionNotes('');
+      setShowNotesInput(false);
+    } catch {
+      toast.error('Failed to reactivate application');
     }
   };
 
@@ -183,6 +199,28 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Inactive Notice */}
+            {applicant.status === 'inactive' && (
+              <div className="mx-4 mt-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-medium text-amber-300">Application Inactive</span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  This application was marked inactive due to no activity
+                  {applicant.deactivated_at && (
+                    <> since {formatDate(applicant.deactivated_at)}</>
+                  )}.
+                  A coordinator can reactivate it, or the individual may resubmit an interest form.
+                </p>
+                {applicant.reactivated_at && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Previously reactivated on {formatDate(applicant.reactivated_at)}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
@@ -357,7 +395,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="text-xs text-slate-500 space-y-1">
                   <p>Applied: {formatDate(applicant.created_at)}</p>
                   <p>Last updated: {formatDate(applicant.updated_at)}</p>
+                  <p>Last activity: {formatDate(applicant.last_activity_at)}</p>
                   <p>Pipeline: {applicant.pipeline_name ?? applicant.pipeline_id}</p>
+                  {applicant.deactivated_at && (
+                    <p>Deactivated: {formatDate(applicant.deactivated_at)}</p>
+                  )}
+                  {applicant.reactivated_at && (
+                    <p>Last reactivated: {formatDate(applicant.reactivated_at)}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -441,6 +486,54 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   >
                     <Play className="w-3.5 h-3.5" />
                     Resume
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Inactive Actions */}
+            {applicant.status === 'inactive' && (
+              <div className="border-t border-white/10 p-4 space-y-3">
+                {showNotesInput && (
+                  <div className="flex items-start gap-2">
+                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <textarea
+                      value={actionNotes}
+                      onChange={(e) => setActionNotes(e.target.value)}
+                      placeholder="Add notes for reactivation..."
+                      rows={2}
+                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowNotesInput(!showNotesInput)}
+                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    title="Add notes"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                  <div className="flex-1" />
+                  <button
+                    onClick={handleReject}
+                    disabled={isAdvancing}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    Reject
+                  </button>
+                  <button
+                    onClick={handleReactivate}
+                    disabled={isReactivating}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {isReactivating ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    )}
+                    Reactivate
                   </button>
                 </div>
               </div>

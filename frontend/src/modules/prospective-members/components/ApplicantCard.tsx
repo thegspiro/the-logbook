@@ -5,8 +5,8 @@
  */
 
 import React from 'react';
-import { Clock, Mail, Phone, ArrowRight } from 'lucide-react';
-import type { ApplicantListItem, ApplicantStatus } from '../types';
+import { Clock, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
+import type { ApplicantListItem, ApplicantStatus, InactivityAlertLevel } from '../types';
 
 interface ApplicantCardProps {
   applicant: ApplicantListItem;
@@ -21,6 +21,13 @@ const STATUS_COLORS: Record<ApplicantStatus, string> = {
   withdrawn: 'bg-slate-500/20 text-slate-400',
   converted: 'bg-blue-500/20 text-blue-400',
   rejected: 'bg-red-500/20 text-red-400',
+  inactive: 'bg-slate-500/20 text-slate-500',
+};
+
+const ALERT_LEVEL_STYLES: Record<InactivityAlertLevel, { border: string; icon: string } | null> = {
+  normal: null,
+  warning: { border: 'border-amber-500/40', icon: 'text-amber-400' },
+  critical: { border: 'border-red-500/40', icon: 'text-red-400' },
 };
 
 export const ApplicantCard: React.FC<ApplicantCardProps> = ({
@@ -30,16 +37,33 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
   isDragging,
 }) => {
   const initials = `${applicant.first_name[0]}${applicant.last_name[0]}`.toUpperCase();
+  const alertLevel = applicant.inactivity_alert_level ?? 'normal';
+  const alertStyle = ALERT_LEVEL_STYLES[alertLevel];
 
   return (
     <div
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, applicant)}
       onClick={() => onClick(applicant)}
-      className={`bg-slate-700/80 border border-white/10 rounded-lg p-3.5 cursor-pointer hover:border-white/20 hover:bg-slate-700 transition-all ${
+      className={`bg-slate-700/80 border rounded-lg p-3.5 cursor-pointer hover:border-white/20 hover:bg-slate-700 transition-all ${
         isDragging ? 'opacity-50 ring-2 ring-red-500' : ''
-      }`}
+      } ${alertStyle ? alertStyle.border : 'border-white/10'}`}
     >
+      {/* Inactivity Warning Banner */}
+      {alertLevel !== 'normal' && (
+        <div className={`flex items-center gap-1.5 mb-2 px-2 py-1 rounded text-xs ${
+          alertLevel === 'critical'
+            ? 'bg-red-500/10 text-red-400'
+            : 'bg-amber-500/10 text-amber-400'
+        }`}>
+          <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+          <span>
+            {alertLevel === 'critical' ? 'Approaching timeout' : 'Activity slowing'}
+            {applicant.days_since_activity != null && ` — ${applicant.days_since_activity}d idle`}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2.5">

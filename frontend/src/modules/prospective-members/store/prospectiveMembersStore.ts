@@ -9,12 +9,15 @@ import type {
   Pipeline,
   PipelineListItem,
   PipelineStats,
+  InactivityConfig,
   Applicant,
   ApplicantListItem,
   ApplicantListFilters,
   PipelineViewMode,
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
+
+export type PipelineTab = 'active' | 'inactive';
 
 interface ProspectiveMembersState {
   // Pipeline data
@@ -37,7 +40,14 @@ interface ProspectiveMembersState {
 
   // View state
   viewMode: PipelineViewMode;
+  activeTab: PipelineTab;
   detailDrawerOpen: boolean;
+
+  // Inactive applicant data
+  inactiveApplicants: ApplicantListItem[];
+  inactiveTotalApplicants: number;
+  inactiveCurrentPage: number;
+  inactiveTotalPages: number;
 
   // Loading states
   isLoading: boolean;
@@ -45,7 +55,10 @@ interface ProspectiveMembersState {
   isLoadingPipeline: boolean;
   isLoadingApplicant: boolean;
   isLoadingStats: boolean;
+  isLoadingInactive: boolean;
   isAdvancing: boolean;
+  isReactivating: boolean;
+  isPurging: boolean;
   error: string | null;
 
   // Pipeline actions
@@ -63,10 +76,17 @@ interface ProspectiveMembersState {
   holdApplicant: (id: string, reason?: string) => Promise<void>;
   resumeApplicant: (id: string) => Promise<void>;
 
+  // Inactivity actions
+  reactivateApplicant: (id: string, notes?: string) => Promise<void>;
+  fetchInactiveApplicants: (page?: number) => Promise<void>;
+  purgeInactiveApplicants: (applicantIds?: string[]) => Promise<void>;
+  updateInactivitySettings: (config: InactivityConfig) => Promise<void>;
+
   // Filter & view actions
   setFilters: (filters: ApplicantListFilters) => void;
   clearFilters: () => void;
   setViewMode: (mode: PipelineViewMode) => void;
+  setActiveTab: (tab: PipelineTab) => void;
   setDetailDrawerOpen: (open: boolean) => void;
 
   // Utilities
@@ -93,14 +113,23 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     filters: defaultFilters,
 
     viewMode: 'kanban',
+    activeTab: 'active',
     detailDrawerOpen: false,
+
+    inactiveApplicants: [],
+    inactiveTotalApplicants: 0,
+    inactiveCurrentPage: 1,
+    inactiveTotalPages: 0,
 
     isLoading: false,
     isLoadingPipelines: false,
     isLoadingPipeline: false,
     isLoadingApplicant: false,
     isLoadingStats: false,
+    isLoadingInactive: false,
     isAdvancing: false,
+    isReactivating: false,
+    isPurging: false,
     error: null,
 
     // Pipeline actions
@@ -297,6 +326,111 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
       }
     },
 
+    // Inactivity actions
+    reactivateApplicant: async (id: string, notes?: string) => {
+      set({ isReactivating: true, error: null });
+      try {
+        await applicantService.reactivateApplicant(id, notes ? { notes } : undefined);
+        // Refresh both active and inactive lists
+        await get().fetchApplicants();
+        await get().fetchInactiveApplicants();
+        const state = get();
+        if (state.currentPipeline) {
+          await get().fetchPipelineStats(state.currentPipeline.id);
+        }
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant?.id === id) {
+          await get().fetchApplicant(id);
+        }
+        set({ isReactivating: false });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to reactivate applicant',
+          isReactivating: false,
+        });
+      }
+    },
+
+    fetchInactiveApplicants: async (page?: number) => {
+      const state = get();
+      const pageToFetch = page ?? state.inactiveCurrentPage;
+
+      set({ isLoadingInactive: true, error: null });
+      try {
+        const response = await applicantService.getInactiveApplicants({
+          pipeline_id: state.filters.pipeline_id,
+          search: state.filters.search,
+          page: pageToFetch,
+          pageSize: state.pageSize,
+        });
+
+        set({
+          inactiveApplicants: response.items,
+          inactiveTotalApplicants: response.total,
+          inactiveCurrentPage: response.page,
+          inactiveTotalPages: response.total_pages,
+          isLoadingInactive: false,
+        });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to fetch inactive applicants',
+          isLoadingInactive: false,
+        });
+      }
+    },
+
+    purgeInactiveApplicants: async (applicantIds?: string[]) => {
+      const state = get();
+      if (!state.currentPipeline) return;
+
+      set({ isPurging: true, error: null });
+      try {
+        await applicantService.purgeInactiveApplicants(state.currentPipeline.id, {
+          applicant_ids: applicantIds,
+          confirm: true,
+        });
+        await get().fetchInactiveApplicants();
+        await get().fetchPipelineStats(state.currentPipeline.id);
+        set({ isPurging: false });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to purge inactive applicants',
+          isPurging: false,
+        });
+      }
+    },
+
+    updateInactivitySettings: async (config: InactivityConfig) => {
+      const state = get();
+      if (!state.currentPipeline) return;
+
+      set({ error: null });
+      try {
+        const updated = await pipelineService.updateInactivitySettings(
+          state.currentPipeline.id,
+          config
+        );
+        set({ currentPipeline: updated });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to update inactivity settings',
+        });
+        throw error;
+      }
+    },
+
     // Filter & view actions
     setFilters: (filters: ApplicantListFilters) => {
       set({ filters: { ...get().filters, ...filters }, currentPage: 1 });
@@ -310,6 +444,15 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
 
     setViewMode: (mode: PipelineViewMode) => {
       set({ viewMode: mode });
+    },
+
+    setActiveTab: (tab: PipelineTab) => {
+      set({ activeTab: tab });
+      if (tab === 'inactive') {
+        get().fetchInactiveApplicants(1);
+      } else {
+        get().fetchApplicants(1);
+      }
     },
 
     setDetailDrawerOpen: (open: boolean) => {
