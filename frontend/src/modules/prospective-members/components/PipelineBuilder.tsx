@@ -65,6 +65,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     setStages(pipeline.stages);
@@ -160,7 +161,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
 
   const handleDrop = (e: React.DragEvent, toIndex: number) => {
     e.preventDefault();
-    if (dragIndex !== null && dragIndex !== toIndex) {
+    if (dragIndex !== null && dragIndex !== toIndex && !isSaving) {
       moveStage(dragIndex, toIndex);
     }
     setDragIndex(null);
@@ -269,13 +270,33 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={() => handleDeleteStage(stage.id)}
-                    className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
-                    title="Remove stage"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {deleteConfirmId === stage.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setDeleteConfirmId(null)}
+                        className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleDeleteStage(stage.id);
+                          setDeleteConfirmId(null);
+                        }}
+                        className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirmId(stage.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                      title="Remove stage"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

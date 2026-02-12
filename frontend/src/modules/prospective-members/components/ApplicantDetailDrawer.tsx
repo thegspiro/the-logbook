@@ -5,7 +5,7 @@
  * and stage-specific actions.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Mail,
@@ -28,6 +28,8 @@ import {
   MessageSquare,
   RotateCcw,
   AlertTriangle,
+  EyeOff,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -35,6 +37,7 @@ import type {
   StageType,
   StageHistoryEntry,
 } from '../types';
+import { isSafeUrl, getInitials } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 
 interface ApplicantDetailDrawerProps {
@@ -66,14 +69,28 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     resumeApplicant,
     reactivateApplicant,
     isAdvancing,
+    isRejecting,
+    isHolding,
+    isResuming,
     isReactivating,
     isLoadingApplicant,
   } = useProspectiveMembersStore();
 
   const [actionNotes, setActionNotes] = useState('');
   const [showNotesInput, setShowNotesInput] = useState(false);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [showPii, setShowPii] = useState(true);
+
+  // Reset action notes and confirm state when applicant changes
+  useEffect(() => {
+    setActionNotes('');
+    setShowNotesInput(false);
+    setShowRejectConfirm(false);
+  }, [applicant?.id]);
 
   if (!isOpen) return null;
+
+  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming;
 
   const handleAdvance = async () => {
     if (!applicant) return;
@@ -100,6 +117,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       toast.success('Applicant rejected');
       setActionNotes('');
       setShowNotesInput(false);
+      setShowRejectConfirm(false);
     } catch {
       toast.error('Failed to reject applicant');
     }
@@ -157,6 +175,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     });
   };
 
+  const maskValue = (value: string) => showPii ? value : '••••••••';
+
   return (
     <>
       {/* Overlay */}
@@ -180,7 +200,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             <div className="flex items-center justify-between p-4 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-white">
-                  {applicant.first_name[0]}{applicant.last_name[0]}
+                  {getInitials(applicant.first_name, applicant.last_name)}
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">
@@ -192,12 +212,21 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </p>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowPii(!showPii)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                  title={showPii ? 'Hide personal info' : 'Show personal info'}
+                >
+                  {showPii ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Inactive Notice */}
@@ -232,19 +261,19 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Mail className="w-4 h-4 text-slate-500" />
-                    <span className="text-slate-300">{applicant.email}</span>
+                    <span className="text-slate-300">{maskValue(applicant.email)}</span>
                   </div>
                   {applicant.phone && (
                     <div className="flex items-center gap-2 text-sm">
                       <Phone className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">{applicant.phone}</span>
+                      <span className="text-slate-300">{maskValue(applicant.phone)}</span>
                     </div>
                   )}
                   {applicant.date_of_birth && (
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="w-4 h-4 text-slate-500" />
                       <span className="text-slate-300">
-                        DOB: {formatDate(applicant.date_of_birth)}
+                        DOB: {showPii ? formatDate(applicant.date_of_birth) : '••/••/••••'}
                       </span>
                     </div>
                   )}
@@ -252,9 +281,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="w-4 h-4 text-slate-500" />
                       <span className="text-slate-300">
-                        {[applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
-                          .filter(Boolean)
-                          .join(', ')}
+                        {showPii
+                          ? [applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
+                              .filter(Boolean)
+                              .join(', ')
+                          : '••••••••'}
                       </span>
                     </div>
                   )}
@@ -352,7 +383,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                       className="flex items-center gap-1 text-xs text-blue-400"
                                     >
                                       <FileText className="w-3 h-3" />
-                                      {artifact.url ? (
+                                      {artifact.url && isSafeUrl(artifact.url) ? (
                                         <a
                                           href={artifact.url}
                                           target="_blank"
@@ -396,7 +427,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <p>Applied: {formatDate(applicant.created_at)}</p>
                   <p>Last updated: {formatDate(applicant.updated_at)}</p>
                   <p>Last activity: {formatDate(applicant.last_activity_at)}</p>
-                  <p>Pipeline: {applicant.pipeline_name ?? applicant.pipeline_id}</p>
+                  {applicant.pipeline_name && (
+                    <p>Pipeline: {applicant.pipeline_name}</p>
+                  )}
                   {applicant.deactivated_at && (
                     <p>Deactivated: {formatDate(applicant.deactivated_at)}</p>
                   )}
@@ -424,6 +457,31 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
 
+                {/* Reject confirmation */}
+                {showRejectConfirm && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                    <p className="text-sm text-red-300 mb-2">
+                      Are you sure you want to reject this applicant? This action cannot be easily undone.
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowRejectConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={isRejecting}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
@@ -437,15 +495,15 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
                   <button
                     onClick={handleHold}
-                    disabled={isAdvancing}
+                    disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
                   >
-                    <Pause className="w-3.5 h-3.5" />
+                    {isHolding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />}
                     Hold
                   </button>
                   <button
-                    onClick={handleReject}
-                    disabled={isAdvancing}
+                    onClick={() => setShowRejectConfirm(true)}
+                    disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
@@ -453,7 +511,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </button>
                   <button
                     onClick={handleAdvance}
-                    disabled={isAdvancing}
+                    disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
                     {isAdvancing ? (
@@ -470,10 +528,33 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {/* On Hold Actions */}
             {applicant.status === 'on_hold' && (
               <div className="border-t border-white/10 p-4">
+                {showRejectConfirm && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-red-300 mb-2">
+                      Are you sure you want to reject this applicant? This action cannot be easily undone.
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowRejectConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={isRejecting}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center justify-end gap-2">
                   <button
-                    onClick={handleReject}
-                    disabled={isAdvancing}
+                    onClick={() => setShowRejectConfirm(true)}
+                    disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
@@ -481,10 +562,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </button>
                   <button
                     onClick={handleResume}
-                    disabled={isAdvancing}
+                    disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
-                    <Play className="w-3.5 h-3.5" />
+                    {isResuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                     Resume
                   </button>
                 </div>
@@ -506,6 +587,29 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     />
                   </div>
                 )}
+                {showRejectConfirm && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                    <p className="text-sm text-red-300 mb-2">
+                      Are you sure you want to reject this applicant?
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowRejectConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={isRejecting}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
@@ -516,8 +620,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </button>
                   <div className="flex-1" />
                   <button
-                    onClick={handleReject}
-                    disabled={isAdvancing}
+                    onClick={() => setShowRejectConfirm(true)}
+                    disabled={isRejecting || isReactivating}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />

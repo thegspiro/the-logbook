@@ -28,6 +28,7 @@ import type {
   PurgeInactiveRequest,
   PurgeInactiveResponse,
 } from '../types';
+import { FILE_UPLOAD_LIMITS } from '../types';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -43,27 +44,40 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 responses
+// Shared refresh promise to prevent concurrent refresh attempts (matches shared API client pattern)
+let refreshPromise: Promise<string> | null = null;
+
+// Handle 401 responses with race-safe token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken && !error.config._retry) {
-        error.config._retry = true;
-        try {
-          const res = await axios.post('/api/v1/auth/refresh', {
-            refresh_token: refreshToken,
-          });
-          const { access_token } = res.data;
-          localStorage.setItem('access_token', access_token);
-          error.config.headers.Authorization = `Bearer ${access_token}`;
-          return api(error.config);
-        } catch {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
+      if (!refreshToken) return Promise.reject(error);
+
+      try {
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+            .then((response) => {
+              const { access_token, refresh_token: new_refresh_token } = response.data;
+              localStorage.setItem('access_token', access_token);
+              if (new_refresh_token) {
+                localStorage.setItem('refresh_token', new_refresh_token);
+              }
+              return access_token;
+            })
+            .finally(() => { refreshPromise = null; });
         }
+        const newAccessToken = await refreshPromise;
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
+      } catch {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
@@ -324,6 +338,22 @@ export const applicantService = {
     documentType: string,
     file: File
   ): Promise<ApplicantDocument> {
+    // Client-side file validation
+    if (file.size > FILE_UPLOAD_LIMITS.maxSizeBytes) {
+      throw new Error(`File exceeds maximum size of ${FILE_UPLOAD_LIMITS.maxSizeLabel}`);
+    }
+    if (file.type && !FILE_UPLOAD_LIMITS.allowedMimeTypes.includes(file.type)) {
+      throw new Error(
+        `File type "${file.type}" is not allowed. Accepted: ${FILE_UPLOAD_LIMITS.allowedExtensions.join(', ')}`
+      );
+    }
+    const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+    if (ext && !(FILE_UPLOAD_LIMITS.allowedExtensions as readonly string[]).includes(ext)) {
+      throw new Error(
+        `File extension "${ext}" is not allowed. Accepted: ${FILE_UPLOAD_LIMITS.allowedExtensions.join(', ')}`
+      );
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('stage_id', stageId);

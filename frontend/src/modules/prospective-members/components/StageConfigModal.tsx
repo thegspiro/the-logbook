@@ -136,6 +136,30 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       if (validTypes.length === 0) newErrors.document_types = 'At least one document type is required';
     }
 
+    if (stageType === 'election_vote') {
+      const c = config as ElectionStageConfig;
+      if (!c.eligible_voter_roles || c.eligible_voter_roles.length === 0) {
+        newErrors.eligible_voter_roles = 'At least one eligible voter role is required';
+      }
+      const pct = c.victory_percentage ?? 67;
+      if (pct < 1 || pct > 100 || !Number.isFinite(pct)) {
+        newErrors.victory_percentage = 'Victory percentage must be between 1 and 100';
+      }
+    }
+
+    if (stageType === 'manual_approval') {
+      const c = config as ManualApprovalConfig;
+      if (!c.approver_roles || c.approver_roles.length === 0) {
+        newErrors.approver_roles = 'At least one approver role is required';
+      }
+    }
+
+    if (hasTimeoutOverride) {
+      if (!Number.isFinite(timeoutOverrideDays) || timeoutOverrideDays < 1) {
+        newErrors.timeout_override = 'Timeout override must be at least 1 day';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };

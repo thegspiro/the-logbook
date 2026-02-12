@@ -47,7 +47,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   applicants,
   onApplicantClick,
 }) => {
-  const { advanceApplicant } = useProspectiveMembersStore();
+  const { advanceApplicant, isAdvancing } = useProspectiveMembersStore();
   const [draggedApplicant, setDraggedApplicant] = useState<ApplicantListItem | null>(null);
   const [dropTargetStageId, setDropTargetStageId] = useState<string | null>(null);
 
@@ -89,7 +89,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     e.preventDefault();
     setDropTargetStageId(null);
 
-    if (!draggedApplicant) return;
+    if (!draggedApplicant || isAdvancing) return;
 
     // Only allow advancing to the next stage
     const currentStageIndex = sortedStages.findIndex(

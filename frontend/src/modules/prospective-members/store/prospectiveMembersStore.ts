@@ -57,6 +57,9 @@ interface ProspectiveMembersState {
   isLoadingStats: boolean;
   isLoadingInactive: boolean;
   isAdvancing: boolean;
+  isRejecting: boolean;
+  isHolding: boolean;
+  isResuming: boolean;
   isReactivating: boolean;
   isPurging: boolean;
   error: string | null;
@@ -128,6 +131,9 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     isLoadingStats: false,
     isLoadingInactive: false,
     isAdvancing: false,
+    isRejecting: false,
+    isHolding: false,
+    isResuming: false,
     isReactivating: false,
     isPurging: false,
     error: null,
@@ -264,7 +270,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     },
 
     rejectApplicant: async (id: string, reason?: string) => {
-      set({ isAdvancing: true, error: null });
+      set({ isRejecting: true, error: null });
       try {
         await applicantService.rejectApplicant(id, reason);
         await get().fetchApplicants();
@@ -272,20 +278,21 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         if (currentApplicant?.id === id) {
           await get().fetchApplicant(id);
         }
-        set({ isAdvancing: false });
+        set({ isRejecting: false });
       } catch (error) {
         set({
           error:
             error instanceof Error
               ? error.message
               : 'Failed to reject applicant',
-          isAdvancing: false,
+          isRejecting: false,
         });
+        throw error;
       }
     },
 
     holdApplicant: async (id: string, reason?: string) => {
-      set({ isAdvancing: true, error: null });
+      set({ isHolding: true, error: null });
       try {
         await applicantService.putOnHold(id, reason);
         await get().fetchApplicants();
@@ -293,20 +300,21 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         if (currentApplicant?.id === id) {
           await get().fetchApplicant(id);
         }
-        set({ isAdvancing: false });
+        set({ isHolding: false });
       } catch (error) {
         set({
           error:
             error instanceof Error
               ? error.message
               : 'Failed to put applicant on hold',
-          isAdvancing: false,
+          isHolding: false,
         });
+        throw error;
       }
     },
 
     resumeApplicant: async (id: string) => {
-      set({ isAdvancing: true, error: null });
+      set({ isResuming: true, error: null });
       try {
         await applicantService.resumeApplicant(id);
         await get().fetchApplicants();
@@ -314,15 +322,16 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
         if (currentApplicant?.id === id) {
           await get().fetchApplicant(id);
         }
-        set({ isAdvancing: false });
+        set({ isResuming: false });
       } catch (error) {
         set({
           error:
             error instanceof Error
               ? error.message
               : 'Failed to resume applicant',
-          isAdvancing: false,
+          isResuming: false,
         });
+        throw error;
       }
     },
 

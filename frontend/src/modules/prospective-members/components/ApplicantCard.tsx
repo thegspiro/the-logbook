@@ -7,6 +7,7 @@
 import React from 'react';
 import { Clock, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
 import type { ApplicantListItem, ApplicantStatus, InactivityAlertLevel } from '../types';
+import { getInitials } from '../types';
 
 interface ApplicantCardProps {
   applicant: ApplicantListItem;
@@ -36,7 +37,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
   onDragStart,
   isDragging,
 }) => {
-  const initials = `${applicant.first_name[0]}${applicant.last_name[0]}`.toUpperCase();
+  const initials = getInitials(applicant.first_name, applicant.last_name);
   const alertLevel = applicant.inactivity_alert_level ?? 'normal';
   const alertStyle = ALERT_LEVEL_STYLES[alertLevel];
 

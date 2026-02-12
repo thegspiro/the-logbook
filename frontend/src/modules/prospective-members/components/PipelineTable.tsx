@@ -5,11 +5,10 @@
  * server-side pagination, and bulk actions.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
   CheckSquare,
   Square,
   Forward,
@@ -17,9 +16,11 @@ import {
   XCircle,
   MoreHorizontal,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ApplicantListItem, ApplicantStatus } from '../types';
+import { getInitials } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 
 interface PipelineTableProps {
@@ -48,10 +49,18 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   onPageChange,
   onApplicantClick,
 }) => {
-  const { advanceApplicant, holdApplicant, rejectApplicant } =
+  const { advanceApplicant, holdApplicant, rejectApplicant, isRejecting } =
     useProspectiveMembersStore();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
+  const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
+
+  // Clear selection when page changes
+  useEffect(() => {
+    setSelected(new Set());
+    setActionMenuId(null);
+  }, [currentPage]);
 
   const allSelected =
     applicants.length > 0 && selected.size === applicants.length;
@@ -145,11 +154,37 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
               Hold
             </button>
             <button
-              onClick={() => handleBulkAction('reject')}
+              onClick={() => setShowBulkRejectConfirm(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
             >
               <XCircle className="w-3.5 h-3.5" />
               Reject
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Reject Confirmation */}
+      {showBulkRejectConfirm && (
+        <div className="mb-3 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+          <p className="text-sm text-red-300 mb-3">
+            Are you sure you want to reject <strong className="text-white">{selected.size}</strong> applicant(s)? This action cannot be easily undone.
+          </p>
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              onClick={() => setShowBulkRejectConfirm(false)}
+              className="px-3 py-1.5 text-sm text-slate-300 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                handleBulkAction('reject');
+                setShowBulkRejectConfirm(false);
+              }}
+              className="flex items-center gap-1 px-4 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              Confirm Reject All
             </button>
           </div>
         </div>
@@ -173,33 +208,25 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   </button>
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  <div className="flex items-center gap-1 cursor-pointer hover:text-white">
-                    Name <ArrowUpDown className="w-3 h-3" />
-                  </div>
+                  Name
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Email
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  <div className="flex items-center gap-1 cursor-pointer hover:text-white">
-                    Current Stage <ArrowUpDown className="w-3 h-3" />
-                  </div>
+                  Current Stage
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  <div className="flex items-center gap-1 cursor-pointer hover:text-white">
-                    Days in Stage <ArrowUpDown className="w-3 h-3" />
-                  </div>
+                  Days in Stage
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Target Type
                 </th>
                 <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  <div className="flex items-center gap-1 cursor-pointer hover:text-white">
-                    Applied <ArrowUpDown className="w-3 h-3" />
-                  </div>
+                  Applied
                 </th>
                 <th className="w-12 p-3"></th>
               </tr>
@@ -241,7 +268,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                            {applicant.first_name[0]}{applicant.last_name[0]}
+                            {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-sm font-medium text-white">
                             {applicant.first_name} {applicant.last_name}
@@ -336,15 +363,38 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 >
                                   Put on Hold
                                 </button>
-                                <button
-                                  onClick={() => {
-                                    rejectApplicant(applicant.id);
-                                    setActionMenuId(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-white/5"
-                                >
-                                  Reject
-                                </button>
+                                {rejectConfirmId === applicant.id ? (
+                                  <div className="px-4 py-2 space-y-2">
+                                    <p className="text-xs text-red-300">Confirm reject?</p>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => setRejectConfirmId(null)}
+                                        className="text-xs text-slate-400 hover:text-white"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          rejectApplicant(applicant.id);
+                                          setRejectConfirmId(null);
+                                          setActionMenuId(null);
+                                        }}
+                                        disabled={isRejecting}
+                                        className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                                      >
+                                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
+                                        Confirm
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setRejectConfirmId(applicant.id)}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-white/5"
+                                  >
+                                    Reject
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>

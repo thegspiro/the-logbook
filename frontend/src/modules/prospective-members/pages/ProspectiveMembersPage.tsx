@@ -36,6 +36,7 @@ import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
 import { ConversionModal } from '../components/ConversionModal';
 import { applicantService } from '../services/api';
 import type { ApplicantListItem, Applicant, ApplicantStatus } from '../types';
+import { isValidEmail, getInitials } from '../types';
 
 export const ProspectiveMembersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -153,8 +154,12 @@ export const ProspectiveMembersPage: React.FC = () => {
 
   const handleCreateApplicant = async () => {
     if (!currentPipeline) return;
-    if (!newApplicant.first_name || !newApplicant.last_name || !newApplicant.email) {
+    if (!newApplicant.first_name.trim() || !newApplicant.last_name.trim() || !newApplicant.email.trim()) {
       toast.error('First name, last name, and email are required');
+      return;
+    }
+    if (!isValidEmail(newApplicant.email.trim())) {
+      toast.error('Please enter a valid email address');
       return;
     }
     setIsCreating(true);
@@ -528,14 +533,20 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <button
                   onClick={async () => {
                     const ids = Array.from(selectedInactive);
+                    let successCount = 0;
                     for (const id of ids) {
                       try {
                         await reactivateApplicant(id);
+                        successCount++;
                       } catch {
                         // continue
                       }
                     }
-                    toast.success(`Reactivated ${ids.length} application(s)`);
+                    if (successCount === ids.length) {
+                      toast.success(`Reactivated ${successCount} application(s)`);
+                    } else {
+                      toast.success(`Reactivated ${successCount} of ${ids.length} application(s)`);
+                    }
                     setSelectedInactive(new Set());
                   }}
                   disabled={isReactivating}
@@ -622,7 +633,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                       <td className="p-3">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 flex-shrink-0">
-                            {applicant.first_name[0]}{applicant.last_name[0]}
+                            {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-sm font-medium text-slate-300">
                             {applicant.first_name} {applicant.last_name}

@@ -75,9 +75,50 @@ export const DEFAULT_INACTIVITY_CONFIG: InactivityConfig = {
  */
 export function getEffectiveTimeoutDays(config: InactivityConfig): number | null {
   if (config.timeout_preset === 'never') return null;
-  if (config.timeout_preset === 'custom') return config.custom_timeout_days ?? null;
+  if (config.timeout_preset === 'custom') {
+    const days = config.custom_timeout_days;
+    if (days == null || days <= 0 || !Number.isFinite(days)) return null;
+    return days;
+  }
   return TIMEOUT_PRESET_DAYS[config.timeout_preset];
 }
+
+/** Validate that a URL uses a safe protocol (http/https only). */
+export function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** Safe initials extraction that handles empty strings. */
+export function getInitials(firstName: string, lastName: string): string {
+  const f = firstName?.trim();
+  const l = lastName?.trim();
+  return `${f ? f[0] : '?'}${l ? l[0] : '?'}`.toUpperCase();
+}
+
+/** Basic email format validation. */
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/** Allowed file upload constraints. */
+export const FILE_UPLOAD_LIMITS = {
+  maxSizeBytes: 10 * 1024 * 1024, // 10 MB
+  maxSizeLabel: '10 MB',
+  allowedMimeTypes: [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+  allowedExtensions: ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx'],
+} as const;
 
 // =============================================================================
 // Pipeline Stage Configuration

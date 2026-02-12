@@ -5,7 +5,7 @@
  * into an administrative or probationary member.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   UserCheck,
@@ -44,6 +44,17 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
     user_id: string;
     message: string;
   } | null>(null);
+
+  // Reset state when applicant changes or modal opens
+  useEffect(() => {
+    if (applicant && isOpen) {
+      setMembershipType(applicant.target_membership_type ?? 'probationary');
+      setSendWelcomeEmail(true);
+      setNotes('');
+      setIsConverting(false);
+      setConversionResult(null);
+    }
+  }, [applicant?.id, isOpen]);
 
   if (!isOpen || !applicant) return null;
 
