@@ -489,6 +489,33 @@ Public forms support QR code generation for physical distribution:
 
 ---
 
+## Election & Voting Security
+
+### Double-Voting Prevention
+
+The election system uses database-level constraints to prevent double-voting:
+
+- **4 Partial Unique Indexes**: Unique indexes on the votes table enforce one vote per user per ballot at the database level — prevents race conditions and direct database manipulation
+- **IntegrityError Handling**: `cast_vote()` catches constraint violations and returns a user-friendly error message instead of a 500 error
+- **Anonymous Voting**: Votes are linked to users via HMAC-SHA256 hashed identifiers, preventing direct association between votes and voters while still enforcing uniqueness
+
+### Election Results Timing
+
+- Results require both `status=CLOSED` AND `end_date` to have passed before vote counts are revealed
+- During active elections, only aggregate ballot statistics (turnout, total votes cast) are visible
+- Prevents premature result leaks that could influence remaining voters
+
+### Authentication & Token Security
+
+- **Token Storage**: Auth tokens stored as `access_token` in localStorage with separate `refresh_token`
+- **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
+- **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
+- **Session Revocation**: Logout properly invalidates the server-side session record
+
+For a comprehensive security review, see [ELECTION_SECURITY_AUDIT.md](ELECTION_SECURITY_AUDIT.md).
+
+---
+
 ## Error Handling & Information Disclosure Prevention
 
 ### API Error Responses

@@ -237,8 +237,10 @@ The wiki includes:
 ### Modules & Features
 - [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
 - [Custom Forms Module](docs/FORMS_MODULE.md) - Form builder, public forms, cross-module integrations
-- [Role System](ROLE_SYSTEM_README.md) - Role-based access control
+- [Role System](ROLE_SYSTEM_README.md) - Role-based access control (16 system roles)
 - [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details
+- [Election Security Audit](ELECTION_SECURITY_AUDIT.md) - Voting system security review
+- [Async SQLAlchemy Review](ASYNC_SQLALCHEMY_REVIEW.md) - Codebase async safety audit
 
 ### Security & Troubleshooting
 - [Security Guide](SECURITY.md) - Security policy and compliance

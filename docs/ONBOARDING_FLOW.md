@@ -1098,4 +1098,72 @@ Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduli
 
 ---
 
+## UX Improvements (February 10, 2026)
+
+### Week 1: Core Usability
+- **Password Reset Flow**: New Forgot Password and Reset Password pages
+- **Live Dashboard Stats**: Dashboard values from API with skeleton loaders
+- **User Settings Page**: Account, password, and notification tabs
+- **Dead Navigation Links Fixed**: Reports and Settings links now route correctly
+
+### Week 2: Safety
+- **Logout Confirmation Modal**: ARIA-compliant modal with Escape key, scroll lock, and unsaved changes warning
+
+### Week 3: Onboarding Polish
+- **Module Features Visible**: First 3 features shown upfront on module cards with "+ X more" hint
+- **Breadcrumb Progress**: Step names with green checkmarks replace simple step counter
+- **Simplified Organization Setup**: Relaxed ZIP validation, sections expanded by default
+- **Focus Trap Hook**: Reusable `useFocusTrap` for WCAG-compliant mobile menus
+
+### Week 4: Contextual Help
+- **Help Link Component**: 3 variants (icon/button/inline) with tooltip support
+- **Integrated Help Tooltips**: Dashboard, Organization Setup, and Reports pages
+
+### Additional
+- **Membership Type Field**: Dropdown in admin user creation (prospective/probationary/regular/life/administrative)
+- **Administrator Terminology**: Clarified IT Administrator vs Administrative Member
+- **Validation Toast Fix**: `validateForm()` returns errors directly instead of reading stale state
+
+---
+
+## Authentication & Login (February 10-11, 2026)
+
+### Login Flow Fixes
+- **Token Type Mismatch**: `get_user_from_token()` compared UUID object against String(36) column — fixed to query by string
+- **Account Lockout Persistence**: Failed login counter now commits correctly (was being rolled back on HTTPException)
+- **Session Creation**: Onboarding endpoint now uses `create_user_tokens()` which creates a proper UserSession row
+- **Login Redirect**: Authenticated users on login page redirect to `/dashboard`
+- **ProtectedRoute Race Condition**: Checks localStorage first, shows spinner while validating
+
+### Auth UX
+- **Concurrent Token Refresh**: Multiple 401 responses share a single refresh promise — prevents replay detection logout
+- **Welcome Page Detection**: Redirects when onboarding is already completed
+- **Organization Branding**: `GET /auth/branding` endpoint (unauthenticated) serves org name and logo to login page
+
+### Login Page Enhancements
+- Organization logo display with "Sign in to [Org Name]"
+- Rounded square logo shape (was circular)
+- Footer matching onboarding style
+
+---
+
+## Startup Optimization (February 11, 2026)
+
+- **Fast-Path Initialization**: Fresh databases use `create_all()` instead of running 39+ Alembic migrations — first-boot reduced from ~20 minutes to seconds
+- **Onboarding Completion Fix**: Explicit `commit()` in admin-user endpoint before frontend calls `/complete`
+- **Audit Logger Savepoint**: Savepoint isolation prevents 500 errors in `/complete` endpoint
+- **Auth Session Commit**: `create_user_tokens()` now commits the session record immediately
+- **E2E Test Script**: `test_onboarding_e2e.sh` validates the complete onboarding flow
+
+---
+
+## Election Security (February 10, 2026)
+
+- **Double-Voting Prevention**: 4 partial unique indexes on votes table prevent duplicate votes at the database level
+- **Results Timing**: Requires `status=CLOSED` AND `end_date` passed before revealing vote counts
+- **IntegrityError Handling**: `cast_vote()` returns user-friendly error instead of 500
+- **Security Audit**: Full review documented in [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) (rating: 7.1/10)
+
+---
+
 **Last Updated**: February 12, 2026 (Added role/module config persistence, dashboard stats API, auth token handling, 16 system roles, orphaned role filtering, branding transfer mechanism)

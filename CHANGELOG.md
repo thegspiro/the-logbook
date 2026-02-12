@@ -109,6 +109,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Backend Fixes
 - **Apparatus Module Whitelist**: Fixed module slug mismatch for apparatus/public outreach in the module configuration whitelist
 
+### Fixed - Authentication & Login (2026-02-11)
+
+#### Login Flow
+- **Login 401 Fix**: `get_user_from_token()` compared a UUID object against a `String(36)` database column causing type mismatch in aiomysql — fixed to query by token string only
+- **Account Lockout Persistence**: Failed login counter was flushed but rolled back when HTTPException was raised — changed to explicit `commit()` so lockout increments persist
+- **Token Refresh Type Mismatch**: `UUID(payload["sub"])` didn't match `String(36)` column — kept as string for correct comparison
+- **Session Revocation Fix**: Same UUID-vs-String mismatch in session revocation resolved
+- **Session Creation**: Onboarding endpoint created bare JWT with no UserSession row — now uses `create_user_tokens()` which creates the session record
+- **Login Redirect**: Login page now redirects to `/dashboard` instead of `/` for authenticated users
+- **ProtectedRoute Race Condition**: Route component now checks localStorage first and shows spinner while validating token, preventing flash of login page
+
+#### Auth UX
+- **Concurrent Token Refresh**: Multiple simultaneous 401 responses now share a single refresh promise instead of each triggering independent refresh calls — prevents replay detection from logging users out
+- **Welcome Page Detection**: Welcome page now detects when onboarding is already completed and redirects appropriately
+- **Logout Confirmation Modal**: New modal with ARIA attributes, Escape key support, and background scroll lock warns about unsaved changes before logging out
+
+### Added - Login Page (2026-02-11)
+
+- **Organization Branding**: Unauthenticated `GET /auth/branding` endpoint returns org name and logo; login page displays logo with "Sign in to [Org Name]" heading
+- **Footer**: Copyright footer with org name and "Powered by The Logbook" text matching onboarding style
+- **Logo Shape**: Updated logo container from circular to rounded square
+
+### Added - Startup Optimization (2026-02-11)
+
+- **Fast-Path Database Initialization**: Fresh databases now use `create_all()` instead of running 39+ Alembic migrations sequentially, reducing first-boot time from ~20 minutes to seconds
+- **Onboarding Completion Fix**: Added explicit `await db.commit()` in admin-user endpoint — previously relied on auto-commit but frontend immediately called `/complete`
+- **Audit Logger Savepoint**: Onboarding `/complete` endpoint was failing with 500 error due to audit logger commit conflicts — added savepoint isolation
+- **End-to-End Test Script**: Comprehensive bash script (`test_onboarding_e2e.sh`) validating complete onboarding flow: startup, session management, organization creation, admin user setup, login/auth, and database verification
+
+### Security - Election System (2026-02-10)
+
+- **Double-Voting Prevention**: Added 4 partial unique indexes on the votes table to prevent duplicate votes at the database level — guards against race conditions and direct DB manipulation
+- **Election Results Timing**: Results now require both `status=CLOSED` AND `end_date` to have passed before revealing vote counts — prevents premature result leaks during active elections
+- **Integrity Error Handling**: `cast_vote()` now catches `IntegrityError` with a user-friendly message instead of a 500 error
+- **Security Audit**: Comprehensive election security audit documented in `ELECTION_SECURITY_AUDIT.md` (rating: 7.1/10) — identified and resolved critical double-voting gap, catalogued anonymous voting strengths (HMAC-SHA256)
+
+### Added - UX Improvements (2026-02-10)
+
+#### Week 1: Core Usability
+- **Password Reset Flow**: New Forgot Password and Reset Password pages
+- **Live Dashboard Stats**: Replaced hardcoded dashboard values with live API data and skeleton loaders
+- **User Settings Page**: Full settings page with account, password, and notification tabs
+- **Dead Navigation Links Fixed**: Reports and Settings links now route correctly
+
+#### Week 2: Safety
+- **Logout Confirmation**: Modal warns about unsaved changes before logging out
+
+#### Week 3: Onboarding Polish
+- **Module Features Visible**: Module cards now display the first 3 features upfront with "+ X more" hint instead of hiding behind "More info" button
+- **Breadcrumb Progress Indicator**: Step names with green checkmarks replace the simple step counter
+- **Simplified Organization Setup**: Relaxed ZIP validation, form sections expanded by default
+- **Focus Trap Hook**: Reusable `useFocusTrap` hook for WCAG-compliant mobile menus
+
+#### Week 4: Contextual Help
+- **Help Link Component**: Reusable `HelpLink` with 3 variants (icon/button/inline), tooltip support, configurable positioning
+- **Integrated Help Tooltips**: Added to Dashboard, Organization Setup, and Reports pages
+
+#### Additional UX Fixes
+- **Membership Type Field**: Dropdown (prospective/probationary/regular/life/administrative) in admin user creation with prospective member warning banner
+- **Administrator Terminology**: Clarified distinction between IT Administrator (system admin) and Administrative Member (membership type)
+- **Validation Toast Fix**: `validateForm()` now returns errors directly instead of reading stale state, fixing "0 errors" toast message
+
+### Fixed - Backend (2026-02-10)
+
+#### SQLAlchemy Async Fixes
+- **Organization Creation Greenlet Error**: Added `await db.refresh(org)` after flush to prevent lazy-loading of `organization_type.value` in async context
+- **Admin User Creation Greenlet Error**: Eagerly loaded `roles` relationship before appending to avoid lazy loading in async context
+- **Migration Dependency Chain**: Fixed `down_revision` pointer in vote constraints migration from non-existent ID to correct parent
+- **Tax ID Field**: Added `tax_id` to onboarding Pydantic schema, service method, and API endpoint — frontend was sending it but backend rejected it with 422
+
+#### Test Infrastructure
+- **MySQL Test Database**: Tests now use actual MySQL database instead of SQLite for realistic testing
+- **Transaction Management**: Replaced `commit()` calls with `flush()` for test compatibility; fixed audit logger transaction management
+- **Comprehensive Onboarding Test Suite**: Full integration test coverage for onboarding flow
+- **Database Initialization Fixture**: Shared test fixture for consistent database state
+- **Async SQLAlchemy Review**: Full codebase audit of 32 `flush()` calls documented in `ASYNC_SQLALCHEMY_REVIEW.md` — 87.5% safe, 0 critical issues
+
 ### Added - Frontend (2026-02-08)
 
 #### Onboarding UX Improvements
