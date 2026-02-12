@@ -38,7 +38,7 @@ class AuthService:
         self,
         username: str,
         password: str
-    ) -> Optional[User]:
+    ) -> Tuple[Optional[User], Optional[str]]:
         """
         Authenticate a user by username and password
 
@@ -47,7 +47,7 @@ class AuthService:
             password: Plain text password
 
         Returns:
-            User object if authentication successful, None otherwise
+            Tuple of (User, None) on success, or (None, error_message) on failure
         """
         # Try to find user by username or email
         result = await self.db.execute(
@@ -62,16 +62,17 @@ class AuthService:
 
         if not user:
             logger.warning("Authentication failed for login attempt")
-            return None
+            return None, "Incorrect username or password"
 
         if not user.password_hash:
             logger.warning("Authentication failed for login attempt")
-            return None
+            return None, "Incorrect username or password"
 
         # Check if account is locked
         if user.locked_until and user.locked_until > datetime.utcnow():
+            remaining = int((user.locked_until - datetime.utcnow()).total_seconds() / 60) + 1
             logger.warning(f"Authentication failed: account locked - {username}")
-            return None
+            return None, f"Account is temporarily locked. Try again in {remaining} minutes."
 
         # Verify password
         if not verify_password(password, user.password_hash):
@@ -88,7 +89,14 @@ class AuthService:
             # the get_db() dependency cleanup.
             await self.db.commit()
             logger.warning("Authentication failed: invalid credentials")
-            return None
+
+            remaining_attempts = 5 - user.failed_login_attempts
+            if remaining_attempts <= 0:
+                return None, "Account is temporarily locked due to too many failed attempts. Try again in 30 minutes."
+            elif remaining_attempts <= 2:
+                return None, f"Incorrect username or password. {remaining_attempts} attempt{'s' if remaining_attempts > 1 else ''} remaining before account is locked."
+            else:
+                return None, "Incorrect username or password"
 
         # Reset failed login attempts on successful login
         user.failed_login_attempts = 0
@@ -96,7 +104,7 @@ class AuthService:
         user.last_login_at = datetime.utcnow()
         await self.db.flush()
 
-        return user
+        return user, None
 
     async def create_user_tokens(
         self,
@@ -217,7 +225,7 @@ class AuthService:
             session.expires_at = datetime.utcnow() + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
-            await self.db.flush()
+            await self.db.commit()
 
             return new_access_token, new_refresh_token
 

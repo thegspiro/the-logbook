@@ -209,6 +209,12 @@ const AdminUserCreation: React.FC = () => {
 
         toast.success('Welcome to your department dashboard!');
 
+        // Load user into auth store before navigating — ProtectedRoute
+        // checks useAuthStore for authentication, so the store must
+        // be populated before the dashboard renders.
+        const { useAuthStore } = await import('../../../stores/authStore');
+        await useAuthStore.getState().loadUser();
+
         // Navigate to main dashboard (user is now authenticated)
         navigate('/dashboard');
 

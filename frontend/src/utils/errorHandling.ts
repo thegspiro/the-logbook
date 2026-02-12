@@ -52,7 +52,7 @@ export function toAppError(error: unknown): AppError {
   ) {
     const response = (error as any).response;
     return {
-      message: response.data?.message || response.statusText || 'Request failed',
+      message: response.data?.detail || response.data?.message || response.statusText || 'Request failed',
       code: response.data?.code,
       status: response.status,
       details: response.data?.details,
