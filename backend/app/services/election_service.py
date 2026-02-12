@@ -1775,6 +1775,168 @@ Best regards,
 
         return sent_count
 
+    async def _notify_leadership_of_deletion(
+        self,
+        election: Election,
+        performed_by: UUID,
+        organization_id: UUID,
+        reason: str,
+        vote_count: int = 0,
+    ) -> int:
+        """
+        Send critical email notifications to all leadership about an election deletion.
+
+        This is triggered when a non-draft election (open or closed) is deleted,
+        which is a major red-flag event.
+
+        Returns: Number of notifications sent
+        """
+        from app.services.email_service import EmailService
+
+        leadership_roles = ["chief", "president", "vice_president", "secretary"]
+
+        users_result = await self.db.execute(
+            select(User)
+            .join(User.roles)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)
+            .options(selectinload(User.roles))
+        )
+        all_users = users_result.scalars().all()
+
+        leadership_users = [
+            user for user in all_users
+            if any(role.slug in leadership_roles for role in user.roles)
+        ]
+
+        if not leadership_users:
+            return 0
+
+        performer_result = await self.db.execute(
+            select(User).where(User.id == performed_by)
+        )
+        performer = performer_result.scalar_one_or_none()
+        performer_name = performer.full_name if performer else "Unknown"
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            return 0
+
+        email_service = EmailService(organization)
+
+        import html
+        safe_title = html.escape(election.title)
+        safe_performer = html.escape(performer_name)
+        safe_reason = html.escape(reason)
+        safe_org_name = html.escape(organization.name)
+        election_status = election.status.value.upper()
+
+        sent_count = 0
+        for user in leadership_users:
+            safe_first_name = html.escape(user.first_name)
+
+            subject = f"CRITICAL: Election DELETED - {election.title}"
+
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #7f1d1d; color: white; padding: 20px; text-align: center; }}
+        .critical-badge {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; font-size: 16px; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-left: 4px solid #7f1d1d; margin: 15px 0; }}
+        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
+        .warning {{ background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 15px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ELECTION DELETED</h1>
+            <div class="critical-badge">CRITICAL - REQUIRES IMMEDIATE ATTENTION</div>
+        </div>
+        <div class="content">
+            <p>Dear {safe_first_name},</p>
+
+            <div class="warning">
+                <p><strong>An election has been permanently deleted while in {election_status} status.</strong></p>
+                <p>This is a critical action that has been automatically flagged. All leadership members have been notified.</p>
+            </div>
+
+            <div class="details">
+                <h3>Election Details:</h3>
+                <ul>
+                    <li><strong>Title:</strong> {safe_title}</li>
+                    <li><strong>Status at Deletion:</strong> {election_status}</li>
+                    <li><strong>Active Votes at Deletion:</strong> {vote_count}</li>
+                    <li><strong>Deleted By:</strong> {safe_performer}</li>
+                    <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
+                </ul>
+            </div>
+
+            <div class="reason">
+                <h3>Reason Given:</h3>
+                <p>{safe_reason}</p>
+            </div>
+
+            <p>This deletion has been logged in the audit trail with <strong>CRITICAL</strong> severity. Please review this action and coordinate with your team immediately if this was not authorized.</p>
+
+            <p>Best regards,<br>{safe_org_name} Election System</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated critical notification from the election management system.</p>
+        </div>
+    </div>
+</body>
+</html>
+            """
+
+            text_body = f"""CRITICAL: Election DELETED
+
+Dear {user.first_name},
+
+An election has been permanently deleted while in {election_status} status.
+This is a critical action that has been automatically flagged. All leadership members have been notified.
+
+ELECTION DETAILS:
+- Title: {election.title}
+- Status at Deletion: {election_status}
+- Active Votes at Deletion: {vote_count}
+- Deleted By: {performer_name}
+- Date/Time: {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}
+
+REASON GIVEN:
+{reason}
+
+This deletion has been logged in the audit trail with CRITICAL severity. Please review this action and coordinate with your team immediately if this was not authorized.
+
+Best regards,
+{organization.name} Election System
+            """
+
+            try:
+                success_count_user, failure_count_user = await email_service.send_email(
+                    to_emails=[user.email],
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                )
+                if success_count_user > 0:
+                    sent_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send deletion notification to {user.email}: {e}")
+                continue
+
+        return sent_count
+
     async def _generate_voting_token(
         self, user_id: UUID, election_id: UUID, election_end_date: datetime,
         anonymity_salt: str = "",

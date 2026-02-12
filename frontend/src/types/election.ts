@@ -249,6 +249,65 @@ export interface EmailBallotResponse {
   message: string;
 }
 
+export interface ElectionDeleteResponse {
+  success: boolean;
+  message: string;
+  notifications_sent: number;
+}
+
+export interface ForensicsReport {
+  election_id: string;
+  election_title: string;
+  election_status: string;
+  anonymous_voting: boolean;
+  voting_method: string;
+  created_at: string;
+  vote_integrity: VoteIntegrityResult;
+  deleted_votes: {
+    count: number;
+    records: Array<{
+      vote_id: string;
+      candidate_id: string;
+      position: string | null;
+      deleted_at: string | null;
+      deleted_by: string | null;
+      deletion_reason: string | null;
+    }>;
+  };
+  rollback_history: Array<Record<string, unknown>>;
+  voting_tokens: {
+    total_issued: number;
+    total_used: number;
+    records: Array<{
+      token_id: string;
+      used: boolean;
+      used_at: string | null;
+      first_accessed_at: string | null;
+      access_count: number;
+      positions_voted: string[];
+      created_at: string | null;
+      expires_at: string | null;
+    }>;
+  };
+  audit_log: {
+    total_entries: number;
+    entries: Array<{
+      id: string;
+      timestamp: string | null;
+      event_type: string;
+      severity: string | null;
+      user_id: string | null;
+      ip_address: string | null;
+      event_data: Record<string, unknown>;
+    }>;
+  };
+  anomaly_detection: {
+    suspicious_ips: Record<string, number>;
+    ip_vote_distribution: Record<string, number>;
+  };
+  voting_timeline: Record<string, number>;
+}
+
 // Attendance types
 
 export interface Attendee {

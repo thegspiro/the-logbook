@@ -1098,10 +1098,13 @@ export const electionService = {
   },
 
   /**
-   * Delete an election
+   * Delete an election (reason required for non-draft elections)
    */
-  async deleteElection(electionId: string): Promise<void> {
-    await api.delete(`/elections/${electionId}`);
+  async deleteElection(electionId: string, reason?: string): Promise<import('../types/election').ElectionDeleteResponse> {
+    const response = await api.delete<import('../types/election').ElectionDeleteResponse>(`/elections/${electionId}`, {
+      data: reason ? { reason } : undefined,
+    });
+    return response.data;
   },
 
   /**
@@ -1215,6 +1218,24 @@ export const electionService = {
    */
   async verifyIntegrity(electionId: string): Promise<import('../types/election').VoteIntegrityResult> {
     const response = await api.get<import('../types/election').VoteIntegrityResult>(`/elections/${electionId}/integrity`);
+    return response.data;
+  },
+
+  /**
+   * Get comprehensive forensics report (admin only)
+   */
+  async getForensics(electionId: string): Promise<import('../types/election').ForensicsReport> {
+    const response = await api.get<import('../types/election').ForensicsReport>(`/elections/${electionId}/forensics`);
+    return response.data;
+  },
+
+  /**
+   * Soft-delete a vote with audit trail (admin only)
+   */
+  async softDeleteVote(electionId: string, voteId: string, reason: string): Promise<{ message: string; vote_id: string }> {
+    const response = await api.delete<{ message: string; vote_id: string }>(`/elections/${electionId}/votes/${voteId}`, {
+      params: { reason },
+    });
     return response.data;
   },
 

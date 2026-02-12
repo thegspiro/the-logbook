@@ -355,6 +355,18 @@ class ElectionRollbackResponse(BaseModel):
     notifications_sent: int
 
 
+class ElectionDelete(BaseModel):
+    """Schema for deleting an election. Reason required for non-draft elections."""
+    reason: Optional[str] = Field(None, min_length=10, max_length=500, description="Reason for deletion (required for open/closed elections)")
+
+
+class ElectionDeleteResponse(BaseModel):
+    """Response after deleting an election"""
+    success: bool
+    message: str
+    notifications_sent: int
+
+
 # Attendance Schemas
 
 class AttendeeRecord(BaseModel):

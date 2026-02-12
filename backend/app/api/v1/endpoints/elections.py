@@ -41,6 +41,8 @@ from app.schemas.election import (
     EmailBallotResponse,
     ElectionRollback,
     ElectionRollbackResponse,
+    ElectionDelete,
+    ElectionDeleteResponse,
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     BallotTemplatesResponse,
@@ -315,14 +317,20 @@ async def update_election(
     return election
 
 
-@router.delete("/{election_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{election_id}", response_model=ElectionDeleteResponse)
 async def delete_election(
     election_id: UUID,
+    delete_data: ElectionDelete = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
     """
-    Delete an election (only if in draft status with no votes)
+    Delete an election.
+
+    - Draft elections: Can be deleted freely (no reason required).
+    - Open/closed elections: Requires a reason. Automatically sends
+      alert notifications to all leadership members and creates a
+      critical audit trail entry.
 
     **Authentication required**
     **Requires permission: elections.manage**
@@ -340,39 +348,82 @@ async def delete_election(
             detail="Election not found"
         )
 
-    # Can only delete draft elections
-    if election.status != ElectionStatus.DRAFT:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Can only delete draft elections"
-        )
-
-    # Check for active (non-deleted) votes
-    votes_result = await db.execute(
-        select(func.count(Vote.id))
-        .where(Vote.election_id == election_id)
-        .where(Vote.deleted_at.is_(None))
-    )
-    vote_count = votes_result.scalar() or 0
-
-    if vote_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete election with existing votes"
-        )
-
     election_title = election.title
+    election_status = election.status.value
+    reason = delete_data.reason if delete_data else None
+    notifications_sent = 0
+
+    # Non-draft elections require a reason and trigger leadership alerts
+    if election.status != ElectionStatus.DRAFT:
+        if not reason or len(reason.strip()) < 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A reason of at least 10 characters is required to delete a non-draft election"
+            )
+
+        # Count active votes for audit context
+        votes_result = await db.execute(
+            select(func.count(Vote.id))
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
+        )
+        vote_count = votes_result.scalar() or 0
+
+        # Notify all leadership members before deletion
+        service = ElectionService(db)
+        notifications_sent = await service._notify_leadership_of_deletion(
+            election=election,
+            performed_by=current_user.id,
+            organization_id=current_user.organization_id,
+            reason=reason,
+            vote_count=vote_count,
+        )
+
+        logger.critical(
+            f"NON-DRAFT ELECTION DELETED | id={election_id} title={election_title!r} "
+            f"status={election_status} votes={vote_count} by={current_user.id} "
+            f"reason={reason!r} notifications={notifications_sent}"
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="election_deleted_critical",
+            event_category="elections",
+            severity="critical",
+            event_data={
+                "election_id": str(election_id),
+                "title": election_title,
+                "status_at_deletion": election_status,
+                "active_vote_count": vote_count,
+                "reason": reason,
+                "notifications_sent": notifications_sent,
+            },
+            user_id=str(current_user.id),
+        )
+    else:
+        logger.info(f"Draft election deleted | id={election_id} title={election_title!r} by={current_user.id}")
+
+        await log_audit_event(
+            db=db,
+            event_type="election_deleted",
+            event_category="elections",
+            severity="warning",
+            event_data={"election_id": str(election_id), "title": election_title},
+            user_id=str(current_user.id),
+        )
+
     await db.delete(election)
     await db.commit()
 
-    logger.info(f"Election deleted | id={election_id} title={election_title!r} by={current_user.id}")
-    await log_audit_event(
-        db=db,
-        event_type="election_deleted",
-        event_category="elections",
-        severity="warning",
-        event_data={"election_id": str(election_id), "title": election_title},
-        user_id=str(current_user.id),
+    if election_status == "draft":
+        message = "Election deleted successfully"
+    else:
+        message = f"Election deleted. {notifications_sent} leadership members have been notified."
+
+    return ElectionDeleteResponse(
+        success=True,
+        message=message,
+        notifications_sent=notifications_sent,
     )
 
 
