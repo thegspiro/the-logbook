@@ -24,6 +24,7 @@ import type {
   ConvertApplicantRequest,
   ConvertApplicantResponse,
   ApplicantDocument,
+  WithdrawApplicantRequest,
   ReactivateApplicantRequest,
   PurgeInactiveRequest,
   PurgeInactiveResponse,
@@ -263,6 +264,17 @@ export const applicantService = {
     return response.data;
   },
 
+  async withdrawApplicant(
+    applicantId: string,
+    data?: WithdrawApplicantRequest
+  ): Promise<Applicant> {
+    const response = await api.post<Applicant>(
+      `/prospective-members/applicants/${applicantId}/withdraw`,
+      data ?? {}
+    );
+    return response.data;
+  },
+
   async resumeApplicant(applicantId: string): Promise<Applicant> {
     const response = await api.post<Applicant>(
       `/prospective-members/applicants/${applicantId}/resume`
@@ -293,6 +305,27 @@ export const applicantService = {
         params: {
           pipeline_id: params?.pipeline_id,
           status: 'inactive',
+          search: params?.search,
+          page: params?.page ?? 1,
+          page_size: params?.pageSize ?? 25,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  async getWithdrawnApplicants(params?: {
+    pipeline_id?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedApplicantList> {
+    const response = await api.get<PaginatedApplicantList>(
+      '/prospective-members/applicants',
+      {
+        params: {
+          pipeline_id: params?.pipeline_id,
+          status: 'withdrawn',
           search: params?.search,
           page: params?.page ?? 1,
           page_size: params?.pageSize ?? 25,

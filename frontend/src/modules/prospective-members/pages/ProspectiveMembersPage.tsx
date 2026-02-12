@@ -25,6 +25,7 @@ import {
   Trash2,
   RotateCcw,
   Info,
+  Archive,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -57,11 +58,16 @@ export const ProspectiveMembersPage: React.FC = () => {
     inactiveTotalApplicants,
     inactiveCurrentPage,
     inactiveTotalPages,
+    withdrawnApplicants,
+    withdrawnTotalApplicants,
+    withdrawnCurrentPage,
+    withdrawnTotalPages,
     isLoading,
     isLoadingPipelines,
     isLoadingPipeline,
     isLoadingStats,
     isLoadingInactive,
+    isLoadingWithdrawn,
     isReactivating,
     isPurging,
     error,
@@ -71,6 +77,7 @@ export const ProspectiveMembersPage: React.FC = () => {
     fetchApplicants,
     fetchApplicant,
     fetchInactiveApplicants,
+    fetchWithdrawnApplicants,
     reactivateApplicant,
     purgeInactiveApplicants,
     setFilters,
@@ -292,11 +299,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             )}
+            {(pipelineStats.withdrawn_count > 0) && (
+              <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-slate-500 text-xs mb-1">
+                  <Archive className="w-3.5 h-3.5" />
+                  Withdrawn
+                </div>
+                <p className="text-2xl font-bold text-slate-400">
+                  {pipelineStats.withdrawn_count}
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1.5 mb-6 px-1">
             <Info className="w-3 h-3 text-slate-600 flex-shrink-0" />
             <p className="text-xs text-slate-600">
-              Statistics include active applicants only. Inactive, rejected, and withdrawn applicants are excluded from conversion rate and averages.
+              Statistics include active applicants only. Inactive, rejected, and withdrawn (archived) applicants are excluded from conversion rate and averages.
             </p>
           </div>
         </>
@@ -326,6 +344,21 @@ export const ProspectiveMembersPage: React.FC = () => {
           {pipelineStats && pipelineStats.inactive_count > 0 && (
             <span className="px-1.5 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300">
               {pipelineStats.inactive_count}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('withdrawn')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'withdrawn'
+              ? 'border-red-500 text-white'
+              : 'border-transparent text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Withdrawn
+          {pipelineStats && pipelineStats.withdrawn_count > 0 && (
+            <span className="px-1.5 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300">
+              {pipelineStats.withdrawn_count}
             </span>
           )}
         </button>
@@ -709,6 +742,137 @@ export const ProspectiveMembersPage: React.FC = () => {
                 Inactive applications are excluded from pipeline statistics.
                 Purging permanently deletes applicant data and cannot be undone.
                 Consider reactivating applications before purging if you are unsure.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Withdrawn Tab Content */}
+      {activeTab === 'withdrawn' && (
+        <div>
+          {isLoadingWithdrawn ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+            </div>
+          ) : withdrawnApplicants.length === 0 ? (
+            <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-white/10">
+              <Archive className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">
+                No withdrawn applications
+              </h3>
+              <p className="text-sm text-slate-400">
+                Applicants who voluntarily withdraw from the pipeline will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-slate-800/50 border border-white/10 rounded-lg overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Name</th>
+                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Email</th>
+                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Last Stage</th>
+                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Withdrawn Date</th>
+                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Reason</th>
+                    <th className="w-32 p-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {withdrawnApplicants.map((applicant) => (
+                    <tr
+                      key={applicant.id}
+                      className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                    >
+                      <td className="p-3">
+                        <div
+                          className="flex items-center gap-2.5 cursor-pointer"
+                          onClick={() => fetchApplicant(applicant.id)}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 flex-shrink-0">
+                            {getInitials(applicant.first_name, applicant.last_name)}
+                          </div>
+                          <span className="text-sm font-medium text-slate-300">
+                            {applicant.first_name} {applicant.last_name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-sm text-slate-400">{applicant.email}</td>
+                      <td className="p-3 text-sm text-slate-400">{applicant.current_stage_name ?? '—'}</td>
+                      <td className="p-3 text-sm text-slate-400">
+                        {applicant.withdrawn_at
+                          ? new Date(applicant.withdrawn_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="p-3 text-sm text-slate-500 max-w-[200px] truncate">
+                        {applicant.withdrawal_reason ?? '—'}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => fetchApplicant(applicant.id)}
+                            className="text-xs text-slate-400 hover:text-white transition-colors"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await reactivateApplicant(applicant.id);
+                                toast.success(`${applicant.first_name} reactivated`);
+                              } catch {
+                                toast.error('Failed to reactivate');
+                              }
+                            }}
+                            disabled={isReactivating}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Reactivate
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {withdrawnTotalPages > 1 && (
+                <div className="flex items-center justify-between p-3 border-t border-white/10">
+                  <p className="text-sm text-slate-400">
+                    Page {withdrawnCurrentPage} of {withdrawnTotalPages} ({withdrawnTotalApplicants} total)
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => fetchWithdrawnApplicants(withdrawnCurrentPage - 1)}
+                      disabled={withdrawnCurrentPage <= 1}
+                      className="px-3 py-1 text-sm text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => fetchWithdrawnApplicants(withdrawnCurrentPage + 1)}
+                      disabled={withdrawnCurrentPage >= withdrawnTotalPages}
+                      className="px-3 py-1 text-sm text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Info Note */}
+          {withdrawnApplicants.length > 0 && (
+            <div className="flex items-start gap-2 mt-4 p-3 bg-slate-800/30 border border-white/5 rounded-lg">
+              <Info className="w-3.5 h-3.5 text-slate-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-500">
+                Withdrawn applications are from prospective members who voluntarily left the pipeline process.
+                You can reactivate them to place them back into the active pipeline at their previous stage.
               </p>
             </div>
           )}

@@ -17,7 +17,7 @@ import type {
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
 
-export type PipelineTab = 'active' | 'inactive';
+export type PipelineTab = 'active' | 'inactive' | 'withdrawn';
 
 interface ProspectiveMembersState {
   // Pipeline data
@@ -49,6 +49,12 @@ interface ProspectiveMembersState {
   inactiveCurrentPage: number;
   inactiveTotalPages: number;
 
+  // Withdrawn applicant data
+  withdrawnApplicants: ApplicantListItem[];
+  withdrawnTotalApplicants: number;
+  withdrawnCurrentPage: number;
+  withdrawnTotalPages: number;
+
   // Loading states
   isLoading: boolean;
   isLoadingPipelines: boolean;
@@ -56,10 +62,12 @@ interface ProspectiveMembersState {
   isLoadingApplicant: boolean;
   isLoadingStats: boolean;
   isLoadingInactive: boolean;
+  isLoadingWithdrawn: boolean;
   isAdvancing: boolean;
   isRejecting: boolean;
   isHolding: boolean;
   isResuming: boolean;
+  isWithdrawing: boolean;
   isReactivating: boolean;
   isPurging: boolean;
   error: string | null;
@@ -78,10 +86,12 @@ interface ProspectiveMembersState {
   rejectApplicant: (id: string, reason?: string) => Promise<void>;
   holdApplicant: (id: string, reason?: string) => Promise<void>;
   resumeApplicant: (id: string) => Promise<void>;
+  withdrawApplicant: (id: string, reason?: string) => Promise<void>;
 
   // Inactivity actions
   reactivateApplicant: (id: string, notes?: string) => Promise<void>;
   fetchInactiveApplicants: (page?: number) => Promise<void>;
+  fetchWithdrawnApplicants: (page?: number) => Promise<void>;
   purgeInactiveApplicants: (applicantIds?: string[]) => Promise<void>;
   updateInactivitySettings: (config: InactivityConfig) => Promise<void>;
 
@@ -124,16 +134,23 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
     inactiveCurrentPage: 1,
     inactiveTotalPages: 0,
 
+    withdrawnApplicants: [],
+    withdrawnTotalApplicants: 0,
+    withdrawnCurrentPage: 1,
+    withdrawnTotalPages: 0,
+
     isLoading: false,
     isLoadingPipelines: false,
     isLoadingPipeline: false,
     isLoadingApplicant: false,
     isLoadingStats: false,
     isLoadingInactive: false,
+    isLoadingWithdrawn: false,
     isAdvancing: false,
     isRejecting: false,
     isHolding: false,
     isResuming: false,
+    isWithdrawing: false,
     isReactivating: false,
     isPurging: false,
     error: null,
@@ -335,6 +352,33 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
       }
     },
 
+    withdrawApplicant: async (id: string, reason?: string) => {
+      set({ isWithdrawing: true, error: null });
+      try {
+        await applicantService.withdrawApplicant(id, reason ? { reason } : undefined);
+        await get().fetchApplicants();
+        await get().fetchWithdrawnApplicants();
+        const state = get();
+        if (state.currentPipeline) {
+          await get().fetchPipelineStats(state.currentPipeline.id);
+        }
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant?.id === id) {
+          await get().fetchApplicant(id);
+        }
+        set({ isWithdrawing: false });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to withdraw applicant',
+          isWithdrawing: false,
+        });
+        throw error;
+      }
+    },
+
     // Inactivity actions
     reactivateApplicant: async (id: string, notes?: string) => {
       set({ isReactivating: true, error: null });
@@ -390,6 +434,37 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
               ? error.message
               : 'Failed to fetch inactive applicants',
           isLoadingInactive: false,
+        });
+      }
+    },
+
+    fetchWithdrawnApplicants: async (page?: number) => {
+      const state = get();
+      const pageToFetch = page ?? state.withdrawnCurrentPage;
+
+      set({ isLoadingWithdrawn: true, error: null });
+      try {
+        const response = await applicantService.getWithdrawnApplicants({
+          pipeline_id: state.filters.pipeline_id,
+          search: state.filters.search,
+          page: pageToFetch,
+          pageSize: state.pageSize,
+        });
+
+        set({
+          withdrawnApplicants: response.items,
+          withdrawnTotalApplicants: response.total,
+          withdrawnCurrentPage: response.page,
+          withdrawnTotalPages: response.total_pages,
+          isLoadingWithdrawn: false,
+        });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to fetch withdrawn applicants',
+          isLoadingWithdrawn: false,
         });
       }
     },
@@ -459,6 +534,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
       set({ activeTab: tab });
       if (tab === 'inactive') {
         get().fetchInactiveApplicants(1);
+      } else if (tab === 'withdrawn') {
+        get().fetchWithdrawnApplicants(1);
       } else {
         get().fetchApplicants(1);
       }
