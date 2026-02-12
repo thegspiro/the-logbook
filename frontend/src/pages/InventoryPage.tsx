@@ -139,7 +139,7 @@ const InventoryPage: React.FC = () => {
       setTotalItems(itemsData.total);
     } catch (err: any) {
       console.error('Error loading inventory:', err);
-      setError(err.response?.data?.detail || 'Failed to load inventory data.');
+      setError(err.response?.data?.detail || 'Unable to load inventory data. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -176,7 +176,7 @@ const InventoryPage: React.FC = () => {
       });
       loadData();
     } catch (err: any) {
-      setFormError(err.response?.data?.detail || 'Failed to create item.');
+      setFormError(err.response?.data?.detail || 'Unable to create the item. Please check your input and try again.');
     }
   };
 
@@ -192,7 +192,7 @@ const InventoryPage: React.FC = () => {
       });
       loadData();
     } catch (err: any) {
-      setFormError(err.response?.data?.detail || 'Failed to create category.');
+      setFormError(err.response?.data?.detail || 'Unable to create the category. Please check your input and try again.');
     }
   };
 

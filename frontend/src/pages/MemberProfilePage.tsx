@@ -107,7 +107,7 @@ export const MemberProfilePage: React.FC = () => {
       setUser(userData);
     } catch (err) {
       console.error('Error fetching user data:', err);
-      setError('Failed to load member information.');
+      setError('Unable to load member information. The member may not exist or you may not have access.');
     } finally {
       setLoading(false);
     }
@@ -219,7 +219,7 @@ export const MemberProfilePage: React.FC = () => {
       setIsEditing(false);
     } catch (err: any) {
       console.error('Error updating contact info:', err);
-      setError(err.response?.data?.detail || 'Failed to update contact information.');
+      setError(err.response?.data?.detail || 'Unable to update contact information. Please check your input and try again.');
     } finally {
       setSaving(false);
     }

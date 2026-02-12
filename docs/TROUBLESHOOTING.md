@@ -445,7 +445,7 @@ docker compose up --build
 **Message**: `"Session expired. Please log in again."`
 
 **Causes**:
-1. Onboarding session timed out (30 minutes of inactivity)
+1. Onboarding session timed out (30 minutes of inactivity, as of 2026-02-12)
 2. Browser was closed
 3. Cookies were cleared
 4. Server was restarted
@@ -593,11 +593,11 @@ services:
 **Database Slow**:
 ```bash
 # Check database size
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
   -e "SELECT table_schema, SUM(data_length + index_length) / 1024 / 1024 AS 'Size (MB)' FROM information_schema.tables GROUP BY table_schema;"
 
 # Optimize tables
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "OPTIMIZE TABLE users, organizations, audit_logs;"
 ```
 
@@ -752,7 +752,7 @@ Error: Data truncation or constraint violation
 **Fix**: Check existing data
 ```bash
 # Find problematic data
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "SELECT * FROM organizations WHERE organization_type NOT IN ('fire_department', 'ems_only', 'fire_ems_combined');"
 ```
 
@@ -839,6 +839,418 @@ The system now automatically translates technical errors:
 
 ---
 
+## Security & Session Management
+
+**Last Updated**: 2026-02-12
+
+### Session Inactivity Timeout
+
+The application automatically logs users out after **30 minutes of inactivity** (no mouse, keyboard, scroll, or touch events).
+
+#### Symptom: "You have been logged out due to inactivity"
+
+**Cause**: No user activity detected for 30 minutes.
+
+**Solutions**:
+1. Log in again at the login page
+2. Keep the browser tab active during long workflows
+3. No data is lost -- unsaved form changes will need to be re-entered
+
+---
+
+### Onboarding Session Expiry
+
+Onboarding sessions now expire after **30 minutes of inactivity** (previously 2 hours).
+
+#### Symptom: "Your onboarding session has expired due to inactivity"
+
+**Cause**: Took too long between onboarding steps.
+
+**Solutions**:
+1. Refresh the page to start a new session
+2. Previously saved progress (organization, email config) is retained
+3. Complete each step promptly to avoid timeout
+
+---
+
+### Password Reset Links
+
+Password reset links expire after **30 minutes**.
+
+#### Symptom: "This password reset link has expired"
+
+**Cause**: Reset link was not used within 30 minutes of being sent.
+
+**Solutions**:
+1. Request a new reset link from the login page
+2. Check email promptly after requesting reset
+3. If emails are delayed, contact your administrator
+
+#### Symptom: "This password reset link is invalid or has already been used"
+
+**Cause**: Link was already used, or URL was corrupted.
+
+**Solutions**:
+1. Each reset link can only be used once
+2. Request a new link from the login page
+3. Copy the full URL from the email (don't modify it)
+
+---
+
+### Account Lockout
+
+After **5 failed login attempts**, accounts are temporarily locked for **30 minutes**.
+
+#### Symptom: "Account is temporarily locked"
+
+**Cause**: Too many incorrect password attempts.
+
+**Solutions**:
+1. Wait for the lockout period to expire (message shows remaining time)
+2. Use "Forgot Password" to reset your password
+3. Contact your administrator if you're locked out repeatedly
+
+---
+
+### Security Configuration (Administrators)
+
+#### Production Environment Requirements
+
+The following must be configured in production:
+
+| Setting | Requirement | Error if Missing |
+|---------|------------|------------------|
+| `ENCRYPTION_SALT` | Unique random value | Application will not start |
+| `SECRET_KEY` | Unique, 32+ characters | Startup warning/failure |
+| `ENCRYPTION_KEY` | Unique random value | Startup warning/failure |
+
+**Generate secure values**:
+```bash
+# Generate ENCRYPTION_SALT
+python -c "import secrets; print(secrets.token_hex(16))"
+
+# Generate SECRET_KEY
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Generate ENCRYPTION_KEY
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+#### Bulk Import Limits
+
+External training bulk imports are limited to **500 records** per request to prevent abuse.
+
+#### Form Submission Sanitization
+
+All form submissions are automatically sanitized with DOMPurify to strip HTML/script injection. If form data appears truncated, ensure inputs don't contain HTML tags.
+
+#### Password Requirements
+
+Login passwords must be at least **8 characters** (schema validation). New passwords during registration or reset must meet the full strength requirements (12+ characters, mixed case, numbers, special characters).
+
+---
+
+## Documents Module
+
+### Overview
+
+The Documents module provides file storage with folder hierarchy, document upload/download, and status management (draft, active, archived).
+
+**API Endpoints**: `/api/v1/documents/`
+**Permissions**: `documents.view` (read), `documents.manage` (create/edit/delete)
+
+### Common Issues
+
+#### Error: Unable to load documents
+
+**Message**: `"Unable to load documents. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. Backend service not running
+3. Database migration not applied (missing `documents` or `document_folders` tables)
+
+**Solutions**:
+```bash
+# Verify the documents tables exist
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
+  -e "SHOW TABLES LIKE 'document%';"
+
+# Expected: documents, document_folders
+
+# If tables are missing, run migrations
+docker exec the-logbook-backend-1 alembic upgrade head
+```
+
+---
+
+#### Error: Unable to upload document
+
+**Message**: `"Unable to upload the document. Please check your input and try again."`
+
+**Causes**:
+1. File too large (check server upload limits)
+2. Missing required fields (name)
+3. Invalid folder_id reference
+
+**Solutions**:
+- Verify the file is not too large for your server configuration
+- Ensure the target folder exists before uploading
+- Check that the document name is provided
+
+---
+
+#### Error: Unable to create folder
+
+**Message**: `"Unable to create the folder. Please check your input and try again."`
+
+**Causes**:
+1. Duplicate folder name in the same parent
+2. Invalid parent_folder_id
+3. Missing `documents.manage` permission
+
+**Solutions**:
+- Use a unique folder name within the parent directory
+- Verify your user role has `documents.manage` permission
+- Check that the parent folder exists
+
+---
+
+## Meetings & Minutes Module
+
+### Overview
+
+The Meetings module manages meeting records with attendees, action items, and approval workflows. Meeting types include regular, special, emergency, committee, and board meetings.
+
+**API Endpoints**: `/api/v1/meetings/`
+**Permissions**: `meetings.view` (read), `meetings.manage` (create/edit/delete/approve)
+
+### Common Issues
+
+#### Error: Unable to load meetings
+
+**Message**: `"Unable to load meetings. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. Missing `meetings` table (migration not applied)
+
+**Solutions**:
+```bash
+# Verify the meetings tables exist
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
+  -e "SHOW TABLES LIKE 'meeting%';"
+
+# Expected: meetings, meeting_attendees, meeting_action_items
+```
+
+---
+
+#### Error: Unable to create meeting
+
+**Message**: `"Unable to create the meeting. Please check your input and try again."`
+
+**Causes**:
+1. Missing required fields (title, meeting_type, meeting_date)
+2. Invalid meeting_type value
+3. Missing `meetings.manage` permission
+
+**Solutions**:
+- Ensure title, meeting type, and date are all provided
+- Valid meeting types: `regular`, `special`, `emergency`, `committee`, `board`
+- Check that your user role has `meetings.manage` permission
+
+---
+
+#### Meeting Approval Workflow
+
+Meetings follow a status workflow: **draft** -> **approved** -> **archived**
+
+- Only users with `meetings.manage` permission can approve meetings
+- Approved meetings cannot be edited (only archived)
+- Action items can be managed independently of meeting status
+
+---
+
+## Scheduling Module
+
+### Overview
+
+The Scheduling module manages shift creation, week/month calendar views, and attendance tracking per shift.
+
+**API Endpoints**: `/api/v1/scheduling/`
+**Permissions**: `scheduling.view` (read), `scheduling.manage` (create/edit/delete)
+
+### Common Issues
+
+#### Error: Unable to load shifts
+
+**Message**: `"Unable to load shifts. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. Backend service not running
+3. Shifts table not created (migration not applied)
+
+**Solutions**:
+```bash
+# Check backend health
+curl http://localhost:3001/health
+
+# Run migrations if needed
+docker exec the-logbook-backend-1 alembic upgrade head
+```
+
+---
+
+#### Error: Unable to create shift
+
+**Message**: `"Unable to create the shift. Please check your input and try again."`
+
+**Causes**:
+1. Missing required fields (title, shift_date, start_time, end_time)
+2. End time before start time
+3. Missing `scheduling.manage` permission
+
+**Solutions**:
+- Verify all required fields are filled in
+- Ensure end time is after start time
+- Check user has `scheduling.manage` permission
+
+---
+
+#### Calendar View Shows No Data
+
+**Symptoms**: Calendar shows empty week/month despite shifts existing
+
+**Causes**:
+1. Date range filter doesn't match existing shifts
+2. Shifts exist for different dates
+
+**Solutions**:
+- Navigate to the correct week using the calendar navigation
+- Check that shifts have been created for the current week
+- Verify shift dates are correct in the database
+
+---
+
+## Reports Module
+
+### Overview
+
+The Reports module generates data reports including member roster, training summary, and event attendance reports using aggregated data from across the application.
+
+**API Endpoints**: `/api/v1/reports/`
+**Permissions**: `reports.view` (view report types), `reports.manage` (generate reports)
+
+### Common Issues
+
+#### Error: Unable to generate report
+
+**Message**: `"Unable to generate report. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. No data available for the requested report type
+3. Missing `reports.manage` permission
+
+**Solutions**:
+- Verify your connection to the server
+- Ensure data exists for the report (e.g., members exist for member roster report)
+- Check that your user role has `reports.manage` permission
+
+---
+
+#### Report Returns Empty Results
+
+**Symptoms**: Report generates successfully but shows no data
+
+**Causes**:
+1. No records match the report criteria
+2. Date range filters exclude all data
+3. Data hasn't been entered yet
+
+**Solutions**:
+- For **member_roster**: Verify active members exist in the Members module
+- For **training_summary**: Verify training records have been created
+- For **event_attendance**: Verify events with attendees exist
+
+---
+
+#### Available Report Types
+
+| Report Type | Description | Data Source |
+|-------------|-------------|-------------|
+| `member_roster` | List of all active members with roles | Users table |
+| `training_summary` | Training completion and certification status | Training records |
+| `event_attendance` | Event participation rates | Events and attendees |
+
+---
+
+## Notifications Module
+
+### Overview
+
+The Notifications module manages notification rules (triggers and categories), delivery logging, and read tracking. Rules can be toggled on/off and notification logs track delivery status.
+
+**API Endpoints**: `/api/v1/notifications/`
+**Permissions**: `notifications.view` (read), `notifications.manage` (create/edit/delete rules)
+
+### Common Issues
+
+#### Error: Unable to load notification rules
+
+**Message**: `"Unable to load notification rules. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. Missing `notification_rules` or `notification_logs` tables
+
+**Solutions**:
+```bash
+# Verify the notification tables exist
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
+  -e "SHOW TABLES LIKE 'notification%';"
+
+# Expected: notification_rules, notification_logs
+```
+
+---
+
+#### Error: Unable to create notification rule
+
+**Message**: `"Unable to create the notification rule. Please check your input and try again."`
+
+**Causes**:
+1. Missing required fields (name, trigger_type, category)
+2. Invalid trigger_type or category value
+3. Missing `notifications.manage` permission
+
+**Valid Configuration Values**:
+
+| Field | Valid Values |
+|-------|-------------|
+| `trigger_type` | `event_created`, `training_due`, `shift_assigned`, `document_uploaded`, `meeting_scheduled`, `election_opened`, `form_submitted`, `custom` |
+| `category` | `events`, `training`, `scheduling`, `documents`, `meetings`, `elections`, `forms`, `system` |
+| `channel` | `in_app`, `email`, `sms`, `push` |
+
+---
+
+#### Notification Rule Toggle Not Persisting
+
+**Symptoms**: Toggling a rule on/off reverts after page refresh
+
+**Causes**:
+1. API call to toggle endpoint failing silently
+2. Network issue preventing the update
+
+**Solutions**:
+- Check browser console for API errors (F12 -> Console)
+- Verify the rule ID is valid
+- Confirm `notifications.manage` permission is assigned
+
+---
+
 ## Getting Help
 
 ### Self-Service Resources
@@ -868,7 +1280,7 @@ When reporting an issue, include:
 docker exec the-logbook-backend-1 python -c "from app.core.config import settings; print(settings.VERSION)"
 
 # Database status
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password -e "SELECT VERSION();"
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT VERSION();"
 
 # Container status
 docker-compose ps
@@ -976,7 +1388,7 @@ swaks --to test@example.com \
 docker stats
 
 # Check database size
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
   -e "SELECT table_name, ROUND(((data_length + index_length) / 1024 / 1024), 2) AS 'Size (MB)' FROM information_schema.tables WHERE table_schema = 'logbook' ORDER BY (data_length + index_length) DESC LIMIT 10;"
 
 # Check slow queries
@@ -1118,6 +1530,11 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 ## Version History
 
 **v1.3** - 2026-02-12
+- Added Documents module troubleshooting (folder creation, file upload, loading errors)
+- Added Meetings & Minutes module troubleshooting (meeting creation, approval workflow, action items)
+- Added Scheduling module troubleshooting (shift creation, calendar views, attendance)
+- Added Reports module troubleshooting (report generation, empty results, available report types)
+- Added Notifications module troubleshooting (rule creation, toggle persistence, valid configuration values)
 - Added Prospective Members module troubleshooting section
 - Added inactivity timeout troubleshooting
 - Added applicant reactivation troubleshooting

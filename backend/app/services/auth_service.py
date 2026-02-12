@@ -384,7 +384,7 @@ class AuthService:
         """
         # Verify current password
         if not user.password_hash or not verify_password(current_password, user.password_hash):
-            return False, "Current password is incorrect"
+            return False, "Current password is incorrect. Please verify your existing password and try again."
 
         # Validate new password
         is_valid, error_msg = validate_password_strength(new_password)
@@ -394,10 +394,16 @@ class AuthService:
         # Update password
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.utcnow()
+        user.failed_login_attempts = 0
+        user.locked_until = None
 
-        await self.db.flush()
+        # Revoke all existing sessions — forces re-login with new password
+        # and invalidates any stolen tokens
+        revoked = await self._revoke_all_user_sessions(str(user.id))
 
-        logger.info(f"Password changed for user: {user.username}")
+        await self.db.commit()
+
+        logger.info(f"Password changed for user: {user.username}, revoked {revoked} sessions")
 
         return True, None
 
@@ -528,6 +534,38 @@ class AuthService:
 
         return user, raw_token
 
+    async def validate_reset_token(
+        self,
+        raw_token: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Validate a password reset token without consuming it.
+
+        Returns:
+            Tuple of (is_valid, user_email_or_none)
+        """
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.password_reset_token == token_hash,
+                User.deleted_at.is_(None),
+            )
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return False, None
+
+        if (
+            not user.password_reset_expires_at
+            or user.password_reset_expires_at < datetime.utcnow()
+        ):
+            return False, None
+
+        return True, user.email
+
     async def reset_password_with_token(
         self,
         raw_token: str,
@@ -551,7 +589,7 @@ class AuthService:
         user = result.scalar_one_or_none()
 
         if not user:
-            return False, "Invalid or expired reset token"
+            return False, "This password reset link is invalid or has already been used. Please request a new reset link from the login page."
 
         if (
             not user.password_reset_expires_at
@@ -561,7 +599,7 @@ class AuthService:
             user.password_reset_token = None
             user.password_reset_expires_at = None
             await self.db.flush()
-            return False, "Reset token has expired. Please request a new one."
+            return False, "This password reset link has expired. Reset links are valid for 30 minutes. Please request a new one from the login page."
 
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)

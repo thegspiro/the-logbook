@@ -182,7 +182,7 @@ const TrainingOfficerDashboard: React.FC = () => {
       setRequirements(reqs);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      setError('Failed to load training data. Please try again.');
+      setError('Unable to load training dashboard data. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }

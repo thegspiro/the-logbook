@@ -68,7 +68,7 @@ const Members: React.FC = () => {
       setStats(calculatedStats);
     } catch (err: any) {
       console.error('Failed to load members:', err);
-      setError(err.response?.data?.detail || 'Failed to load members. Please try again.');
+      setError(err.response?.data?.detail || 'Unable to load the member list. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }

@@ -43,7 +43,7 @@ export const RoleManagementPage: React.FC = () => {
       setPermissionCategories(permsData);
     } catch (err) {
       console.error('Error fetching data:', err);
-      setError('Failed to load data. Please try again later.');
+      setError('Unable to load roles and permissions. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,7 @@ export const RoleManagementPage: React.FC = () => {
       setShowCreateModal(false);
     } catch (err: any) {
       console.error('Error saving role:', err);
-      setError(err.response?.data?.detail || 'Failed to save role. Please try again.');
+      setError(err.response?.data?.detail || 'Unable to save the role. Please check your input and try again.');
     }
   };
 
@@ -109,7 +109,7 @@ export const RoleManagementPage: React.FC = () => {
       await fetchData();
     } catch (err: any) {
       console.error('Error deleting role:', err);
-      setError(err.response?.data?.detail || 'Failed to delete role. Please try again.');
+      setError(err.response?.data?.detail || 'Unable to delete the role. It may still be assigned to users.');
     }
   };
 

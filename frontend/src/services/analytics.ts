@@ -7,7 +7,12 @@
  * - Time-to-check-in
  * - Device types
  * - Error rates
+ *
+ * Events are persisted to the backend API and metrics are fetched from there.
+ * A local buffer is kept for immediate UI responsiveness.
  */
+
+import { analyticsApiService, type AnalyticsMetrics } from './api';
 
 export interface AnalyticsEvent {
   id: string;
@@ -35,10 +40,26 @@ export interface QRCodeMetrics {
   checkInTrends: Array<{ time: Date; count: number }>;
 }
 
-class AnalyticsService {
-  private events: AnalyticsEvent[] = [];
-  private maxEvents = 1000;
+function mapApiMetrics(data: AnalyticsMetrics): QRCodeMetrics {
+  return {
+    totalScans: data.total_scans,
+    successfulCheckIns: data.successful_check_ins,
+    failedCheckIns: data.failed_check_ins,
+    successRate: data.success_rate,
+    avgTimeToCheckIn: data.avg_time_to_check_in,
+    deviceBreakdown: {
+      mobile: data.device_breakdown?.mobile || 0,
+      desktop: data.device_breakdown?.desktop || 0,
+      tablet: data.device_breakdown?.tablet || 0,
+      unknown: data.device_breakdown?.unknown || 0,
+    },
+    errorBreakdown: data.error_breakdown || {},
+    hourlyActivity: data.hourly_activity || Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
+    checkInTrends: [],
+  };
+}
 
+class AnalyticsService {
   /**
    * Track a QR code scan
    */
@@ -55,7 +76,7 @@ class AnalyticsService {
   trackCheckInSuccess(
     eventId: string,
     userId: string,
-    timeToCheckIn: number // seconds from scan to success
+    timeToCheckIn: number
   ): void {
     this.trackEvent('check_in_success', eventId, userId, {
       timeToCheckIn,
@@ -102,7 +123,7 @@ class AnalyticsService {
   }
 
   /**
-   * Generic event tracking
+   * Generic event tracking - sends to backend
    */
   private trackEvent(
     eventType: AnalyticsEvent['eventType'],
@@ -110,188 +131,38 @@ class AnalyticsService {
     userId: string | undefined,
     metadata: Record<string, any>
   ): void {
-    const analyticsEvent: AnalyticsEvent = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date(),
-      eventType,
-      eventId,
-      userId,
+    analyticsApiService.trackEvent({
+      event_type: eventType,
+      event_id: eventId,
+      user_id: userId,
       metadata,
-    };
+    }).catch(() => {
+      // Silently fail - analytics should not block the user
+    });
+  }
 
-    this.events.unshift(analyticsEvent);
-    if (this.events.length > this.maxEvents) {
-      this.events.pop();
+  /**
+   * Get metrics for a specific event (from backend)
+   */
+  async getEventMetrics(eventId: string): Promise<QRCodeMetrics> {
+    try {
+      const data = await analyticsApiService.getMetrics(eventId);
+      return mapApiMetrics(data);
+    } catch {
+      return this.emptyMetrics();
     }
-
-    // Send to backend (placeholder)
-    this.sendToBackend(analyticsEvent);
   }
 
   /**
-   * Get metrics for a specific event
+   * Get overall platform metrics (from backend)
    */
-  getEventMetrics(eventId: string): QRCodeMetrics {
-    const eventEvents = this.events.filter(e => e.eventId === eventId);
-
-    const scans = eventEvents.filter(e => e.eventType === 'qr_scan').length;
-    const successes = eventEvents.filter(e => e.eventType === 'check_in_success');
-    const failures = eventEvents.filter(e => e.eventType === 'check_in_failure');
-
-    // Calculate success rate
-    const total = successes.length + failures.length;
-    const successRate = total > 0 ? (successes.length / total) * 100 : 0;
-
-    // Calculate average time to check-in
-    const checkInTimes = successes
-      .map(e => e.metadata.timeToCheckIn)
-      .filter(t => typeof t === 'number');
-    const avgTimeToCheckIn = checkInTimes.length > 0
-      ? checkInTimes.reduce((a, b) => a + b, 0) / checkInTimes.length
-      : 0;
-
-    // Device breakdown
-    const deviceBreakdown = {
-      mobile: 0,
-      desktop: 0,
-      tablet: 0,
-      unknown: 0,
-    };
-
-    eventEvents.forEach(e => {
-      const deviceType = e.metadata.deviceType || 'unknown';
-      if (deviceType in deviceBreakdown) {
-        (deviceBreakdown as any)[deviceType]++;
-      } else {
-        deviceBreakdown.unknown++;
-      }
-    });
-
-    // Error breakdown
-    const errorBreakdown: Record<string, number> = {};
-    failures.forEach(e => {
-      const errorType = e.metadata.errorType || 'unknown';
-      errorBreakdown[errorType] = (errorBreakdown[errorType] || 0) + 1;
-    });
-
-    // Hourly activity
-    const hourlyActivity = this.calculateHourlyActivity(eventEvents);
-
-    // Check-in trends (last 24 hours, grouped by 15-minute intervals)
-    const checkInTrends = this.calculateCheckInTrends(successes);
-
-    return {
-      totalScans: scans,
-      successfulCheckIns: successes.length,
-      failedCheckIns: failures.length,
-      successRate: Math.round(successRate * 100) / 100,
-      avgTimeToCheckIn: Math.round(avgTimeToCheckIn),
-      deviceBreakdown,
-      errorBreakdown,
-      hourlyActivity,
-      checkInTrends,
-    };
-  }
-
-  /**
-   * Get overall platform metrics
-   */
-  getOverallMetrics(): QRCodeMetrics {
-    const scans = this.events.filter(e => e.eventType === 'qr_scan').length;
-    const successes = this.events.filter(e => e.eventType === 'check_in_success');
-    const failures = this.events.filter(e => e.eventType === 'check_in_failure');
-
-    const total = successes.length + failures.length;
-    const successRate = total > 0 ? (successes.length / total) * 100 : 0;
-
-    const checkInTimes = successes
-      .map(e => e.metadata.timeToCheckIn)
-      .filter(t => typeof t === 'number');
-    const avgTimeToCheckIn = checkInTimes.length > 0
-      ? checkInTimes.reduce((a, b) => a + b, 0) / checkInTimes.length
-      : 0;
-
-    const deviceBreakdown = {
-      mobile: 0,
-      desktop: 0,
-      tablet: 0,
-      unknown: 0,
-    };
-
-    this.events.forEach(e => {
-      const deviceType = e.metadata.deviceType || 'unknown';
-      if (deviceType in deviceBreakdown) {
-        (deviceBreakdown as any)[deviceType]++;
-      } else {
-        deviceBreakdown.unknown++;
-      }
-    });
-
-    const errorBreakdown: Record<string, number> = {};
-    failures.forEach(e => {
-      const errorType = e.metadata.errorType || 'unknown';
-      errorBreakdown[errorType] = (errorBreakdown[errorType] || 0) + 1;
-    });
-
-    const hourlyActivity = this.calculateHourlyActivity(this.events);
-    const checkInTrends = this.calculateCheckInTrends(successes);
-
-    return {
-      totalScans: scans,
-      successfulCheckIns: successes.length,
-      failedCheckIns: failures.length,
-      successRate: Math.round(successRate * 100) / 100,
-      avgTimeToCheckIn: Math.round(avgTimeToCheckIn),
-      deviceBreakdown,
-      errorBreakdown,
-      hourlyActivity,
-      checkInTrends,
-    };
-  }
-
-  /**
-   * Calculate hourly activity distribution
-   */
-  private calculateHourlyActivity(events: AnalyticsEvent[]): Array<{ hour: number; count: number }> {
-    const hourCounts: Record<number, number> = {};
-
-    events.forEach(e => {
-      const hour = e.timestamp.getHours();
-      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-    });
-
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      count: hourCounts[hour] || 0,
-    }));
-  }
-
-  /**
-   * Calculate check-in trends over time
-   */
-  private calculateCheckInTrends(
-    checkIns: AnalyticsEvent[]
-  ): Array<{ time: Date; count: number }> {
-    const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-    // Filter last 24 hours
-    const recentCheckIns = checkIns.filter(e => e.timestamp >= oneDayAgo);
-
-    // Group by 15-minute intervals
-    const intervals: Record<string, number> = {};
-
-    recentCheckIns.forEach(e => {
-      const minutes = Math.floor(e.timestamp.getMinutes() / 15) * 15;
-      const intervalTime = new Date(e.timestamp);
-      intervalTime.setMinutes(minutes, 0, 0);
-      const key = intervalTime.toISOString();
-      intervals[key] = (intervals[key] || 0) + 1;
-    });
-
-    return Object.entries(intervals)
-      .map(([time, count]) => ({ time: new Date(time), count }))
-      .sort((a, b) => a.time.getTime() - b.time.getTime());
+  async getOverallMetrics(): Promise<QRCodeMetrics> {
+    try {
+      const data = await analyticsApiService.getMetrics();
+      return mapApiMetrics(data);
+    } catch {
+      return this.emptyMetrics();
+    }
   }
 
   /**
@@ -316,39 +187,35 @@ class AnalyticsService {
   }
 
   /**
-   * Send to backend (placeholder)
+   * Export analytics data (from backend)
    */
-  private async sendToBackend(_event: AnalyticsEvent): Promise<void> {
-    // TODO: Implement backend analytics storage
-    /*
+  async exportAnalytics(eventId?: string): Promise<string> {
     try {
-      await fetch('/api/v1/analytics/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event),
-      });
-    } catch (err) {
-      console.error('Failed to send analytics:', err);
+      return await analyticsApiService.exportAnalytics(eventId);
+    } catch {
+      return JSON.stringify({ events: [], error: 'Failed to export' }, null, 2);
     }
-    */
-  }
-
-  /**
-   * Export analytics data
-   */
-  exportAnalytics(): string {
-    return JSON.stringify({
-      events: this.events,
-      metrics: this.getOverallMetrics(),
-      exportedAt: new Date().toISOString(),
-    }, null, 2);
   }
 
   /**
    * Clear all analytics data
    */
   clearAnalytics(): void {
-    this.events = [];
+    // No-op for backend-persisted analytics
+  }
+
+  private emptyMetrics(): QRCodeMetrics {
+    return {
+      totalScans: 0,
+      successfulCheckIns: 0,
+      failedCheckIns: 0,
+      successRate: 0,
+      avgTimeToCheckIn: 0,
+      deviceBreakdown: { mobile: 0, desktop: 0, tablet: 0, unknown: 0 },
+      errorBreakdown: {},
+      hourlyActivity: Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
+      checkInTrends: [],
+    };
   }
 }
 

@@ -62,15 +62,15 @@ class TestOnboardingIntegration:
         assert org is not None
         org_id = org.id
 
-        # Verify Super Admin role exists (created automatically by create_organization)
+        # Verify IT Administrator role exists (created automatically by create_organization)
         result = await db_session.execute(
             select(Role).where(
                 Role.organization_id == org_id,
-                Role.slug == "super_admin"
+                Role.slug == "it_administrator"
             )
         )
-        super_admin_role = result.scalar_one_or_none()
-        assert super_admin_role is not None, "Super Admin role should be created"
+        it_admin_role = result.scalar_one_or_none()
+        assert it_admin_role is not None, "IT Administrator role should be created"
 
         # Create admin user - THIS IS THE CRITICAL TEST
         # This should NOT raise MissingGreenlet error
@@ -94,13 +94,13 @@ class TestOnboardingIntegration:
         assert user.email == admin_data["email"]
         assert user.username == admin_data["username"]
 
-        # CRITICAL: Verify the user has the Super Admin role
+        # CRITICAL: Verify the user has the IT Administrator role
         # This tests that await db.refresh(user, ['roles']) worked correctly
         await db_session.refresh(user, ['roles'])
         assert len(user.roles) > 0, "User should have at least one role assigned"
 
         role_slugs = [role.slug for role in user.roles]
-        assert "super_admin" in role_slugs, "User should have Super Admin role"
+        assert "it_administrator" in role_slugs, "User should have IT Administrator role"
 
     @pytest.mark.asyncio
     async def test_create_organization(
@@ -178,14 +178,14 @@ class TestOnboardingIntegration:
 
         assert len(roles) > 0, "Default roles should be created"
 
-        # Verify Super Admin role exists (critical for admin user creation)
+        # Verify IT Administrator role exists (critical for admin user creation)
         role_slugs = [r.slug for r in roles]
-        assert "super_admin" in role_slugs, "Super Admin role must exist"
+        assert "it_administrator" in role_slugs, "IT Administrator role must exist"
 
-        # Find Super Admin role and verify its properties
-        super_admin = next(r for r in roles if r.slug == "super_admin")
-        assert super_admin.name == "Super Administrator"
-        assert super_admin.priority == 100
+        # Find IT Administrator role and verify its properties
+        it_admin = next(r for r in roles if r.slug == "it_administrator")
+        assert it_admin.name == "IT Administrator"
+        assert it_admin.priority == 100
 
     @pytest.mark.asyncio
     async def test_duplicate_admin_user_prevention(

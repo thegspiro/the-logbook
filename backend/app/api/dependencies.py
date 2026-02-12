@@ -42,6 +42,10 @@ class PermissionChecker:
         for role in current_user.roles:
             user_permissions.update(role.permissions or [])
 
+        # Wildcard "*" grants all permissions (IT Administrator)
+        if "*" in user_permissions:
+            return current_user
+
         for perm in self.required_permissions:
             if perm in user_permissions:
                 return current_user
@@ -77,6 +81,10 @@ class AllPermissionChecker:
         user_permissions = set()
         for role in current_user.roles:
             user_permissions.update(role.permissions or [])
+
+        # Wildcard "*" grants all permissions (IT Administrator)
+        if "*" in user_permissions:
+            return current_user
 
         missing = [p for p in self.required_permissions if p not in user_permissions]
         if missing:

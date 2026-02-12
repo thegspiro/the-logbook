@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
 
@@ -7,31 +7,32 @@ import { errorTracker, type ErrorLog } from '../services/errorTracking';
  *
  * Displays all tracked errors with filtering, statistics, and export capabilities.
  * Useful for administrators to identify and troubleshoot issues.
+ * Data is fetched from the backend API.
  */
 const ErrorMonitoringPage: React.FC = () => {
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [filter, setFilter] = useState<string>('all');
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<{ total: number; byType: Record<string, number>; recentErrors: ErrorLog[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadErrors = useCallback(async () => {
+    const [errorList, errorStats] = await Promise.all([
+      errorTracker.getErrors(filter !== 'all' ? { error_type: filter } : undefined),
+      errorTracker.getErrorStats(),
+    ]);
+    setErrors(errorList);
+    setStats(errorStats);
+    setLoading(false);
+  }, [filter]);
 
   useEffect(() => {
-    // Refresh errors every 5 seconds
-    const loadErrors = () => {
-      setErrors(errorTracker.getErrors());
-      setStats(errorTracker.getErrorStats());
-    };
-
     loadErrors();
-    const interval = setInterval(loadErrors, 5000);
-
+    const interval = setInterval(loadErrors, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadErrors]);
 
-  const filteredErrors = filter === 'all'
-    ? errors
-    : errors.filter(e => e.errorType === filter);
-
-  const exportErrors = () => {
-    const dataStr = errorTracker.exportErrors();
+  const exportErrors = async () => {
+    const dataStr = await errorTracker.exportErrors();
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
@@ -41,13 +42,21 @@ const ErrorMonitoringPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const clearAllErrors = () => {
+  const clearAllErrors = async () => {
     if (window.confirm('Are you sure you want to clear all errors? This cannot be undone.')) {
-      errorTracker.clearErrors();
+      await errorTracker.clearErrors();
       setErrors([]);
       setStats(null);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="text-gray-600">Loading error data...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -114,7 +123,7 @@ const ErrorMonitoringPage: React.FC = () => {
 
       {/* Error List */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {filteredErrors.length === 0 ? (
+        {errors.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <svg
               className="mx-auto h-12 w-12 text-gray-400 mb-4"
@@ -159,7 +168,7 @@ const ErrorMonitoringPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredErrors.map((error) => (
+                {errors.map((error) => (
                   <tr key={error.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(error.timestamp).toLocaleString()}

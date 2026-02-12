@@ -7,16 +7,17 @@ import { analyticsService, type QRCodeMetrics } from '../services/analytics';
  *
  * Displays QR code check-in analytics and metrics.
  * Can show metrics for a specific event or overall platform metrics.
+ * Data is fetched from the backend API.
  */
 const AnalyticsDashboardPage: React.FC = () => {
   const { id: eventId } = useParams<{ id?: string }>();
   const [metrics, setMetrics] = useState<QRCodeMetrics | null>(null);
 
   useEffect(() => {
-    const loadMetrics = () => {
+    const loadMetrics = async () => {
       const data = eventId
-        ? analyticsService.getEventMetrics(eventId)
-        : analyticsService.getOverallMetrics();
+        ? await analyticsService.getEventMetrics(eventId)
+        : await analyticsService.getOverallMetrics();
       setMetrics(data);
     };
 
@@ -26,8 +27,8 @@ const AnalyticsDashboardPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [eventId]);
 
-  const exportData = () => {
-    const dataStr = analyticsService.exportAnalytics();
+  const exportData = async () => {
+    const dataStr = await analyticsService.exportAnalytics(eventId);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
