@@ -53,9 +53,26 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ---
 
+### 📋 Module Documentation
+
+7. **[FORMS_MODULE.md](./FORMS_MODULE.md)**
+   - Complete Forms module documentation
+   - Public-facing forms with QR code generation
+   - Cross-module integrations (Membership, Inventory)
+   - Security: input sanitization, rate limiting, honeypot bot detection
+   - API endpoint reference (20+ endpoints)
+   - Database models, migrations, and permissions
+
+8. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
+   - Public API v1.1.0 with public form endpoints
+   - Form retrieval and submission without authentication
+   - Rate limiting, security notes, integration examples
+
+---
+
 ### 🛠️ Development & Operations
 
-7. **[ONBOARDING_REVIEW.md](../ONBOARDING_REVIEW.md)**
+9. **[ONBOARDING_REVIEW.md](../ONBOARDING_REVIEW.md)**
    - Analysis of startup delays and optimization recommendations
    - Docker Compose configuration improvements
    - Database connection retry strategy
@@ -159,6 +176,8 @@ See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.m
 | Database errors | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#database--migration-issues) |
 | Network/connection issues | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems) |
 | Enum case mismatch | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md) |
+| Custom forms / public forms | [FORMS_MODULE.md](./FORMS_MODULE.md) |
+| Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Security questions | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md) |
 
 ### By Error Message
@@ -240,6 +259,8 @@ docker-compose ps
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
 | ENUM_CONVENTIONS.md | 1.0 | 2026-02-07 | Current |
+| FORMS_MODULE.md | 1.0 | 2026-02-12 | Current |
+| PUBLIC_API_DOCUMENTATION.md | 1.1 | 2026-02-12 | Current |
 | ONBOARDING_REVIEW.md | 1.0 | 2026-02-07 | Current |
 
 ---
@@ -269,6 +290,23 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-12 - Forms Module & Public Forms
+
+**What Changed**:
+- Added complete Custom Forms module with form builder, field management, and submissions
+- Added public-facing forms accessible via unique URL slugs without authentication
+- Added cross-module integrations (Membership, Inventory)
+- Added QR code generation for physical form distribution
+- Added comprehensive form security (input sanitization, rate limiting, honeypot bot detection)
+- Updated Public API Documentation to v1.1.0 with public form endpoints
+
+**New Documentation**:
+- Created [FORMS_MODULE.md](./FORMS_MODULE.md) - Complete forms documentation
+- Updated [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) - Added public form endpoints
+- Updated [SECURITY.md](../SECURITY.md) - Added public form security section
+
+---
 
 ### 2026-02-07 - Major Error Handling Update
 

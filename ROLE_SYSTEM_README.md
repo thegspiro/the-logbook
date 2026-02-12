@@ -155,6 +155,9 @@ Each module has view and manage permissions:
 
 **Advanced Modules:**
 - Forms (`forms.view`, `forms.manage`)
+  - `forms.view`: View forms list, form details, and submissions
+  - `forms.manage`: Create/edit/delete forms, manage fields, publish/archive, configure public access, manage cross-module integrations
+  - Note: Public form submission requires no permissions (accessible by anyone with the form URL)
 - Integrations (`integrations.view`, `integrations.manage`)
 
 **Legacy/Additional Modules:**

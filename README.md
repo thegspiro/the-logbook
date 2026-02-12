@@ -44,6 +44,13 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 - Vehicle/Apparatus Management
 - Budget & Finance Tracking
 - **Event Management** - QR code check-in, self-check-in pages, check-out functionality
+- **Custom Forms** ([Documentation](docs/FORMS_MODULE.md))
+  - Drag-and-drop form builder with 15+ field types
+  - Public-facing forms via unique URL slugs with QR code generation
+  - Cross-module integrations (Membership interest, Equipment assignment)
+  - Submission management with filtering and export
+  - Member lookup fields for internal workflows
+  - Bot protection (honeypot), rate limiting, and input sanitization
 - **Module Configuration** - Priority-based module overview system
 - **Navigation Options** - Configurable top and side navigation layouts
 
@@ -225,6 +232,7 @@ The wiki includes:
 
 ### Modules & Features
 - [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
+- [Custom Forms Module](docs/FORMS_MODULE.md) - Form builder, public forms, cross-module integrations
 - [Role System](ROLE_SYSTEM_README.md) - Role-based access control
 - [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details
 

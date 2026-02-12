@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Forms Module (2026-02-12)
+
+#### Custom Forms Engine
+- **Form Builder**: Full form management with 15+ field types (text, textarea, email, phone, number, date, time, datetime, select, multiselect, checkbox, radio, file, signature, section_header, member_lookup)
+- **Form Lifecycle**: Draft, Published, and Archived states with publish/archive workflows
+- **Starter Templates**: Pre-built templates for Membership Interest Form and Equipment Assignment Form
+- **Field Configuration**: Labels, placeholders, help text, validation patterns, min/max constraints, required flags, field width (full/half/third)
+- **Field Reordering**: Drag-and-drop field ordering via reorder endpoint
+- **Submission Management**: View, filter, and delete submissions with pagination
+
+#### Public-Facing Forms
+- **Public Form URLs**: Each form gets a unique 12-character hex slug for public access (`/f/:slug`)
+- **No-Auth Submission**: Public forms accept submissions without authentication
+- **Public Form Page**: Clean, light-themed form page for external visitors with all field types rendered
+- **QR Code Generation**: Downloadable QR codes (PNG/SVG) in the sharing modal for printing and placing in physical locations
+- **Organization Branding**: Public forms display the organization name and form description
+
+#### Cross-Module Integrations
+- **Membership Integration**: Public form submissions can feed into the membership module for admin review
+- **Inventory Integration**: Internal forms with member lookup can assign equipment via the inventory module
+- **Field Mappings**: Configurable JSON field mappings between form fields and target module fields
+- **Integration Management UI**: Add, view, and delete integrations per form in the admin interface
+
+#### Form Security
+- **Input Sanitization**: All form submission data is HTML-escaped, null-byte stripped, and length-limited before storage
+- **Type Validation**: Email format + header injection check, phone character validation, number range validation
+- **Option Validation**: Select/radio/checkbox values validated against allowed options (prevents arbitrary value injection)
+- **Rate Limiting**: Public form views (60/min/IP) and submissions (10/min/IP) with lockout periods
+- **Honeypot Bot Detection**: Hidden field in public forms silently rejects bot submissions with fake success response
+- **Slug Validation**: Form slugs validated against strict hex pattern to prevent path traversal
+- **DOMPurify**: Frontend sanitization of all server-provided text content for defense-in-depth XSS protection
+
+#### Backend Architecture
+- **Database Models**: Form, FormField, FormSubmission, FormIntegration with UUID primary keys
+- **Alembic Migrations**: Two migrations for forms tables and public form extensions
+- **FormsService**: Comprehensive service layer with sanitization, validation, integration processing
+- **API Endpoints**: 16+ REST endpoints for form CRUD, field management, submissions, integrations, member lookup
+- **Public API**: Separate `/api/public/v1/forms/` router with no authentication
+- **Permissions**: `forms.view` and `forms.manage` integrated with RBAC system
+
 ### Added - Frontend (2026-02-08)
 
 #### Onboarding UX Improvements
