@@ -316,7 +316,6 @@ class OnboardingService:
         # Additional info
         county: Optional[str] = None,
         founded_year: Optional[int] = None,
-        tax_id: Optional[str] = None,
         logo: Optional[str] = None,
     ) -> Organization:
         """
@@ -342,8 +341,10 @@ class OnboardingService:
             department_id: Internal department ID
             county: County/jurisdiction
             founded_year: Year organization was founded
-            tax_id: EIN/Tax ID for 501(c)(3) organizations (optional)
             logo: Logo as base64 data URL or external URL
+
+            Note: EIN/tax_id can be added later via organization settings when
+            enabling the Financial or Reports module.
 
         Returns:
             Created Organization object
@@ -413,7 +414,6 @@ class OnboardingService:
             # Additional info
             county=county,
             founded_year=founded_year,
-            tax_id=tax_id,
             logo=logo,
         )
 

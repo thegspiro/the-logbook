@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
   Users,
+  UserPlus,
   Calendar,
   FileText,
   Settings,
@@ -56,8 +57,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: Home },
-    { label: 'Members', path: '/members', icon: Users },
-    { label: 'Membership Pipeline', path: '/membership-pipeline', icon: UserPlus },
+    {
+      label: 'Members',
+      path: '#',
+      icon: Users,
+      subItems: [
+        { label: 'All Members', path: '/members', icon: Users },
+        { label: 'Prospective', path: '/prospective-members', icon: UserPlus },
+      ],
+    },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
     { label: 'Training', path: '/training', icon: GraduationCap },

@@ -1376,7 +1376,6 @@ async def save_session_organization(
             # Additional info
             county=data.county,
             founded_year=data.founded_year,
-            tax_id=data.tax_id,
             logo=validate_logo_image(data.logo),  # Validate and sanitize logo
         )
 

@@ -9,7 +9,6 @@ import {
   Phone,
   Calendar,
   AlertCircle,
-  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
@@ -506,7 +505,6 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('membershipType', e.target.value as any)}
                   className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="prospective">Prospective</option>
                   <option value="probationary">Probationary</option>
                   <option value="regular">Regular</option>
                   <option value="life">Life</option>
@@ -554,39 +552,6 @@ const AddMember: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Prospective Member Warning */}
-          {formData.membershipType === 'prospective' && (
-            <div className="bg-yellow-900/30 border-2 border-yellow-500 rounded-lg p-6">
-              <div className="flex items-start space-x-3">
-                <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="text-yellow-400 font-bold text-lg mb-2">
-                    Prospective Member - No Login Account
-                  </h3>
-                  <div className="text-slate-200 space-y-2">
-                    <p>
-                      <strong>Important:</strong> Prospective members should NOT be given login account privileges at this stage.
-                    </p>
-                    <p>
-                      Prospective members are individuals who have expressed interest in joining the department
-                      but have not yet been officially elected. They are tracked in the membership system for
-                      coordination purposes only.
-                    </p>
-                    <p>
-                      <strong>Next Steps:</strong>
-                    </p>
-                    <ul className="list-disc list-inside ml-4 space-y-1">
-                      <li>Complete this form to capture their contact information</li>
-                      <li>The membership coordinator will track them through the election process</li>
-                      <li>After successful election, update their membership type to "Probationary"</li>
-                      <li>Only then should login credentials be created and sent to the member</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Emergency Contact 1 */}
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">

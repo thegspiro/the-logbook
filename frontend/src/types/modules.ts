@@ -322,6 +322,26 @@ export const AVAILABLE_MODULES: Module[] = [
     ],
   },
   {
+    id: 'prospective-members',
+    name: 'Prospective Members Pipeline',
+    description: 'Applicant-to-member pipeline with configurable stages',
+    longDescription:
+      'Manage the full prospective member pipeline from application to membership conversion. Configure pipeline stages (form submission, document upload, election/vote, manual approval), track applicants through kanban or table views, and automatically convert successful applicants to administrative or probationary members.',
+    category: 'optional',
+    enabled: false,
+    canDisable: true,
+    icon: 'UserPlus',
+    route: '/prospective-members',
+    features: [
+      'Configurable pipeline stages',
+      'Kanban and table views',
+      'Drag-and-drop stage management',
+      'Document upload requirements',
+      'Election/vote integration',
+      'Automatic member conversion',
+    ],
+  },
+  {
     id: 'public-info',
     name: 'Public Information',
     description: 'Public-facing pages, community outreach, and fire safety education',

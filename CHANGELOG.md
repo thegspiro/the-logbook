@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Prospective Members Module (2026-02-12)
+
+#### Pipeline Management
+- **Configurable Pipeline Builder**: Drag-and-drop stage builder with four stage types (form submission, document upload, election/vote, manual approval)
+- **Pipeline Stages**: Each stage has a name, description, type, and optional per-stage inactivity timeout override
+- **Dual View Modes**: Toggle between kanban board (drag-and-drop columns) and table view (sortable, paginated) for managing applicants
+- **Server-Side Pagination**: Efficient pagination for large applicant lists with configurable page sizes
+- **Bulk Actions**: Select multiple applicants to advance, hold, or reject in batch
+
+#### Applicant Lifecycle
+- **Status Tracking**: Six applicant statuses — active, on_hold, withdrawn, converted, rejected, inactive
+- **Stage Progression**: Advance applicants through pipeline stages with action menu or drag-and-drop
+- **Detail Drawer**: Slide-out panel showing full applicant details, notes, stage history, and activity timestamps
+- **Conversion Flow**: Convert successful applicants to administrative member or probationary member via conversion modal
+
+#### Inactivity Timeout System
+- **Configurable Timeouts**: Pipeline-level default timeout with presets (3 months, 6 months, 1 year, never) or custom days
+- **Per-Stage Overrides**: Individual stages can override the pipeline default for stages that naturally take longer (e.g., background checks)
+- **Two-Phase Warnings**: Visual indicators at configurable warning threshold (amber at warning %, red at critical/approaching timeout)
+- **Automatic Deactivation**: Applications automatically marked inactive when no action occurs within the timeout period
+- **Notification Controls**: Toggle notifications for coordinators and/or applicants when approaching timeout
+- **Active/Inactive Tabs**: Main page splits into Active and Inactive tabs with badge counts
+- **Reactivation**: Coordinators can reactivate inactive applications; applicants can self-reactivate by resubmitting interest form
+- **Auto-Purge**: Optional automatic purging of inactive applications after configurable period (default 365 days) to reduce stored private data
+- **Manual Purge**: Bulk purge with confirmation modal and security messaging about permanent data deletion
+- **Stats Annotations**: Statistics explicitly note what is included/excluded (active applicants only; inactive, rejected, withdrawn excluded from conversion rates)
+
+#### Cross-Module Integration
+- **Forms Integration**: Pipeline stages of type `form_submission` link to the Forms module for structured data collection
+- **Elections Integration**: Pipeline stages of type `election_vote` link to the Elections module for membership votes
+- **Notifications Integration**: Configurable alerts for stage changes, inactivity warnings, and timeout events
+
+#### Onboarding & Permissions
+- **Optional Module**: Added to onboarding module registry as optional, Core category module
+- **Role Permissions**: Secretary and Membership Coordinator roles granted manage permissions by default
+- **RBAC Integration**: `prospective_members.view` and `prospective_members.manage` permissions
+
+#### Frontend Architecture
+- **Module Structure**: Full standalone module at `frontend/src/modules/prospective-members/` with types, services, store, components, and pages
+- **Zustand Store**: Comprehensive state management with server-side pagination, active/inactive tabs, loading states, and all CRUD operations
+- **Route Encapsulation**: `getProspectiveMembersRoutes()` registered in App.tsx with lazy-loaded pages
+- **7 Components**: PipelineBuilder, PipelineKanban, PipelineTable, ApplicantCard, ApplicantDetailDrawer, ConversionModal, StageConfigModal
+
 ### Added - Forms Module (2026-02-12)
 
 #### Custom Forms Engine

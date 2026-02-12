@@ -349,7 +349,6 @@ class OrganizationSetupCreate(BaseModel):
     # Additional Information
     county: Optional[str] = Field(None, max_length=100, description="County/jurisdiction")
     founded_year: Optional[int] = Field(None, ge=1700, le=2100, description="Year organization was founded")
-    tax_id: Optional[str] = Field(None, max_length=50, description="EIN/Tax ID for 501(c)(3) organizations")
 
     # Logo
     logo: Optional[str] = Field(None, description="Logo as base64 data URL or external URL")
