@@ -327,7 +327,7 @@ class SessionDataResponse(BaseModel):
 # Session Helper Functions
 # ============================================
 
-SESSION_EXPIRY_HOURS = 2
+SESSION_EXPIRY_HOURS = 0.5  # 30 minutes
 
 
 async def get_or_create_session(

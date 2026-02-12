@@ -534,6 +534,38 @@ class AuthService:
 
         return user, raw_token
 
+    async def validate_reset_token(
+        self,
+        raw_token: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Validate a password reset token without consuming it.
+
+        Returns:
+            Tuple of (is_valid, user_email_or_none)
+        """
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.password_reset_token == token_hash,
+                User.deleted_at.is_(None),
+            )
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return False, None
+
+        if (
+            not user.password_reset_expires_at
+            or user.password_reset_expires_at < datetime.utcnow()
+        ):
+            return False, None
+
+        return True, user.email
+
     async def reset_password_with_token(
         self,
         raw_token: str,

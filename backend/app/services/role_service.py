@@ -580,6 +580,22 @@ class RoleManagementService:
         for role_id in to_add:
             await self.assign_role_to_user(db, user_id, role_id, set_by)
 
+        # Audit log the bulk change
+        if to_add or to_remove:
+            await log_audit_event(
+                db=db,
+                event_type="user_roles_replaced",
+                event_category="roles",
+                severity="warning",
+                event_data={
+                    "user_id": user_id,
+                    "roles_added": list(to_add),
+                    "roles_removed": list(to_remove),
+                    "new_role_ids": role_ids,
+                },
+                user_id=set_by,
+            )
+
         # Return updated roles
         return await self.get_user_roles(db, user_id)
 

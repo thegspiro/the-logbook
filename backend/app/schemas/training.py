@@ -552,7 +552,7 @@ class ImportRecordRequest(BaseModel):
 
 class BulkImportRequest(BaseModel):
     """Request to bulk import external records"""
-    external_import_ids: List[UUID]
+    external_import_ids: List[UUID] = Field(..., max_length=500)
     auto_map_users: bool = True  # Try to match users by email
     default_category_id: Optional[UUID] = None
 

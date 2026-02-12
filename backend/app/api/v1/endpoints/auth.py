@@ -506,3 +506,32 @@ async def reset_password(
         )
 
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+
+@router.post("/validate-reset-token", dependencies=[Depends(check_rate_limit)])
+async def validate_reset_token(
+    token_data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validate a password reset token (POST to avoid token in URL/logs).
+
+    Returns whether the token is valid and the associated email.
+    """
+    token = token_data.get("token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token is required"
+        )
+
+    auth_service = AuthService(db)
+    is_valid, email = await auth_service.validate_reset_token(token)
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+
+    return {"valid": True, "email": email}

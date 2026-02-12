@@ -10,6 +10,9 @@ interface AppLayoutProps {
   children?: React.ReactNode;
 }
 
+// Inactivity timeout: auto-logout after 30 minutes of no user activity
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
@@ -17,6 +20,29 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Session inactivity timeout
+  useEffect(() => {
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(async () => {
+        await logout();
+        sessionStorage.clear();
+        navigate('/login', { state: { message: 'You have been logged out due to inactivity.' } });
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((event) => document.addEventListener(event, resetTimer));
+    resetTimer();
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      events.forEach((event) => document.removeEventListener(event, resetTimer));
+    };
+  }, [logout, navigate]);
 
   useEffect(() => {
     // Load department info and navigation preference from sessionStorage first

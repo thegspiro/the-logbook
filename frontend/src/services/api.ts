@@ -450,7 +450,7 @@ export const authService = {
    * Validate password reset token
    */
   async validateResetToken(token: string): Promise<{ valid: boolean; email?: string }> {
-    const response = await api.get<{ valid: boolean; email?: string }>(`/auth/password-reset/validate/${token}`);
+    const response = await api.post<{ valid: boolean; email?: string }>('/auth/validate-reset-token', { token });
     return response.data;
   },
 

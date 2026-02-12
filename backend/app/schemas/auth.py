@@ -29,7 +29,7 @@ class UserLogin(BaseModel):
     - Also accepts email format for login flexibility
     """
     username: str = Field(..., min_length=3, max_length=100)
-    password: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=8)
 
     @field_validator('username')
     @classmethod
