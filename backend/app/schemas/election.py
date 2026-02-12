@@ -4,10 +4,15 @@ Election Pydantic Schemas
 Request and response schemas for election-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from uuid import UUID
+
+
+VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
+VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
+VALID_RUNOFF_TYPES = {"top_two", "eliminate_lowest"}
 
 
 # Ballot Item Schemas
@@ -60,6 +65,27 @@ class ElectionBase(BaseModel):
     runoff_type: str = Field(default="top_two", description="Runoff type: top_two (top 2 advance), eliminate_lowest (remove lowest)")
     max_runoff_rounds: int = Field(default=3, ge=1, le=10, description="Maximum number of runoff rounds")
 
+    @field_validator("voting_method")
+    @classmethod
+    def validate_voting_method(cls, v: str) -> str:
+        if v not in VALID_VOTING_METHODS:
+            raise ValueError(f"Invalid voting method '{v}'. Must be one of: {', '.join(sorted(VALID_VOTING_METHODS))}")
+        return v
+
+    @field_validator("victory_condition")
+    @classmethod
+    def validate_victory_condition(cls, v: str) -> str:
+        if v not in VALID_VICTORY_CONDITIONS:
+            raise ValueError(f"Invalid victory condition '{v}'. Must be one of: {', '.join(sorted(VALID_VICTORY_CONDITIONS))}")
+        return v
+
+    @field_validator("runoff_type")
+    @classmethod
+    def validate_runoff_type(cls, v: str) -> str:
+        if v not in VALID_RUNOFF_TYPES:
+            raise ValueError(f"Invalid runoff type '{v}'. Must be one of: {', '.join(sorted(VALID_RUNOFF_TYPES))}")
+        return v
+
 
 class ElectionCreate(ElectionBase):
     """Schema for creating a new election"""
@@ -67,7 +93,13 @@ class ElectionCreate(ElectionBase):
 
 
 class ElectionUpdate(BaseModel):
-    """Schema for updating an election"""
+    """Schema for updating an election
+
+    NOTE: status is intentionally excluded. Use the dedicated
+    /open, /close, and /rollback endpoints to change election status.
+    This prevents bypassing validation logic (candidate checks, result
+    calculation, runoff creation, audit trails).
+    """
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     election_type: Optional[str] = Field(None, max_length=50)
@@ -77,7 +109,6 @@ class ElectionUpdate(BaseModel):
     meeting_date: Optional[datetime] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    status: Optional[str] = None
     anonymous_voting: Optional[bool] = None
     allow_write_ins: Optional[bool] = None
     max_votes_per_position: Optional[int] = Field(None, ge=1)
@@ -90,6 +121,27 @@ class ElectionUpdate(BaseModel):
     enable_runoffs: Optional[bool] = None
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
+
+    @field_validator("voting_method")
+    @classmethod
+    def validate_voting_method(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_VOTING_METHODS:
+            raise ValueError(f"Invalid voting method '{v}'. Must be one of: {', '.join(sorted(VALID_VOTING_METHODS))}")
+        return v
+
+    @field_validator("victory_condition")
+    @classmethod
+    def validate_victory_condition(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_VICTORY_CONDITIONS:
+            raise ValueError(f"Invalid victory condition '{v}'. Must be one of: {', '.join(sorted(VALID_VICTORY_CONDITIONS))}")
+        return v
+
+    @field_validator("runoff_type")
+    @classmethod
+    def validate_runoff_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_RUNOFF_TYPES:
+            raise ValueError(f"Invalid runoff type '{v}'. Must be one of: {', '.join(sorted(VALID_RUNOFF_TYPES))}")
+        return v
 
 
 class ElectionResponse(ElectionBase):

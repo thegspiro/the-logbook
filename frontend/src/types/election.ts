@@ -104,7 +104,7 @@ export interface ElectionUpdate {
   positions?: string[];
   start_date?: string;
   end_date?: string;
-  status?: ElectionStatus;
+  // NOTE: status is intentionally excluded — use /open, /close, /rollback endpoints
   anonymous_voting?: boolean;
   allow_write_ins?: boolean;
   max_votes_per_position?: number;

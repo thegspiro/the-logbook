@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-12 (includes prospective members module, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-12 (includes prospective members module, elections module, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -18,6 +18,7 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
 8. [Prospective Members Module Issues](#prospective-members-module-issues)
+9. [Elections Module Issues](#elections-module-issues)
 9. [Error Message Reference](#error-message-reference)
 10. [Getting Help](#getting-help)
 
@@ -1198,7 +1199,88 @@ docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
 
 ---
 
+## Elections Module Issues
+
+### Election Cannot Be Closed
+
+**Symptoms**: Clicking "Close Election" returns an error or does nothing.
+
+**Possible Causes & Solutions**:
+
+1. **Election is not OPEN**: Only OPEN elections can be closed. If the election is still in DRAFT status, you must open it first via the "Open Election" button.
+
+2. **Election not found**: Verify the election exists and belongs to your organization.
+
+---
+
+### Double-Voting Error
+
+**Symptoms**: User receives "Database integrity check: You have already voted" error.
+
+**Explanation**: This is the database-level protection working correctly. The 4 partial unique indexes on the votes table prevent duplicate votes even if a race condition occurs.
+
+**For anonymous elections**: The system tracks votes by `voter_hash` (HMAC-SHA256 of user_id + election_id + per-election salt). Even though `voter_id` is NULL, duplicate detection works via the hash.
+
+**For non-anonymous elections**: Duplicate detection uses `voter_id` directly.
+
+---
+
+### Results Not Showing After Election Closes
+
+**Symptoms**: Election status is "closed" but results show "Results not available yet".
+
+**Possible Causes & Solutions**:
+
+1. **Time-based check**: Results require BOTH `status == CLOSED` AND `current_time > end_date`. If the election was closed early (before `end_date`), results won't show until the original end time passes.
+
+2. **Timezone issue**: All time comparisons use UTC. Ensure your election dates were set in UTC or adjusted accordingly.
+
+3. **Override option**: A manager can toggle `results_visible_immediately` on a CLOSED election to show results before the end_date passes.
+
+---
+
+### Cannot Update Election While Open
+
+**Symptoms**: Attempting to update election fields returns "Cannot update X for open election".
+
+**Explanation**: When an election is OPEN, only `end_date` can be modified (to extend voting time). This restriction prevents changing voting rules, eligibility, or other configuration during active voting.
+
+To make broader changes, use the "Rollback Election" feature to return to DRAFT status, then make changes and re-open.
+
+---
+
+### Invalid Voting Method Error
+
+**Symptoms**: Creating or updating an election returns "Invalid voting method" error.
+
+**Valid Values**:
+- `voting_method`: `simple_majority`, `ranked_choice`, `approval`, `supermajority`
+- `victory_condition`: `most_votes`, `majority`, `supermajority`, `threshold`
+- `runoff_type`: `top_two`, `eliminate_lowest`
+
+---
+
+### Candidate Position Rejected
+
+**Symptoms**: Adding a candidate returns "Position 'X' is not defined for this election".
+
+**Explanation**: If the election defines specific positions, candidates must be assigned to one of those positions. Check the election's positions list and ensure the candidate's position matches exactly.
+
+---
+
+### Results Visibility Toggle Missing for Open Elections
+
+**Symptoms**: The "Show Results to Voters" / "Hide Results from Voters" button is not visible when the election is OPEN.
+
+**Explanation**: This is intentional. Revealing live results during active voting enables strategic voting and undermines election integrity. The toggle is only available for DRAFT and CLOSED elections.
+
+---
+
 ## Version History
+
+**v1.5** - 2026-02-12
+- Added elections module troubleshooting section (7 new entries)
+- Covers: closing, double-voting, results visibility, update restrictions, validation errors
 
 **v1.4** - 2026-02-12
 - Added withdraw/archive troubleshooting sections

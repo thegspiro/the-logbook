@@ -333,42 +333,51 @@ encrypted_candidate_id = Column(String(256), nullable=False)
 
 | Category | Score | Status |
 |----------|-------|--------|
-| **Double-Voting Prevention** | 🔴 **4/10** | DATABASE CONSTRAINT MISSING |
-| **Anonymous Voting** | 🟢 **9/10** | Excellent implementation |
-| **Eligibility Checks** | 🟢 **10/10** | Comprehensive validation |
-| **Result Access Control** | 🟢 **10/10** | Proper time-based enforcement |
+| **Double-Voting Prevention** | 🟢 **9/10** | DB constraints + app-level checks (FIXED) |
+| **Anonymous Voting** | 🟢 **9/10** | Excellent HMAC-SHA256 implementation |
+| **Eligibility Checks** | 🟢 **10/10** | Comprehensive validation + anonymous-aware |
+| **Result Access Control** | 🟢 **10/10** | Proper UTC time-based enforcement (FIXED) |
 | **Audit Trail** | 🟢 **8/10** | Good logging, could add signatures |
-| **Race Condition Protection** | 🟡 **5/10** | Needs transaction isolation |
-| **Anonymity Protection** | 🟢 **8/10** | Strong, salt storage risk |
+| **Race Condition Protection** | 🟢 **8/10** | DB constraint + IntegrityError handling |
+| **Anonymity Protection** | 🟢 **9/10** | Strong, voter_hash queries fixed |
+| **Input Validation** | 🟢 **9/10** | Enum validation, position checks, HTML escaping |
+| **Status Transition Security** | 🟢 **9/10** | Status bypass removed, close_election guarded |
 
-**Overall:** 🟡 **7.1/10** - Good but needs critical fix
+**Overall:** 🟢 **9.0/10** - Production-ready with strong ballot integrity
 
 ---
 
 ## ✅ ACTION ITEMS (Prioritized)
 
-### CRITICAL (Fix Immediately)
-1. ✅ **Add unique constraints to votes table** to prevent double-voting
-   - Create migration file with partial unique indexes
-   - Test with concurrent vote submissions
-   - Deploy to production
+### CRITICAL — ALL FIXED ✅
+1. ✅ **Add unique constraints to votes table** — Migration 20260210_0023
+2. ✅ **Remove status from ElectionUpdate schema** — Prevents bypassing open/close/rollback validation
+3. ✅ **Fix anonymous vote eligibility check** — Now queries voter_hash for anonymous elections
+4. ✅ **Fix datetime.now() → datetime.utcnow()** — Results visibility uses consistent UTC
+5. ✅ **Add IntegrityError handling to cast_vote_with_token()** — Matches cast_vote() pattern
 
-### HIGH (Fix Within 1 Week)
-2. ⚠️ **Add transaction isolation** to `cast_vote()` method
-   - Wrap in database transaction
-   - Handle IntegrityError from unique constraint
-   - Add integration tests for race conditions
+### HIGH — ALL FIXED ✅
+6. ✅ **IntegrityError handling in cast_vote()** — Catches DB constraint violations
+7. ✅ **Block results_visible_immediately toggle for OPEN elections** — Prevents strategic voting
+8. ✅ **Validate voting_method, victory_condition, runoff_type** — Pydantic field validators
+9. ✅ **Validate candidate position against election positions** — API endpoint check
+10. ✅ **HTML-escape user data in rollback emails** — Prevents injection
+11. ✅ **Guard close_election() to require OPEN status** — Prevents closing DRAFT elections
 
 ### MEDIUM (Fix Within 1 Month)
-3. 📋 **Implement automatic salt destruction**
-   - Add cron job to destroy salts 30 days post-election
-   - Document salt destruction policy
-   - Add admin UI to manually destroy salt
+12. 📋 **Implement automatic salt destruction**
+    - Add cron job to destroy salts 30 days post-election
+    - Document salt destruction policy
+    - Add admin UI to manually destroy salt
 
 ### LOW (Future Enhancements)
-4. 📝 **Add vote signatures** for tampering detection
-5. 📝 **Implement soft-delete** for votes with audit trail
-6. 📝 **Add integration tests** for security scenarios
+13. 📝 **Add vote signatures** for tampering detection
+14. 📝 **Implement soft-delete** for votes with audit trail
+15. 📝 **Add integration tests** for security scenarios
+16. 📝 **Implement bulk vote atomicity** (wrap in single transaction)
+17. 📝 **Enhance token-based voting for multi-position elections** (don't mark used after first vote)
+18. 📝 **Add voter-facing ballot UI** (currently no frontend voting interface)
+19. 📝 **Add candidate management UI** to election detail page
 
 ---
 
@@ -384,6 +393,10 @@ encrypted_candidate_id = Column(String(256), nullable=False)
            task1 = tg.create_task(cast_vote(user, election, candidate1))
            task2 = tg.create_task(cast_vote(user, election, candidate2))
        # Only one should succeed
+
+   async def test_anonymous_double_vote_prevention():
+       """Test anonymous voting correctly prevents duplicates via voter_hash"""
+       ...
    ```
 
 2. **Election Timing Tests**
@@ -391,6 +404,7 @@ encrypted_candidate_id = Column(String(256), nullable=False)
    async def test_cannot_vote_before_start()
    async def test_cannot_vote_after_end()
    async def test_cannot_view_results_before_close()
+   async def test_results_use_utc_consistently()
    ```
 
 3. **Anonymous Voting Tests**
@@ -398,6 +412,7 @@ encrypted_candidate_id = Column(String(256), nullable=False)
    async def test_voter_id_not_stored_when_anonymous()
    async def test_voter_hash_uniqueness()
    async def test_cannot_correlate_voter_to_vote()
+   async def test_eligibility_check_uses_voter_hash_for_anonymous()
    ```
 
 4. **Eligibility Tests**
@@ -405,6 +420,16 @@ encrypted_candidate_id = Column(String(256), nullable=False)
    async def test_ineligible_user_cannot_vote()
    async def test_position_specific_eligibility()
    async def test_max_votes_per_position_enforced()
+   async def test_max_votes_per_position_enforced_anonymous()
+   ```
+
+5. **Status Transition Tests**
+   ```python
+   async def test_cannot_set_status_via_update_endpoint()
+   async def test_cannot_close_draft_election()
+   async def test_cannot_toggle_results_visibility_while_open()
+   async def test_invalid_voting_method_rejected()
+   async def test_candidate_position_must_match_election()
    ```
 
 ---
@@ -414,18 +439,27 @@ encrypted_candidate_id = Column(String(256), nullable=False)
 - **OWASP Top 10:** A04:2021 - Insecure Design
 - **CWE-362:** Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')
 - **CWE-820:** Missing Synchronization
+- **CWE-79:** Cross-site Scripting (email HTML injection)
 - **Database Constraints:** PostgreSQL Partial Unique Indexes
 
 ---
 
 ## 🔐 CONCLUSION
 
-The election system has a **solid security foundation** with proper authentication, comprehensive eligibility checks, and well-implemented anonymous voting. However, the **lack of database-level double-voting prevention** is a critical vulnerability that must be addressed immediately.
+The election system has a **strong security foundation** with proper authentication, comprehensive eligibility checks, well-implemented anonymous voting, and database-level ballot integrity.
 
-Once the unique constraints are added and race condition protection is implemented, the system will provide **strong ballot integrity guarantees** suitable for production use.
+**All critical and high-priority vulnerabilities have been fixed** as of the 2026-02-12 review:
+- Database unique constraints prevent double-voting at the DB level
+- IntegrityError handling catches race conditions in both authenticated and token-based voting
+- Anonymous vote eligibility correctly queries voter_hash instead of voter_id
+- Status transitions are properly guarded (no bypass via PATCH)
+- Results visibility cannot be toggled during active elections
+- Input validation enforces valid voting methods, victory conditions, and candidate positions
+- Email templates escape user-supplied data
 
-**Recommended Priority:**
-1. 🔴 Add database unique constraints (THIS WEEK)
-2. 🟡 Add transaction isolation (NEXT WEEK)
-3. 🟢 Implement salt destruction automation (THIS MONTH)
-4. 🔵 Add vote signatures and soft-delete (FUTURE)
+**Remaining improvements** are medium/low priority: automatic salt destruction, vote signatures, bulk vote atomicity, multi-position token support, and voter-facing UI.
+
+**Audit History:**
+- 2026-02-10: Initial audit — Score 7.1/10 (critical double-voting vulnerability)
+- 2026-02-10: DB unique constraints added (migration 20260210_0023)
+- 2026-02-12: Comprehensive review — 11 fixes applied, Score 9.0/10

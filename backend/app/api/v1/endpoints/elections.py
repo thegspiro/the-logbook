@@ -202,13 +202,15 @@ async def update_election(
 
     # Determine what can be updated based on election status
     if election.status == ElectionStatus.OPEN:
-        # For open elections, only allow updating end_date and results_visible_immediately
-        allowed_fields = {"end_date", "results_visible_immediately"}
+        # For open elections, only allow updating end_date
+        # NOTE: results_visible_immediately is intentionally BLOCKED for open elections
+        # to prevent revealing live vote counts during active voting (strategic voting risk)
+        allowed_fields = {"end_date"}
         disallowed_fields = set(update_data.keys()) - allowed_fields
         if disallowed_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot update {', '.join(disallowed_fields)} for open election. Only end_date and results_visible_immediately can be updated."
+                detail=f"Cannot update {', '.join(disallowed_fields)} for open election. Only end_date can be updated while voting is active."
             )
 
         # If updating end_date, validate it's in the future and after start_date
@@ -482,6 +484,14 @@ async def create_candidate(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Election ID mismatch"
         )
+
+    # Validate candidate position against election positions (if positions are defined)
+    if candidate.position and election.positions:
+        if candidate.position not in election.positions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Position '{candidate.position}' is not defined for this election. Valid positions: {', '.join(election.positions)}"
+            )
 
     new_candidate = Candidate(
         id=uuid4(),

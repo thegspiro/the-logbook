@@ -342,21 +342,24 @@ export const ElectionDetailPage: React.FC = () => {
                 </button>
               )}
 
-              <button
-                onClick={handleToggleResultsVisibility}
-                disabled={updatingVisibility}
-                className={`px-4 py-2 rounded-md ${
-                  election.results_visible_immediately
-                    ? 'bg-yellow-600 text-white hover:bg-yellow-700'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                } disabled:opacity-50`}
-              >
-                {updatingVisibility
-                  ? 'Updating...'
-                  : election.results_visible_immediately
-                  ? 'Hide Results from Voters'
-                  : 'Show Results to Voters'}
-              </button>
+              {/* Results visibility toggle — blocked for open elections to prevent strategic voting */}
+              {election.status !== 'open' && (
+                <button
+                  onClick={handleToggleResultsVisibility}
+                  disabled={updatingVisibility}
+                  className={`px-4 py-2 rounded-md ${
+                    election.results_visible_immediately
+                      ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  } disabled:opacity-50`}
+                >
+                  {updatingVisibility
+                    ? 'Updating...'
+                    : election.results_visible_immediately
+                    ? 'Hide Results from Voters'
+                    : 'Show Results to Voters'}
+                </button>
+              )}
 
               {election.email_sent && (
                 <div className="flex items-center text-sm text-gray-600">

@@ -167,11 +167,22 @@ class ElectionService:
                     )
 
         # Check what positions they've already voted for
-        vote_result = await self.db.execute(
-            select(Vote)
-            .where(Vote.election_id == election_id)
-            .where(Vote.voter_id == user_id)
-        )
+        # For anonymous elections, lookup by voter_hash since voter_id is NULL
+        if election.anonymous_voting:
+            voter_hash = self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            vote_result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_hash == voter_hash)
+            )
+        else:
+            vote_result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_id == user_id)
+            )
         existing_votes = vote_result.scalars().all()
 
         positions_voted = list(set(vote.position for vote in existing_votes if vote.position))
@@ -259,7 +270,7 @@ class ElectionService:
 
         # Check max votes per position
         if position:
-            position_votes = [v for v in await self._get_user_votes(user_id, election_id) if v.position == position]
+            position_votes = [v for v in await self._get_user_votes(user_id, election_id, election) if v.position == position]
             if len(position_votes) >= election.max_votes_per_position:
                 return None, f"Maximum votes for {position} reached"
 
@@ -291,13 +302,26 @@ class ElectionService:
 
         return vote, None
 
-    async def _get_user_votes(self, user_id: UUID, election_id: UUID) -> List[Vote]:
-        """Get all votes by a user in an election"""
-        result = await self.db.execute(
-            select(Vote)
-            .where(Vote.election_id == election_id)
-            .where(Vote.voter_id == user_id)
-        )
+    async def _get_user_votes(
+        self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
+    ) -> List[Vote]:
+        """Get all votes by a user in an election (handles anonymous voting)"""
+        # For anonymous elections, lookup by voter_hash since voter_id is NULL
+        if election and election.anonymous_voting:
+            voter_hash = self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_hash == voter_hash)
+            )
+        else:
+            result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_id == user_id)
+            )
         return result.scalars().all()
 
     def _generate_voter_hash(
@@ -351,7 +375,7 @@ class ElectionService:
 
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
-        current_time = datetime.now()
+        current_time = datetime.utcnow()
         election_has_closed = current_time > election.end_date
 
         can_view = (
@@ -737,6 +761,10 @@ class ElectionService:
         if election.status == ElectionStatus.CLOSED:
             return election
 
+        # Only OPEN elections can be closed
+        if election.status != ElectionStatus.OPEN:
+            return None
+
         election.status = ElectionStatus.CLOSED
         await self.db.commit()
         await self.db.refresh(election)
@@ -912,6 +940,13 @@ class ElectionService:
         # Initialize email service
         email_service = EmailService(organization)
 
+        # HTML-escape user-supplied data to prevent injection in emails
+        import html
+        safe_title = html.escape(election.title)
+        safe_performer = html.escape(performer_name)
+        safe_reason = html.escape(reason)
+        safe_org_name = html.escape(organization.name)
+
         # Send notifications
         sent_count = 0
         for user in leadership_users:
@@ -920,6 +955,8 @@ class ElectionService:
                 continue
 
             subject = f"ALERT: Election Rolled Back - {election.title}"
+
+            safe_first_name = html.escape(user.first_name)
 
             html_body = f"""
 <!DOCTYPE html>
@@ -943,30 +980,30 @@ class ElectionService:
             <div class="alert-badge">REQUIRES ATTENTION</div>
         </div>
         <div class="content">
-            <p>Dear {user.first_name},</p>
+            <p>Dear {safe_first_name},</p>
 
             <p>This is an important notification regarding an election rollback.</p>
 
             <div class="details">
                 <h3>Election Details:</h3>
                 <ul>
-                    <li><strong>Title:</strong> {election.title}</li>
+                    <li><strong>Title:</strong> {safe_title}</li>
                     <li><strong>Status Changed:</strong> {from_status.upper()} → {to_status.upper()}</li>
-                    <li><strong>Performed By:</strong> {performer_name}</li>
+                    <li><strong>Performed By:</strong> {safe_performer}</li>
                     <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
                 </ul>
             </div>
 
             <div class="reason">
                 <h3>Reason for Rollback:</h3>
-                <p>{reason}</p>
+                <p>{safe_reason}</p>
             </div>
 
             <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
 
-            <p>If you have any questions or concerns about this rollback, please contact {performer_name} or review the election at your earliest convenience.</p>
+            <p>If you have any questions or concerns about this rollback, please contact {safe_performer} or review the election at your earliest convenience.</p>
 
-            <p>Best regards,<br>{organization.name} Election System</p>
+            <p>Best regards,<br>{safe_org_name} Election System</p>
         </div>
         <div class="footer">
             <p>This is an automated notification from the election management system.</p>
@@ -1157,14 +1194,24 @@ Best regards,
         return success_count, failed_count
 
     async def has_user_voted(
-        self, user_id: UUID, election_id: UUID
+        self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
     ) -> bool:
-        """Check if a user has voted in an election"""
-        result = await self.db.execute(
-            select(func.count(Vote.id))
-            .where(Vote.election_id == election_id)
-            .where(Vote.voter_id == user_id)
-        )
+        """Check if a user has voted in an election (handles anonymous voting)"""
+        if election and election.anonymous_voting:
+            voter_hash = self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            result = await self.db.execute(
+                select(func.count(Vote.id))
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_hash == voter_hash)
+            )
+        else:
+            result = await self.db.execute(
+                select(func.count(Vote.id))
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_id == user_id)
+            )
         vote_count = result.scalar() or 0
         return vote_count > 0
 
@@ -1298,7 +1345,15 @@ Best regards,
         voting_token.used = True
         voting_token.used_at = datetime.utcnow()
 
-        await self.db.commit()
-        await self.db.refresh(vote)
+        # SECURITY: Database-level constraint prevents double-voting
+        # even if race condition bypasses application-level checks
+        try:
+            await self.db.commit()
+            await self.db.refresh(vote)
+        except IntegrityError:
+            await self.db.rollback()
+            if position:
+                return None, f"Database integrity check: You have already voted for {position}"
+            return None, "Database integrity check: You have already voted in this election"
 
         return vote, None
