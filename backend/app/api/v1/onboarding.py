@@ -717,7 +717,7 @@ async def create_admin_user(
     """
     Create the first administrator user
 
-    Creates admin user with Super Admin role.
+    Creates admin user with IT Administrator role.
     Requires organization to be created first.
     Returns access token for automatic login.
     """
@@ -1258,18 +1258,18 @@ async def save_session_modules(
     # Validate session
     session = await validate_session(request, db)
 
-    # Validate modules - must match module IDs from frontend ModuleOverview.tsx
+    # Validate modules - must match module IDs from frontend moduleRegistry.ts
     available_modules = [
-        # Essential modules
-        "members", "events", "documents",
+        # Core modules (always enabled)
+        "members", "events", "documents", "forms",
         # Operations modules
-        "training", "inventory", "scheduling",
+        "training", "inventory", "scheduling", "apparatus",
         # Governance modules
         "elections", "minutes", "reports",
         # Communication modules
         "notifications", "mobile",
         # Advanced modules
-        "forms", "integrations",
+        "integrations",
         # Legacy/additional modules (for backwards compatibility)
         "compliance", "meetings", "fundraising", "incidents",
         "equipment", "vehicles", "budget"

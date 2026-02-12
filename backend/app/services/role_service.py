@@ -615,7 +615,7 @@ class RoleManagementService:
     ) -> bool:
         """Check if a user has a specific permission."""
         permissions = await self.get_user_permissions(db, user_id)
-        return permission in permissions
+        return "*" in permissions or permission in permissions
 
     async def user_has_any_permission(
         self,
@@ -625,7 +625,7 @@ class RoleManagementService:
     ) -> bool:
         """Check if a user has any of the specified permissions."""
         user_permissions = await self.get_user_permissions(db, user_id)
-        return bool(user_permissions.intersection(permissions))
+        return "*" in user_permissions or bool(user_permissions.intersection(permissions))
 
     # ============================================
     # Initialization
