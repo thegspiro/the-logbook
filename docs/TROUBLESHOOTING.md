@@ -1115,7 +1115,95 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 
 ---
 
+### Withdraw Action Not Appearing
+
+**Symptoms**: The "Withdraw" button is missing from the applicant detail drawer or table action menu.
+
+**Causes**:
+1. Applicant is not in `active` or `on_hold` status
+2. User does not have `prospective_members.manage` permission
+
+**Solutions**:
+- Withdraw is only available for applicants with `active` or `on_hold` status
+- Rejected, converted, and inactive applicants cannot be withdrawn
+- Check that the user's role includes `prospective_members.manage`
+
+---
+
+### Withdrawn Applicant Tab Empty
+
+**Symptoms**: The "Withdrawn" tab shows no applicants even though withdrawals were performed.
+
+**Solutions**:
+1. Check that the correct pipeline is selected in the pipeline filter
+2. Refresh the page — the withdrawn tab fetches data when first selected
+3. Use the search field on the withdrawn tab to locate specific applicants
+
+---
+
+### Election Package Not Auto-Created
+
+**Symptoms**: Applicant advances to an `election_vote` stage but no election package appears in the detail drawer.
+
+**Causes**:
+1. The pipeline is not loaded in the store (no `currentPipeline`)
+2. The advance API did not return the updated applicant data
+3. The package creation API call failed silently
+
+**Solutions**:
+
+**Verify the pipeline is loaded:**
+- The election package auto-creation depends on `currentPipeline` being set in the store
+- If navigating directly to an applicant, ensure the pipeline loads first
+
+**Check backend logs:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
+```
+
+**Manual creation:**
+- If auto-creation failed, the package can be created manually via the API
+- The detail drawer will show "No election package has been created yet" with instructions
+
+---
+
+### Election Package Stuck in Draft
+
+**Symptoms**: The coordinator edited the election package but cannot submit it for ballot.
+
+**Causes**:
+1. The "Mark Ready for Ballot" button may be disabled due to a pending save
+2. API error when updating package status
+
+**Solutions**:
+
+**Save first, then submit:**
+1. Click "Save Draft" to persist coordinator notes and supporting statement
+2. Then click "Mark Ready for Ballot" to change status to `ready`
+
+**Check for errors:**
+- Look for error toasts or the store's `error` field
+- Check backend logs for validation failures on the election package endpoint
+
+---
+
+### Election Package Not Visible in Elections Module
+
+**Symptoms**: Package is marked as "ready" but the secretary cannot see it in the Elections module.
+
+**Solutions**:
+- The Elections module queries the `GET /api/v1/prospective-members/election-packages?status=ready` endpoint
+- Verify the package status is actually `ready` (not still `draft`)
+- Ensure the pipeline_id filter (if any) matches the correct pipeline
+
+---
+
 ## Version History
+
+**v1.4** - 2026-02-12
+- Added withdraw/archive troubleshooting sections
+- Added election package troubleshooting sections
+- Added cross-module election package visibility guidance
 
 **v1.3** - 2026-02-12
 - Added Prospective Members module troubleshooting section

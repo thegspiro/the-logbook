@@ -16,7 +16,6 @@ import type {
   PipelineViewMode,
   ElectionPackage,
   ElectionPackageUpdate,
-  ElectionStageConfig,
 } from '../types';
 import { pipelineService, applicantService } from '../services/api';
 

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Prospective Members: Withdraw & Election Package Integration (2026-02-12)
+
+#### Withdraw / Archive Feature
+- **Withdraw Action**: Active or on-hold applicants can be voluntarily withdrawn from the pipeline with an optional reason
+- **Withdrawn Tab**: New tab on the main page showing all withdrawn applications with date, reason, and reactivate option
+- **Withdrawn Stats Card**: Stats bar shows withdrawn count when greater than zero
+- **Reactivation from Withdrawn**: Coordinators can reactivate withdrawn applications back to their previous pipeline stage
+- **Confirmation Dialogs**: Withdraw action requires confirmation in both the detail drawer and table action menu
+
+#### Election Package Integration
+- **Auto-Created Packages**: When an applicant advances to an `election_vote` stage, the system automatically creates an election package bundling their data
+- **Configurable Package Fields**: Stage config lets coordinators choose what applicant data to include (email, phone, address, DOB, documents, stage history)
+- **Package Review UI**: Election package section in the applicant detail drawer with status badge, applicant snapshot, and editable fields
+- **Coordinator Notes**: Draft packages can be edited with coordinator notes and a supporting statement for voters
+- **Submit for Ballot**: "Mark Ready for Ballot" button transitions package from draft to ready for the secretary
+- **Cross-Module Query**: `electionPackageService` provides endpoints for the Elections module to discover ready packages
+- **Recommended Ballot Item**: Each package includes pre-configured ballot item settings from the stage's election config (voting method, victory condition, anonymous voting)
+- **Package Status Tracking**: Five statuses (draft, ready, added_to_ballot, elected, not_elected) with appropriate UI for each
+
 ### Added - Prospective Members Module (2026-02-12)
 
 #### Pipeline Management

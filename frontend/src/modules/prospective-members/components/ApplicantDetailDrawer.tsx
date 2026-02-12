@@ -37,7 +37,6 @@ import type {
   Applicant,
   StageType,
   StageHistoryEntry,
-  ElectionPackage,
 } from '../types';
 import { isSafeUrl, getInitials } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';

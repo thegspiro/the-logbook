@@ -12,9 +12,11 @@ The Prospective Members module provides a complete applicant tracking system for
 - **Dual View Modes**: Kanban board with drag-and-drop or sortable paginated table
 - **Inactivity Timeout System**: Automatic deactivation with configurable timeouts, per-stage overrides, two-phase warnings, and auto-purge
 - **Applicant Lifecycle**: Six statuses (active, on_hold, withdrawn, converted, rejected, inactive) with full audit trail
+- **Withdraw / Archive**: Applicants can voluntarily withdraw; withdrawn applications are archived and reactivatable
+- **Election Package Integration**: Auto-generates election packages when applicants reach an election_vote stage, bundling applicant data for the secretary to build a ballot
 - **Conversion Flow**: Convert successful applicants to administrative member or probationary member
 - **Bulk Operations**: Select multiple applicants for batch advance, hold, or reject actions
-- **Cross-Module Integration**: Links to Forms (data collection), Elections (membership votes), and Notifications (alerts)
+- **Cross-Module Integration**: Links to Forms (data collection), Elections (membership votes via election packages), and Notifications (alerts)
 
 ---
 
@@ -29,7 +31,7 @@ frontend/src/modules/prospective-members/
 ├── types/
 │   └── index.ts                # All TypeScript types, enums, constants, helpers
 ├── services/
-│   └── api.ts                  # API service layer (pipelineService, applicantService)
+│   └── api.ts                  # API service layer (pipelineService, applicantService, electionPackageService)
 ├── store/
 │   └── prospectiveMembersStore.ts  # Zustand store with full state management
 ├── components/
@@ -42,7 +44,7 @@ frontend/src/modules/prospective-members/
 │   ├── ConversionModal.tsx     # Convert applicant to member modal
 │   └── StageConfigModal.tsx    # Stage configuration with timeout overrides
 └── pages/
-    ├── ProspectiveMembersPage.tsx   # Main page (active/inactive tabs, stats, views)
+    ├── ProspectiveMembersPage.tsx   # Main page (active/inactive/withdrawn tabs, stats, views)
     └── PipelineSettingsPage.tsx     # Pipeline builder + inactivity configuration
 ```
 
@@ -54,7 +56,8 @@ frontend/src/modules/prospective-members/
 | `PipelineStageType` | `'form_submission' \| 'document_upload' \| 'election_vote' \| 'manual_approval'` |
 | `InactivityTimeoutPreset` | `'3_months' \| '6_months' \| '1_year' \| 'never' \| 'custom'` |
 | `InactivityAlertLevel` | `'normal' \| 'warning' \| 'critical'` |
-| `PipelineTab` | `'active' \| 'inactive'` |
+| `PipelineTab` | `'active' \| 'inactive' \| 'withdrawn'` |
+| `ElectionPackageStatus` | `'draft' \| 'ready' \| 'added_to_ballot' \| 'elected' \| 'not_elected'` |
 
 ### Key Interfaces
 
@@ -62,10 +65,12 @@ frontend/src/modules/prospective-members/
 |-----------|-------------|
 | `Pipeline` | Pipeline definition with stages and inactivity config |
 | `PipelineStage` | Stage with name, type, description, and optional timeout override |
-| `Applicant` | Full applicant record with activity timestamps and deactivation info |
+| `Applicant` | Full applicant record with activity timestamps, deactivation, and withdrawal info |
 | `ApplicantListItem` | Lightweight applicant for list views with alert level |
 | `InactivityConfig` | Pipeline-level inactivity settings |
-| `PipelineStats` | Aggregated statistics including inactive/warning counts |
+| `PipelineStats` | Aggregated statistics including inactive/warning/withdrawn counts |
+| `ElectionPackage` | Bundled applicant data for election ballot creation |
+| `ElectionPackageFieldConfig` | Configurable fields for what info to include in election packages |
 
 ### Constants
 
@@ -74,6 +79,7 @@ frontend/src/modules/prospective-members/
 | `TIMEOUT_PRESET_DAYS` | Maps presets to day counts: 3_months=90, 6_months=180, 1_year=365, never/custom=null |
 | `TIMEOUT_PRESET_LABELS` | Human-readable labels for timeout presets |
 | `DEFAULT_INACTIVITY_CONFIG` | Default config: 3_months, 80% warning, coordinator notifications on |
+| `DEFAULT_ELECTION_PACKAGE_FIELDS` | Default included fields: email, documents, stage history on; phone, address, DOB off |
 
 ---
 
@@ -85,7 +91,7 @@ frontend/src/modules/prospective-members/
 |------|------|-------------|-------------|
 | `form_submission` | FileText | Applicant completes a form | Links to Forms module |
 | `document_upload` | Upload | Applicant uploads required documents | File storage |
-| `election_vote` | Vote | Membership votes on applicant | Links to Elections module |
+| `election_vote` | Vote | Membership votes on applicant | Links to Elections module via election packages |
 | `manual_approval` | CheckCircle | Coordinator manually approves | Internal action |
 
 ### Pipeline Builder
@@ -103,6 +109,7 @@ Each stage can be configured with:
 - **Description**: Optional description explaining the stage's purpose
 - **Type**: One of the four stage types above
 - **Inactivity timeout override**: Optional custom timeout (in days) for this specific stage
+- **Election package fields** (election_vote only): Choose which applicant data to include in election packages (email, phone, address, DOB, documents, stage history, custom coordinator prompt)
 
 ---
 
@@ -202,11 +209,23 @@ When enabled, auto-purge permanently deletes inactive applicant records after th
 
 | Action | Available When | Effect |
 |--------|---------------|--------|
-| Advance | Active | Moves applicant to the next pipeline stage |
+| Advance | Active | Moves applicant to the next pipeline stage; auto-creates election package if target is election_vote stage |
 | Hold | Active | Sets status to on_hold |
-| Reject | Active, On Hold | Sets status to rejected |
-| Reactivate | Inactive | Returns applicant to active status |
+| Reject | Active, On Hold, Inactive | Sets status to rejected |
+| Withdraw | Active, On Hold | Sets status to withdrawn; archives the application |
+| Reactivate | Inactive, Withdrawn | Returns applicant to active status at their previous stage |
 | Convert | Active (final stage) | Creates member record, sets status to converted |
+
+### Withdraw / Archive
+
+When an applicant (or their coordinator) decides to withdraw from the process:
+
+1. Click "Withdraw" in the detail drawer or table action menu
+2. Confirm the withdrawal in the confirmation prompt (optional reason field)
+3. The application moves to the **Withdrawn** tab
+4. Withdrawn applicants can be reactivated by a coordinator at any time
+
+The Withdrawn tab on the main page shows all withdrawn applications with name, last stage, withdrawal date, and reason.
 
 ### Conversion
 
@@ -223,9 +242,76 @@ When an applicant reaches the final pipeline stage and is approved:
 
 ---
 
+## Election Package Integration
+
+When a pipeline includes an `election_vote` stage, the system automatically creates an **election package** when an applicant advances to that stage. This bridges the Prospective Members and Elections modules.
+
+### How It Works
+
+```
+Applicant advances to election_vote stage
+  → Election package auto-created (status: draft)
+  → Coordinator reviews and edits package
+  → Coordinator marks package as "Ready for Ballot" (status: ready)
+  → Secretary picks up ready packages in Elections module
+  → Secretary adds to ballot (status: added_to_ballot)
+  → Election completes (status: elected / not_elected)
+```
+
+### Election Package Contents
+
+An election package bundles the following applicant data (configurable per stage):
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| Applicant name | Always | Full name snapshot at package creation |
+| Membership type | Always | Administrative or probationary |
+| Target role | Always | If assigned |
+| Email | On | Applicant's email address |
+| Phone | Off | Applicant's phone number |
+| Address | Off | Applicant's mailing address |
+| Date of birth | Off | Applicant's date of birth |
+| Documents | On | All uploaded documents from previous stages |
+| Stage history | On | Summary of completed stages and dates |
+| Coordinator notes | Editable | Internal notes (not shown to voters) |
+| Supporting statement | Editable | Statement shown on ballot or to voters |
+| Custom fields | Editable | Additional key-value pairs |
+
+### Configuring Package Fields
+
+In the Stage Configuration Modal for an `election_vote` stage:
+1. Scroll to the "Election Package Contents" section
+2. Toggle which applicant fields to include
+3. Optionally set a custom coordinator prompt
+
+### Package Statuses
+
+| Status | Description |
+|--------|-------------|
+| `draft` | Package created, coordinator can edit notes and statement |
+| `ready` | Coordinator submitted package; available for secretary to add to ballot |
+| `added_to_ballot` | Secretary has added this candidate to an election ballot |
+| `elected` | Applicant was elected by membership vote |
+| `not_elected` | Applicant was not elected |
+
+### Recommended Ballot Item
+
+Each package includes a `recommended_ballot_item` pre-configured from the stage's election settings (voting method, victory condition, anonymous voting, eligible voter roles). The secretary can use these as defaults when building the ballot.
+
+### API Endpoints
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/prospective-members/applicants/{id}/election-package` | `view` | Get election package for applicant |
+| `POST` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage` | Create election package |
+| `PATCH` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage` | Update election package |
+| `GET` | `/api/v1/prospective-members/election-packages` | `view` | List election packages (with status/pipeline filters) |
+
+---
+
 ## Statistics
 
-The stats bar on the main page shows six metrics:
+The stats bar on the main page shows up to seven metrics:
 
 | Metric | Description |
 |--------|-------------|
@@ -235,6 +321,7 @@ The stats bar on the main page shows six metrics:
 | Conversion Rate | Converted / (Total - Active - On Hold) |
 | Approaching Timeout | Active applicants in warning or critical alert state |
 | Inactive | Count of applicants with `status = 'inactive'` |
+| Withdrawn | Count of applicants with `status = 'withdrawn'` (shown when > 0) |
 
 **Important**: An annotation below the stats bar states: "Statistics include active applicants only. Inactive, rejected, and withdrawn applicants are excluded from conversion rate and averages."
 
@@ -269,13 +356,17 @@ The `useProspectiveMembersStore` manages all module state:
 | `applicants` | `ApplicantListItem[]` | Active applicants for current page |
 | `totalApplicants` | `number` | Total active applicant count |
 | `currentPage` / `totalPages` | `number` | Active list pagination |
-| `activeTab` | `PipelineTab` | Current tab (`'active'` or `'inactive'`) |
+| `activeTab` | `PipelineTab` | Current tab (`'active'`, `'inactive'`, or `'withdrawn'`) |
 | `inactiveApplicants` | `ApplicantListItem[]` | Inactive applicants for current page |
 | `inactiveTotalApplicants` | `number` | Total inactive count |
 | `inactiveCurrentPage` / `inactiveTotalPages` | `number` | Inactive list pagination |
+| `withdrawnApplicants` | `ApplicantListItem[]` | Withdrawn applicants for current page |
+| `withdrawnTotalApplicants` | `number` | Total withdrawn count |
+| `withdrawnCurrentPage` / `withdrawnTotalPages` | `number` | Withdrawn list pagination |
+| `currentElectionPackage` | `ElectionPackage \| null` | Election package for currently viewed applicant |
 | `stats` | `PipelineStats \| null` | Aggregated pipeline statistics |
-| `selectedApplicant` | `Applicant \| null` | Currently selected applicant for detail drawer |
-| Loading flags | `boolean` | `isLoading`, `isLoadingInactive`, `isReactivating`, `isPurging` |
+| `currentApplicant` | `Applicant \| null` | Currently selected applicant for detail drawer |
+| Loading flags | `boolean` | `isLoading`, `isLoadingInactive`, `isLoadingWithdrawn`, `isLoadingElectionPackage`, `isReactivating`, `isPurging`, `isWithdrawing` |
 
 ### Actions
 
@@ -285,13 +376,18 @@ The `useProspectiveMembersStore` manages all module state:
 | `fetchApplicants(page?)` | Load active applicants with pagination |
 | `fetchInactiveApplicants(page?)` | Load inactive applicants with pagination |
 | `fetchStats()` | Load pipeline statistics |
-| `advanceApplicant(id)` | Move applicant to next stage |
+| `advanceApplicant(id)` | Move applicant to next stage; auto-creates election package for election_vote stages |
 | `holdApplicant(id)` | Put applicant on hold |
 | `rejectApplicant(id)` | Reject applicant |
-| `reactivateApplicant(id)` | Reactivate inactive applicant |
+| `withdrawApplicant(id, reason?)` | Withdraw/archive applicant from pipeline |
+| `reactivateApplicant(id)` | Reactivate inactive or withdrawn applicant |
+| `fetchWithdrawnApplicants(page?)` | Load withdrawn applicants with pagination |
+| `fetchElectionPackage(applicantId)` | Load election package for current applicant |
+| `updateElectionPackage(applicantId, data)` | Save election package edits |
+| `submitElectionPackage(applicantId)` | Mark election package as ready for ballot |
 | `purgeInactiveApplicants(pipelineId, data)` | Permanently delete inactive applicants |
 | `updateInactivitySettings(pipelineId, config)` | Update pipeline inactivity configuration |
-| `setActiveTab(tab)` | Switch between active/inactive tabs |
+| `setActiveTab(tab)` | Switch between active/inactive/withdrawn tabs |
 
 ---
 
@@ -321,8 +417,18 @@ The `useProspectiveMembersStore` manages all module state:
 | `POST` | `/api/v1/prospective-members/applicants/{id}/advance` | `manage` | Advance to next stage |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/hold` | `manage` | Put on hold |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/reject` | `manage` | Reject applicant |
-| `POST` | `/api/v1/prospective-members/applicants/{id}/reactivate` | `manage` | Reactivate inactive applicant |
+| `POST` | `/api/v1/prospective-members/applicants/{id}/withdraw` | `manage` | Withdraw applicant from pipeline |
+| `POST` | `/api/v1/prospective-members/applicants/{id}/reactivate` | `manage` | Reactivate inactive or withdrawn applicant |
 | `POST` | `/api/v1/prospective-members/applicants/{id}/convert` | `manage` | Convert to member |
+| `GET` | `/api/v1/prospective-members/applicants/{id}/election-package` | `view` | Get election package |
+| `POST` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage` | Create election package |
+| `PATCH` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage` | Update election package |
+
+### Election Package Endpoints (Cross-Module)
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/prospective-members/election-packages` | `view` | List election packages (filterable by pipeline_id, status) |
 
 ### Statistics Endpoint
 
@@ -354,9 +460,12 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 - Cannot reactivate an applicant
 - Pipeline statistics showing unexpected values
 - Purge operation safety guidance
+- Withdraw/archive not appearing
+- Election package not auto-created
+- Election package stuck in draft
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 1.1
 **Last Updated**: 2026-02-12
 **Maintainer**: Development Team
