@@ -598,11 +598,11 @@ services:
 **Database Slow**:
 ```bash
 # Check database size
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
   -e "SELECT table_schema, SUM(data_length + index_length) / 1024 / 1024 AS 'Size (MB)' FROM information_schema.tables GROUP BY table_schema;"
 
 # Optimize tables
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "OPTIMIZE TABLE users, organizations, audit_logs;"
 ```
 
@@ -757,7 +757,7 @@ Error: Data truncation or constraint violation
 **Fix**: Check existing data
 ```bash
 # Find problematic data
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "SELECT * FROM organizations WHERE organization_type NOT IN ('fire_department', 'ems_only', 'fire_ems_combined');"
 ```
 
@@ -978,7 +978,7 @@ The Documents module provides file storage with folder hierarchy, document uploa
 **Solutions**:
 ```bash
 # Verify the documents tables exist
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "SHOW TABLES LIKE 'document%';"
 
 # Expected: documents, document_folders
@@ -1043,7 +1043,7 @@ The Meetings module manages meeting records with attendees, action items, and ap
 **Solutions**:
 ```bash
 # Verify the meetings tables exist
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "SHOW TABLES LIKE 'meeting%';"
 
 # Expected: meetings, meeting_attendees, meeting_action_items
@@ -1214,7 +1214,7 @@ The Notifications module manages notification rules (triggers and categories), d
 **Solutions**:
 ```bash
 # Verify the notification tables exist
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password logbook \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
   -e "SHOW TABLES LIKE 'notification%';"
 
 # Expected: notification_rules, notification_logs
@@ -1285,7 +1285,7 @@ When reporting an issue, include:
 docker exec the-logbook-backend-1 python -c "from app.core.config import settings; print(settings.VERSION)"
 
 # Database status
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password -e "SELECT VERSION();"
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT VERSION();"
 
 # Container status
 docker-compose ps
@@ -1393,7 +1393,7 @@ swaks --to test@example.com \
 docker stats
 
 # Check database size
-docker exec the-logbook-db-1 mysql -uroot -plogbook_password \
+docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
   -e "SELECT table_name, ROUND(((data_length + index_length) / 1024 / 1024), 2) AS 'Size (MB)' FROM information_schema.tables WHERE table_schema = 'logbook' ORDER BY (data_length + index_length) DESC LIMIT 10;"
 
 # Check slow queries
