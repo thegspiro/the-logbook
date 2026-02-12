@@ -9,11 +9,14 @@ from fastapi import APIRouter
 # Import route modules
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
+    analytics,
     auth,
     dashboard,
     documents,
+    error_logs,
     events,
     forms,
+    integrations,
     locations,
     meetings,
     notifications,
@@ -59,6 +62,9 @@ api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"]
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
+api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 api_router.include_router(public_portal_admin.router)
 
 # Placeholder routes
@@ -93,6 +99,9 @@ async def api_root():
             "scheduling": "/api/v1/scheduling",
             "reports": "/api/v1/reports",
             "notifications": "/api/v1/notifications",
+            "analytics": "/api/v1/analytics",
+            "errors": "/api/v1/errors",
+            "integrations": "/api/v1/integrations",
             "public_portal": "/api/v1/public-portal"
         }
     }

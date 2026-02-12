@@ -76,6 +76,18 @@ from app.models.notification import (
     NotificationChannel,
 )
 
+from app.models.integration import (
+    Integration,
+)
+
+from app.models.analytics import (
+    AnalyticsEvent,
+)
+
+from app.models.error_log import (
+    ErrorLog,
+)
+
 from app.models.apparatus import (
     Apparatus,
     ApparatusType,
@@ -154,6 +166,12 @@ __all__ = [
     "NotificationTrigger",
     "NotificationCategory",
     "NotificationChannel",
+    # Integration models
+    "Integration",
+    # Analytics models
+    "AnalyticsEvent",
+    # Error log models
+    "ErrorLog",
     # Apparatus models
     "Apparatus",
     "ApparatusType",

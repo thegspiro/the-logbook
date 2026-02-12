@@ -280,6 +280,31 @@ export const userService = {
     const response = await api.post<UserWithRoles>('/users', memberData);
     return response.data;
   },
+
+  /**
+   * Get notification preferences for the current user
+   */
+  async getNotificationPreferences(userId: string): Promise<import('../types/user').NotificationPreferences> {
+    const response = await api.get<{ notification_preferences: import('../types/user').NotificationPreferences }>(`/users/${userId}/with-roles`);
+    return response.data.notification_preferences || {
+      email: true,
+      sms: false,
+      push: false,
+      email_notifications: true,
+      event_reminders: true,
+      training_reminders: true,
+      announcement_notifications: true,
+    };
+  },
+
+  /**
+   * Update notification preferences for a user
+   */
+  async updateNotificationPreferences(userId: string, preferences: Partial<import('../types/user').NotificationPreferences>): Promise<void> {
+    await api.patch(`/users/${userId}/contact-info`, {
+      notification_preferences: preferences,
+    });
+  },
 };
 
 export interface EnabledModulesResponse {
@@ -388,6 +413,14 @@ export const roleService = {
    */
   async deleteRole(roleId: string): Promise<void> {
     await api.delete(`/roles/${roleId}`);
+  },
+
+  /**
+   * Clone an existing role
+   */
+  async cloneRole(roleId: string): Promise<Role> {
+    const response = await api.post<Role>(`/roles/${roleId}/clone`);
+    return response.data;
   },
 };
 
@@ -1198,6 +1231,14 @@ export const electionService = {
     const response = await api.post<import('../types/election').EmailBallotResponse>(`/elections/${electionId}/send-ballot`, emailData);
     return response.data;
   },
+
+  /**
+   * Cast votes in bulk
+   */
+  async bulkCastVotes(electionId: string, votes: import('../types/election').VoteCreate[]): Promise<{ success: boolean; votes_cast: number }> {
+    const response = await api.post<{ success: boolean; votes_cast: number }>(`/elections/${electionId}/vote/bulk`, { votes });
+    return response.data;
+  },
 };
 
 export const eventService = {
@@ -1506,6 +1547,40 @@ export const inventoryService = {
   async retireItem(itemId: string, notes?: string): Promise<void> {
     await api.post(`/inventory/items/${itemId}/retire`, { notes });
   },
+
+  async assignItem(itemId: string, userId: string): Promise<InventoryItem> {
+    const response = await api.post<InventoryItem>(`/inventory/items/${itemId}/assign`, { user_id: userId });
+    return response.data;
+  },
+
+  async unassignItem(itemId: string): Promise<InventoryItem> {
+    const response = await api.post<InventoryItem>(`/inventory/items/${itemId}/unassign`);
+    return response.data;
+  },
+
+  async checkoutItem(data: { item_id: string; user_id: string; due_date?: string; notes?: string }): Promise<{ id: string }> {
+    const response = await api.post<{ id: string }>('/inventory/checkout', data);
+    return response.data;
+  },
+
+  async checkInItem(checkoutId: string): Promise<void> {
+    await api.post(`/inventory/checkout/${checkoutId}/checkin`);
+  },
+
+  async getActiveCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/active');
+    return response.data;
+  },
+
+  async getOverdueCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
+    return response.data;
+  },
+
+  async getLowStockItems(): Promise<InventoryItem[]> {
+    const response = await api.get<InventoryItem[]>('/inventory/low-stock');
+    return response.data;
+  },
 };
 
 // ============================================
@@ -1811,6 +1886,13 @@ export const formsService = {
       params: { q: query, limit: limit || 20 },
     });
     return response.data;
+  },
+
+  /**
+   * Reorder form fields
+   */
+  async reorderFields(formId: string, fieldIds: string[]): Promise<void> {
+    await api.post(`/forms/${formId}/fields/reorder`, { field_ids: fieldIds });
   },
 };
 
@@ -2272,5 +2354,388 @@ export const dashboardService = {
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
     return response.data;
+  },
+};
+
+// ============================================
+// Email Templates Service
+// ============================================
+
+export interface EmailTemplate {
+  id: string;
+  organization_id: string;
+  template_type: string;
+  name: string;
+  subject: string;
+  html_body: string;
+  text_body?: string;
+  css_styles?: string;
+  allow_attachments: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  attachments: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  id: string;
+  template_id: string;
+  filename: string;
+  content_type: string;
+  file_size: string;
+  created_at: string;
+}
+
+export interface EmailTemplateUpdate {
+  subject?: string;
+  html_body?: string;
+  text_body?: string;
+  css_styles?: string;
+  is_active?: boolean;
+}
+
+export interface EmailTemplatePreview {
+  subject: string;
+  html_body: string;
+  text_body: string;
+}
+
+export const emailTemplatesService = {
+  async getTemplates(): Promise<EmailTemplate[]> {
+    const response = await api.get<EmailTemplate[]>('/email-templates');
+    return response.data;
+  },
+
+  async getTemplate(templateId: string): Promise<EmailTemplate> {
+    const response = await api.get<EmailTemplate>(`/email-templates/${templateId}`);
+    return response.data;
+  },
+
+  async updateTemplate(templateId: string, data: EmailTemplateUpdate): Promise<EmailTemplate> {
+    const response = await api.put<EmailTemplate>(`/email-templates/${templateId}`, data);
+    return response.data;
+  },
+
+  async previewTemplate(templateId: string, context?: Record<string, unknown>, overrides?: { subject?: string; html_body?: string; css_styles?: string }): Promise<EmailTemplatePreview> {
+    const response = await api.post<EmailTemplatePreview>(`/email-templates/${templateId}/preview`, {
+      context: context || {},
+      ...overrides,
+    });
+    return response.data;
+  },
+
+  async uploadAttachment(templateId: string, file: File): Promise<EmailAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<EmailAttachment>(`/email-templates/${templateId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteAttachment(templateId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/email-templates/${templateId}/attachments/${attachmentId}`);
+  },
+};
+
+// ============================================
+// Locations Service
+// ============================================
+
+export interface Location {
+  id: string;
+  organization_id: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  latitude?: number;
+  longitude?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationCreate {
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export const locationsService = {
+  async getLocations(params?: { is_active?: boolean; skip?: number; limit?: number }): Promise<Location[]> {
+    const response = await api.get<Location[]>('/locations', { params });
+    return response.data;
+  },
+
+  async getLocation(locationId: string): Promise<Location> {
+    const response = await api.get<Location>(`/locations/${locationId}`);
+    return response.data;
+  },
+
+  async createLocation(data: LocationCreate): Promise<Location> {
+    const response = await api.post<Location>('/locations', data);
+    return response.data;
+  },
+
+  async updateLocation(locationId: string, data: Partial<LocationCreate>): Promise<Location> {
+    const response = await api.patch<Location>(`/locations/${locationId}`, data);
+    return response.data;
+  },
+
+  async deleteLocation(locationId: string): Promise<void> {
+    await api.delete(`/locations/${locationId}`);
+  },
+};
+
+// ============================================
+// Security Monitoring Service
+// ============================================
+
+export interface SecurityStatus {
+  timestamp: string;
+  overall_status: string;
+  alerts: {
+    total_last_hour: number;
+    by_severity: Record<string, number>;
+  };
+  metrics: Record<string, unknown>;
+}
+
+export interface SecurityAlert {
+  id: string;
+  alert_type: string;
+  threat_level: string;
+  message: string;
+  timestamp: string;
+  acknowledged: boolean;
+}
+
+export const securityService = {
+  async getStatus(): Promise<SecurityStatus> {
+    const response = await api.get<SecurityStatus>('/security/status');
+    return response.data;
+  },
+
+  async getAlerts(params?: { limit?: number; threat_level?: string; alert_type?: string }): Promise<{ alerts: SecurityAlert[]; total: number }> {
+    const response = await api.get<{ alerts: SecurityAlert[]; total: number }>('/security/alerts', { params });
+    return response.data;
+  },
+
+  async acknowledgeAlert(alertId: string): Promise<{ status: string; alert_id: string }> {
+    const response = await api.post<{ status: string; alert_id: string }>(`/security/alerts/${alertId}/acknowledge`);
+    return response.data;
+  },
+
+  async verifyAuditIntegrity(params?: { start_id?: number; end_id?: number }): Promise<{ verified: boolean; total_checked: number; errors: string[] }> {
+    const response = await api.get<{ verified: boolean; total_checked: number; errors: string[] }>('/security/audit-log/integrity', { params });
+    return response.data;
+  },
+
+  async triggerManualCheck(): Promise<{ check_completed: boolean; overall_status: string; integrity: Record<string, unknown> }> {
+    const response = await api.post<{ check_completed: boolean; overall_status: string; integrity: Record<string, unknown> }>('/security/manual-check');
+    return response.data;
+  },
+};
+
+// ============================================
+// Training Sessions Service
+// ============================================
+
+export interface TrainingSession {
+  id: string;
+  organization_id: string;
+  event_id: string;
+  course_id?: string;
+  course_name: string;
+  course_code?: string;
+  training_type: string;
+  credit_hours: number;
+  instructor?: string;
+  max_participants?: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainingSessionCreate {
+  title: string;
+  description?: string;
+  course_id?: string;
+  course_name: string;
+  training_type: string;
+  credit_hours: number;
+  instructor?: string;
+  max_participants?: number;
+  start_time: string;
+  end_time: string;
+  location?: string;
+}
+
+export const trainingSessionService = {
+  async getSessions(params?: { skip?: number; limit?: number; status?: string }): Promise<TrainingSession[]> {
+    const response = await api.get<TrainingSession[]>('/training/sessions', { params });
+    return response.data;
+  },
+
+  async getSession(sessionId: string): Promise<TrainingSession> {
+    const response = await api.get<TrainingSession>(`/training/sessions/${sessionId}`);
+    return response.data;
+  },
+
+  async createSession(data: TrainingSessionCreate): Promise<TrainingSession> {
+    const response = await api.post<TrainingSession>('/training/sessions', data);
+    return response.data;
+  },
+
+  async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
+    const response = await api.post<{ message: string; approval_id: string }>(`/training/sessions/${sessionId}/finalize`);
+    return response.data;
+  },
+};
+
+// ============================================
+// Integrations Service
+// ============================================
+
+export interface IntegrationConfig {
+  id: string;
+  organization_id: string;
+  integration_type: string;
+  name: string;
+  status: 'available' | 'connected' | 'error' | 'coming_soon';
+  config: Record<string, unknown>;
+  enabled: boolean;
+  last_sync_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const integrationsService = {
+  async getIntegrations(): Promise<IntegrationConfig[]> {
+    const response = await api.get<IntegrationConfig[]>('/integrations');
+    return response.data;
+  },
+
+  async getIntegration(integrationId: string): Promise<IntegrationConfig> {
+    const response = await api.get<IntegrationConfig>(`/integrations/${integrationId}`);
+    return response.data;
+  },
+
+  async connectIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {
+    const response = await api.post<IntegrationConfig>(`/integrations/${integrationId}/connect`, config);
+    return response.data;
+  },
+
+  async disconnectIntegration(integrationId: string): Promise<void> {
+    await api.post(`/integrations/${integrationId}/disconnect`);
+  },
+
+  async updateIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {
+    const response = await api.patch<IntegrationConfig>(`/integrations/${integrationId}`, config);
+    return response.data;
+  },
+};
+
+// ============================================
+// Analytics API Service (backend-persisted)
+// ============================================
+
+export interface AnalyticsEventRecord {
+  id: string;
+  event_type: string;
+  event_id: string;
+  user_id?: string;
+  metadata: Record<string, unknown>;
+  device_type: string;
+  created_at: string;
+}
+
+export interface AnalyticsMetrics {
+  total_scans: number;
+  successful_check_ins: number;
+  failed_check_ins: number;
+  success_rate: number;
+  avg_time_to_check_in: number;
+  device_breakdown: Record<string, number>;
+  error_breakdown: Record<string, number>;
+  hourly_activity: Array<{ hour: number; count: number }>;
+}
+
+export const analyticsApiService = {
+  async trackEvent(data: { event_type: string; event_id: string; user_id?: string; metadata: Record<string, unknown> }): Promise<void> {
+    await api.post('/analytics/track', data);
+  },
+
+  async getMetrics(eventId?: string): Promise<AnalyticsMetrics> {
+    const response = await api.get<AnalyticsMetrics>('/analytics/metrics', {
+      params: eventId ? { event_id: eventId } : undefined,
+    });
+    return response.data;
+  },
+
+  async exportAnalytics(eventId?: string): Promise<string> {
+    const response = await api.get('/analytics/export', {
+      params: eventId ? { event_id: eventId } : undefined,
+    });
+    return JSON.stringify(response.data, null, 2);
+  },
+};
+
+// ============================================
+// Error Logs Service (backend-persisted)
+// ============================================
+
+export interface ErrorLogRecord {
+  id: string;
+  error_type: string;
+  error_message: string;
+  user_message: string;
+  troubleshooting_steps: string[];
+  context: Record<string, unknown>;
+  user_id?: string;
+  event_id?: string;
+  created_at: string;
+}
+
+export interface ErrorLogStats {
+  total: number;
+  by_type: Record<string, number>;
+  recent_errors: ErrorLogRecord[];
+}
+
+export const errorLogsService = {
+  async logError(data: {
+    error_type: string;
+    error_message: string;
+    user_message: string;
+    context: Record<string, unknown>;
+    event_id?: string;
+  }): Promise<void> {
+    await api.post('/errors/log', data);
+  },
+
+  async getErrors(params?: { error_type?: string; event_id?: string; skip?: number; limit?: number }): Promise<{ errors: ErrorLogRecord[]; total: number }> {
+    const response = await api.get<{ errors: ErrorLogRecord[]; total: number }>('/errors', { params });
+    return response.data;
+  },
+
+  async getStats(): Promise<ErrorLogStats> {
+    const response = await api.get<ErrorLogStats>('/errors/stats');
+    return response.data;
+  },
+
+  async clearErrors(): Promise<void> {
+    await api.delete('/errors');
+  },
+
+  async exportErrors(params?: { event_id?: string }): Promise<string> {
+    const response = await api.get('/errors/export', { params });
+    return JSON.stringify(response.data, null, 2);
   },
 };

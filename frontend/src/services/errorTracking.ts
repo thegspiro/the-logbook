@@ -3,7 +3,11 @@
  *
  * Provides centralized error logging, user-friendly error messages,
  * and troubleshooting guidance for the QR code check-in system.
+ *
+ * Errors are persisted to the backend API for persistent storage and analysis.
  */
+
+import { errorLogsService, type ErrorLogRecord, type ErrorLogStats } from './api';
 
 export interface ErrorLog {
   id: string;
@@ -17,10 +21,21 @@ export interface ErrorLog {
   eventId?: string;
 }
 
-class ErrorTrackingService {
-  private errors: ErrorLog[] = [];
-  private maxErrors = 100; // Keep last 100 errors in memory
+function mapApiError(record: ErrorLogRecord): ErrorLog {
+  return {
+    id: record.id,
+    timestamp: new Date(record.created_at),
+    errorType: record.error_type,
+    errorMessage: record.error_message,
+    userMessage: record.user_message || record.error_message,
+    troubleshootingSteps: record.troubleshooting_steps || [],
+    context: record.context || {},
+    userId: record.user_id,
+    eventId: record.event_id,
+  };
+}
 
+class ErrorTrackingService {
   /**
    * Known error types and their user-friendly messages
    */
@@ -103,7 +118,7 @@ class ErrorTrackingService {
   };
 
   /**
-   * Log an error with enhanced context
+   * Log an error with enhanced context - persists to backend
    */
   logError(
     error: Error | string,
@@ -137,18 +152,21 @@ class ErrorTrackingService {
       },
     };
 
-    this.errors.unshift(errorLog);
-    if (this.errors.length > this.maxErrors) {
-      this.errors.pop();
-    }
-
     // Log to console in development
     if (process.env.NODE_ENV === 'development') {
       console.error('[Error Tracking]', errorLog);
     }
 
-    // In production, you would send this to a backend service
-    this.sendToBackend(errorLog);
+    // Persist to backend
+    errorLogsService.logError({
+      error_type: errorType,
+      error_message: errorMessage,
+      user_message: mapping.userMessage,
+      context: errorLog.context,
+      event_id: context.eventId,
+    }).catch(() => {
+      // Silently fail - error logging should not break the app
+    });
 
     return errorLog;
   }
@@ -191,67 +209,60 @@ class ErrorTrackingService {
   }
 
   /**
-   * Get all logged errors
+   * Get all logged errors (from backend)
    */
-  getErrors(): ErrorLog[] {
-    return [...this.errors];
-  }
-
-  /**
-   * Get errors for a specific event
-   */
-  getErrorsForEvent(eventId: string): ErrorLog[] {
-    return this.errors.filter(e => e.context.eventId === eventId);
-  }
-
-  /**
-   * Get error statistics
-   */
-  getErrorStats() {
-    const stats: Record<string, number> = {};
-
-    this.errors.forEach(error => {
-      stats[error.errorType] = (stats[error.errorType] || 0) + 1;
-    });
-
-    return {
-      total: this.errors.length,
-      byType: stats,
-      recentErrors: this.errors.slice(0, 5),
-    };
-  }
-
-  /**
-   * Clear all errors
-   */
-  clearErrors(): void {
-    this.errors = [];
-  }
-
-  /**
-   * Send error to backend (placeholder for future implementation)
-   */
-  private async sendToBackend(_errorLog: ErrorLog): Promise<void> {
-    // TODO: Implement backend error logging
-    // This would send errors to your backend for persistent storage and analysis
-    /*
+  async getErrors(params?: { error_type?: string; event_id?: string }): Promise<ErrorLog[]> {
     try {
-      await fetch('/api/v1/errors/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(errorLog),
-      });
-    } catch (err) {
-      console.error('Failed to send error to backend:', err);
+      const result = await errorLogsService.getErrors({ ...params, limit: 100 });
+      return result.errors.map(mapApiError);
+    } catch {
+      return [];
     }
-    */
   }
 
   /**
-   * Export errors for analysis
+   * Get errors for a specific event (from backend)
    */
-  exportErrors(): string {
-    return JSON.stringify(this.errors, null, 2);
+  async getErrorsForEvent(eventId: string): Promise<ErrorLog[]> {
+    return this.getErrors({ event_id: eventId });
+  }
+
+  /**
+   * Get error statistics (from backend)
+   */
+  async getErrorStats(): Promise<{ total: number; byType: Record<string, number>; recentErrors: ErrorLog[] }> {
+    try {
+      const stats: ErrorLogStats = await errorLogsService.getStats();
+      return {
+        total: stats.total,
+        byType: stats.by_type,
+        recentErrors: stats.recent_errors.map(mapApiError),
+      };
+    } catch {
+      return { total: 0, byType: {}, recentErrors: [] };
+    }
+  }
+
+  /**
+   * Clear all errors (via backend)
+   */
+  async clearErrors(): Promise<void> {
+    try {
+      await errorLogsService.clearErrors();
+    } catch {
+      // Silently fail
+    }
+  }
+
+  /**
+   * Export errors for analysis (from backend)
+   */
+  async exportErrors(params?: { event_id?: string }): Promise<string> {
+    try {
+      return await errorLogsService.exportErrors(params);
+    } catch {
+      return JSON.stringify([], null, 2);
+    }
   }
 }
 
