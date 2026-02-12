@@ -278,3 +278,18 @@ export interface BallotTemplate {
   title_template: string;
   description_template?: string;
 }
+
+// Ballot submission types (token-based voting)
+
+export interface BallotItemVote {
+  ballot_item_id: string;
+  choice: string; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+  write_in_name?: string;
+}
+
+export interface BallotSubmissionResponse {
+  success: boolean;
+  votes_cast: number;
+  abstentions: number;
+  message: string;
+}

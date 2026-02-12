@@ -1256,6 +1256,38 @@ export const electionService = {
     const response = await api.get<{ templates: import('../types/election').BallotTemplate[] }>('/elections/templates/ballot-items');
     return response.data.templates;
   },
+
+  // ========================================
+  // Token-Based Ballot (Public / No Auth)
+  // ========================================
+
+  /**
+   * Get ballot information using a voting token (no auth required)
+   */
+  async getBallotByToken(token: string): Promise<import('../types/election').Election> {
+    const response = await api.get<import('../types/election').Election>('/elections/ballot', { params: { token } });
+    return response.data;
+  },
+
+  /**
+   * Get candidates for a ballot using voting token (no auth required)
+   */
+  async getBallotCandidates(token: string): Promise<import('../types/election').Candidate[]> {
+    const response = await api.get<import('../types/election').Candidate[]>(`/elections/ballot/${token}/candidates`);
+    return response.data;
+  },
+
+  /**
+   * Submit an entire ballot using a voting token (no auth required)
+   */
+  async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
+    const response = await api.post<import('../types/election').BallotSubmissionResponse>(
+      '/elections/ballot/vote/bulk',
+      { votes },
+      { params: { token } }
+    );
+    return response.data;
+  },
 };
 
 export const eventService = {

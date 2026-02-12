@@ -69,6 +69,7 @@ const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = lazy(() => import('./pages/ElectionDetailPage').then(m => ({ default: m.ElectionDetailPage })));
+const BallotVotingPage = lazy(() => import('./pages/BallotVotingPage'));
 
 // Minutes Module
 const MinutesPage = lazy(() => import('./pages/MinutesPage'));
@@ -188,6 +189,9 @@ function App() {
 
             {/* Public Form Page (no auth required) */}
             <Route path="/f/:slug" element={<PublicFormPage />} />
+
+            {/* Public Ballot Voting Page (token-based, no auth required) */}
+            <Route path="/ballot" element={<BallotVotingPage />} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />

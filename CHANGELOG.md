@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Enhanced - Email Ballot Voting Page (2026-02-12)
+
+#### Token-Based Ballot Page (`BallotVotingPage.tsx`)
+- **Public ballot page** at `/ballot?token=xxx` — no authentication required, accessed via "Vote Now" link in email
+- **Full ballot display**: Shows all ballot items with item numbers, titles, descriptions
+- **Voting options per item**: Approve/Deny for approval items, candidate selection for elections, write-in for custom entries, or abstain
+- **Submit Ballot button** at bottom of page with review prompt
+- **Confirmation modal**: Shows summary of all choices (item title + selected option) before final submission
+- **"Change Ballot" / "Cast Ballot"** options in confirmation — member can go back and modify or confirm
+- **Success confirmation**: Green checkmark with submission summary (votes cast, abstentions)
+- **Error handling**: Clear messages for expired tokens, already-submitted ballots, invalid links
+
+#### Backend: Bulk Ballot Submission
+- **`POST /ballot/vote/bulk?token=xxx`** endpoint: Submits all ballot item votes atomically in one transaction
+- **Write-in support**: Creates write-in candidates on the fly when member enters a custom name
+- **Approve/Deny candidates**: Auto-created for approval-type ballot items
+- **Abstain handling**: Items marked as abstain are skipped (no vote recorded)
+- **Token lifecycle**: Token marked as used after full ballot submission, preventing reuse
+- **HMAC-SHA256 signatures** on every vote for tamper detection
+- **Audit logging**: Full ballot submission logged with vote count and abstention count
+
+#### Email Template Updates
+- **"Vote Now" button** (was "Cast Your Vote") — centered, prominent blue button
+- **Ballot URL** now points to frontend `/ballot` page instead of API endpoint
+
 ### Enhanced - Ballot Builder, Meeting Attendance & Member Class Eligibility (2026-02-12)
 
 #### Meeting Attendance Tracking

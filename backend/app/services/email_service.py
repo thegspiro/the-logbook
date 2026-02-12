@@ -199,7 +199,7 @@ class EmailService:
 
             {f'<p>{custom_message}</p>' if custom_message else ''}
 
-            {f'<p><a href="{ballot_url}" class="button">Cast Your Vote</a></p>' if ballot_url else ''}
+            {f'<p style="text-align: center;"><a href="{ballot_url}" class="button">Vote Now</a></p>' if ballot_url else ''}
 
             <p>Please review the ballot items and cast your vote before the voting period closes.</p>
 
@@ -227,7 +227,7 @@ A ballot is now available for your review and vote.
 
 {custom_message if custom_message else ''}
 
-{f"Cast your vote: {ballot_url}" if ballot_url else ''}
+{f"Vote Now: {ballot_url}" if ballot_url else ''}
 
 Please review the ballot items and cast your vote before the voting period closes.
 

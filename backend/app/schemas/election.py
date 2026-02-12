@@ -396,3 +396,25 @@ class BallotTemplate(BaseModel):
 class BallotTemplatesResponse(BaseModel):
     """Response containing available ballot templates"""
     templates: List[BallotTemplate]
+
+
+# Ballot Submission Schemas (Token-Based)
+
+class BallotItemVote(BaseModel):
+    """A single vote within a ballot submission"""
+    ballot_item_id: str = Field(..., description="ID of the ballot item being voted on")
+    choice: str = Field(..., description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID")
+    write_in_name: Optional[str] = Field(None, description="Name for write-in votes")
+
+
+class BallotSubmission(BaseModel):
+    """Full ballot submission with all votes"""
+    votes: List[BallotItemVote] = Field(..., description="List of votes, one per ballot item")
+
+
+class BallotSubmissionResponse(BaseModel):
+    """Response after submitting a ballot"""
+    success: bool
+    votes_cast: int
+    abstentions: int
+    message: str

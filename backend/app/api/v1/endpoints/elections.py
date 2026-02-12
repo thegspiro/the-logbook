@@ -44,6 +44,8 @@ from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     BallotTemplatesResponse,
+    BallotSubmission,
+    BallotSubmissionResponse,
 )
 from app.services.election_service import ElectionService
 from app.api.dependencies import get_current_user, require_permission
@@ -865,9 +867,12 @@ async def send_ballot_emails(
             detail="Election not found"
         )
 
-    # Build base ballot URL (token will be appended by service)
+    # Build base ballot URL pointing to the frontend ballot page
+    # The token will be appended by the service: /ballot?token=xxx
     base_url = str(request.base_url).rstrip("/")
-    base_ballot_url = f"{base_url}/api/v1/elections/ballot" if email_data.include_ballot_link else None
+    # Strip /api/v1 prefix if present to get the frontend origin
+    frontend_origin = base_url.replace("/api/v1", "").replace("/api", "")
+    base_ballot_url = f"{frontend_origin}/ballot" if email_data.include_ballot_link else None
 
     service = ElectionService(db)
     recipients_count, failed_count = await service.send_ballot_emails(
@@ -985,6 +990,38 @@ async def cast_vote_with_token(
         voted_at=vote.voted_at,
         voter_id=None,  # Never reveal voter ID for anonymous voting
     )
+
+
+@router.post("/ballot/vote/bulk", response_model=BallotSubmissionResponse, status_code=status.HTTP_201_CREATED)
+async def submit_ballot_with_token(
+    ballot: BallotSubmission,
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Submit an entire ballot using a voting token
+
+    Submits all ballot item votes atomically. Each vote can be an
+    approval, denial, candidate selection, write-in, or abstention.
+
+    **No authentication required** — uses voting token from email link.
+    """
+    service = ElectionService(db)
+    result, error = await service.submit_ballot_with_token(
+        token=token,
+        votes=[v.model_dump() for v in ballot.votes],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return BallotSubmissionResponse(**result)
 
 
 # ============================================

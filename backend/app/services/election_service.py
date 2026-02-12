@@ -2127,3 +2127,205 @@ Best regards,
         }, ip_address=ip_address)
 
         return vote, None
+
+    async def submit_ballot_with_token(
+        self,
+        token: str,
+        votes: List[Dict],
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        Submit an entire ballot atomically using a voting token.
+
+        Each vote in the list corresponds to a ballot item and contains:
+        - ballot_item_id: ID of the ballot item
+        - choice: 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+        - write_in_name: Name for write-in votes (only when choice='write_in')
+
+        Returns: (result_dict, error_message)
+        """
+        # Validate token and get ballot
+        election, voting_token, error = await self.get_ballot_by_token(token)
+        if error:
+            return None, error
+
+        # Check if this token has already been used
+        if voting_token.used:
+            return None, "This ballot has already been submitted"
+
+        ballot_items = election.ballot_items or []
+        if not ballot_items:
+            return None, "This election has no ballot items configured"
+
+        # Build a lookup of ballot items by ID
+        item_map = {item.get("id"): item for item in ballot_items}
+
+        # Get all accepted candidates for this election
+        candidate_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == election.id)
+            .where(Candidate.accepted == True)
+        )
+        candidates = candidate_result.scalars().all()
+        candidate_map = {str(c.id): c for c in candidates}
+
+        # Process each vote
+        created_votes = []
+        abstentions = 0
+
+        for vote_data in votes:
+            ballot_item_id = vote_data.get("ballot_item_id")
+            choice = vote_data.get("choice", "abstain")
+            write_in_name = vote_data.get("write_in_name")
+
+            # Validate ballot item exists
+            ballot_item = item_map.get(ballot_item_id)
+            if not ballot_item:
+                continue
+
+            # Handle abstain — no vote recorded
+            if choice == "abstain":
+                abstentions += 1
+                continue
+
+            # Determine the position for this vote (use ballot item id as position)
+            position = ballot_item.get("position") or ballot_item_id
+
+            # Check if already voted for this position (prevents double-voting within the ballot)
+            existing_check = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election.id)
+                .where(Vote.voter_hash == voting_token.voter_hash)
+                .where(Vote.position == position)
+                .where(Vote.deleted_at.is_(None))
+            )
+            if existing_check.scalar_one_or_none():
+                return None, f"You have already voted on: {ballot_item.get('title', ballot_item_id)}"
+
+            # Determine candidate_id based on choice
+            candidate_id = None
+
+            if choice == "write_in":
+                if not write_in_name or not write_in_name.strip():
+                    return None, f"Write-in name is required for: {ballot_item.get('title', ballot_item_id)}"
+
+                # Create a write-in candidate
+                write_in_candidate = Candidate(
+                    election_id=election.id,
+                    name=write_in_name.strip(),
+                    position=position,
+                    is_write_in=True,
+                    accepted=True,
+                    display_order=999,
+                )
+                self.db.add(write_in_candidate)
+                await self.db.flush()
+                candidate_id = write_in_candidate.id
+
+            elif choice == "approve":
+                # Find or create an "Approve" candidate for this ballot item
+                approve_result = await self.db.execute(
+                    select(Candidate)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.position == position)
+                    .where(Candidate.name == "Approve")
+                    .where(Candidate.is_write_in == False)
+                )
+                approve_candidate = approve_result.scalar_one_or_none()
+
+                if not approve_candidate:
+                    approve_candidate = Candidate(
+                        election_id=election.id,
+                        name="Approve",
+                        position=position,
+                        is_write_in=False,
+                        accepted=True,
+                        display_order=0,
+                    )
+                    self.db.add(approve_candidate)
+                    await self.db.flush()
+
+                candidate_id = approve_candidate.id
+
+            elif choice == "deny":
+                # Find or create a "Deny" candidate for this ballot item
+                deny_result = await self.db.execute(
+                    select(Candidate)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.position == position)
+                    .where(Candidate.name == "Deny")
+                    .where(Candidate.is_write_in == False)
+                )
+                deny_candidate = deny_result.scalar_one_or_none()
+
+                if not deny_candidate:
+                    deny_candidate = Candidate(
+                        election_id=election.id,
+                        name="Deny",
+                        position=position,
+                        is_write_in=False,
+                        accepted=True,
+                        display_order=1,
+                    )
+                    self.db.add(deny_candidate)
+                    await self.db.flush()
+
+                candidate_id = deny_candidate.id
+
+            else:
+                # Choice is a candidate UUID
+                if choice not in candidate_map:
+                    return None, f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}"
+                candidate_id = UUID(choice)
+
+            # Create the vote
+            vote = Vote(
+                election_id=election.id,
+                candidate_id=candidate_id,
+                voter_id=None,
+                voter_hash=voting_token.voter_hash,
+                position=position,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                voted_at=datetime.utcnow(),
+            )
+            vote.vote_signature = self._sign_vote(vote)
+            self.db.add(vote)
+            created_votes.append(vote)
+
+        # Mark token as fully used
+        voting_token.used = True
+        voting_token.used_at = datetime.utcnow()
+        voting_token.positions_voted = [v.get("ballot_item_id") for v in votes if v.get("choice") != "abstain"]
+
+        # Commit all votes atomically
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            logger.warning(
+                f"Ballot double-submission blocked | election={election.id}"
+            )
+            await self._audit("vote_double_attempt_token", {
+                "election_id": str(election.id),
+                "type": "bulk_ballot_submission",
+            }, severity="warning", ip_address=ip_address)
+            return None, "This ballot has already been submitted"
+
+        logger.info(
+            f"Ballot submitted | election={election.id} "
+            f"votes={len(created_votes)} abstentions={abstentions}"
+        )
+        await self._audit("ballot_submitted_token", {
+            "election_id": str(election.id),
+            "votes_cast": len(created_votes),
+            "abstentions": abstentions,
+        }, ip_address=ip_address)
+
+        return {
+            "success": True,
+            "votes_cast": len(created_votes),
+            "abstentions": abstentions,
+            "message": f"Ballot submitted successfully. {len(created_votes)} vote(s) cast, {abstentions} abstention(s).",
+        }, None
