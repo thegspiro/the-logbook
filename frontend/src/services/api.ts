@@ -1966,3 +1966,142 @@ export const dashboardService = {
     return response.data;
   },
 };
+
+// ============================================
+// Minutes Service
+// ============================================
+
+export const minutesService = {
+  /**
+   * List meeting minutes with optional filtering
+   */
+  async listMinutes(params?: {
+    meeting_type?: string;
+    status_filter?: string;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<import('../types/minutes').MinutesListItem[]> {
+    const response = await api.get<import('../types/minutes').MinutesListItem[]>('/minutes', { params });
+    return response.data;
+  },
+
+  /**
+   * Get aggregate stats for the minutes dashboard
+   */
+  async getStats(): Promise<import('../types/minutes').MinutesStats> {
+    const response = await api.get<import('../types/minutes').MinutesStats>('/minutes/stats');
+    return response.data;
+  },
+
+  /**
+   * Full-text search across meeting minutes
+   */
+  async search(q: string, limit?: number): Promise<import('../types/minutes').MinutesSearchResult[]> {
+    const response = await api.get<import('../types/minutes').MinutesSearchResult[]>('/minutes/search', {
+      params: { q, limit },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get a single meeting minutes record with motions and action items
+   */
+  async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}`);
+    return response.data;
+  },
+
+  /**
+   * Create new meeting minutes
+   */
+  async createMinutes(data: import('../types/minutes').MinutesCreate): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>('/minutes', data);
+    return response.data;
+  },
+
+  /**
+   * Update meeting minutes
+   */
+  async updateMinutes(minutesId: string, data: import('../types/minutes').MinutesUpdate): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.put<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete meeting minutes (only drafts)
+   */
+  async deleteMinutes(minutesId: string): Promise<void> {
+    await api.delete(`/minutes/${minutesId}`);
+  },
+
+  /**
+   * Submit minutes for approval
+   */
+  async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}/submit`);
+    return response.data;
+  },
+
+  /**
+   * Approve submitted minutes
+   */
+  async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}/approve`);
+    return response.data;
+  },
+
+  /**
+   * Reject submitted minutes
+   */
+  async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}/reject`, { reason });
+    return response.data;
+  },
+
+  /**
+   * Add a motion to meeting minutes
+   */
+  async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
+    const response = await api.post<import('../types/minutes').Motion>(`/minutes/${minutesId}/motions`, data);
+    return response.data;
+  },
+
+  /**
+   * Update a motion
+   */
+  async updateMotion(minutesId: string, motionId: string, data: import('../types/minutes').MotionUpdate): Promise<import('../types/minutes').Motion> {
+    const response = await api.put<import('../types/minutes').Motion>(`/minutes/${minutesId}/motions/${motionId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete a motion
+   */
+  async deleteMotion(minutesId: string, motionId: string): Promise<void> {
+    await api.delete(`/minutes/${minutesId}/motions/${motionId}`);
+  },
+
+  /**
+   * Add an action item to meeting minutes
+   */
+  async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
+    const response = await api.post<import('../types/minutes').ActionItem>(`/minutes/${minutesId}/action-items`, data);
+    return response.data;
+  },
+
+  /**
+   * Update an action item
+   */
+  async updateActionItem(minutesId: string, itemId: string, data: import('../types/minutes').ActionItemUpdate): Promise<import('../types/minutes').ActionItem> {
+    const response = await api.put<import('../types/minutes').ActionItem>(`/minutes/${minutesId}/action-items/${itemId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete an action item
+   */
+  async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
+    await api.delete(`/minutes/${minutesId}/action-items/${itemId}`);
+  },
+};

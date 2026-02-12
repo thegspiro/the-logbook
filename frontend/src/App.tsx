@@ -73,6 +73,7 @@ const BallotVotingPage = lazy(() => import('./pages/BallotVotingPage'));
 
 // Minutes Module
 const MinutesPage = lazy(() => import('./pages/MinutesPage'));
+const MinutesDetailPage = lazy(() => import('./pages/MinutesDetailPage'));
 
 // Notifications Module
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
@@ -163,6 +164,7 @@ function App() {
 
               {/* Minutes Module */}
               <Route path="/minutes" element={<MinutesPage />} />
+              <Route path="/minutes/:minutesId" element={<MinutesDetailPage />} />
 
               {/* Notifications Module */}
               <Route path="/notifications" element={<NotificationsPage />} />

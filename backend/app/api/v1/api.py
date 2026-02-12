@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     inventory,
     external_training,
     email_templates,
+    minutes,
 )
 
 api_router = APIRouter()
@@ -49,6 +50,7 @@ api_router.include_router(inventory.router, prefix="/inventory", tags=["inventor
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
+api_router.include_router(minutes.router, prefix="/minutes", tags=["minutes"])
 api_router.include_router(public_portal_admin.router)
 
 # Placeholder routes
@@ -78,6 +80,7 @@ async def api_root():
             "security": "/api/v1/security",
             "email_templates": "/api/v1/email-templates",
             "forms": "/api/v1/forms",
+            "minutes": "/api/v1/minutes",
             "public_portal": "/api/v1/public-portal"
         }
     }

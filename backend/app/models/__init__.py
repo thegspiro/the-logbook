@@ -53,6 +53,17 @@ from app.models.forms import (
     IntegrationType,
 )
 
+from app.models.minute import (
+    MeetingMinutes,
+    Motion,
+    ActionItem,
+    MeetingType,
+    MinutesStatus,
+    MotionStatus,
+    ActionItemStatus,
+    ActionItemPriority,
+)
+
 from app.models.apparatus import (
     Apparatus,
     ApparatusType,
@@ -114,6 +125,15 @@ __all__ = [
     "FieldType",
     "IntegrationTarget",
     "IntegrationType",
+    # Minutes models
+    "MeetingMinutes",
+    "Motion",
+    "ActionItem",
+    "MeetingType",
+    "MinutesStatus",
+    "MotionStatus",
+    "ActionItemStatus",
+    "ActionItemPriority",
     # Apparatus models
     "Apparatus",
     "ApparatusType",
