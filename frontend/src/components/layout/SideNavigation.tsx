@@ -14,7 +14,17 @@ import {
   Shield,
   Building2,
   UserCog,
-  Globe
+  Globe,
+  GraduationCap,
+  Package,
+  Clock,
+  Truck,
+  Vote,
+  ClipboardList,
+  BarChart3,
+  Bell,
+  FormInput,
+  Plug,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
@@ -47,7 +57,38 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     { label: 'Dashboard', path: '/dashboard', icon: Home },
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
-    { label: 'Reports', path: '/reports', icon: FileText },
+    { label: 'Documents', path: '/documents', icon: FileText },
+    { label: 'Training', path: '/training', icon: GraduationCap },
+    {
+      label: 'Operations',
+      path: '#',
+      icon: Package,
+      subItems: [
+        { label: 'Inventory', path: '/inventory', icon: Package },
+        { label: 'Scheduling', path: '/scheduling', icon: Clock },
+        { label: 'Apparatus', path: '/apparatus', icon: Truck },
+      ],
+    },
+    {
+      label: 'Governance',
+      path: '#',
+      icon: Vote,
+      subItems: [
+        { label: 'Elections', path: '/elections', icon: Vote },
+        { label: 'Minutes', path: '/minutes', icon: ClipboardList },
+        { label: 'Reports', path: '/reports', icon: BarChart3 },
+      ],
+    },
+    {
+      label: 'Communication',
+      path: '#',
+      icon: Bell,
+      subItems: [
+        { label: 'Notifications', path: '/notifications', icon: Bell },
+        { label: 'Forms', path: '/forms', icon: FormInput },
+        { label: 'Integrations', path: '/integrations', icon: Plug },
+      ],
+    },
     {
       label: 'Settings',
       path: '/settings',
@@ -94,7 +135,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   return (
     <>
       {/* Mobile Header */}
-      <header className="lg:hidden bg-slate-900/50 backdrop-blur-sm border-b border-white/10 fixed top-0 left-0 right-0 z-50" role="banner">
+      <header className="lg:hidden bg-slate-900 border-b border-white/10 fixed top-0 left-0 right-0 z-50" role="banner">
         <div className="flex items-center justify-between h-16 px-4">
           <a href="/dashboard" className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
             {logoPreview ? (
@@ -141,7 +182,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed top-0 left-0 h-full bg-slate-900/95 backdrop-blur-sm border-r border-white/10 transition-all duration-300 z-40 ${
+        className={`fixed top-0 left-0 h-full bg-slate-900 border-r border-white/10 transition-all duration-300 z-40 ${
           collapsed ? 'w-20' : 'w-64'
         } ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'

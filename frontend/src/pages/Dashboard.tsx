@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Users, FileText, Settings, GraduationCap, TrendingUp, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
-import { AppLayout } from '../components/layout';
 import { useNavigate } from 'react-router-dom';
 import { trainingProgramService, dashboardService } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
@@ -94,7 +93,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <AppLayout>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
@@ -350,7 +349,7 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
       </footer>
-    </AppLayout>
+    </div>
   );
 };
 

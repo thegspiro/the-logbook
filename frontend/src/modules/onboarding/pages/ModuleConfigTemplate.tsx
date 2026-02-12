@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Edit3, Shield, Users, CheckCircle, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getModuleById } from '../config';
+import { useOnboardingStore } from '../store';
 
 /**
  * Module Configuration Template with Two-Tier Permissions
@@ -19,23 +20,39 @@ const ModuleConfigTemplate: React.FC = () => {
   const config = useMemo(() => (moduleId ? getModuleById(moduleId) : undefined), [moduleId]);
   const moduleName = config?.name || 'Module';
 
-  // Available roles for selection
-  const availableRoles = [
-    { id: 'admin', name: 'Administrators', description: 'Full system access' },
-    { id: 'officers', name: 'Officers', description: 'Department leadership' },
-    { id: 'secretary', name: 'Secretary', description: 'Records and communications' },
-    { id: 'treasurer', name: 'Treasurer', description: 'Financial oversight' },
-    { id: 'training_officer', name: 'Training Officer', description: 'Training management' },
-    { id: 'safety_officer', name: 'Safety Officer', description: 'Safety compliance' },
-    { id: 'quartermaster', name: 'Quartermaster', description: 'Equipment management' },
-    { id: 'scheduling_officer', name: 'Scheduling Officer', description: 'Shift management' },
-    { id: 'president', name: 'President/Chief', description: 'Organization leader' },
-  ];
+  // Read roles from the onboarding store (set during RoleSetup step)
+  const rolesConfig = useOnboardingStore(state => state.rolesConfig);
+  const modulePermissionConfigs = useOnboardingStore(state => state.modulePermissionConfigs);
+  const setModulePermissionConfig = useOnboardingStore(state => state.setModulePermissionConfig);
 
-  // State for selected manage roles
-  const [manageRoles, setManageRoles] = useState<string[]>(
-    config?.permissions.defaultManageRoles || ['admin', 'officers']
-  );
+  // Build available roles dynamically from what was configured in the Roles step
+  const availableRoles = useMemo(() => {
+    if (!rolesConfig || Object.keys(rolesConfig).length === 0) {
+      // Fallback if roles haven't been configured yet
+      return [
+        { id: 'admin', name: 'Administrator', description: 'Full system access' },
+        { id: 'member', name: 'Member', description: 'Standard member access' },
+      ];
+    }
+
+    return Object.values(rolesConfig)
+      .sort((a, b) => b.priority - a.priority)
+      .map(role => ({
+        id: role.id,
+        name: role.name,
+        description: role.description,
+      }));
+  }, [rolesConfig]);
+
+  // Restore previously saved manage roles for this module, or use defaults.
+  // Filter out any roles that were removed since the config was saved.
+  const availableRoleIds = useMemo(() => new Set(availableRoles.map(r => r.id)), [availableRoles]);
+  const [manageRoles, setManageRoles] = useState<string[]>(() => {
+    if (moduleId && modulePermissionConfigs[moduleId]) {
+      return modulePermissionConfigs[moduleId].filter(id => availableRoleIds.has(id));
+    }
+    return config?.permissions.defaultManageRoles || ['admin'];
+  });
 
   const toggleRole = (roleId: string) => {
     if (roleId === 'admin') return; // Admin always has manage access
@@ -47,8 +64,9 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!moduleId) return;
     setSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    setModulePermissionConfig(moduleId, manageRoles);
     toast.success(`${moduleName} permissions configured!`);
     setSaving(false);
     navigate('/onboarding/modules');
@@ -192,7 +210,7 @@ const ModuleConfigTemplate: React.FC = () => {
           <div className="mt-4 p-3 bg-slate-800/50 rounded-lg">
             <p className="text-slate-400 text-sm">
               <strong className="text-white">Selected roles:</strong>{' '}
-              {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).join(', ')}
+              {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).filter(Boolean).join(', ')}
             </p>
           </div>
         </div>
