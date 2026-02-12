@@ -1356,13 +1356,155 @@ export interface UserInventoryResponse {
   active_checkouts: UserCheckoutItem[];
 }
 
+export interface InventoryCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  item_type: string;
+  parent_category_id?: string;
+  requires_assignment: boolean;
+  requires_serial_number: boolean;
+  requires_maintenance: boolean;
+  low_stock_threshold?: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  organization_id: string;
+  category_id?: string;
+  name: string;
+  description?: string;
+  manufacturer?: string;
+  model_number?: string;
+  serial_number?: string;
+  asset_tag?: string;
+  barcode?: string;
+  purchase_date?: string;
+  purchase_price?: number;
+  vendor?: string;
+  warranty_expiration?: string;
+  storage_location?: string;
+  station?: string;
+  condition: string;
+  status: string;
+  status_notes?: string;
+  quantity: number;
+  unit_of_measure?: string;
+  last_inspection_date?: string;
+  next_inspection_due?: string;
+  inspection_interval_days?: number;
+  assigned_to_user_id?: string;
+  assigned_date?: string;
+  notes?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItemCreate {
+  category_id?: string;
+  name: string;
+  description?: string;
+  manufacturer?: string;
+  model_number?: string;
+  serial_number?: string;
+  asset_tag?: string;
+  purchase_date?: string;
+  purchase_price?: number;
+  vendor?: string;
+  storage_location?: string;
+  station?: string;
+  condition?: string;
+  status?: string;
+  quantity?: number;
+  unit_of_measure?: string;
+  inspection_interval_days?: number;
+  notes?: string;
+}
+
+export interface InventoryItemsListResponse {
+  items: InventoryItem[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface InventorySummary {
+  total_items: number;
+  items_by_status: Record<string, number>;
+  items_by_condition: Record<string, number>;
+  total_value: number;
+  active_checkouts: number;
+  overdue_checkouts: number;
+  maintenance_due_count: number;
+}
+
+export interface InventoryCategoryCreate {
+  name: string;
+  description?: string;
+  item_type: string;
+  requires_assignment?: boolean;
+  requires_serial_number?: boolean;
+  requires_maintenance?: boolean;
+  low_stock_threshold?: number;
+}
+
 export const inventoryService = {
-  /**
-   * Get a user's complete inventory (permanent assignments + active checkouts)
-   */
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
     return response.data;
+  },
+
+  async getSummary(): Promise<InventorySummary> {
+    const response = await api.get<InventorySummary>('/inventory/summary');
+    return response.data;
+  },
+
+  async getCategories(itemType?: string, activeOnly: boolean = true): Promise<InventoryCategory[]> {
+    const response = await api.get<InventoryCategory[]>('/inventory/categories', {
+      params: { item_type: itemType, active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  async createCategory(data: InventoryCategoryCreate): Promise<InventoryCategory> {
+    const response = await api.post<InventoryCategory>('/inventory/categories', data);
+    return response.data;
+  },
+
+  async getItems(params?: {
+    category_id?: string;
+    status?: string;
+    search?: string;
+    active_only?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<InventoryItemsListResponse> {
+    const response = await api.get<InventoryItemsListResponse>('/inventory/items', { params });
+    return response.data;
+  },
+
+  async getItem(itemId: string): Promise<InventoryItem> {
+    const response = await api.get<InventoryItem>(`/inventory/items/${itemId}`);
+    return response.data;
+  },
+
+  async createItem(data: InventoryItemCreate): Promise<InventoryItem> {
+    const response = await api.post<InventoryItem>('/inventory/items', data);
+    return response.data;
+  },
+
+  async updateItem(itemId: string, data: Partial<InventoryItemCreate>): Promise<InventoryItem> {
+    const response = await api.patch<InventoryItem>(`/inventory/items/${itemId}`, data);
+    return response.data;
+  },
+
+  async retireItem(itemId: string, notes?: string): Promise<void> {
+    await api.post(`/inventory/items/${itemId}/retire`, { notes });
   },
 };
 
