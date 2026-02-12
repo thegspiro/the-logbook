@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   EyeOff,
   Eye,
+  Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -67,11 +68,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     rejectApplicant,
     holdApplicant,
     resumeApplicant,
+    withdrawApplicant,
     reactivateApplicant,
     isAdvancing,
     isRejecting,
     isHolding,
     isResuming,
+    isWithdrawing,
     isReactivating,
     isLoadingApplicant,
   } = useProspectiveMembersStore();
@@ -79,6 +82,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [actionNotes, setActionNotes] = useState('');
   const [showNotesInput, setShowNotesInput] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
   const [showPii, setShowPii] = useState(true);
 
   // Reset action notes and confirm state when applicant changes
@@ -86,11 +90,12 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setActionNotes('');
     setShowNotesInput(false);
     setShowRejectConfirm(false);
+    setShowWithdrawConfirm(false);
   }, [applicant?.id]);
 
   if (!isOpen) return null;
 
-  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming;
+  const isActionInProgress = isAdvancing || isRejecting || isHolding || isResuming || isWithdrawing;
 
   const handleAdvance = async () => {
     if (!applicant) return;
@@ -154,6 +159,19 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setShowNotesInput(false);
     } catch {
       toast.error('Failed to reactivate application');
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!applicant) return;
+    try {
+      await withdrawApplicant(applicant.id, actionNotes || undefined);
+      toast.success(`${applicant.first_name}'s application withdrawn`);
+      setActionNotes('');
+      setShowNotesInput(false);
+      setShowWithdrawConfirm(false);
+    } catch {
+      toast.error('Failed to withdraw application');
     }
   };
 
@@ -246,6 +264,27 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 {applicant.reactivated_at && (
                   <p className="text-xs text-slate-500 mt-1">
                     Previously reactivated on {formatDate(applicant.reactivated_at)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Withdrawn Notice */}
+            {applicant.status === 'withdrawn' && (
+              <div className="mx-4 mt-4 p-3 bg-slate-500/5 border border-slate-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <Archive className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm font-medium text-slate-300">Application Withdrawn</span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  This applicant voluntarily withdrew from the pipeline
+                  {applicant.withdrawn_at && (
+                    <> on {formatDate(applicant.withdrawn_at)}</>
+                  )}.
+                </p>
+                {applicant.withdrawal_reason && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Reason: {applicant.withdrawal_reason}
                   </p>
                 )}
               </div>
@@ -457,6 +496,31 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
 
+                {/* Withdraw confirmation */}
+                {showWithdrawConfirm && (
+                  <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
+                    <p className="text-sm text-slate-300 mb-2">
+                      Withdraw this application? The applicant will be archived and removed from the active pipeline.
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowWithdrawConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleWithdraw}
+                        disabled={isWithdrawing}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Withdraw
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Reject confirmation */}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
@@ -494,6 +558,15 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <div className="flex-1" />
 
                   <button
+                    onClick={() => setShowWithdrawConfirm(true)}
+                    disabled={isActionInProgress}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 border border-white/10 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                    title="Withdraw application"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    Withdraw
+                  </button>
+                  <button
                     onClick={handleHold}
                     disabled={isActionInProgress}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
@@ -527,9 +600,44 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* On Hold Actions */}
             {applicant.status === 'on_hold' && (
-              <div className="border-t border-white/10 p-4">
+              <div className="border-t border-white/10 p-4 space-y-3">
+                {showNotesInput && (
+                  <div className="flex items-start gap-2">
+                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <textarea
+                      value={actionNotes}
+                      onChange={(e) => setActionNotes(e.target.value)}
+                      placeholder="Add notes for this action..."
+                      rows={2}
+                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                    />
+                  </div>
+                )}
+                {showWithdrawConfirm && (
+                  <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
+                    <p className="text-sm text-slate-300 mb-2">
+                      Withdraw this application? The applicant will be archived and removed from the active pipeline.
+                    </p>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => setShowWithdrawConfirm(false)}
+                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleWithdraw}
+                        disabled={isWithdrawing}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Confirm Withdraw
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {showRejectConfirm && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-3">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
                     <p className="text-sm text-red-300 mb-2">
                       Are you sure you want to reject this applicant? This action cannot be easily undone.
                     </p>
@@ -551,7 +659,24 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     </div>
                   </div>
                 )}
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowNotesInput(!showNotesInput)}
+                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    title="Add notes"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => setShowWithdrawConfirm(true)}
+                    disabled={isActionInProgress}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 border border-white/10 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                    title="Withdraw application"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    Withdraw
+                  </button>
                   <button
                     onClick={() => setShowRejectConfirm(true)}
                     disabled={isActionInProgress}
@@ -567,6 +692,46 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   >
                     {isResuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                     Resume
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Withdrawn Actions */}
+            {applicant.status === 'withdrawn' && (
+              <div className="border-t border-white/10 p-4 space-y-3">
+                {showNotesInput && (
+                  <div className="flex items-start gap-2">
+                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <textarea
+                      value={actionNotes}
+                      onChange={(e) => setActionNotes(e.target.value)}
+                      placeholder="Add notes for reactivation..."
+                      rows={2}
+                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowNotesInput(!showNotesInput)}
+                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    title="Add notes"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                  <div className="flex-1" />
+                  <button
+                    onClick={handleReactivate}
+                    disabled={isReactivating}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {isReactivating ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    )}
+                    Reactivate
                   </button>
                 </div>
               </div>

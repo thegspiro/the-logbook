@@ -297,6 +297,8 @@ export interface Applicant {
   deactivated_at?: string;
   deactivated_reason?: string;
   reactivated_at?: string;
+  withdrawn_at?: string;
+  withdrawal_reason?: string;
   created_at: string;
   updated_at: string;
 }
@@ -322,6 +324,8 @@ export interface ApplicantListItem {
   inactivity_alert_level: InactivityAlertLevel;
   inactivity_timeout_days?: number; // effective timeout for this applicant's current stage
   deactivated_at?: string;
+  withdrawn_at?: string;
+  withdrawal_reason?: string;
   created_at: string;
 }
 
@@ -460,6 +464,10 @@ export interface DocumentUploadRequest {
 // =============================================================================
 // Inactivity Actions
 // =============================================================================
+
+export interface WithdrawApplicantRequest {
+  reason?: string;
+}
 
 export interface ReactivateApplicantRequest {
   notes?: string;

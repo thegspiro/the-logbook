@@ -17,6 +17,7 @@ import {
   MoreHorizontal,
   AlertTriangle,
   Loader2,
+  Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ApplicantListItem, ApplicantStatus } from '../types';
@@ -49,12 +50,13 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   onPageChange,
   onApplicantClick,
 }) => {
-  const { advanceApplicant, holdApplicant, rejectApplicant, isRejecting } =
+  const { advanceApplicant, holdApplicant, rejectApplicant, withdrawApplicant, isRejecting, isWithdrawing } =
     useProspectiveMembersStore();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
+  const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
 
   // Clear selection when page changes
   useEffect(() => {
@@ -363,6 +365,38 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 >
                                   Put on Hold
                                 </button>
+                                {withdrawConfirmId === applicant.id ? (
+                                  <div className="px-4 py-2 space-y-2">
+                                    <p className="text-xs text-slate-300">Confirm withdraw?</p>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => setWithdrawConfirmId(null)}
+                                        className="text-xs text-slate-400 hover:text-white"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          withdrawApplicant(applicant.id);
+                                          setWithdrawConfirmId(null);
+                                          setActionMenuId(null);
+                                        }}
+                                        disabled={isWithdrawing}
+                                        className="flex items-center gap-1 text-xs text-slate-300 hover:text-white disabled:opacity-50"
+                                      >
+                                        {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
+                                        Confirm
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setWithdrawConfirmId(applicant.id)}
+                                    className="w-full text-left px-4 py-2 text-sm text-slate-400 hover:bg-white/5"
+                                  >
+                                    Withdraw
+                                  </button>
+                                )}
                                 {rejectConfirmId === applicant.id ? (
                                   <div className="px-4 py-2 space-y-2">
                                     <p className="text-xs text-red-300">Confirm reject?</p>
