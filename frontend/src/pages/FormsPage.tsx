@@ -24,6 +24,8 @@ import {
   Check,
   Download,
   QrCode,
+  Pencil,
+  ArrowLeft,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
@@ -33,9 +35,9 @@ import {
   type FormsSummary,
   type FormCreate,
   type FormDetailDef,
-  type SubmissionsListResponse,
   type FormIntegrationCreate,
 } from '../services/api';
+import { FormBuilder, FormRenderer, SubmissionViewer } from '../components/forms';
 
 interface StarterTemplate {
   id: string;
@@ -217,7 +219,6 @@ const FormsPage: React.FC = () => {
   // Data
   const [forms, setForms] = useState<FormDef[]>([]);
   const [summary, setSummary] = useState<FormsSummary | null>(null);
-  const [selectedFormSubmissions, setSelectedFormSubmissions] = useState<SubmissionsListResponse | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [selectedFormDetail, setSelectedFormDetail] = useState<FormDetailDef | null>(null);
 
@@ -227,6 +228,10 @@ const FormsPage: React.FC = () => {
     category: 'Operations',
     is_public: false,
   });
+
+  // Form detail view (builder/preview/submissions)
+  const [editingForm, setEditingForm] = useState<FormDetailDef | null>(null);
+  const [detailTab, setDetailTab] = useState<'builder' | 'preview' | 'submissions'>('builder');
 
   // Integration state
   const [integrationTarget, setIntegrationTarget] = useState('membership');
@@ -344,16 +349,25 @@ const FormsPage: React.FC = () => {
     }
   };
 
-  const handleViewSubmissions = async (formId: string) => {
+  const handleViewSubmissions = (formId: string) => {
+    setSelectedFormId(formId);
+    setActiveTab('submissions');
+  };
+
+  const handleEditForm = async (formId: string) => {
     try {
-      const res = await formsService.getSubmissions(formId);
-      setSelectedFormSubmissions(res);
-      setSelectedFormId(formId);
-      setActiveTab('submissions');
+      const detail = await formsService.getForm(formId);
+      setEditingForm(detail);
+      setDetailTab('builder');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load submissions';
+      const message = err instanceof Error ? err.message : 'Failed to load form';
       setError(message);
     }
+  };
+
+  const handleCloseEditor = () => {
+    setEditingForm(null);
+    loadData(); // Refresh list to reflect any changes
   };
 
   const handleShareForm = (form: FormDef) => {
@@ -647,6 +661,15 @@ const FormsPage: React.FC = () => {
                         <span>{form.submission_count ?? 0} submissions</span>
                       </div>
                       <div className="flex items-center space-x-1">
+                        {canManage && (
+                          <button
+                            onClick={() => handleEditForm(form.id)}
+                            className="p-1.5 text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 rounded transition-colors"
+                            title="Edit form fields"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleViewSubmissions(form.id)}
                           className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors"
@@ -763,62 +786,23 @@ const FormsPage: React.FC = () => {
         {/* Submissions Tab */}
         {activeTab === 'submissions' && (
           <>
-            {selectedFormId && selectedFormSubmissions ? (
+            {selectedFormId ? (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-white text-lg font-semibold">
-                    Submissions ({selectedFormSubmissions.total})
+                    Submissions
                   </h2>
                   <button
-                    onClick={() => { setSelectedFormId(null); setSelectedFormSubmissions(null); }}
+                    onClick={() => setSelectedFormId(null)}
                     className="text-slate-400 hover:text-white text-sm"
                   >
                     Clear selection
                   </button>
                 </div>
-                {selectedFormSubmissions.submissions.length === 0 ? (
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                    <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-                    <h3 className="text-white text-xl font-bold mb-2">No Submissions</h3>
-                    <p className="text-slate-300">
-                      No submissions have been received for this form yet.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedFormSubmissions.submissions.map((sub) => (
-                      <div key={sub.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <p className="text-white text-sm font-medium">
-                                Submission #{sub.id.slice(0, 8)}
-                              </p>
-                              {sub.is_public_submission && (
-                                <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30">
-                                  Public
-                                </span>
-                              )}
-                              {sub.integration_processed && (
-                                <span className="px-2 py-0.5 text-xs bg-orange-500/10 text-orange-400 rounded border border-orange-500/30">
-                                  Integrated
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-slate-400 text-xs mt-0.5">
-                              {new Date(sub.submitted_at).toLocaleString()}
-                              {sub.submitter_name && ` - ${sub.submitter_name}`}
-                              {sub.submitter_email && ` (${sub.submitter_email})`}
-                            </p>
-                          </div>
-                          <div className="flex items-center space-x-2 text-xs text-slate-400">
-                            <span>{Object.keys(sub.data).length} responses</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <SubmissionViewer
+                  formId={selectedFormId}
+                  allowDelete={canManage}
+                />
               </div>
             ) : (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
@@ -836,6 +820,93 @@ const FormsPage: React.FC = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* Form Detail / Editor View */}
+        {editingForm && (
+          <div className="fixed inset-0 z-50 bg-slate-900/95 overflow-y-auto">
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleCloseEditor}
+                    className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div>
+                    <h2 className="text-white text-xl font-bold">{editingForm.name}</h2>
+                    <p className="text-slate-400 text-sm">{editingForm.description || 'No description'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 text-xs rounded border ${statusColor(editingForm.status)}`}>
+                    {editingForm.status}
+                  </span>
+                  <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
+                    {editingForm.category}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detail Tabs */}
+              <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+                <button
+                  onClick={() => setDetailTab('builder')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Form Builder
+                </button>
+                <button
+                  onClick={() => setDetailTab('preview')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Preview & Submit
+                </button>
+                <button
+                  onClick={() => setDetailTab('submissions')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Submissions
+                </button>
+              </div>
+
+              {/* Builder Tab */}
+              {detailTab === 'builder' && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                  <FormBuilder formId={editingForm.id} />
+                </div>
+              )}
+
+              {/* Preview & Submit Tab */}
+              {detailTab === 'preview' && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                  <FormRenderer
+                    formId={editingForm.id}
+                    submitLabel="Submit Form"
+                    allowResubmit
+                  />
+                </div>
+              )}
+
+              {/* Submissions Tab */}
+              {detailTab === 'submissions' && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                  <SubmissionViewer
+                    formId={editingForm.id}
+                    allowDelete={canManage}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Create Form Modal */}
