@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ClipboardList,
   FileSearch,
@@ -9,8 +9,15 @@ import {
   Filter,
   X,
   AlertCircle,
+  Trash2,
+  Calendar,
+  MapPin,
+  User,
+  Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { meetingsService } from '../services/api';
+import type { MeetingRecord, MeetingsSummary } from '../services/api';
 
 type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'other';
 
@@ -30,6 +37,14 @@ const MinutesPage: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
+  const [summary, setSummary] = useState<MeetingsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [minutesForm, setMinutesForm] = useState({
     title: '',
     meetingType: 'business' as MeetingType,
@@ -39,6 +54,84 @@ const MinutesPage: React.FC = () => {
     calledBy: '',
     notes: '',
   });
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: { meeting_type?: string; search?: string } = {};
+      if (typeFilter !== 'all') {
+        params.meeting_type = typeFilter;
+      }
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+      const [meetingsRes, summaryRes] = await Promise.all([
+        meetingsService.getMeetings(params),
+        meetingsService.getSummary(),
+      ]);
+      setMeetings(meetingsRes.meetings);
+      setSummary(summaryRes);
+    } catch {
+      setError('Unable to load meetings. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [typeFilter, searchQuery]);
+
+  const handleCreateMeeting = async () => {
+    if (!minutesForm.title.trim()) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const data: Record<string, unknown> = {
+        title: minutesForm.title,
+        meeting_type: minutesForm.meetingType,
+        meeting_date: minutesForm.meetingDate || null,
+        start_time: minutesForm.meetingTime ? `${minutesForm.meetingTime}:00` : null,
+        location: minutesForm.location || null,
+        called_by: minutesForm.calledBy || null,
+        notes: minutesForm.notes || null,
+      };
+      await meetingsService.createMeeting(data);
+      setShowCreateModal(false);
+      setMinutesForm({
+        title: '',
+        meetingType: 'business',
+        meetingDate: '',
+        meetingTime: '',
+        location: '',
+        calledBy: '',
+        notes: '',
+      });
+      await fetchData();
+    } catch {
+      setCreateError('Unable to create meeting. Please check your connection and try again.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    if (!confirm('Are you sure you want to delete this meeting?')) return;
+    setDeletingId(meetingId);
+    try {
+      await meetingsService.deleteMeeting(meetingId);
+      await fetchData();
+    } catch {
+      setError('Unable to delete meeting. Please check your connection and try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const getMeetingTypeInfo = (type: string) => {
+    return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[4];
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
@@ -71,19 +164,19 @@ const MinutesPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Total Minutes</p>
-            <p className="text-white text-2xl font-bold mt-1">0</p>
+            <p className="text-white text-2xl font-bold mt-1">{summary?.total_meetings ?? 0}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">This Month</p>
-            <p className="text-cyan-400 text-2xl font-bold mt-1">0</p>
+            <p className="text-cyan-400 text-2xl font-bold mt-1">{summary?.meetings_this_month ?? 0}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Open Action Items</p>
-            <p className="text-yellow-400 text-2xl font-bold mt-1">0</p>
+            <p className="text-yellow-400 text-2xl font-bold mt-1">{summary?.open_action_items ?? 0}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Pending Approval</p>
-            <p className="text-orange-400 text-2xl font-bold mt-1">0</p>
+            <p className="text-orange-400 text-2xl font-bold mt-1">{summary?.pending_approval ?? 0}</p>
           </div>
         </div>
 
@@ -116,62 +209,165 @@ const MinutesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <ClipboardList className="w-8 h-8 text-cyan-400 mb-4" />
-            <h3 className="text-white font-semibold text-lg mb-2">Record Minutes</h3>
-            <p className="text-slate-300 text-sm mb-3">
-              Structured templates for recording meeting minutes with attendees, motions, and votes.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded">Roll Call</span>
-              <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded">Motions</span>
-              <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded">Votes</span>
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <p className="text-red-300 text-sm">{error}</p>
             </div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <CheckSquare className="w-8 h-8 text-green-400 mb-4" />
-            <h3 className="text-white font-semibold text-lg mb-2">Action Items</h3>
-            <p className="text-slate-300 text-sm mb-3">
-              Track action items from meetings with assignees, due dates, and completion status.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded">Assignees</span>
-              <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded">Due Dates</span>
-              <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded">Follow-up</span>
-            </div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
-            <Archive className="w-8 h-8 text-amber-400 mb-4" />
-            <h3 className="text-white font-semibold text-lg mb-2">Archives & Search</h3>
-            <p className="text-slate-300 text-sm mb-3">
-              Full-text search across all meeting minutes for compliance and quick reference.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">Full-text Search</span>
-              <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">PDF Export</span>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Empty State */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-          <FileSearch className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-          <h3 className="text-white text-xl font-bold mb-2">No Meeting Minutes</h3>
-          <p className="text-slate-300 mb-6">
-            Start recording meeting minutes to maintain your organization's history.
-          </p>
-          {canManage && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Record First Minutes</span>
-            </button>
-          )}
-        </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+            <Loader2 className="w-10 h-10 text-cyan-400 mx-auto mb-4 animate-spin" />
+            <p className="text-slate-300">Loading meetings...</p>
+          </div>
+        )}
+
+        {/* Content Area */}
+        {!loading && meetings.length > 0 && (
+          <div className="space-y-4">
+            {meetings.map((meeting) => {
+              const typeInfo = getMeetingTypeInfo(meeting.meeting_type);
+              return (
+                <div
+                  key={meeting.id}
+                  className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:border-white/30 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-white font-semibold text-lg truncate">{meeting.title}</h3>
+                        <span className={`px-2 py-0.5 text-xs rounded border ${typeInfo.color}`}>
+                          {typeInfo.label}
+                        </span>
+                        {meeting.status && (
+                          <span className={`px-2 py-0.5 text-xs rounded ${
+                            meeting.status === 'approved'
+                              ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                              : meeting.status === 'draft'
+                              ? 'bg-slate-500/10 text-slate-400 border border-slate-500/30'
+                              : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30'
+                          }`}>
+                            {meeting.status.charAt(0).toUpperCase() + meeting.status.slice(1)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                        {meeting.meeting_date && (
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="w-4 h-4" />
+                            <span>{meeting.meeting_date}</span>
+                            {meeting.start_time && (
+                              <span>at {meeting.start_time.slice(0, 5)}</span>
+                            )}
+                          </div>
+                        )}
+                        {meeting.location && (
+                          <div className="flex items-center space-x-1">
+                            <MapPin className="w-4 h-4" />
+                            <span>{meeting.location}</span>
+                          </div>
+                        )}
+                        {meeting.called_by && (
+                          <div className="flex items-center space-x-1">
+                            <User className="w-4 h-4" />
+                            <span>Called by {meeting.called_by}</span>
+                          </div>
+                        )}
+                      </div>
+                      {meeting.notes && (
+                        <p className="text-slate-300 text-sm mt-2 line-clamp-2">{meeting.notes}</p>
+                      )}
+                      <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+                        <span>{meeting.attendee_count} attendee{meeting.attendee_count !== 1 ? 's' : ''}</span>
+                        <span>{meeting.action_item_count} action item{meeting.action_item_count !== 1 ? 's' : ''}</span>
+                        {meeting.creator_name && <span>Created by {meeting.creator_name}</span>}
+                      </div>
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => handleDeleteMeeting(meeting.id)}
+                        disabled={deletingId === meeting.id}
+                        className="ml-4 p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        title="Delete meeting"
+                      >
+                        {deletingId === meeting.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty State - Feature Cards (shown when no meetings exist and not loading) */}
+        {!loading && meetings.length === 0 && !error && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+                <ClipboardList className="w-8 h-8 text-cyan-400 mb-4" />
+                <h3 className="text-white font-semibold text-lg mb-2">Record Minutes</h3>
+                <p className="text-slate-300 text-sm mb-3">
+                  Structured templates for recording meeting minutes with attendees, motions, and votes.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded">Roll Call</span>
+                  <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded">Motions</span>
+                  <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded">Votes</span>
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+                <CheckSquare className="w-8 h-8 text-green-400 mb-4" />
+                <h3 className="text-white font-semibold text-lg mb-2">Action Items</h3>
+                <p className="text-slate-300 text-sm mb-3">
+                  Track action items from meetings with assignees, due dates, and completion status.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded">Assignees</span>
+                  <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded">Due Dates</span>
+                  <span className="px-2 py-0.5 text-xs bg-green-500/10 text-green-400 rounded">Follow-up</span>
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+                <Archive className="w-8 h-8 text-amber-400 mb-4" />
+                <h3 className="text-white font-semibold text-lg mb-2">Archives & Search</h3>
+                <p className="text-slate-300 text-sm mb-3">
+                  Full-text search across all meeting minutes for compliance and quick reference.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">Full-text Search</span>
+                  <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded">PDF Export</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+              <FileSearch className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+              <h3 className="text-white text-xl font-bold mb-2">No Meeting Minutes</h3>
+              <p className="text-slate-300 mb-6">
+                Start recording meeting minutes to maintain your organization's history.
+              </p>
+              {canManage && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Record First Minutes</span>
+                </button>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Create Minutes Modal */}
         {showCreateModal && (
@@ -186,6 +382,15 @@ const MinutesPage: React.FC = () => {
                       <X className="w-5 h-5" />
                     </button>
                   </div>
+
+                  {createError && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <p className="text-red-300 text-sm">{createError}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-4">
                     <div>
@@ -260,15 +465,6 @@ const MinutesPage: React.FC = () => {
                         placeholder="Meeting opened at... Roll call taken... Old business..."
                       />
                     </div>
-
-                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
-                      <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-cyan-300 text-sm">
-                          The meeting minutes backend is being developed. Full minutes recording with attendees, motions, and action items will be available soon.
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
@@ -279,10 +475,12 @@ const MinutesPage: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    disabled
-                    className="px-4 py-2 bg-cyan-600/50 text-white/50 rounded-lg cursor-not-allowed"
+                    onClick={handleCreateMeeting}
+                    disabled={creating || !minutesForm.title.trim()}
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >
-                    Start Recording
+                    {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <span>{creating ? 'Creating...' : 'Start Recording'}</span>
                   </button>
                 </div>
               </div>

@@ -1837,6 +1837,425 @@ export const publicFormsService = {
   },
 };
 
+// ============================================
+// Documents Service
+// ============================================
+
+export interface DocumentFolder {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  color: string;
+  icon: string;
+  parent_id?: string;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface DocumentRecord {
+  id: string;
+  organization_id: string;
+  folder_id?: string;
+  name: string;
+  description?: string;
+  file_name: string;
+  file_size: number;
+  file_type?: string;
+  status: string;
+  version: number;
+  tags?: string;
+  created_at: string;
+  updated_at: string;
+  uploaded_by?: string;
+  uploader_name?: string;
+  folder_name?: string;
+}
+
+export interface DocumentsSummary {
+  total_documents: number;
+  total_folders: number;
+  total_size_bytes: number;
+  documents_this_month: number;
+}
+
+export const documentsService = {
+  async getFolders(parentId?: string): Promise<{ folders: DocumentFolder[]; total: number }> {
+    const params: Record<string, string> = {};
+    if (parentId) params.parent_id = parentId;
+    const response = await api.get('/documents/folders', { params });
+    return response.data;
+  },
+
+  async createFolder(data: { name: string; description?: string; color?: string; icon?: string; parent_id?: string }): Promise<DocumentFolder> {
+    const response = await api.post<DocumentFolder>('/documents/folders', data);
+    return response.data;
+  },
+
+  async updateFolder(folderId: string, data: Partial<{ name: string; description: string; color: string }>): Promise<DocumentFolder> {
+    const response = await api.patch<DocumentFolder>(`/documents/folders/${folderId}`, data);
+    return response.data;
+  },
+
+  async deleteFolder(folderId: string): Promise<void> {
+    await api.delete(`/documents/folders/${folderId}`);
+  },
+
+  async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/documents/', { params });
+    return response.data;
+  },
+
+  async uploadDocument(formData: FormData): Promise<DocumentRecord> {
+    const response = await api.post<DocumentRecord>('/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async getDocument(documentId: string): Promise<DocumentRecord> {
+    const response = await api.get<DocumentRecord>(`/documents/${documentId}`);
+    return response.data;
+  },
+
+  async updateDocument(documentId: string, data: Partial<{ name: string; description: string; folder_id: string; tags: string; status: string }>): Promise<DocumentRecord> {
+    const response = await api.patch<DocumentRecord>(`/documents/${documentId}`, data);
+    return response.data;
+  },
+
+  async deleteDocument(documentId: string): Promise<void> {
+    await api.delete(`/documents/${documentId}`);
+  },
+
+  async getSummary(): Promise<DocumentsSummary> {
+    const response = await api.get<DocumentsSummary>('/documents/stats/summary');
+    return response.data;
+  },
+};
+
+// ============================================
+// Meetings (Minutes) Service
+// ============================================
+
+export interface MeetingRecord {
+  id: string;
+  organization_id: string;
+  title: string;
+  meeting_type: string;
+  meeting_date: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  called_by?: string;
+  status: string;
+  agenda?: string;
+  notes?: string;
+  motions?: string;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  creator_name?: string;
+  attendee_count: number;
+  action_item_count: number;
+  attendees?: MeetingAttendee[];
+  action_items?: MeetingActionItem[];
+}
+
+export interface MeetingAttendee {
+  id: string;
+  meeting_id: string;
+  user_id: string;
+  present: boolean;
+  excused: boolean;
+  user_name?: string;
+  created_at: string;
+}
+
+export interface MeetingActionItem {
+  id: string;
+  meeting_id: string;
+  organization_id: string;
+  description: string;
+  assigned_to?: string;
+  assignee_name?: string;
+  due_date?: string;
+  status: string;
+  priority: number;
+  completed_at?: string;
+  completion_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MeetingsSummary {
+  total_meetings: number;
+  meetings_this_month: number;
+  open_action_items: number;
+  pending_approval: number;
+}
+
+export const meetingsService = {
+  async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/meetings/', { params });
+    return response.data;
+  },
+
+  async createMeeting(data: Record<string, unknown>): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>('/meetings/', data);
+    return response.data;
+  },
+
+  async getMeeting(meetingId: string): Promise<MeetingRecord> {
+    const response = await api.get<MeetingRecord>(`/meetings/${meetingId}`);
+    return response.data;
+  },
+
+  async updateMeeting(meetingId: string, data: Record<string, unknown>): Promise<MeetingRecord> {
+    const response = await api.patch<MeetingRecord>(`/meetings/${meetingId}`, data);
+    return response.data;
+  },
+
+  async deleteMeeting(meetingId: string): Promise<void> {
+    await api.delete(`/meetings/${meetingId}`);
+  },
+
+  async approveMeeting(meetingId: string): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>(`/meetings/${meetingId}/approve`);
+    return response.data;
+  },
+
+  async addAttendee(meetingId: string, data: { user_id: string; present?: boolean; excused?: boolean }): Promise<MeetingAttendee> {
+    const response = await api.post<MeetingAttendee>(`/meetings/${meetingId}/attendees`, data);
+    return response.data;
+  },
+
+  async removeAttendee(meetingId: string, attendeeId: string): Promise<void> {
+    await api.delete(`/meetings/${meetingId}/attendees/${attendeeId}`);
+  },
+
+  async createActionItem(meetingId: string, data: Record<string, unknown>): Promise<MeetingActionItem> {
+    const response = await api.post<MeetingActionItem>(`/meetings/${meetingId}/action-items`, data);
+    return response.data;
+  },
+
+  async updateActionItem(itemId: string, data: Record<string, unknown>): Promise<MeetingActionItem> {
+    const response = await api.patch<MeetingActionItem>(`/meetings/action-items/${itemId}`, data);
+    return response.data;
+  },
+
+  async deleteActionItem(itemId: string): Promise<void> {
+    await api.delete(`/meetings/action-items/${itemId}`);
+  },
+
+  async getSummary(): Promise<MeetingsSummary> {
+    const response = await api.get<MeetingsSummary>('/meetings/stats/summary');
+    return response.data;
+  },
+};
+
+// ============================================
+// Scheduling Service
+// ============================================
+
+export interface ShiftRecord {
+  id: string;
+  organization_id: string;
+  shift_date: string;
+  start_time: string;
+  end_time?: string;
+  apparatus_id?: string;
+  station_id?: string;
+  shift_officer_id?: string;
+  shift_officer_name?: string;
+  notes?: string;
+  activities?: unknown;
+  attendee_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  attendees?: ShiftAttendanceRecord[];
+}
+
+export interface ShiftAttendanceRecord {
+  id: string;
+  shift_id: string;
+  user_id: string;
+  user_name?: string;
+  checked_in_at?: string;
+  checked_out_at?: string;
+  duration_minutes?: number;
+  created_at: string;
+}
+
+export interface SchedulingSummary {
+  total_shifts: number;
+  shifts_this_week: number;
+  shifts_this_month: number;
+  total_hours_this_month: number;
+}
+
+export const schedulingService = {
+  async getShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/scheduling/shifts', { params });
+    return response.data;
+  },
+
+  async createShift(data: Record<string, unknown>): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>('/scheduling/shifts', data);
+    return response.data;
+  },
+
+  async getShift(shiftId: string): Promise<ShiftRecord> {
+    const response = await api.get<ShiftRecord>(`/scheduling/shifts/${shiftId}`);
+    return response.data;
+  },
+
+  async updateShift(shiftId: string, data: Record<string, unknown>): Promise<ShiftRecord> {
+    const response = await api.patch<ShiftRecord>(`/scheduling/shifts/${shiftId}`, data);
+    return response.data;
+  },
+
+  async deleteShift(shiftId: string): Promise<void> {
+    await api.delete(`/scheduling/shifts/${shiftId}`);
+  },
+
+  async addAttendance(shiftId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
+    const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/attendance`, data);
+    return response.data;
+  },
+
+  async getWeekCalendar(weekStart?: string): Promise<ShiftRecord[]> {
+    const params: Record<string, string> = {};
+    if (weekStart) params.week_start = weekStart;
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
+    return response.data;
+  },
+
+  async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
+    const params: Record<string, number> = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
+    return response.data;
+  },
+
+  async getSummary(): Promise<SchedulingSummary> {
+    const response = await api.get<SchedulingSummary>('/scheduling/summary');
+    return response.data;
+  },
+};
+
+// ============================================
+// Reports Service
+// ============================================
+
+export const reportsService = {
+  async getAvailableReports(): Promise<{ available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }> }> {
+    const response = await api.get('/reports/available');
+    return response.data;
+  },
+
+  async generateReport(data: { report_type: string; start_date?: string; end_date?: string; filters?: Record<string, unknown> }): Promise<Record<string, unknown>> {
+    const response = await api.post('/reports/generate', data);
+    return response.data;
+  },
+};
+
+// ============================================
+// Notifications Service
+// ============================================
+
+export interface NotificationRuleRecord {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  trigger: string;
+  category: string;
+  channel: string;
+  enabled: boolean;
+  config?: unknown;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface NotificationLogRecord {
+  id: string;
+  organization_id: string;
+  rule_id?: string;
+  rule_name?: string;
+  recipient_id?: string;
+  recipient_email?: string;
+  recipient_name?: string;
+  channel: string;
+  subject?: string;
+  message?: string;
+  sent_at: string;
+  delivered: boolean;
+  read: boolean;
+  read_at?: string;
+  error?: string;
+  created_at: string;
+}
+
+export interface NotificationsSummary {
+  total_rules: number;
+  active_rules: number;
+  emails_sent_this_month: number;
+  notifications_sent_this_month: number;
+}
+
+export const notificationsService = {
+  async getRules(params?: { category?: string; enabled?: boolean; search?: string }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
+    const response = await api.get('/notifications/rules', { params });
+    return response.data;
+  },
+
+  async createRule(data: Record<string, unknown>): Promise<NotificationRuleRecord> {
+    const response = await api.post<NotificationRuleRecord>('/notifications/rules', data);
+    return response.data;
+  },
+
+  async getRule(ruleId: string): Promise<NotificationRuleRecord> {
+    const response = await api.get<NotificationRuleRecord>(`/notifications/rules/${ruleId}`);
+    return response.data;
+  },
+
+  async updateRule(ruleId: string, data: Record<string, unknown>): Promise<NotificationRuleRecord> {
+    const response = await api.patch<NotificationRuleRecord>(`/notifications/rules/${ruleId}`, data);
+    return response.data;
+  },
+
+  async deleteRule(ruleId: string): Promise<void> {
+    await api.delete(`/notifications/rules/${ruleId}`);
+  },
+
+  async toggleRule(ruleId: string, enabled: boolean): Promise<NotificationRuleRecord> {
+    const response = await api.post<NotificationRuleRecord>(`/notifications/rules/${ruleId}/toggle`, null, { params: { enabled } });
+    return response.data;
+  },
+
+  async getLogs(params?: { channel?: string; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/notifications/logs', { params });
+    return response.data;
+  },
+
+  async markAsRead(logId: string): Promise<NotificationLogRecord> {
+    const response = await api.post<NotificationLogRecord>(`/notifications/logs/${logId}/read`);
+    return response.data;
+  },
+
+  async getSummary(): Promise<NotificationsSummary> {
+    const response = await api.get<NotificationsSummary>('/notifications/summary');
+    return response.data;
+  },
+};
+
 export interface DashboardStats {
   total_members: number;
   active_members: number;

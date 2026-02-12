@@ -13,8 +13,11 @@ import {
   Download,
   Filter,
   AlertCircle,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
+import { reportsService } from '../services/api';
 
 interface ReportCard {
   id: string;
@@ -25,8 +28,19 @@ interface ReportCard {
   available: boolean;
 }
 
+/** Maps frontend report IDs to the API report_type values. */
+const REPORT_TYPE_MAP: Record<string, string> = {
+  'member-roster': 'member_roster',
+  'training-summary': 'training_summary',
+  'event-attendance': 'event_attendance',
+};
+
 export const ReportsPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);
+  const [activeReport, setActiveReport] = useState<ReportCard | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const reports: ReportCard[] = [
     {
@@ -76,6 +90,214 @@ export const ReportsPage: React.FC = () => {
       ? reports
       : reports.filter((r) => r.category === selectedCategory);
 
+  const handleGenerateReport = async (report: ReportCard) => {
+    const reportType = REPORT_TYPE_MAP[report.id];
+    if (!reportType) return;
+
+    setGeneratingId(report.id);
+    setError(null);
+
+    try {
+      const data = await reportsService.generateReport({ report_type: reportType });
+      setReportData(data);
+      setActiveReport(report);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to generate report. Please try again.';
+      setError(message);
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const closeModal = () => {
+    setReportData(null);
+    setActiveReport(null);
+    setError(null);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Report-specific rendering helpers
+  // ---------------------------------------------------------------------------
+
+  const renderMemberRoster = (data: Record<string, unknown>) => {
+    const members = (data.members ?? data.data ?? []) as Array<Record<string, unknown>>;
+    const totalCount = (data.total_count ?? data.member_count ?? members.length) as number;
+
+    return (
+      <>
+        <p className="text-sm text-slate-300 mb-4">
+          Total members: <span className="font-semibold text-white">{totalCount}</span>
+        </p>
+        {members.length > 0 && (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Name</th>
+                  <th className="px-4 py-2">Email</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Role</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {members.map((m, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {String(m.first_name ?? m.name ?? '')} {String(m.last_name ?? '')}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(m.email ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(m.status ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(m.role ?? '-')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {members.length === 0 && (
+          <p className="text-slate-400 text-sm">No member records found.</p>
+        )}
+      </>
+    );
+  };
+
+  const renderTrainingSummary = (data: Record<string, unknown>) => {
+    const completionRate = data.completion_rate ?? data.overall_completion_rate;
+    const entries = (data.entries ?? data.training_records ?? data.data ?? []) as Array<Record<string, unknown>>;
+
+    return (
+      <>
+        {completionRate !== undefined && (
+          <p className="text-sm text-slate-300 mb-4">
+            Overall completion rate:{' '}
+            <span className="font-semibold text-white">
+              {typeof completionRate === 'number'
+                ? `${Math.round(completionRate * (completionRate <= 1 ? 100 : 1))}%`
+                : String(completionRate)}
+            </span>
+          </p>
+        )}
+        {entries.length > 0 && (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Member</th>
+                  <th className="px-4 py-2">Course / Requirement</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Hours</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {entries.map((e, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {String(e.member_name ?? e.member ?? e.name ?? '-')}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {String(e.course ?? e.requirement ?? e.title ?? '-')}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">
+                      {String(e.status ?? e.completion_status ?? '-')}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {e.hours != null ? String(e.hours) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {entries.length === 0 && (
+          <p className="text-slate-400 text-sm">No training entries found.</p>
+        )}
+      </>
+    );
+  };
+
+  const renderEventAttendance = (data: Record<string, unknown>) => {
+    const events = (data.events ?? data.data ?? []) as Array<Record<string, unknown>>;
+    const overallRate = data.overall_attendance_rate ?? data.attendance_rate;
+
+    return (
+      <>
+        {overallRate !== undefined && (
+          <p className="text-sm text-slate-300 mb-4">
+            Overall attendance rate:{' '}
+            <span className="font-semibold text-white">
+              {typeof overallRate === 'number'
+                ? `${Math.round(overallRate * (overallRate <= 1 ? 100 : 1))}%`
+                : String(overallRate)}
+            </span>
+          </p>
+        )}
+        {events.length > 0 && (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Event</th>
+                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">Attendees</th>
+                  <th className="px-4 py-2">Attendance Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {events.map((ev, i) => {
+                  const rate = ev.attendance_rate ?? ev.rate;
+                  return (
+                    <tr key={i} className="text-slate-200">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {String(ev.title ?? ev.name ?? ev.event ?? '-')}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {ev.date ? String(ev.date) : '-'}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {ev.attendees != null ? String(ev.attendees) : ev.attendee_count != null ? String(ev.attendee_count) : '-'}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {rate !== undefined && rate !== null
+                          ? typeof rate === 'number'
+                            ? `${Math.round(rate * (rate <= 1 ? 100 : 1))}%`
+                            : String(rate)
+                          : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {events.length === 0 && (
+          <p className="text-slate-400 text-sm">No event attendance records found.</p>
+        )}
+      </>
+    );
+  };
+
+  const renderReportContent = () => {
+    if (!reportData || !activeReport) return null;
+
+    switch (activeReport.id) {
+      case 'member-roster':
+        return renderMemberRoster(reportData);
+      case 'training-summary':
+        return renderTrainingSummary(reportData);
+      case 'event-attendance':
+        return renderEventAttendance(reportData);
+      default:
+        return (
+          <pre className="text-sm text-slate-300 whitespace-pre-wrap overflow-auto max-h-[50vh]">
+            {JSON.stringify(reportData, null, 2)}
+          </pre>
+        );
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -116,10 +338,26 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Banner */}
+      {error && !activeReport && (
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="flex-1">
+              <p className="text-sm text-red-300">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Reports Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredReports.map((report) => {
           const Icon = report.icon;
+          const isGenerating = generatingId === report.id;
           return (
             <div
               key={report.id}
@@ -147,14 +385,21 @@ export const ReportsPage: React.FC = () => {
 
               {report.available && (
                 <button
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                  onClick={() => {
-                    // Placeholder for report generation
-                    alert(`Generating ${report.title}...`);
-                  }}
+                  disabled={isGenerating}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-70 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  onClick={() => handleGenerateReport(report)}
                 >
-                  <Download className="w-4 h-4" aria-hidden="true" />
-                  <span>Generate Report</span>
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" aria-hidden="true" />
+                      <span>Generate Report</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
@@ -192,6 +437,48 @@ export const ReportsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Report Results Modal */}
+      {activeReport && reportData && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black/60" onClick={closeModal} />
+            <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full border border-white/20">
+              <div className="px-6 pt-5 pb-4">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-red-600/20 rounded-lg flex items-center justify-center">
+                      {React.createElement(activeReport.icon, {
+                        className: 'w-5 h-5 text-red-500',
+                        'aria-hidden': true,
+                      })}
+                    </div>
+                    <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {renderReportContent()}
+              </div>
+
+              <div className="px-6 py-4 border-t border-white/10 flex justify-end">
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

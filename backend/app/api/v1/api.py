@@ -11,10 +11,15 @@ from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
     auth,
     dashboard,
+    documents,
     events,
     forms,
     locations,
+    meetings,
+    notifications,
     roles,
+    reports,
+    scheduling,
     users,
     organizations,
     apparatus,
@@ -49,6 +54,11 @@ api_router.include_router(inventory.router, prefix="/inventory", tags=["inventor
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
+api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
+api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(public_portal_admin.router)
 
 # Placeholder routes
@@ -78,6 +88,11 @@ async def api_root():
             "security": "/api/v1/security",
             "email_templates": "/api/v1/email-templates",
             "forms": "/api/v1/forms",
+            "documents": "/api/v1/documents",
+            "meetings": "/api/v1/meetings",
+            "scheduling": "/api/v1/scheduling",
+            "reports": "/api/v1/reports",
+            "notifications": "/api/v1/notifications",
             "public_portal": "/api/v1/public-portal"
         }
     }

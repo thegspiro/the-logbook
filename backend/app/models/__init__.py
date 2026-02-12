@@ -53,6 +53,29 @@ from app.models.forms import (
     IntegrationType,
 )
 
+from app.models.document import (
+    Document,
+    DocumentFolder,
+    DocumentStatus,
+)
+
+from app.models.meeting import (
+    Meeting,
+    MeetingAttendee,
+    MeetingActionItem,
+    MeetingType,
+    MeetingStatus,
+    ActionItemStatus,
+)
+
+from app.models.notification import (
+    NotificationRule,
+    NotificationLog,
+    NotificationTrigger,
+    NotificationCategory,
+    NotificationChannel,
+)
+
 from app.models.apparatus import (
     Apparatus,
     ApparatusType,
@@ -114,6 +137,23 @@ __all__ = [
     "FieldType",
     "IntegrationTarget",
     "IntegrationType",
+    # Document models
+    "Document",
+    "DocumentFolder",
+    "DocumentStatus",
+    # Meeting models
+    "Meeting",
+    "MeetingAttendee",
+    "MeetingActionItem",
+    "MeetingType",
+    "MeetingStatus",
+    "ActionItemStatus",
+    # Notification models
+    "NotificationRule",
+    "NotificationLog",
+    "NotificationTrigger",
+    "NotificationCategory",
+    "NotificationChannel",
     # Apparatus models
     "Apparatus",
     "ApparatusType",
