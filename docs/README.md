@@ -17,7 +17,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - **Updated**: 2026-02-12 with security hardening, session management, error improvements
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
-   - Complete catalog of all 75+ error messages in the application
+   - Complete catalog of all 94+ error messages in the application
    - Quality ratings and improvement status for each error
    - Troubleshooting steps for every error
    - Implementation roadmap
@@ -79,6 +79,41 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Public API v1.1.0 with public form endpoints
    - Form retrieval and submission without authentication
    - Rate limiting, security notes, integration examples
+
+10. **Documents Module**
+    - Document storage with folder hierarchy (create, browse, upload, delete)
+    - File metadata tracking (size, MIME type, upload date)
+    - Document status workflow (draft, active, archived)
+    - API endpoints: 8 endpoints for folder CRUD, document CRUD, summary
+    - Permissions: `documents.view`, `documents.manage`
+
+11. **Meetings & Minutes Module**
+    - Meeting creation with type classification (regular, special, emergency, committee, board)
+    - Attendee tracking and action item management
+    - Meeting approval workflow (draft, approved, archived)
+    - API endpoints: 12 endpoints for meeting CRUD, attendees, action items, summary
+    - Permissions: `meetings.view`, `meetings.manage`
+
+12. **Scheduling Module**
+    - Shift creation and management with position types
+    - Week and month calendar views with real shift data
+    - Attendance tracking per shift
+    - API endpoints: 10 endpoints for shift CRUD, attendance, calendar views, summary
+    - Permissions: `scheduling.view`, `scheduling.manage`
+
+13. **Reports Module**
+    - Report generation: member roster, training summary, event attendance
+    - Data aggregation from members, training records, and events
+    - Tabular report display with filtering
+    - API endpoints: 2 endpoints (available reports list, generate report)
+    - Permissions: `reports.view`, `reports.manage`
+
+14. **Notifications Module**
+    - Notification rule creation with trigger/category configuration
+    - Rule toggle (enable/disable) with persistence
+    - Notification log tracking with delivery status and read state
+    - API endpoints: 8 endpoints for rule CRUD, toggle, logs, mark-read, summary
+    - Permissions: `notifications.view`, `notifications.manage`
 
 ---
 
@@ -164,11 +199,11 @@ python backend/scripts/verify_database_enums.py
 
 Current Status:
 ```
-✅ Good: 55+ errors (73%)
-⚠️  Needs Improvement: 14 errors (19%)
-❌ Poor: 6 errors (8%)
+✅ Good: 73+ errors (78%)
+⚠️  Needs Improvement: 15 errors (16%)
+❌ Poor: 6 errors (6%)
 
-Total: 75+ errors documented
+Total: 94+ errors documented
 ```
 
 Recent Improvements (2026-02-12):
@@ -201,6 +236,11 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Network/connection issues | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems) |
 | Enum case mismatch | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md) |
 | Custom forms / public forms | [FORMS_MODULE.md](./FORMS_MODULE.md) |
+| Documents / file management | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#documents-module) |
+| Meeting minutes / action items | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meetings--minutes-module) |
+| Shift scheduling / calendar | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module) |
+| Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
+| Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
 | Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
@@ -279,8 +319,8 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.2 | 2026-02-12 | Current |
-| ERROR_MESSAGES_COMPLETE.md | 1.1 | 2026-02-12 | Current |
+| TROUBLESHOOTING.md | 1.3 | 2026-02-12 | Current |
+| ERROR_MESSAGES_COMPLETE.md | 1.2 | 2026-02-12 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_12.md | 1.0 | 2026-02-12 | Current |
@@ -320,6 +360,26 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-12 - Five New Modules: Documents, Minutes, Scheduling, Reports, Notifications
+
+**What Changed**:
+- Built complete backend stack for 5 new modules (models, schemas, services, endpoints, migration)
+- Connected all 5 frontend pages to real database APIs (replacing placeholder/static data)
+- **Documents**: Folder hierarchy, file upload/download, document status management
+- **Meetings/Minutes**: Meeting CRUD with attendees, action items, approval workflow
+- **Scheduling**: Shift management, week/month calendar views, attendance tracking
+- **Reports**: Member roster, training summary, event attendance report generation
+- **Notifications**: Rule-based notification configuration, delivery logging, read tracking
+- Database migration creates 7 new tables: document_folders, documents, meetings, meeting_attendees, meeting_action_items, notification_rules, notification_logs
+- Updated TROUBLESHOOTING.md with module-specific troubleshooting sections
+- Updated ERROR_MESSAGES_COMPLETE.md with 20+ new error messages for new modules
+
+**Rollout Status** (36 of 40 pages production-ready):
+- Ready: Dashboard, Auth, Members, Events, Elections, Training, Forms, Inventory, Settings, Documents, Minutes, Scheduling, Reports, Notifications
+- Deferred: Integrations (needs OAuth), Analytics Dashboard (localStorage), Error Monitoring (localStorage), Create Training Session (partial)
+
+---
 
 ### 2026-02-12 - Security Hardening & Error Message Review
 

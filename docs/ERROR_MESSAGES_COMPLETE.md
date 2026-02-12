@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document catalogs **every error message** in The Logbook application, provides troubleshooting steps for each, and identifies messages that need improvement.
+This document catalogs **every error message** in The Logbook application (94+ errors across all modules), provides troubleshooting steps for each, and identifies messages that need improvement.
 
 **Purpose**:
 - ✅ Complete error message reference
@@ -32,6 +32,11 @@ This document catalogs **every error message** in The Logbook application, provi
 10. [Module Configuration Errors](#module-configuration-errors)
 11. [Network & Connectivity Errors](#network--connectivity-errors)
 12. [File System Errors](#file-system-errors)
+13. [Documents Module Errors](#documents-module-errors)
+14. [Meetings Module Errors](#meetings-module-errors)
+15. [Scheduling Module Errors](#scheduling-module-errors)
+16. [Reports Module Errors](#reports-module-errors)
+17. [Notifications Module Errors](#notifications-module-errors)
 
 ---
 
@@ -1417,6 +1422,264 @@ Every error should have:
 
 ---
 
+## Documents Module Errors
+
+### Document Operations
+
+#### 75. Unable to Load Documents
+**Message**: `"Unable to load documents. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD** - Standard error pattern with action
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: GET `/api/v1/documents/` or `/api/v1/documents/summary` fails
+
+**Troubleshooting**: Check network connection, verify backend is running, ensure `documents` table exists.
+
+---
+
+#### 76. Unable to Upload Document
+**Message**: `"Unable to upload the document. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD** - Clear action guidance
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: POST `/api/v1/documents/` with FormData fails
+
+**Troubleshooting**: Check file size limits, verify required fields (name), ensure folder exists.
+
+---
+
+#### 77. Unable to Create Folder
+**Message**: `"Unable to create the folder. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: POST `/api/v1/documents/folders/` fails
+
+**Troubleshooting**: Check for duplicate folder name, verify parent folder exists, check `documents.manage` permission.
+
+---
+
+#### 78. Unable to Delete Document
+**Message**: `"Unable to delete the document. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: DELETE `/api/v1/documents/{id}` fails
+
+---
+
+#### 79. Document Not Found
+**Message**: `"Document not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/documents.py`
+- Triggered when: Requested document ID does not exist
+
+---
+
+## Meetings Module Errors
+
+### Meeting Operations
+
+#### 80. Unable to Load Meetings
+**Message**: `"Unable to load meetings. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/MinutesPage.tsx`
+- Triggered when: GET `/api/v1/meetings/` fails
+
+---
+
+#### 81. Unable to Create Meeting
+**Message**: `"Unable to create the meeting. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/MinutesPage.tsx`
+- Triggered when: POST `/api/v1/meetings/` fails
+
+**Troubleshooting**: Verify required fields (title, meeting_type, meeting_date). Valid types: regular, special, emergency, committee, board.
+
+---
+
+#### 82. Unable to Delete Meeting
+**Message**: `"Unable to delete the meeting. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/MinutesPage.tsx`
+- Triggered when: DELETE `/api/v1/meetings/{id}` fails
+
+---
+
+#### 83. Meeting Not Found
+**Message**: `"Meeting not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/meetings.py`
+- Triggered when: Requested meeting ID does not exist
+
+---
+
+#### 84. Failed to Add Attendee
+**Message**: `"Failed to add attendee"`
+
+**Quality**: ⚠️ **NEEDS IMPROVEMENT** - No guidance on cause
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/meetings.py`
+- Triggered when: POST `/api/v1/meetings/{id}/attendees` fails
+
+**Troubleshooting**: Verify the user_id exists and hasn't already been added as attendee.
+
+---
+
+## Scheduling Module Errors
+
+### Shift Operations
+
+#### 85. Unable to Load Shifts
+**Message**: `"Unable to load shifts. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/SchedulingPage.tsx`
+- Triggered when: GET `/api/v1/scheduling/week-calendar` or `/api/v1/scheduling/summary` fails
+
+---
+
+#### 86. Unable to Create Shift
+**Message**: `"Unable to create the shift. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/SchedulingPage.tsx`
+- Triggered when: POST `/api/v1/scheduling/shifts/` fails
+
+**Troubleshooting**: Verify required fields (title, shift_date, start_time, end_time). Ensure end_time is after start_time.
+
+---
+
+#### 87. Shift Not Found
+**Message**: `"Shift not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/scheduling.py`
+- Triggered when: Requested shift ID does not exist
+
+---
+
+## Reports Module Errors
+
+### Report Generation
+
+#### 88. Unable to Generate Report
+**Message**: `"Unable to generate report. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/ReportsPage.tsx`
+- Triggered when: POST `/api/v1/reports/generate` fails
+
+**Troubleshooting**: Check network connection, verify `reports.manage` permission, ensure data exists for the report type.
+
+---
+
+#### 89. Invalid Report Type
+**Message**: `"Invalid report type"`
+
+**Quality**: ⚠️ **NEEDS IMPROVEMENT** - Should list valid types
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/reports.py`
+- Triggered when: report_type not in supported list
+
+**Valid Types**: `member_roster`, `training_summary`, `event_attendance`
+
+---
+
+## Notifications Module Errors
+
+### Notification Rule Operations
+
+#### 90. Unable to Load Notification Rules
+**Message**: `"Unable to load notification rules. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: GET `/api/v1/notifications/rules/` fails
+
+---
+
+#### 91. Unable to Create Notification Rule
+**Message**: `"Unable to create the notification rule. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: POST `/api/v1/notifications/rules/` fails
+
+**Troubleshooting**: Verify required fields (name, trigger_type, category). See valid values in TROUBLESHOOTING.md.
+
+---
+
+#### 92. Unable to Toggle Rule
+**Message**: `"Unable to toggle the notification rule. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: POST `/api/v1/notifications/rules/{id}/toggle` fails
+
+---
+
+#### 93. Notification Rule Not Found
+**Message**: `"Notification rule not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/notifications.py`
+- Triggered when: Requested rule ID does not exist
+
+---
+
+#### 94. Unable to Delete Notification Rule
+**Message**: `"Unable to delete the notification rule. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: DELETE `/api/v1/notifications/rules/{id}` fails
+
+---
+
 ## Quick Reference
 
 **Most Common Errors**:
@@ -1425,12 +1688,16 @@ Every error should have:
 3. Password too weak → Add uppercase, numbers, special chars
 4. Email already registered → Use different email or reset password
 5. Session expired → Restart onboarding
+6. Unable to load [module] → Check connection, verify migration applied
+7. Unable to create [item] → Check required fields and permissions
 
 **For Administrators**:
 - CORS errors → Update ALLOWED_ORIGINS in .env
 - Database errors → Check logs, verify migrations
 - OAuth setup → Follow provider documentation links
 - Network timeouts → Check server load and database
+- Missing module tables → Run `alembic upgrade head` to apply latest migrations
+- Permission errors → Verify user role has the required module permission (e.g., `documents.manage`)
 
 **For Developers**:
 - Error message location → Search this document by error text
