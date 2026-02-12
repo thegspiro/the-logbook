@@ -487,12 +487,12 @@ Body: {
 - **View Access**: Read-only access to module data (all members typically)
 - **Manage Access**: Full CRUD operations (selected roles only)
 
-**Role Categories**:
-- **Leadership**: Chief, President, Assistant Chief, Vice President
-- **Officers**: Captain, Lieutenant
-- **Administrative**: Secretary, Treasurer
-- **Specialized**: Training Officer, Safety Officer, Quartermaster
-- **Member**: Regular member access
+**Role Categories** (16 system roles):
+- **Leadership**: IT Administrator, Chief, President, Assistant Chief, Vice President
+- **Administrative**: Secretary, Assistant Secretary, Quartermaster
+- **Operational**: Officers, Training Officer, Public Outreach Coordinator, Meeting Hall Coordinator
+- **Specialized**: Membership Coordinator, Communications Officer, Apparatus Manager
+- **Base**: Member
 
 **Features**:
 - Pre-configured role templates by category
@@ -627,16 +627,35 @@ Body: {
 
 **Status**: Onboarding complete!
 
+**API Call** (on load):
+```
+GET /api/v1/dashboard/stats
+Response: {
+  total_members: number,
+  active_members: number,
+  total_documents: number,
+  setup_percentage: number,
+  recent_events_count: number,
+  pending_tasks_count: number
+}
+```
+
 **Features Available**:
-- All enabled modules
-- User profile
-- Settings (Organization, Role Management, Member Admin)
-- Full application access
+- **Stats Cards**: Total members (clickable → /members), documents count, setup percentage
+- **Training Widget**: Top 3 active training enrollments with progress
+- All enabled modules accessible via navigation
+- User profile and settings
+
+**Branding Transfer**: Organization name and logo are passed from onboarding to the main application layout via sessionStorage keys `departmentName` and `logoData`. The AppLayout component reads these on mount, with a fallback to `GET /api/v1/auth/branding` if not cached.
+
+**Authentication**: The application stores the auth token as `access_token` in localStorage (not `auth_token`). The AppLayout checks this key to verify authentication status. Logout clears both `access_token` and `refresh_token`.
 
 **Post-Onboarding Settings Navigation**:
+- `/settings/account` - User account settings
 - `/settings` - Organization settings
 - `/settings/roles` - Role management (create/edit/delete roles)
 - `/admin/members` - Member administration (assign roles)
+- `/admin/public-portal` - Public portal configuration
 
 ---
 
@@ -822,6 +841,27 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
     "backupPhone": "",
     "secondaryAdminEmail": "",
 
+    // Roles (persisted across navigation)
+    "rolesConfig": {
+      "role-id": {
+        "id": "role-id",
+        "name": "Chief",
+        "slug": "chief",
+        "description": "...",
+        "priority": 95,
+        "icon": "Shield",             // Serialized icon name (not React component)
+        "permissions": { "members": { "view": true, "manage": true }, ... },
+        "isSystem": true,
+        "isEnabled": true
+      }
+    },
+
+    // Module Permission Configs (persisted across navigation)
+    "modulePermissionConfigs": {
+      "training": ["chief-id", "training_officer-id"],   // Role IDs that can manage each module
+      "inventory": ["chief-id", "quartermaster-id"]
+    },
+
     // Modules
     "selectedModules": ["members", "events"],
     "moduleStatuses": { "members": "enabled", "training": "skipped" },
@@ -833,6 +873,23 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
   }
 }
 ```
+
+#### Role Config Persistence
+
+The `rolesConfig` field stores all role configurations (system and custom) so that navigating away from the Role Setup page and back does not reset permissions to defaults. Key implementation details:
+
+- **Icon Serialization**: React icon components (e.g., `Shield`, `UserCog`) cannot be stored in localStorage. An `ICON_MAP` maps string names to components, and `getIconName()` serializes components back to strings.
+- **Auto-save**: Every change calls `triggerAutoSave()` which updates the `lastSaved` timestamp and syncs to localStorage.
+- **Restore**: On remount, `RoleSetup.tsx` reads from `rolesConfig` in the store and deserializes icons back to components.
+
+#### Module Permission Config Persistence
+
+The `modulePermissionConfigs` field stores which roles can manage each module. When a user navigates to a module config page (`/onboarding/modules/{moduleId}/config`):
+
+1. Available roles are dynamically read from `rolesConfig` (not hardcoded)
+2. Previously saved manage roles for the module are restored from `modulePermissionConfigs`
+3. On save, `setModulePermissionConfig(moduleId, manageRoles)` persists to the store
+4. **Orphaned role filtering**: When restoring, role IDs are validated against current `availableRoles` — if a role was removed in the Role Setup step, its ID is filtered out to prevent "undefined" display
 
 **Not persisted** (excluded from localStorage for security):
 - `sessionId` — stored separately in localStorage as `onboarding_session_id`
@@ -1015,4 +1072,30 @@ Before deploying to production:
 
 ---
 
-**Last Updated**: February 8, 2026 (Added UX improvements section, documented new hooks and mobile optimizations)
+## Recent Fixes (February 9-12, 2026)
+
+### Onboarding State Persistence
+- **Role Permissions Persistence**: `rolesConfig` added to Zustand store with localStorage persistence; icon serialization via `ICON_MAP` enables storing React components
+- **Module Permission Config Persistence**: `modulePermissionConfigs` replaces hardcoded role lists and fake save handlers with real store persistence
+- **Orphaned Role ID Filtering**: Role IDs validated against `availableRoles` on restore to prevent undefined entries when roles are removed
+- **Unified Role Initialization**: `DEFAULT_ROLES` in `permissions.py` is the single source of truth for all 16 system roles
+
+### Authentication & Navigation Fixes
+- **Auth Token Key Fix**: AppLayout now checks `access_token` (not `auth_token`) in localStorage, fixing a critical redirect loop that caused hundreds of API requests per second
+- **Branding Transfer**: Organization name and logo transfer from onboarding to main app via sessionStorage, with API fallback
+- **Persistent Navigation**: Side and top navigation components added to all protected pages with submenu support
+
+### Infrastructure
+- **Docker Graceful Shutdown**: Exec form CMD, `stop_grace_period: 15s`, and `init: true` across all Docker Compose configurations
+- **Apparatus Module Fix**: Fixed module slug mismatch for apparatus/public outreach in configuration whitelist
+
+### New System Roles
+Eight new roles added to the default role set (total: 16 system roles):
+- Officers, Quartermaster, Training Officer, Public Outreach Coordinator, Meeting Hall Coordinator, Membership Coordinator, Communications Officer, Apparatus Manager
+
+### Module UIs
+Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduling, Reports, Minutes, Elections, with dashboard stats endpoint
+
+---
+
+**Last Updated**: February 12, 2026 (Added role/module config persistence, dashboard stats API, auth token handling, 16 system roles, orphaned role filtering, branding transfer mechanism)

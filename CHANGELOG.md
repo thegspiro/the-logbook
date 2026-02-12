@@ -47,6 +47,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Public API**: Separate `/api/public/v1/forms/` router with no authentication
 - **Permissions**: `forms.view` and `forms.manage` integrated with RBAC system
 
+### Added - Module UIs (2026-02-11)
+
+#### Fully-Built Module Pages
+- **Events Page**: Full event management with create/edit modals, event type filtering (business meeting, public education, training, social, fundraiser, ceremony), RSVP settings, reminders, QR code check-in links
+- **Inventory Page**: Tabbed items/categories management with CRUD modals, item types (uniform, PPE, tool, equipment, vehicle, electronics, consumable), status tracking (available, assigned, checked out, in maintenance, lost, retired), condition tracking, search and filtering
+- **Training Dashboard**: Three-tab layout (courses, requirements, certifications), expiring certification alerts (90-day window), links to officer dashboard, requirements management, programs, and session creation
+- **Documents Page**: Folder-based document management with 6 default categories (SOPs, Policies, Forms & Templates, Reports, Training Materials, General Documents), grid/list view toggle, upload and folder creation modals
+- **Scheduling Page**: Week/month calendar views, shift templates (day, night, morning), calendar navigation, shift creation with date ranges and staffing requirements
+- **Reports Page**: Reports catalog with categories (member, training, event, compliance), report cards with descriptions and availability status
+- **Minutes Page**: Meeting minutes management with type filtering (business, special, committee, board), quick stats dashboard, create modal, search and filter
+- **Elections Page**: Election management with detail view sub-page
+
+#### Navigation System
+- **Persistent Side Navigation**: Fixed 256px sidebar (collapsible to 64px) with submenu support for Operations, Governance, Communication, and Settings sections
+- **Top Navigation**: Horizontal header bar alternative with responsive mobile hamburger menu
+- **Configurable Layout**: Users choose between top or left sidebar navigation during onboarding; preference stored in sessionStorage
+- **Accessibility**: ARIA labels, focus traps for mobile menu, "Skip to main content" link, keyboard navigation
+
+#### Dashboard
+- **Stats Dashboard**: Displays total members, active members, documents count, setup percentage, recent events, and pending tasks
+- **Dashboard Stats API**: `GET /api/v1/dashboard/stats` endpoint returns organization statistics
+- **Training Widget**: Shows top 3 active training enrollments with progress
+
+### Added - Roles & Permissions (2026-02-10)
+
+#### New System Roles (8 additional roles)
+- **Officers** (Priority 70): General officer role with broad operational access — scheduling, inventory, events, forms management
+- **Quartermaster** (Priority 85): Department inventory, equipment, and gear assignment management
+- **Training Officer** (Priority 65): Training programs, sessions, certifications, and related event management
+- **Public Outreach Coordinator** (Priority 65): Public education and outreach event management
+- **Meeting Hall Coordinator** (Priority 60): Meeting hall and location booking management
+- **Membership Coordinator** (Priority 55): Member records, applications, onboarding/offboarding, role assignment
+- **Communications Officer** (Priority 55): Website, social media, newsletters, and notification management
+- **Apparatus Manager** (Priority 50): Fleet tracking, maintenance logging, and equipment checks
+
+#### Role System Improvements
+- **Unified Role Initialization**: `DEFAULT_ROLES` in `permissions.py` is now the single source of truth for all role definitions, replacing scattered role creation logic
+- **Wildcard Permission Fix**: Permission check now correctly handles wildcard (`*`) permissions for IT Administrator role
+
+### Fixed - Onboarding (2026-02-09)
+
+#### State Persistence
+- **Role Permissions Persistence**: Role permission customizations now persist across page navigation via Zustand store with localStorage; previously, navigating away from the Role Setup page reset all permissions to defaults
+- **Module Configuration Persistence**: Module permission configs (`modulePermissionConfigs`) now save to the Zustand store instead of using a fake setTimeout; available roles are dynamically read from `rolesConfig` instead of being hardcoded
+- **Orphaned Role ID Filtering**: When restoring module permission configs, role IDs are now validated against available roles — prevents "undefined" display when a previously-configured role is removed in the Role Setup step
+- **Icon Serialization**: Role icons are serialized to string names for localStorage storage and deserialized back to React components on restore via `ICON_MAP`
+
+#### Authentication & Navigation
+- **Auth Token Key Fix**: Fixed critical redirect loop caused by AppLayout checking `localStorage.getItem('auth_token')` instead of the correct `'access_token'` key — this caused hundreds of API requests per second as the app bounced between login and dashboard
+- **Branding Persistence**: Organization name and logo now transfer correctly from onboarding to the main application layout via sessionStorage
+
+### Fixed - Infrastructure (2026-02-09)
+
+#### Docker Graceful Shutdown
+- **Exec Form CMD**: Backend Dockerfile and all Docker Compose files now use exec form (`["uvicorn", ...]`) instead of shell form, ensuring uvicorn receives SIGTERM signals directly
+- **Stop Grace Period**: Added `stop_grace_period: 15s` to all Docker Compose configurations (main, minimal, Unraid) to allow in-flight requests to complete
+- **Init Process**: Added `init: true` to backend services as a signal-forwarding safety net
+- **Unraid Compose Files**: Updated both `docker-compose-unraid.yml` and `docker-compose-build-from-source.yml` with graceful shutdown settings
+
+#### Backend Fixes
+- **Apparatus Module Whitelist**: Fixed module slug mismatch for apparatus/public outreach in the module configuration whitelist
+
 ### Added - Frontend (2026-02-08)
 
 #### Onboarding UX Improvements

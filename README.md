@@ -32,18 +32,21 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
   - Training session creation with approval workflow
   - Check-in/check-out tracking integrated with events
   - Milestone system with conditional reminders
-- Compliance Management
-- Scheduling & Shift Management
-- Inventory Management
-- Member Directory & Tracking
-- Meeting Management
+  - Officer dashboard, requirements management, and external training integration pages
+- **Compliance Management** - Compliance tracking and auditing
+- **Scheduling & Shift Management** - Week/month calendar views, shift templates (day, night, morning), staffing requirements
+- **Inventory Management** - Full CRUD with item types, status/condition tracking, category management, search and filtering
+- **Member Directory & Tracking** - Member list, profiles, add/import, training history per member
+- **Meeting Minutes** - Minutes management with type filtering, quick stats, search
 - **Elections & Voting** - Full election system with ballots and candidate management
 - Incident Reporting
 - Equipment Maintenance
 - Fundraising & Donations
 - Vehicle/Apparatus Management
 - Budget & Finance Tracking
-- **Event Management** - QR code check-in, self-check-in pages, check-out functionality
+- **Event Management** - Event creation with type filtering, RSVP settings, reminders, QR code check-in, self-check-in pages, check-out, analytics
+- **Reports** - Reports catalog with member, training, event, and compliance report categories
+- **Documents** - Folder-based document management with 6 default categories, grid/list views, upload and folder creation
 - **Custom Forms** ([Documentation](docs/FORMS_MODULE.md))
   - Drag-and-drop form builder with 15+ field types
   - Public-facing forms via unique URL slugs with QR code generation
@@ -53,6 +56,7 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
   - Bot protection (honeypot), rate limiting, and input sanitization
 - **Module Configuration** - Priority-based module overview system
 - **Navigation Options** - Configurable top and side navigation layouts
+- **Dashboard** - Organization stats (members, events, documents), training progress widget
 
 ## 🚀 Quick Start
 
