@@ -281,7 +281,7 @@ async def test_provider_connection(
 
         return TestConnectionResponse(
             success=False,
-            message=f"Connection test failed: {str(e)}",
+            message="Connection test failed. Check provider credentials and URL.",
             details=None
         )
     finally:
@@ -806,6 +806,7 @@ async def import_single_record(
         return ext_import
 
     except Exception as e:
+        logger.exception(f"Failed to import record for provider {provider_id}")
         await db.rollback()
         ext_import.import_status = "failed"
         ext_import.import_error = str(e)
@@ -814,7 +815,7 @@ async def import_single_record(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to import record: {str(e)}"
+            detail="Failed to import record. Check the provider configuration and try again."
         )
 
 
@@ -902,8 +903,9 @@ async def bulk_import_records(
             imported += 1
 
         except Exception as e:
+            logger.exception(f"Bulk import failed for record {import_id}")
             failed += 1
-            errors.append(f"Failed to import {import_id}: {str(e)}")
+            errors.append(f"Failed to import record {import_id}")
             ext_import.import_status = "failed"
             ext_import.import_error = str(e)
 

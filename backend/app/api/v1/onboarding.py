@@ -19,6 +19,7 @@ import asyncio
 from functools import partial
 
 from app.core.database import get_db
+from app.core.security_middleware import check_rate_limit
 from app.services.onboarding import OnboardingService
 from app.services.auth_service import AuthService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
@@ -803,13 +804,13 @@ async def create_admin_user(
             detail=str(e)
         )
     except Exception as e:
-        # Catch ALL other exceptions and log them
+        # Log full details server-side, return generic message to client
         logger.error(f"Admin user creation failed with unexpected error: {type(e).__name__}: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create admin user: {type(e).__name__}: {str(e)}"
+            detail="Failed to create admin user. Please try again or contact support."
         )
 
 
@@ -1590,7 +1591,7 @@ async def get_session_data(
     }
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(check_rate_limit)])
 async def reset_onboarding(
     request: Request,
     db: AsyncSession = Depends(get_db)

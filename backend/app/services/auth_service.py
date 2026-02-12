@@ -394,10 +394,16 @@ class AuthService:
         # Update password
         user.password_hash = hash_password(new_password)
         user.password_changed_at = datetime.utcnow()
+        user.failed_login_attempts = 0
+        user.locked_until = None
 
-        await self.db.flush()
+        # Revoke all existing sessions — forces re-login with new password
+        # and invalidates any stolen tokens
+        revoked = await self._revoke_all_user_sessions(str(user.id))
 
-        logger.info(f"Password changed for user: {user.username}")
+        await self.db.commit()
+
+        logger.info(f"Password changed for user: {user.username}, revoked {revoked} sessions")
 
         return True, None
 
