@@ -473,7 +473,7 @@ async def _persist_session_data_to_org(
     # Find the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.deleted_at.is_(None))
+        .where(Organization.active == True)
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -748,7 +748,7 @@ async def create_admin_user(
     from app.models.user import Organization
     result = await db.execute(
         select(Organization)
-        .where(Organization.deleted_at.is_(None))
+        .where(Organization.active == True)
         .order_by(Organization.created_at.asc())
         .limit(1)
     )

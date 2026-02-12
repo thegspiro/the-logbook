@@ -94,7 +94,7 @@ async def register(
     from sqlalchemy import select
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.deleted_at.is_(None))
+        .where(Organization.active == True)
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -359,7 +359,7 @@ async def forgot_password(
     # Look up the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.deleted_at.is_(None))
+        .where(Organization.active == True)
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
