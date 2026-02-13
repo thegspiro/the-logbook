@@ -85,6 +85,7 @@ import type {
   RSVPCreate,
   CheckInRequest,
   EventStats,
+  CheckInMonitoringStats,
 } from '../types/event';
 
 const API_BASE_URL = '/api/v1';
@@ -1448,7 +1449,7 @@ export const eventService = {
   /**
    * Get real-time check-in monitoring statistics
    */
-  async getCheckInMonitoring(eventId: string): Promise<any> {
+  async getCheckInMonitoring(eventId: string): Promise<CheckInMonitoringStats> {
     const response = await api.get(`/events/${eventId}/check-in-monitoring`);
     return response.data;
   },

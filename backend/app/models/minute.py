@@ -253,6 +253,7 @@ class MeetingMinutes(Base):
 
     # Relationships
     template = relationship("MinutesTemplate", foreign_keys=[template_id])
+    event = relationship("Event", foreign_keys=[event_id])
     motions = relationship("Motion", back_populates="minutes", cascade="all, delete-orphan", order_by="Motion.order")
     action_items = relationship("ActionItem", back_populates="minutes", cascade="all, delete-orphan", order_by="ActionItem.created_at")
 

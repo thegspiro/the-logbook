@@ -1,33 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
-
-interface CheckInActivity {
-  user_id: string;
-  user_name: string;
-  user_email: string;
-  checked_in_at: string;
-  rsvp_status: string;
-  guest_count: number;
-}
-
-interface CheckInMonitoringStats {
-  event_id: string;
-  event_name: string;
-  event_type: string;
-  start_datetime: string;
-  end_datetime: string;
-  is_check_in_active: boolean;
-  check_in_window_start: string;
-  check_in_window_end: string;
-  total_eligible_members: number;
-  total_rsvps: number;
-  total_checked_in: number;
-  check_in_rate: number;
-  recent_check_ins: CheckInActivity[];
-  avg_check_in_time_minutes: number | null;
-  last_check_in_at: string | null;
-}
+import type { CheckInMonitoringStats } from '../types/event';
 
 /**
  * Event Check-In Monitoring Dashboard

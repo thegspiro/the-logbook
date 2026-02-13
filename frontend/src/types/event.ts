@@ -19,7 +19,9 @@ export interface Event {
   title: string;
   description?: string;
   event_type: EventType;
+  location_id?: string;
   location?: string;
+  location_name?: string;
   location_details?: string;
   start_datetime: string;
   end_datetime: string;
@@ -59,7 +61,9 @@ export interface EventListItem {
   event_type: EventType;
   start_datetime: string;
   end_datetime: string;
+  location_id?: string;
   location?: string;
+  location_name?: string;
   requires_rsvp: boolean;
   is_mandatory: boolean;
   is_cancelled: boolean;
@@ -71,6 +75,7 @@ export interface EventCreate {
   title: string;
   description?: string;
   event_type: EventType;
+  location_id?: string;
   location?: string;
   location_details?: string;
   start_datetime: string;
@@ -96,6 +101,7 @@ export interface EventUpdate {
   title?: string;
   description?: string;
   event_type?: EventType;
+  location_id?: string;
   location?: string;
   location_details?: string;
   start_datetime?: string;
@@ -167,6 +173,7 @@ export interface QRCheckInData {
   event_id: string;
   event_name: string;
   event_type?: string;
+  event_description?: string;
   start_datetime: string;
   end_datetime: string;
   actual_end_time?: string;
@@ -174,4 +181,33 @@ export interface QRCheckInData {
   check_in_end: string;
   is_valid: boolean;
   location?: string;
+  location_id?: string;
+  location_name?: string;
+}
+
+export interface CheckInActivity {
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  checked_in_at: string;
+  rsvp_status: string;
+  guest_count: number;
+}
+
+export interface CheckInMonitoringStats {
+  event_id: string;
+  event_name: string;
+  event_type: string;
+  start_datetime: string;
+  end_datetime: string;
+  is_check_in_active: boolean;
+  check_in_window_start: string;
+  check_in_window_end: string;
+  total_eligible_members: number;
+  total_rsvps: number;
+  total_checked_in: number;
+  check_in_rate: number;
+  recent_check_ins: CheckInActivity[];
+  avg_check_in_time_minutes: number | null;
+  last_check_in_at: string | null;
 }

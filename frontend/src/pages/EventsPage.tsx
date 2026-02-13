@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { EventListItem, EventCreate, EventType } from '../types/event';
+import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
 
 export const EventsPage: React.FC = () => {
@@ -133,32 +134,6 @@ export const EventsPage: React.FC = () => {
       console.error('Error creating event:', err);
       setCreateError(err.response?.data?.detail || 'Failed to create event');
     }
-  };
-
-  const getEventTypeLabel = (type: EventType): string => {
-    const labels: Record<EventType, string> = {
-      business_meeting: 'Business Meeting',
-      public_education: 'Public Education',
-      training: 'Training',
-      social: 'Social',
-      fundraiser: 'Fundraiser',
-      ceremony: 'Ceremony',
-      other: 'Other',
-    };
-    return labels[type];
-  };
-
-  const getEventTypeBadgeColor = (type: EventType): string => {
-    const colors: Record<EventType, string> = {
-      business_meeting: 'bg-blue-100 text-blue-800',
-      public_education: 'bg-green-100 text-green-800',
-      training: 'bg-purple-100 text-purple-800',
-      social: 'bg-pink-100 text-pink-800',
-      fundraiser: 'bg-yellow-100 text-yellow-800',
-      ceremony: 'bg-indigo-100 text-indigo-800',
-      other: 'bg-gray-100 text-gray-800',
-    };
-    return colors[type];
   };
 
   if (loading) {
