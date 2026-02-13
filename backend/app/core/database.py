@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import MetaData
-from sqlalchemy.pool import NullPool
 from typing import AsyncGenerator
 from loguru import logger
 

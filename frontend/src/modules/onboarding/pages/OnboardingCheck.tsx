@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Database, Server, Shield, Wrench, Clock, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
@@ -49,6 +49,12 @@ const OnboardingCheck: React.FC = () => {
   const [showWhatsHappening, setShowWhatsHappening] = useState(false);
   const navigate = useNavigate();
 
+  // Refs to break the runCheck -> startupInfo -> runCheck dependency cycle.
+  // Without these, updating startupInfo recreates runCheck via useCallback deps,
+  // which re-triggers the useEffect, spawning duplicate polling chains.
+  const startupInfoRef = useRef<StartupInfo | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Educational tips to show while waiting
   const educationalTips = [
     {
@@ -92,6 +98,20 @@ const OnboardingCheck: React.FC = () => {
       content: 'Generate compliance reports, training summaries, and department statistics with ease.'
     }
   ];
+
+  // Keep startupInfo ref in sync with state
+  useEffect(() => {
+    startupInfoRef.current = startupInfo;
+  }, [startupInfo]);
+
+  // Clean up polling timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   // Track elapsed time
   useEffect(() => {
@@ -348,18 +368,25 @@ const OnboardingCheck: React.FC = () => {
         if (newCount < MAX_RETRIES) {
           setIsWaiting(true);
 
-          // More informative message based on startup info
+          // Read from ref to avoid adding startupInfo as a dependency
+          // (which would recreate runCheck on every health response, spawning
+          //  duplicate polling chains)
+          const info = startupInfoRef.current;
           let message = `Waiting for services... (${newCount}/${MAX_RETRIES})`;
-          if (startupInfo && !startupInfo.ready) {
-            message = startupInfo.message || message;
+          if (info && !info.ready) {
+            message = info.message || message;
             // Add helpful context about migration time
-            if (startupInfo.phase?.includes('migration')) {
+            if (info.phase?.includes('migration')) {
               message += ' (First startup may take 25-30 minutes for database initialization)';
             }
           }
           setStatusMessage(message);
 
-          setTimeout(() => {
+          // Clear any previous timeout to prevent duplicate chains
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+          timeoutRef.current = setTimeout(() => {
             runCheck();
           }, CHECK_INTERVAL);
         } else {
@@ -369,7 +396,7 @@ const OnboardingCheck: React.FC = () => {
         return newCount;
       });
     }
-  }, [checkServices, checkOnboardingStatus, startupInfo]);
+  }, [checkServices, checkOnboardingStatus]);
 
   const handleSkip = () => {
     // Attempt to proceed anyway - useful if only Redis is down
