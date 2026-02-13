@@ -1,7 +1,7 @@
 """Add minutes templates, documents module, and dynamic sections
 
 Revision ID: 20260213_0800
-Revises: 20260212_1200
+Revises: add_meeting_minutes
 Create Date: 2026-02-13 08:00:00
 """
 
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import mysql
 
 # revision identifiers
 revision = '20260213_0800'
-down_revision = '20260212_1200'
+down_revision = 'add_meeting_minutes'
 branch_labels = None
 depends_on = None
 

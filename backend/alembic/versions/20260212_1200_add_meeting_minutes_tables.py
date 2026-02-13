@@ -1,7 +1,7 @@
 """add meeting minutes tables
 
 Revision ID: add_meeting_minutes
-Revises:
+Revises: 20260212_0400
 Create Date: 2026-02-12 12:00:00.000000
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_meeting_minutes'
-down_revision = None
+down_revision = '20260212_0400'
 branch_labels = None
 depends_on = None
 
