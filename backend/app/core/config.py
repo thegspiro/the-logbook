@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     PASSWORD_REQUIRE_NUMBERS: bool = True
     PASSWORD_REQUIRE_SPECIAL: bool = True
 
+    # HIPAA Compliance Settings (§164.312)
+    HIPAA_SESSION_TIMEOUT_MINUTES: int = 15  # Automatic logoff after inactivity (§164.312(a)(2)(iii))
+    HIPAA_PASSWORD_HISTORY_COUNT: int = 12  # Previous passwords remembered (§164.312(d))
+    HIPAA_MINIMUM_PASSWORD_AGE_DAYS: int = 1  # Min days before password can be changed again
+    HIPAA_MAXIMUM_PASSWORD_AGE_DAYS: int = 90  # Max days before password must be changed
+    HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
+
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = "INSECURE_DEFAULT_KEY_CHANGE_ME"
 

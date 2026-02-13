@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 import { useAuthStore } from '../../stores/authStore';
+import { useIdleTimer } from '../../hooks/useIdleTimer';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -12,11 +14,28 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((s) => s.user);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // HIPAA §164.312(a)(2)(iii): Automatic logoff after inactivity
+  useIdleTimer();
+
+  // HIPAA password age enforcement: redirect to change-password if expired
+  useEffect(() => {
+    if (user?.password_expired && location.pathname !== '/settings/account') {
+      toast('Your password has expired. Please change it to continue.', {
+        id: 'password-expired',
+        duration: 6000,
+        icon: '\uD83D\uDD12',
+      });
+      navigate('/settings/account', { replace: true });
+    }
+  }, [user?.password_expired, location.pathname, navigate]);
 
   useEffect(() => {
     // Load department info and navigation preference from sessionStorage first

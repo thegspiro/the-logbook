@@ -12,6 +12,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.user import User
 from app.models.inventory import ItemStatus, AssignmentType
 from app.schemas.inventory import (
@@ -210,6 +211,19 @@ async def create_item(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(new_item.id),
+            "item_name": new_item.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return new_item
 
 
@@ -266,6 +280,19 @@ async def update_item(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "fields_updated": list(update_data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return updated_item
 
 
@@ -294,6 +321,19 @@ async def retire_item(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_item_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "action": "retired",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {"message": "Item retired successfully"}
 

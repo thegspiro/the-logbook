@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 import secrets
 import hashlib
 
-from app.models.user import User, Session as UserSession, Organization, UserStatus
+from app.models.user import User, Session as UserSession, PasswordHistory, Organization, UserStatus
 from app.core.security import (
     verify_password,
     hash_password,
@@ -26,6 +26,41 @@ from app.core.config import settings
 from loguru import logger
 
 RESET_TOKEN_EXPIRY_MINUTES = 30
+
+
+async def _check_password_history(db: AsyncSession, user_id: str, new_password: str) -> bool:
+    """
+    Check if the new password was used in the last N passwords.
+
+    Returns True if the password is in the history (i.e., reuse detected).
+    """
+    history_count = settings.HIPAA_PASSWORD_HISTORY_COUNT
+    if history_count <= 0:
+        return False
+
+    result = await db.execute(
+        select(PasswordHistory)
+        .where(PasswordHistory.user_id == user_id)
+        .order_by(PasswordHistory.created_at.desc())
+        .limit(history_count)
+    )
+    history_entries = result.scalars().all()
+
+    for entry in history_entries:
+        if verify_password(new_password, entry.password_hash):
+            return True
+    return False
+
+
+async def _save_password_to_history(db: AsyncSession, user_id: str, password_hash: str):
+    """Save the current password hash to the history table."""
+    entry = PasswordHistory(
+        id=str(uuid4()),
+        user_id=user_id,
+        password_hash=password_hash,
+    )
+    db.add(entry)
+    await db.flush()
 
 
 class AuthService:
@@ -103,6 +138,16 @@ class AuthService:
         user.locked_until = None
         user.last_login_at = datetime.utcnow()
         await self.db.flush()
+
+        # Check password age - warn but don't block (frontend handles redirect)
+        max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
+        if max_age_days > 0 and user.password_changed_at:
+            age = (datetime.utcnow() - user.password_changed_at).days
+            if age >= max_age_days:
+                logger.warning(
+                    f"User {user.username} password expired ({age} days old, "
+                    f"max {max_age_days}). Password change required."
+                )
 
         return user, None
 
@@ -374,6 +419,11 @@ class AuthService:
         """
         Change user password
 
+        Enforces HIPAA password controls:
+        - Password strength validation
+        - Password history (prevents reuse of last N passwords)
+        - Minimum password age (prevents rapid cycling)
+
         Args:
             user: User object
             current_password: Current password
@@ -386,10 +436,34 @@ class AuthService:
         if not user.password_hash or not verify_password(current_password, user.password_hash):
             return False, "Current password is incorrect"
 
-        # Validate new password
+        # Enforce minimum password age (prevent rapid cycling through history)
+        min_age_days = settings.HIPAA_MINIMUM_PASSWORD_AGE_DAYS
+        if min_age_days > 0 and user.password_changed_at:
+            age = (datetime.utcnow() - user.password_changed_at).days
+            if age < min_age_days:
+                return False, (
+                    f"Password was changed recently. You must wait at least "
+                    f"{min_age_days} day(s) before changing your password again."
+                )
+
+        # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)
         if not is_valid:
             return False, error_msg
+
+        # Check password history (HIPAA §164.312(d))
+        if await _check_password_history(self.db, str(user.id), new_password):
+            return False, (
+                f"This password was used recently. You cannot reuse any of your "
+                f"last {settings.HIPAA_PASSWORD_HISTORY_COUNT} passwords."
+            )
+
+        # Also check against current password
+        if verify_password(new_password, user.password_hash):
+            return False, "New password must be different from your current password."
+
+        # Save current password to history before changing
+        await _save_password_to_history(self.db, str(user.id), user.password_hash)
 
         # Update password
         user.password_hash = hash_password(new_password)
@@ -567,6 +641,17 @@ class AuthService:
         is_valid, error_msg = validate_password_strength(new_password)
         if not is_valid:
             return False, error_msg
+
+        # Check password history
+        if await _check_password_history(self.db, str(user.id), new_password):
+            return False, (
+                f"This password was used recently. You cannot reuse any of your "
+                f"last {settings.HIPAA_PASSWORD_HISTORY_COUNT} passwords."
+            )
+
+        # Save current password to history before changing
+        if user.password_hash:
+            await _save_password_to_history(self.db, str(user.id), user.password_hash)
 
         # Set new password and clear token
         user.password_hash = hash_password(new_password)

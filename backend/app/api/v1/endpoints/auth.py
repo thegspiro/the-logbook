@@ -265,6 +265,8 @@ async def get_current_user_info(
 
     Returns the authenticated user's profile and permissions.
     """
+    from datetime import datetime
+
     # Get all roles and permissions
     role_names = [role.name for role in current_user.roles]
 
@@ -272,6 +274,13 @@ async def get_current_user_info(
     all_permissions = set()
     for role in current_user.roles:
         all_permissions.update(role.permissions or [])
+
+    # Check HIPAA password age
+    password_expired = False
+    max_age_days = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
+    if max_age_days > 0 and current_user.password_changed_at:
+        age = (datetime.utcnow() - current_user.password_changed_at).days
+        password_expired = age >= max_age_days
 
     return CurrentUser(
         id=current_user.id,
@@ -286,7 +295,22 @@ async def get_current_user_info(
         is_active=current_user.is_active,
         email_verified=current_user.email_verified,
         mfa_enabled=current_user.mfa_enabled,
+        password_expired=password_expired,
     )
+
+
+@router.get("/session-settings")
+async def get_session_settings():
+    """
+    Return HIPAA session timeout and password policy settings.
+
+    The frontend uses this to configure its inactivity timer and
+    to warn users about expiring passwords.
+    """
+    return {
+        "session_timeout_minutes": settings.HIPAA_SESSION_TIMEOUT_MINUTES,
+        "password_max_age_days": settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS,
+    }
 
 
 @router.post("/change-password")

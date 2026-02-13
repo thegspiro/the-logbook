@@ -13,6 +13,7 @@ from uuid import UUID
 from datetime import date, datetime
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.training import (
     TrainingCourse,
     TrainingRecord,
@@ -221,6 +222,19 @@ async def create_record(
     await db.commit()
     await db.refresh(new_record)
 
+    await log_audit_event(
+        db=db,
+        event_type="training_record_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "record_id": str(new_record.id),
+            "user_id": str(new_record.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return new_record
 
 
@@ -250,11 +264,26 @@ async def update_record(
         )
 
     # Update fields
-    for field, value in record_update.model_dump(exclude_unset=True).items():
+    update_fields = record_update.model_dump(exclude_unset=True)
+    for field, value in update_fields.items():
         setattr(record, field, value)
 
     await db.commit()
     await db.refresh(record)
+
+    event_data = {"record_id": str(record_id), "fields_updated": list(update_fields.keys())}
+    # Detect completion
+    if "status" in update_fields and update_fields["status"] == "completed":
+        event_data["completion_recorded"] = True
+    await log_audit_event(
+        db=db,
+        event_type="training_record_updated",
+        event_category="training",
+        severity="info",
+        event_data=event_data,
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return record
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.schemas.organization import (
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
@@ -80,6 +81,19 @@ async def update_organization_settings(
             current_user.organization_id,
             settings_dict
         )
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": list(settings_dict.keys()),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return updated_settings
     except ValueError as e:
         raise HTTPException(
@@ -116,6 +130,20 @@ async def update_contact_info_settings(
 
     try:
         await org_service.update_organization_settings(current_user.organization_id, settings_dict)
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["contact_info_visibility"],
+                "contact_info_enabled": contact_settings.enabled,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return contact_settings
     except ValueError as e:
         raise HTTPException(
@@ -173,10 +201,25 @@ async def update_module_settings(
     module_updates = module_update.model_dump(exclude_unset=True)
 
     try:
-        return await org_service.update_module_settings(
+        result = await org_service.update_module_settings(
             current_user.organization_id,
             module_updates
         )
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["modules"],
+                "module_updates": module_updates,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return result
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
