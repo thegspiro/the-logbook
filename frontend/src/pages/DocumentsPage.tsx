@@ -12,126 +12,21 @@ import {
   Loader2,
   Trash2,
   File,
+  ArrowLeft,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { documentService } from '../services/api';
-import { useAuthStore } from '../stores/authStore';
 import {
   documentsService,
   type DocumentFolder as DocFolder,
   type DocumentRecord,
   type DocumentsSummary,
 } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 
 type ViewMode = 'grid' | 'list';
 
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
-
-  const [folders, setFolders] = useState<DocumentFolder[]>([]);
-  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
-  const [loadingFolders, setLoadingFolders] = useState(true);
-  const [loadingDocuments, setLoadingDocuments] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [selectedFolder, setSelectedFolder] = useState<DocumentFolder | null>(null);
-
-  // Document viewer
-  const [viewingDocument, setViewingDocument] = useState<DocumentItem | null>(null);
-  const [loadingDocument, setLoadingDocument] = useState(false);
-
-  // Create folder
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
-  const [folderForm, setFolderForm] = useState({ name: '', description: '' });
-  const [creatingFolder, setCreatingFolder] = useState(false);
-
-  useEffect(() => {
-    fetchFolders();
-  }, []);
-
-  useEffect(() => {
-    if (selectedFolder) {
-      fetchDocuments(selectedFolder.id);
-    } else {
-      setDocuments([]);
-    }
-  }, [selectedFolder]);
-
-  const fetchFolders = async () => {
-    try {
-      setLoadingFolders(true);
-      const data = await documentService.listFolders();
-      setFolders(data);
-    } catch (err) {
-      console.error('Failed to load folders:', err);
-      toast.error('Failed to load document folders');
-    } finally {
-      setLoadingFolders(false);
-    }
-  };
-
-  const fetchDocuments = async (folderId: string) => {
-    try {
-      setLoadingDocuments(true);
-      const data = await documentService.listDocuments({ folder_id: folderId });
-      setDocuments(data);
-    } catch (err) {
-      console.error('Failed to load documents:', err);
-      toast.error('Failed to load documents');
-    } finally {
-      setLoadingDocuments(false);
-    }
-  };
-
-  const handleCreateFolder = async () => {
-    if (!folderForm.name.trim()) return;
-    try {
-      setCreatingFolder(true);
-      const slug = folderForm.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      await documentService.createFolder({
-        name: folderForm.name.trim(),
-        slug,
-        description: folderForm.description || undefined,
-      });
-      setShowCreateFolder(false);
-      setFolderForm({ name: '', description: '' });
-      await fetchFolders();
-      toast.success('Folder created');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to create folder');
-    } finally {
-      setCreatingFolder(false);
-    }
-  };
-
-  const handleDeleteFolder = async (folder: DocumentFolder) => {
-    if (folder.is_system) {
-      toast.error('System folders cannot be deleted');
-      return;
-    }
-    if (!confirm(`Delete folder "${folder.name}" and all its documents?`)) return;
-    try {
-      await documentService.deleteFolder(folder.id);
-      if (selectedFolder?.id === folder.id) setSelectedFolder(null);
-      await fetchFolders();
-      toast.success('Folder deleted');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete folder');
-    }
-  };
-
-  const handleViewDocument = async (doc: DocumentListItem) => {
-    try {
-      setLoadingDocument(true);
-      const full = await documentService.getDocument(doc.id);
-      setViewingDocument(full);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to load document');
-    } finally {
-      setLoadingDocument(false);
-    }
-  };
 
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
@@ -144,22 +39,24 @@ const DocumentsPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Upload form state
+  // UI state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+
+  // Modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Form state
+  const [folderForm, setFolderForm] = useState({ name: '', description: '' });
   const [uploadForm, setUploadForm] = useState({
     name: '',
     description: '',
     folder: 'general',
     file: null as File | null,
   });
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric',
-    });
-  };
-
-  // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // -------------------------------------------------------
   // Data fetching
@@ -255,7 +152,6 @@ const DocumentsPage: React.FC = () => {
       await documentsService.uploadDocument(formData);
       setShowUploadModal(false);
       setUploadForm({ name: '', description: '', folder: selectedFolder || 'general', file: null });
-      // Refresh data
       await fetchFolders();
       await fetchSummary();
       if (selectedFolder) {
@@ -274,7 +170,6 @@ const DocumentsPage: React.FC = () => {
     try {
       await documentsService.deleteDocument(documentId);
       setDeleteConfirm(null);
-      // Refresh data
       await fetchFolders();
       await fetchSummary();
       if (selectedFolder) {
@@ -311,14 +206,6 @@ const DocumentsPage: React.FC = () => {
   // -------------------------------------------------------
   // Derived state
   // -------------------------------------------------------
-
-  const filteredDocuments = searchQuery.trim()
-    ? documents.filter(d =>
-        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : documents;
 
   const filteredDocuments = searchQuery.trim()
     ? documents.filter(
@@ -677,73 +564,42 @@ const DocumentsPage: React.FC = () => {
                       )}
                     </div>
 
-            {loadingDocuments ? (
-              <p className="text-slate-300 text-sm py-8 text-center" role="status" aria-live="polite">Loading documents...</p>
-            ) : filteredDocuments.length === 0 ? (
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
-                <h3 className="text-white text-xl font-bold mb-2">No Documents in This Folder</h3>
-                <p className="text-slate-300 mb-6">
-                  {selectedFolder.slug === 'meeting-minutes'
-                    ? 'Published meeting minutes will appear here. Approve and publish minutes from the Minutes module.'
-                    : 'Documents will appear here once they are added to this folder.'}
-                </p>
-              </div>
-            ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredDocuments.map(doc => (
-                  <div
-                    key={doc.id}
-                    className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:bg-white/15 transition-all group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="text-amber-400 mt-1">
-                        {doc.document_type === 'generated' ? <ClipboardList className="w-6 h-6" /> : <File className="w-6 h-6" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-white font-medium truncate">{doc.title}</h4>
-                        {doc.description && (
-                          <p className="text-slate-400 text-xs mt-1 line-clamp-2">{doc.description}</p>
-                        )}
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            doc.document_type === 'generated' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-amber-500/20 text-amber-300'
-                          }`}>
-                            {doc.document_type === 'generated' ? 'Published' : 'Uploaded'}
-                          </span>
-                          {doc.source_type === 'meeting_minutes' && (
-                            <span className="text-xs text-slate-400">From Minutes</span>
-                          )}
-                        </div>
-                        <p className="text-slate-400 text-xs mt-2">{formatDate(doc.created_at)}</p>
-                        {doc.tags && doc.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {doc.tags.map((tag, i) => (
-                              <span key={i} className="text-xs px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded">{tag}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                    <div>
+                      <label htmlFor="upload-name" className="block text-sm font-medium text-slate-300 mb-1">Document Name</label>
+                      <input
+                        id="upload-name"
+                        type="text"
+                        value={uploadForm.name}
+                        onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        placeholder="Optional - defaults to file name"
+                      />
                     </div>
-                    <div className="flex justify-end gap-2 mt-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => handleViewDocument(doc)}
-                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 focus:opacity-100"
-                        aria-label={`View ${doc.title}`}
+
+                    <div>
+                      <label htmlFor="upload-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <textarea
+                        id="upload-description"
+                        rows={2}
+                        value={uploadForm.description}
+                        onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        placeholder="Optional description"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="upload-folder" className="block text-sm font-medium text-slate-300 mb-1">Folder</label>
+                      <select
+                        id="upload-folder"
+                        value={uploadForm.folder}
+                        onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                       >
-                        <Eye className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
-                        View
-                      </button>
-                      {canManage && (
-                        <button
-                          onClick={() => handleDeleteDocument(doc.id)}
-                          className="text-xs px-3 py-1.5 bg-red-600/80 text-white rounded hover:bg-red-700 focus:opacity-100"
-                          aria-label={`Delete ${doc.title}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
-                          Delete
-                        </button>
-                      )}
+                        {folders.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -766,29 +622,6 @@ const DocumentsPage: React.FC = () => {
                     {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                     <span>Upload</span>
                   </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6">
-                  {loadingDocument ? (
-                    <p className="text-gray-500 text-center py-12" role="status" aria-live="polite">Loading document...</p>
-                  ) : viewingDocument?.content_html ? (
-                    <div
-                      className="prose max-w-none"
-                      dangerouslySetInnerHTML={{ __html: viewingDocument.content_html }}
-                      role="article"
-                      aria-label="Document content"
-                    />
-                  ) : viewingDocument?.file_name ? (
-                    <div className="text-center py-12">
-                      <File className="w-16 h-16 text-gray-300 mx-auto mb-4" aria-hidden="true" />
-                      <p className="text-gray-700 font-medium">{viewingDocument.file_name}</p>
-                      <p className="text-gray-500 text-sm mt-1">{formatFileSize(viewingDocument.file_size)}</p>
-                      <p className="text-gray-400 text-xs mt-4">
-                        File download not yet available. Contact your administrator.
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-center py-12">No content available for this document.</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -818,6 +651,7 @@ const DocumentsPage: React.FC = () => {
                     <div>
                       <label htmlFor="folder-name" className="block text-sm font-medium text-slate-300 mb-1">Folder Name <span aria-hidden="true">*</span></label>
                       <input
+                        id="folder-name"
                         type="text"
                         required
                         value={folderForm.name}
