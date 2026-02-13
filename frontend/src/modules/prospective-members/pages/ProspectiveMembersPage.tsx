@@ -30,7 +30,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
-import type { PipelineTab } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
 import { PipelineTable } from '../components/PipelineTable';
 import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
@@ -81,7 +80,6 @@ export const ProspectiveMembersPage: React.FC = () => {
     reactivateApplicant,
     purgeInactiveApplicants,
     setFilters,
-    clearFilters,
     setViewMode,
     setActiveTab,
     setDetailDrawerOpen,

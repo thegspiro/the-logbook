@@ -16,7 +16,6 @@ import {
   Upload,
   Vote,
   CheckCircle,
-  Save,
   Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
