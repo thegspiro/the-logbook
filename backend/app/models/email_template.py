@@ -75,7 +75,7 @@ class EmailTemplate(Base):
 
     # Available template variables (JSON list of {name, description} objects)
     # e.g. [{"name": "first_name", "description": "Recipient's first name"}]
-    available_variables = Column(JSON, default=[])
+    available_variables = Column(JSON, default=list)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

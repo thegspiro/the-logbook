@@ -377,7 +377,7 @@ class Apparatus(Base):
     # ===========================================
     # Custom Fields (JSON storage for user-defined fields)
     # ===========================================
-    custom_field_values = Column(JSON, default={})
+    custom_field_values = Column(JSON, default=dict)
 
     # ===========================================
     # Notes and Description

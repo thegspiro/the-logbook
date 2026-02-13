@@ -228,7 +228,7 @@ class ProspectiveMember(Base):
     )
 
     # Extensible data (from form submissions, custom fields, etc.)
-    metadata_ = Column("metadata", JSON, default={})
+    metadata_ = Column("metadata", JSON, default=dict)
     form_submission_id = Column(
         String(36),
         ForeignKey("form_submissions.id", ondelete="SET NULL"),

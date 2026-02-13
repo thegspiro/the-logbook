@@ -28,7 +28,7 @@ class AnalyticsEvent(Base):
     event_id = Column(String(36), nullable=True)  # reference to the event being tracked
     user_id = Column(String(36), nullable=True)
     device_type = Column(String(20), nullable=True)
-    metadata = Column(JSON, default={})
+    metadata = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
