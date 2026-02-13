@@ -6,7 +6,6 @@ import {
   Search,
   Filter,
   X,
-  CheckCircle,
   Clock,
   AlertCircle,
   Trash2,
