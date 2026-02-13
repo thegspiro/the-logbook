@@ -1,12 +1,21 @@
 /**
  * Minutes Detail Page
  *
- * View and edit meeting minutes, motions, action items, and manage approval workflow.
+ * View and edit meeting minutes with dynamic sections, motions, action items,
+ * section reordering, and publish-to-documents workflow.
  */
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import {
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  Trash2,
+  BookOpen,
+  CheckCircle,
+} from 'lucide-react';
 import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type {
@@ -15,6 +24,7 @@ import type {
   MotionCreate,
   ActionItemCreate,
   ActionItemPriority,
+  SectionEntry,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../types/event';
 
@@ -47,17 +57,6 @@ const ACTION_STATUS_BADGES: Record<string, string> = {
   overdue: 'bg-red-100 text-red-800',
 };
 
-const SECTION_FIELDS: { key: string; label: string }[] = [
-  { key: 'agenda', label: 'Agenda' },
-  { key: 'old_business', label: 'Old Business' },
-  { key: 'new_business', label: 'New Business' },
-  { key: 'treasurer_report', label: 'Treasurer Report' },
-  { key: 'chief_report', label: 'Chief Report' },
-  { key: 'committee_reports', label: 'Committee Reports' },
-  { key: 'announcements', label: 'Announcements' },
-  { key: 'notes', label: 'General Notes' },
-];
-
 export const MinutesDetailPage: React.FC = () => {
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
@@ -72,6 +71,13 @@ export const MinutesDetailPage: React.FC = () => {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [sectionValue, setSectionValue] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Add section form
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+
+  // Publishing
+  const [publishing, setPublishing] = useState(false);
 
   // Motion form
   const [showMotionForm, setShowMotionForm] = useState(false);
@@ -126,11 +132,16 @@ export const MinutesDetailPage: React.FC = () => {
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
 
-  const handleSaveSection = async (key: string) => {
-    if (!minutesId) return;
+  // ── Section CRUD ──
+
+  const handleSaveSection = async (sectionKey: string) => {
+    if (!minutesId || !minutes) return;
     try {
       setSaving(true);
-      const updated = await minutesService.updateMinutes(minutesId, { [key]: sectionValue });
+      const updatedSections = minutes.sections.map(s =>
+        s.key === sectionKey ? { ...s, content: sectionValue } : s
+      );
+      const updated = await minutesService.updateMinutes(minutesId, { sections: updatedSections });
       setMinutes(updated);
       setEditingSection(null);
       toast.success('Section saved');
@@ -140,6 +151,90 @@ export const MinutesDetailPage: React.FC = () => {
       setSaving(false);
     }
   };
+
+  const handleReorderSection = async (index: number, direction: 'up' | 'down') => {
+    if (!minutesId || !minutes) return;
+    const sections = [...minutes.sections];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sections.length) return;
+
+    // Swap
+    [sections[index], sections[targetIndex]] = [sections[targetIndex], sections[index]];
+    // Renumber
+    const renumbered = sections.map((s, i) => ({ ...s, order: i }));
+
+    try {
+      setSaving(true);
+      const updated = await minutesService.updateMinutes(minutesId, { sections: renumbered });
+      setMinutes(updated);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to reorder');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddSection = async () => {
+    if (!minutesId || !minutes || !newSectionTitle.trim()) return;
+    const key = newSectionTitle.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const newSection: SectionEntry = {
+      order: minutes.sections.length,
+      key,
+      title: newSectionTitle.trim(),
+      content: '',
+    };
+
+    try {
+      setSaving(true);
+      const updated = await minutesService.updateMinutes(minutesId, {
+        sections: [...minutes.sections, newSection],
+      });
+      setMinutes(updated);
+      setNewSectionTitle('');
+      setShowAddSection(false);
+      toast.success('Section added');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to add section');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSection = async (sectionKey: string) => {
+    if (!minutesId || !minutes || !confirm('Delete this section?')) return;
+    const filtered = minutes.sections
+      .filter(s => s.key !== sectionKey)
+      .map((s, i) => ({ ...s, order: i }));
+
+    try {
+      setSaving(true);
+      const updated = await minutesService.updateMinutes(minutesId, { sections: filtered });
+      setMinutes(updated);
+      toast.success('Section removed');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to delete section');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Publishing ──
+
+  const handlePublish = async () => {
+    if (!minutesId) return;
+    try {
+      setPublishing(true);
+      await minutesService.publishMinutes(minutesId);
+      await fetchMinutes();
+      toast.success('Minutes published to Documents');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to publish');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // ── Workflow ──
 
   const handleSubmit = async () => {
     if (!minutesId) return;
@@ -176,6 +271,8 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
+  // ── Motions ──
+
   const handleAddMotion = async () => {
     if (!minutesId || !motionForm.motion_text.trim()) return;
     try {
@@ -202,6 +299,8 @@ export const MinutesDetailPage: React.FC = () => {
       toast.error(err.response?.data?.detail || 'Failed to delete motion');
     }
   };
+
+  // ── Action Items ──
 
   const handleAddActionItem = async () => {
     if (!minutesId || !actionForm.description.trim()) return;
@@ -236,6 +335,8 @@ export const MinutesDetailPage: React.FC = () => {
       toast.error(err.response?.data?.detail || 'Failed to delete');
     }
   };
+
+  // ── Event linking ──
 
   const handleOpenLinkEvent = async () => {
     setShowLinkEventModal(true);
@@ -419,6 +520,25 @@ export const MinutesDetailPage: React.FC = () => {
                 </button>
               </>
             )}
+            {minutes.status === 'approved' && (
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                {publishing ? 'Publishing...' : minutes.published_document_id ? 'Re-publish to Documents' : 'Publish to Documents'}
+              </button>
+            )}
+            {minutes.published_document_id && (
+              <Link
+                to="/documents"
+                className="px-4 py-2 border border-green-300 text-green-700 rounded-md hover:bg-green-50 inline-flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                View in Documents
+              </Link>
+            )}
             {minutes.status === 'draft' && (
               <button
                 onClick={handleDelete}
@@ -475,70 +595,158 @@ export const MinutesDetailPage: React.FC = () => {
         )}
       </div>
 
-      {/* Content Sections */}
+      {/* Dynamic Content Sections */}
       <div className="space-y-4 mb-6">
-        {SECTION_FIELDS.map(({ key, label }) => {
-          const value = (minutes as any)[key] as string | null;
-          const isEditing = editingSection === key;
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-900">Meeting Sections</h2>
+          {canManage && isEditable && (
+            <button
+              onClick={() => setShowAddSection(!showAddSection)}
+              className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 inline-flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Section
+            </button>
+          )}
+        </div>
 
-          if (!value && !isEditable && !isEditing) return null;
-
-          return (
-            <div key={key} className="bg-white shadow rounded-lg p-6">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-md font-semibold text-gray-900">{label}</h3>
-                {canManage && isEditable && !isEditing && (
-                  <button
-                    onClick={() => { setEditingSection(key); setSectionValue(value || ''); }}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-
-              {isEditing ? (
-                <div>
-                  <textarea
-                    rows={6}
-                    value={sectionValue}
-                    onChange={(e) => setSectionValue(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  />
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() => handleSaveSection(key)}
-                      disabled={saving}
-                      className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
-                    >
-                      {saving ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      onClick={() => setEditingSection(null)}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : value ? (
-                <div className="text-sm text-gray-700 whitespace-pre-wrap">{value}</div>
-              ) : (
-                <p className="text-sm text-gray-400 italic">
-                  No content yet.{' '}
-                  {canManage && isEditable && (
-                    <button
-                      onClick={() => { setEditingSection(key); setSectionValue(''); }}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Add content
-                    </button>
-                  )}
-                </p>
-              )}
+        {/* Add Section Form */}
+        {showAddSection && (
+          <div className="bg-gray-50 border rounded-lg p-4 flex items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Section Title</label>
+              <input
+                type="text"
+                value={newSectionTitle}
+                onChange={(e) => setNewSectionTitle(e.target.value)}
+                placeholder="e.g., Fire Prevention Report"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
             </div>
-          );
-        })}
+            <button
+              onClick={handleAddSection}
+              disabled={!newSectionTitle.trim() || saving}
+              className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+            <button
+              onClick={() => { setShowAddSection(false); setNewSectionTitle(''); }}
+              className="px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {minutes.sections.length === 0 ? (
+          <div className="bg-white shadow rounded-lg p-8 text-center">
+            <p className="text-gray-500">No sections defined for these minutes.</p>
+            {canManage && isEditable && (
+              <button
+                onClick={() => setShowAddSection(true)}
+                className="mt-3 text-sm text-cyan-600 hover:text-cyan-800"
+              >
+                Add your first section
+              </button>
+            )}
+          </div>
+        ) : (
+          minutes.sections
+            .sort((a, b) => a.order - b.order)
+            .map((section, idx) => {
+              const isEditing = editingSection === section.key;
+
+              return (
+                <div key={section.key} className="bg-white shadow rounded-lg p-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      {canManage && isEditable && (
+                        <div className="flex flex-col">
+                          <button
+                            onClick={() => handleReorderSection(idx, 'up')}
+                            disabled={idx === 0 || saving}
+                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30 p-0.5"
+                            title="Move up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleReorderSection(idx, 'down')}
+                            disabled={idx === minutes.sections.length - 1 || saving}
+                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30 p-0.5"
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                      <h3 className="text-md font-semibold text-gray-900">{section.title}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {canManage && isEditable && !isEditing && (
+                        <>
+                          <button
+                            onClick={() => { setEditingSection(section.key); setSectionValue(section.content || ''); }}
+                            className="text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSection(section.key)}
+                            className="text-gray-400 hover:text-red-600 p-1"
+                            title="Delete section"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <div>
+                      <textarea
+                        rows={6}
+                        value={sectionValue}
+                        onChange={(e) => setSectionValue(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleSaveSection(section.key)}
+                          disabled={saving}
+                          className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
+                        >
+                          {saving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => setEditingSection(null)}
+                          className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : section.content ? (
+                    <div className="text-sm text-gray-700 whitespace-pre-wrap">{section.content}</div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">
+                      No content yet.{' '}
+                      {canManage && isEditable && (
+                        <button
+                          onClick={() => { setEditingSection(section.key); setSectionValue(''); }}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Add content
+                        </button>
+                      )}
+                    </p>
+                  )}
+                </div>
+              );
+            })
+        )}
       </div>
 
       {/* Motions */}

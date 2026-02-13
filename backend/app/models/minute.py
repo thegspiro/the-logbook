@@ -1,7 +1,7 @@
 """
 Meeting Minutes Models
 
-Database models for meeting minutes, motions, and action items.
+Database models for meeting minutes, motions, action items, and templates.
 """
 
 from sqlalchemy import (
@@ -71,6 +71,76 @@ class ActionItemPriority(str, Enum):
     URGENT = "urgent"
 
 
+# ── Default template sections for a standard business meeting ──
+
+DEFAULT_BUSINESS_SECTIONS = [
+    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
+    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
+    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Minutes", "default_content": "", "required": False},
+    {"order": 3, "key": "treasurer_report", "title": "Treasurer's Report", "default_content": "", "required": False},
+    {"order": 4, "key": "chief_report", "title": "Chief's Report", "default_content": "", "required": False},
+    {"order": 5, "key": "committee_reports", "title": "Committee Reports", "default_content": "", "required": False},
+    {"order": 6, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
+    {"order": 7, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
+    {"order": 8, "key": "announcements", "title": "Announcements", "default_content": "", "required": False},
+    {"order": 9, "key": "public_comment", "title": "Public Comment", "default_content": "", "required": False},
+    {"order": 10, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+]
+
+DEFAULT_SPECIAL_SECTIONS = [
+    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
+    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
+    {"order": 2, "key": "purpose", "title": "Purpose of Special Meeting", "default_content": "", "required": True},
+    {"order": 3, "key": "discussion", "title": "Discussion", "default_content": "", "required": False},
+    {"order": 4, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+]
+
+DEFAULT_COMMITTEE_SECTIONS = [
+    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
+    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
+    {"order": 2, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
+    {"order": 3, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
+    {"order": 4, "key": "recommendations", "title": "Recommendations to Full Body", "default_content": "", "required": False},
+    {"order": 5, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+]
+
+
+class MinutesTemplate(Base):
+    """
+    Meeting Minutes Template
+
+    Defines a reusable template with predefined sections, ordering,
+    and document header/footer configuration for uniform output.
+    """
+    __tablename__ = "minutes_templates"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    meeting_type = Column(SQLEnum(MeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MeetingType.BUSINESS)
+    is_default = Column(Boolean, nullable=False, default=False)
+
+    # Sections definition: JSON array of {order, key, title, default_content, required}
+    sections = Column(JSON, nullable=False)
+
+    # Document header config: {org_name, logo_url, subtitle, show_date, show_type}
+    header_config = Column(JSON, nullable=True)
+
+    # Document footer config: {left_text, center_text, right_text, show_page_numbers, confidentiality_notice}
+    footer_config = Column(JSON, nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_minutes_templates_organization_id", "organization_id"),
+        Index("ix_minutes_templates_meeting_type", "meeting_type"),
+    )
+
+
 class MeetingMinutes(Base):
     """
     Meeting Minutes model
@@ -97,7 +167,22 @@ class MeetingMinutes(Base):
     quorum_met = Column(Boolean, nullable=True)
     quorum_count = Column(Integer, nullable=True)
 
-    # Content sections
+    # Dynamic content sections: JSON array of {order, key, title, content}
+    # When present, this is the authoritative source for content.
+    # Legacy fields below are retained for backward compatibility.
+    sections = Column(JSON, nullable=True)
+
+    # Template used to create these minutes
+    template_id = Column(String(36), ForeignKey("minutes_templates.id", ondelete="SET NULL"), nullable=True)
+
+    # Document header/footer overrides (inherits from template if null)
+    header_config = Column(JSON, nullable=True)
+    footer_config = Column(JSON, nullable=True)
+
+    # Published document reference
+    published_document_id = Column(String(36), nullable=True)
+
+    # Legacy content sections (kept for backward compat with existing data)
     agenda = Column(Text, nullable=True)
     old_business = Column(Text, nullable=True)
     new_business = Column(Text, nullable=True)
@@ -126,8 +211,48 @@ class MeetingMinutes(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    template = relationship("MinutesTemplate", foreign_keys=[template_id])
     motions = relationship("Motion", back_populates="minutes", cascade="all, delete-orphan", order_by="Motion.order")
     action_items = relationship("ActionItem", back_populates="minutes", cascade="all, delete-orphan", order_by="ActionItem.created_at")
+
+    def get_sections(self):
+        """Return sections from the dynamic field, or build from legacy fields."""
+        if self.sections:
+            return self.sections
+
+        # Build sections from legacy fields for backward compatibility
+        legacy_map = [
+            ("agenda", "Agenda"),
+            ("old_business", "Old Business"),
+            ("new_business", "New Business"),
+            ("treasurer_report", "Treasurer's Report"),
+            ("chief_report", "Chief's Report"),
+            ("committee_reports", "Committee Reports"),
+            ("announcements", "Announcements"),
+            ("notes", "General Notes"),
+        ]
+        result = []
+        for i, (key, title) in enumerate(legacy_map):
+            value = getattr(self, key, None)
+            if value:
+                result.append({"order": i, "key": key, "title": title, "content": value})
+        return result
+
+    def get_effective_header(self):
+        """Get header config: minutes override > template > None"""
+        if self.header_config:
+            return self.header_config
+        if self.template and self.template.header_config:
+            return self.template.header_config
+        return None
+
+    def get_effective_footer(self):
+        """Get footer config: minutes override > template > None"""
+        if self.footer_config:
+            return self.footer_config
+        if self.template and self.template.footer_config:
+            return self.template.footer_config
+        return None
 
     __table_args__ = (
         Index("ix_meeting_minutes_organization_id", "organization_id"),

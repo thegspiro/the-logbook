@@ -2104,4 +2104,80 @@ export const minutesService = {
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
     await api.delete(`/minutes/${minutesId}/action-items/${itemId}`);
   },
+
+  // Templates
+  async listTemplates(meetingType?: string): Promise<import('../types/minutes').TemplateListItem[]> {
+    const response = await api.get<import('../types/minutes').TemplateListItem[]>('/minutes/templates', {
+      params: meetingType ? { meeting_type: meetingType } : undefined,
+    });
+    return response.data;
+  },
+
+  async getTemplate(templateId: string): Promise<import('../types/minutes').MinutesTemplate> {
+    const response = await api.get<import('../types/minutes').MinutesTemplate>(`/minutes/templates/${templateId}`);
+    return response.data;
+  },
+
+  async createTemplate(data: import('../types/minutes').TemplateCreate): Promise<import('../types/minutes').MinutesTemplate> {
+    const response = await api.post<import('../types/minutes').MinutesTemplate>('/minutes/templates', data);
+    return response.data;
+  },
+
+  async updateTemplate(templateId: string, data: import('../types/minutes').TemplateUpdate): Promise<import('../types/minutes').MinutesTemplate> {
+    const response = await api.put<import('../types/minutes').MinutesTemplate>(`/minutes/templates/${templateId}`, data);
+    return response.data;
+  },
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await api.delete(`/minutes/templates/${templateId}`);
+  },
+
+  // Publishing
+  async publishMinutes(minutesId: string): Promise<import('../types/document').DocumentItem> {
+    const response = await api.post<import('../types/document').DocumentItem>(`/minutes/${minutesId}/publish`);
+    return response.data;
+  },
+};
+
+
+// ============================================
+// Documents Service
+// ============================================
+
+export const documentService = {
+  async listFolders(parentFolderId?: string): Promise<import('../types/document').DocumentFolder[]> {
+    const response = await api.get<import('../types/document').DocumentFolder[]>('/documents/folders', {
+      params: parentFolderId ? { parent_folder_id: parentFolderId } : undefined,
+    });
+    return response.data;
+  },
+
+  async createFolder(data: import('../types/document').FolderCreate): Promise<import('../types/document').DocumentFolder> {
+    const response = await api.post<import('../types/document').DocumentFolder>('/documents/folders', data);
+    return response.data;
+  },
+
+  async deleteFolder(folderId: string): Promise<void> {
+    await api.delete(`/documents/folders/${folderId}`);
+  },
+
+  async listDocuments(params?: {
+    folder_id?: string;
+    document_type?: string;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<import('../types/document').DocumentListItem[]> {
+    const response = await api.get<import('../types/document').DocumentListItem[]>('/documents', { params });
+    return response.data;
+  },
+
+  async getDocument(documentId: string): Promise<import('../types/document').DocumentItem> {
+    const response = await api.get<import('../types/document').DocumentItem>(`/documents/${documentId}`);
+    return response.data;
+  },
+
+  async deleteDocument(documentId: string): Promise<void> {
+    await api.delete(`/documents/${documentId}`);
+  },
 };

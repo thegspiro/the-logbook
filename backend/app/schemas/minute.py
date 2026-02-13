@@ -1,13 +1,112 @@
 """
 Meeting Minutes Pydantic Schemas
 
-Request and response schemas for meeting minutes endpoints.
+Request and response schemas for meeting minutes, templates, and related endpoints.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
+
+
+# ============================================
+# Section Schemas (for dynamic sections)
+# ============================================
+
+class SectionEntry(BaseModel):
+    """A single content section within minutes or a template"""
+    order: int = Field(..., ge=0, description="Display order")
+    key: str = Field(..., min_length=1, max_length=100, description="Unique key for the section")
+    title: str = Field(..., min_length=1, max_length=200, description="Display title")
+    content: str = Field(default="", description="Section content (minutes only)")
+
+
+class TemplateSectionEntry(BaseModel):
+    """A section definition within a template"""
+    order: int = Field(..., ge=0)
+    key: str = Field(..., min_length=1, max_length=100)
+    title: str = Field(..., min_length=1, max_length=200)
+    default_content: str = Field(default="", description="Default content to pre-fill")
+    required: bool = Field(default=False, description="Whether the section is required")
+
+
+# ============================================
+# Header / Footer Config Schemas
+# ============================================
+
+class HeaderConfig(BaseModel):
+    """Document header configuration"""
+    org_name: Optional[str] = Field(None, max_length=200, description="Organization name for header")
+    logo_url: Optional[str] = Field(None, description="URL to organization logo")
+    subtitle: Optional[str] = Field(None, max_length=300, description="Subtitle line (e.g., 'Official Meeting Minutes')")
+    show_date: bool = Field(default=True, description="Show meeting date in header")
+    show_meeting_type: bool = Field(default=True, description="Show meeting type in header")
+
+
+class FooterConfig(BaseModel):
+    """Document footer configuration"""
+    left_text: Optional[str] = Field(None, max_length=200, description="Left-aligned footer text")
+    center_text: Optional[str] = Field(None, max_length=200, description="Center footer text")
+    right_text: Optional[str] = Field(None, max_length=200, description="Right-aligned footer text")
+    show_page_numbers: bool = Field(default=True, description="Show page numbers")
+    confidentiality_notice: Optional[str] = Field(None, max_length=500, description="Confidentiality or distribution notice")
+
+
+# ============================================
+# Template Schemas
+# ============================================
+
+class TemplateCreate(BaseModel):
+    """Schema for creating a minutes template"""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    meeting_type: str = Field(default="business")
+    is_default: bool = False
+    sections: List[TemplateSectionEntry]
+    header_config: Optional[HeaderConfig] = None
+    footer_config: Optional[FooterConfig] = None
+
+
+class TemplateUpdate(BaseModel):
+    """Schema for updating a minutes template"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    meeting_type: Optional[str] = None
+    is_default: Optional[bool] = None
+    sections: Optional[List[TemplateSectionEntry]] = None
+    header_config: Optional[HeaderConfig] = None
+    footer_config: Optional[FooterConfig] = None
+
+
+class TemplateResponse(BaseModel):
+    """Template response schema"""
+    id: str
+    organization_id: str
+    name: str
+    description: Optional[str] = None
+    meeting_type: str
+    is_default: bool
+    sections: List[TemplateSectionEntry]
+    header_config: Optional[HeaderConfig] = None
+    footer_config: Optional[FooterConfig] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TemplateListItem(BaseModel):
+    """Compact template listing"""
+    id: str
+    name: str
+    meeting_type: str
+    is_default: bool
+    section_count: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -121,6 +220,18 @@ class MinutesBase(BaseModel):
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = Field(None, ge=0)
+    event_id: Optional[str] = Field(None, description="Optional link to an event")
+
+
+class MinutesCreate(MinutesBase):
+    """Schema for creating meeting minutes"""
+    template_id: Optional[str] = Field(None, description="Template to use for section structure")
+    sections: Optional[List[SectionEntry]] = Field(None, description="Content sections (if not using template)")
+    header_config: Optional[HeaderConfig] = None
+    footer_config: Optional[FooterConfig] = None
+    motions: Optional[List[MotionCreate]] = Field(None, description="Motions to create with the minutes")
+    action_items: Optional[List[ActionItemCreate]] = Field(None, description="Action items to create with the minutes")
+    # Legacy fields still accepted for backward compat
     agenda: Optional[str] = None
     old_business: Optional[str] = None
     new_business: Optional[str] = None
@@ -129,13 +240,6 @@ class MinutesBase(BaseModel):
     committee_reports: Optional[str] = None
     announcements: Optional[str] = None
     notes: Optional[str] = None
-    event_id: Optional[str] = Field(None, description="Optional link to an event")
-
-
-class MinutesCreate(MinutesBase):
-    """Schema for creating meeting minutes"""
-    motions: Optional[List[MotionCreate]] = Field(None, description="Motions to create with the minutes")
-    action_items: Optional[List[ActionItemCreate]] = Field(None, description="Action items to create with the minutes")
 
 
 class MinutesUpdate(BaseModel):
@@ -150,6 +254,11 @@ class MinutesUpdate(BaseModel):
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = Field(None, ge=0)
+    event_id: Optional[str] = None
+    sections: Optional[List[SectionEntry]] = Field(None, description="Full sections replacement")
+    header_config: Optional[HeaderConfig] = None
+    footer_config: Optional[FooterConfig] = None
+    # Legacy fields still accepted
     agenda: Optional[str] = None
     old_business: Optional[str] = None
     new_business: Optional[str] = None
@@ -158,13 +267,28 @@ class MinutesUpdate(BaseModel):
     committee_reports: Optional[str] = None
     announcements: Optional[str] = None
     notes: Optional[str] = None
-    event_id: Optional[str] = None
 
 
-class MinutesResponse(MinutesBase):
+class MinutesResponse(BaseModel):
     """Meeting minutes response schema"""
     id: str
     organization_id: str
+    title: str
+    meeting_type: str
+    meeting_date: datetime
+    location: Optional[str] = None
+    called_by: Optional[str] = None
+    called_to_order_at: Optional[datetime] = None
+    adjourned_at: Optional[datetime] = None
+    attendees: Optional[List[AttendeeEntry]] = None
+    quorum_met: Optional[bool] = None
+    quorum_count: Optional[int] = None
+    event_id: Optional[str] = None
+    template_id: Optional[str] = None
+    sections: List[SectionEntry] = []
+    header_config: Optional[HeaderConfig] = None
+    footer_config: Optional[FooterConfig] = None
+    published_document_id: Optional[str] = None
     status: str
     submitted_at: Optional[datetime] = None
     submitted_by: Optional[str] = None
@@ -191,6 +315,7 @@ class MinutesListItem(BaseModel):
     status: str
     location: Optional[str] = None
     called_by: Optional[str] = None
+    template_id: Optional[str] = None
     motions_count: int = 0
     action_items_count: int = 0
     open_action_items: int = 0

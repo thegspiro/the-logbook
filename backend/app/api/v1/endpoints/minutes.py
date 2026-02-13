@@ -29,8 +29,17 @@ from app.schemas.minute import (
     ActionItemCreate,
     ActionItemUpdate,
     ActionItemResponse,
+    SectionEntry,
+    TemplateCreate,
+    TemplateUpdate,
+    TemplateResponse,
+    TemplateListItem,
+    TemplateSectionEntry,
 )
+from app.schemas.document import DocumentResponse
 from app.services.minute_service import MinuteService
+from app.services.template_service import TemplateService
+from app.services.document_service import DocumentService
 from app.api.dependencies import get_current_user, require_permission
 
 logger = logging.getLogger(__name__)
@@ -520,11 +529,188 @@ async def delete_action_item(
 
 
 # ============================================
+# Publish Minutes
+# ============================================
+
+@router.post("/{minutes_id}/publish", response_model=DocumentResponse)
+async def publish_minutes(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """Publish approved minutes as a formatted document in the Meeting Minutes folder."""
+    minute_service = MinuteService(db)
+    minutes = await minute_service.get_minutes(minutes_id, current_user.organization_id)
+    if not minutes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Minutes not found")
+
+    doc_service = DocumentService(db)
+    try:
+        doc = await doc_service.publish_minutes(minutes, current_user.organization_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    await log_audit_event(
+        db=db,
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        action="minutes.published",
+        resource_type="meeting_minutes",
+        resource_id=minutes_id,
+        details={"document_id": doc.id, "title": minutes.title},
+    )
+
+    return DocumentResponse(
+        id=doc.id,
+        organization_id=doc.organization_id,
+        folder_id=doc.folder_id,
+        title=doc.title,
+        description=doc.description,
+        document_type=doc.document_type if isinstance(doc.document_type, str) else doc.document_type.value,
+        content_html=doc.content_html,
+        source_type=doc.source_type,
+        source_id=doc.source_id,
+        tags=doc.tags,
+        created_by=doc.created_by,
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+    )
+
+
+# ============================================
+# Templates
+# ============================================
+
+@router.get("/templates", response_model=List[TemplateListItem])
+async def list_templates(
+    meeting_type: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.view")),
+):
+    """List available minutes templates"""
+    service = TemplateService(db)
+    templates = await service.list_templates(current_user.organization_id, meeting_type)
+    if not templates:
+        templates = await service.initialize_defaults(current_user.organization_id, current_user.id)
+
+    return [
+        TemplateListItem(
+            id=t.id,
+            name=t.name,
+            meeting_type=t.meeting_type if isinstance(t.meeting_type, str) else t.meeting_type.value,
+            is_default=t.is_default,
+            section_count=len(t.sections) if t.sections else 0,
+            created_at=t.created_at,
+        )
+        for t in templates
+    ]
+
+
+@router.get("/templates/{template_id}", response_model=TemplateResponse)
+async def get_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.view")),
+):
+    """Get a template by ID"""
+    service = TemplateService(db)
+    tpl = await service.get_template(template_id, current_user.organization_id)
+    if not tpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    return _build_template_response(tpl)
+
+
+@router.post("/templates", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
+async def create_template(
+    data: TemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """Create a new minutes template"""
+    service = TemplateService(db)
+    tpl = await service.create_template(data, current_user.organization_id, current_user.id)
+    await log_audit_event(
+        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
+        action="template.created", resource_type="minutes_template", resource_id=tpl.id,
+        details={"name": tpl.name},
+    )
+    return _build_template_response(tpl)
+
+
+@router.put("/templates/{template_id}", response_model=TemplateResponse)
+async def update_template(
+    template_id: str,
+    data: TemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """Update a minutes template"""
+    service = TemplateService(db)
+    tpl = await service.update_template(template_id, current_user.organization_id, data)
+    if not tpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    await log_audit_event(
+        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
+        action="template.updated", resource_type="minutes_template", resource_id=tpl.id,
+        details={"name": tpl.name},
+    )
+    return _build_template_response(tpl)
+
+
+@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """Delete a minutes template"""
+    service = TemplateService(db)
+    deleted = await service.delete_template(template_id, current_user.organization_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    await log_audit_event(
+        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
+        action="template.deleted", resource_type="minutes_template", resource_id=template_id,
+    )
+
+
+# ============================================
 # Response Builders
 # ============================================
 
+def _build_template_response(tpl) -> TemplateResponse:
+    """Build a TemplateResponse from a MinutesTemplate model"""
+    sections = [
+        TemplateSectionEntry(
+            order=s.get("order", 0), key=s.get("key", ""), title=s.get("title", ""),
+            default_content=s.get("default_content", ""), required=s.get("required", False),
+        )
+        for s in (tpl.sections or [])
+    ]
+    return TemplateResponse(
+        id=tpl.id, organization_id=tpl.organization_id, name=tpl.name,
+        description=tpl.description,
+        meeting_type=tpl.meeting_type if isinstance(tpl.meeting_type, str) else tpl.meeting_type.value,
+        is_default=tpl.is_default, sections=sections,
+        header_config=tpl.header_config, footer_config=tpl.footer_config,
+        created_by=tpl.created_by, created_at=tpl.created_at, updated_at=tpl.updated_at,
+    )
+
+
 def _build_response(minutes) -> MinutesResponse:
     """Build a MinutesResponse from a MeetingMinutes model"""
+    # Build sections from the model's get_sections() helper (dynamic or legacy)
+    raw_sections = minutes.get_sections() if hasattr(minutes, 'get_sections') else (minutes.sections or [])
+    sections = [
+        SectionEntry(
+            order=s.get("order", 0),
+            key=s.get("key", ""),
+            title=s.get("title", ""),
+            content=s.get("content", ""),
+        )
+        for s in raw_sections
+    ]
+
     return MinutesResponse(
         id=minutes.id,
         organization_id=minutes.organization_id,
@@ -538,15 +724,12 @@ def _build_response(minutes) -> MinutesResponse:
         attendees=minutes.attendees,
         quorum_met=minutes.quorum_met,
         quorum_count=minutes.quorum_count,
-        agenda=minutes.agenda,
-        old_business=minutes.old_business,
-        new_business=minutes.new_business,
-        treasurer_report=minutes.treasurer_report,
-        chief_report=minutes.chief_report,
-        committee_reports=minutes.committee_reports,
-        announcements=minutes.announcements,
-        notes=minutes.notes,
         event_id=minutes.event_id,
+        template_id=minutes.template_id,
+        sections=sections,
+        header_config=minutes.get_effective_header() if hasattr(minutes, 'get_effective_header') else minutes.header_config,
+        footer_config=minutes.get_effective_footer() if hasattr(minutes, 'get_effective_footer') else minutes.footer_config,
+        published_document_id=minutes.published_document_id,
         status=minutes.status if isinstance(minutes.status, str) else minutes.status.value,
         submitted_at=minutes.submitted_at,
         submitted_by=minutes.submitted_by,

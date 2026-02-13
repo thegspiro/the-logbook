@@ -55,6 +55,7 @@ from app.models.forms import (
 
 from app.models.minute import (
     MeetingMinutes,
+    MinutesTemplate,
     Motion,
     ActionItem,
     MeetingType,
@@ -62,6 +63,12 @@ from app.models.minute import (
     MotionStatus,
     ActionItemStatus,
     ActionItemPriority,
+)
+
+from app.models.document import (
+    Document,
+    DocumentFolder,
+    DocumentType,
 )
 
 from app.models.apparatus import (
@@ -127,6 +134,7 @@ __all__ = [
     "IntegrationType",
     # Minutes models
     "MeetingMinutes",
+    "MinutesTemplate",
     "Motion",
     "ActionItem",
     "MeetingType",
@@ -134,6 +142,10 @@ __all__ = [
     "MotionStatus",
     "ActionItemStatus",
     "ActionItemPriority",
+    # Document models
+    "Document",
+    "DocumentFolder",
+    "DocumentType",
     # Apparatus models
     "Apparatus",
     "ApparatusType",

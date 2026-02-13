@@ -13,9 +13,10 @@ from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from app.models.minute import (
-    MeetingMinutes, Motion, ActionItem,
+    MeetingMinutes, MinutesTemplate, Motion, ActionItem,
     MeetingType, MinutesStatus, MotionStatus,
     ActionItemStatus, ActionItemPriority,
+    DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
 )
 from app.models.user import User
 from app.schemas.minute import (
@@ -48,6 +49,47 @@ class MinuteService:
             minutes_dict["attendees"] = [
                 a.model_dump() if hasattr(a, "model_dump") else a
                 for a in data.attendees
+            ]
+
+        # Serialize sections to dicts
+        if minutes_dict.get("sections"):
+            minutes_dict["sections"] = [
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in data.sections
+            ]
+
+        # Serialize header/footer configs
+        if minutes_dict.get("header_config") and hasattr(data.header_config, "model_dump"):
+            minutes_dict["header_config"] = data.header_config.model_dump()
+        if minutes_dict.get("footer_config") and hasattr(data.footer_config, "model_dump"):
+            minutes_dict["footer_config"] = data.footer_config.model_dump()
+
+        # If a template_id is provided but no sections, populate from template
+        if minutes_dict.get("template_id") and not minutes_dict.get("sections"):
+            template = await self._get_template(minutes_dict["template_id"], organization_id)
+            if template and template.sections:
+                minutes_dict["sections"] = [
+                    {"order": s["order"], "key": s["key"], "title": s["title"], "content": s.get("default_content", "")}
+                    for s in template.sections
+                ]
+                # Inherit header/footer from template if not explicitly set
+                if not minutes_dict.get("header_config") and template.header_config:
+                    minutes_dict["header_config"] = template.header_config
+                if not minutes_dict.get("footer_config") and template.footer_config:
+                    minutes_dict["footer_config"] = template.footer_config
+
+        # If no template and no sections, generate default sections for the meeting type
+        if not minutes_dict.get("sections"):
+            mt = minutes_dict.get("meeting_type", "business")
+            if mt == "special":
+                default = DEFAULT_SPECIAL_SECTIONS
+            elif mt == "committee":
+                default = DEFAULT_COMMITTEE_SECTIONS
+            else:
+                default = DEFAULT_BUSINESS_SECTIONS
+            minutes_dict["sections"] = [
+                {"order": s["order"], "key": s["key"], "title": s["title"], "content": s.get("default_content", "")}
+                for s in default
             ]
 
         minutes = MeetingMinutes(
@@ -96,6 +138,17 @@ class MinuteService:
         # Reload with relationships
         return await self.get_minutes(minutes.id, organization_id)
 
+    async def _get_template(
+        self, template_id: str, organization_id: UUID
+    ) -> Optional[MinutesTemplate]:
+        """Get a template by ID"""
+        result = await self.db.execute(
+            select(MinutesTemplate)
+            .where(MinutesTemplate.id == template_id)
+            .where(MinutesTemplate.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
     async def get_minutes(
         self, minutes_id: str, organization_id: UUID
     ) -> Optional[MeetingMinutes]:
@@ -107,6 +160,7 @@ class MinuteService:
             .options(
                 selectinload(MeetingMinutes.motions),
                 selectinload(MeetingMinutes.action_items),
+                selectinload(MeetingMinutes.template),
             )
         )
         return result.scalar_one_or_none()
@@ -177,6 +231,19 @@ class MinuteService:
                 a.model_dump() if hasattr(a, "model_dump") else a
                 for a in data.attendees
             ]
+
+        # Serialize sections
+        if "sections" in update_data and update_data["sections"]:
+            update_data["sections"] = [
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in data.sections
+            ]
+
+        # Serialize header/footer configs
+        if "header_config" in update_data and data.header_config and hasattr(data.header_config, "model_dump"):
+            update_data["header_config"] = data.header_config.model_dump()
+        if "footer_config" in update_data and data.footer_config and hasattr(data.footer_config, "model_dump"):
+            update_data["footer_config"] = data.footer_config.model_dump()
 
         for field, value in update_data.items():
             setattr(minutes, field, value)

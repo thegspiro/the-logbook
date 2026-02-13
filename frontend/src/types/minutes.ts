@@ -8,6 +8,89 @@ export type MotionStatus = 'passed' | 'failed' | 'tabled' | 'withdrawn';
 export type ActionItemStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'overdue';
 export type ActionItemPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+// ── Section Types ──
+
+export interface SectionEntry {
+  order: number;
+  key: string;
+  title: string;
+  content: string;
+}
+
+export interface TemplateSectionEntry {
+  order: number;
+  key: string;
+  title: string;
+  default_content: string;
+  required: boolean;
+}
+
+// ── Header / Footer Config ──
+
+export interface HeaderConfig {
+  org_name?: string;
+  logo_url?: string;
+  subtitle?: string;
+  show_date?: boolean;
+  show_meeting_type?: boolean;
+}
+
+export interface FooterConfig {
+  left_text?: string;
+  center_text?: string;
+  right_text?: string;
+  show_page_numbers?: boolean;
+  confidentiality_notice?: string;
+}
+
+// ── Template Types ──
+
+export interface MinutesTemplate {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  meeting_type: MeetingType;
+  is_default: boolean;
+  sections: TemplateSectionEntry[];
+  header_config?: HeaderConfig;
+  footer_config?: FooterConfig;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TemplateListItem {
+  id: string;
+  name: string;
+  meeting_type: MeetingType;
+  is_default: boolean;
+  section_count: number;
+  created_at: string;
+}
+
+export interface TemplateCreate {
+  name: string;
+  description?: string;
+  meeting_type: MeetingType;
+  is_default?: boolean;
+  sections: TemplateSectionEntry[];
+  header_config?: HeaderConfig;
+  footer_config?: FooterConfig;
+}
+
+export interface TemplateUpdate {
+  name?: string;
+  description?: string;
+  meeting_type?: MeetingType;
+  is_default?: boolean;
+  sections?: TemplateSectionEntry[];
+  header_config?: HeaderConfig;
+  footer_config?: FooterConfig;
+}
+
+// ── Existing types (unchanged) ──
+
 export interface AttendeeEntry {
   user_id?: string;
   name: string;
@@ -59,15 +142,12 @@ export interface MeetingMinutes {
   attendees?: AttendeeEntry[];
   quorum_met?: boolean;
   quorum_count?: number;
-  agenda?: string;
-  old_business?: string;
-  new_business?: string;
-  treasurer_report?: string;
-  chief_report?: string;
-  committee_reports?: string;
-  announcements?: string;
-  notes?: string;
   event_id?: string;
+  template_id?: string;
+  sections: SectionEntry[];
+  header_config?: HeaderConfig;
+  footer_config?: FooterConfig;
+  published_document_id?: string;
   status: MinutesStatus;
   submitted_at?: string;
   submitted_by?: string;
@@ -91,6 +171,7 @@ export interface MinutesListItem {
   status: MinutesStatus;
   location?: string;
   called_by?: string;
+  template_id?: string;
   motions_count: number;
   action_items_count: number;
   open_action_items: number;
@@ -103,20 +184,11 @@ export interface MinutesCreate {
   meeting_date: string;
   location?: string;
   called_by?: string;
-  called_to_order_at?: string;
-  adjourned_at?: string;
-  attendees?: AttendeeEntry[];
-  quorum_met?: boolean;
-  quorum_count?: number;
-  agenda?: string;
-  old_business?: string;
-  new_business?: string;
-  treasurer_report?: string;
-  chief_report?: string;
-  committee_reports?: string;
-  announcements?: string;
-  notes?: string;
   event_id?: string;
+  template_id?: string;
+  sections?: SectionEntry[];
+  header_config?: HeaderConfig;
+  footer_config?: FooterConfig;
   motions?: MotionCreate[];
   action_items?: ActionItemCreate[];
 }
@@ -127,20 +199,10 @@ export interface MinutesUpdate {
   meeting_date?: string;
   location?: string;
   called_by?: string;
-  called_to_order_at?: string;
-  adjourned_at?: string;
-  attendees?: AttendeeEntry[];
-  quorum_met?: boolean;
-  quorum_count?: number;
-  agenda?: string;
-  old_business?: string;
-  new_business?: string;
-  treasurer_report?: string;
-  chief_report?: string;
-  committee_reports?: string;
-  announcements?: string;
-  notes?: string;
   event_id?: string;
+  sections?: SectionEntry[];
+  header_config?: HeaderConfig;
+  footer_config?: FooterConfig;
 }
 
 export interface MotionCreate {

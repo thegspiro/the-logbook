@@ -11,6 +11,7 @@ import {
   Clock,
   AlertCircle,
   FileText,
+  LayoutTemplate,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { minutesService, eventService } from '../services/api';
@@ -20,6 +21,7 @@ import type {
   MinutesStats,
   MeetingType,
   MinutesSearchResult,
+  TemplateListItem,
 } from '../types/minutes';
 import type { EventListItem } from '../types/event';
 
@@ -55,6 +57,8 @@ const MinutesPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [meetingEvents, setMeetingEvents] = useState<EventListItem[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [templates, setTemplates] = useState<TemplateListItem[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const [form, setForm] = useState({
     title: '',
@@ -65,22 +69,47 @@ const MinutesPage: React.FC = () => {
     calledBy: '',
     notes: '',
     eventId: '',
+    templateId: '',
   });
 
   useEffect(() => {
     fetchData();
   }, [typeFilter, statusFilter]);
 
-  // Fetch meeting events when create modal opens
+  // Fetch meeting events and templates when create modal opens
   useEffect(() => {
-    if (showCreateModal && meetingEvents.length === 0) {
-      setLoadingEvents(true);
-      eventService.getEvents({ event_type: 'business_meeting' })
-        .then(events => setMeetingEvents(events))
-        .catch(() => {}) // non-critical
-        .finally(() => setLoadingEvents(false));
+    if (showCreateModal) {
+      if (meetingEvents.length === 0) {
+        setLoadingEvents(true);
+        eventService.getEvents({ event_type: 'business_meeting' })
+          .then(events => setMeetingEvents(events))
+          .catch(() => {})
+          .finally(() => setLoadingEvents(false));
+      }
+      if (templates.length === 0) {
+        setLoadingTemplates(true);
+        minutesService.listTemplates()
+          .then(t => {
+            setTemplates(t);
+            // Auto-select default template for the selected meeting type
+            const defaultTpl = t.find(tpl => tpl.meeting_type === form.meetingType && tpl.is_default);
+            if (defaultTpl && !form.templateId) {
+              setForm(prev => ({ ...prev, templateId: defaultTpl.id }));
+            }
+          })
+          .catch(() => {})
+          .finally(() => setLoadingTemplates(false));
+      }
     }
   }, [showCreateModal]);
+
+  // Update auto-selected template when meeting type changes
+  useEffect(() => {
+    if (templates.length > 0) {
+      const defaultTpl = templates.find(t => t.meeting_type === form.meetingType && t.is_default);
+      setForm(prev => ({ ...prev, templateId: defaultTpl?.id || '' }));
+    }
+  }, [form.meetingType, templates]);
 
   const fetchData = async () => {
     try {
@@ -148,12 +177,12 @@ const MinutesPage: React.FC = () => {
         meeting_date: meetingDate,
         location: form.location || undefined,
         called_by: form.calledBy || undefined,
-        notes: form.notes || undefined,
         event_id: form.eventId || undefined,
+        template_id: form.templateId || undefined,
       });
 
       setShowCreateModal(false);
-      setForm({ title: '', meetingType: 'business', meetingDate: '', meetingTime: '', location: '', calledBy: '', notes: '', eventId: '' });
+      setForm({ title: '', meetingType: 'business', meetingDate: '', meetingTime: '', location: '', calledBy: '', notes: '', eventId: '', templateId: '' });
       toast.success('Minutes created successfully');
       navigate(`/minutes/${created.id}`);
     } catch (err: any) {
@@ -175,6 +204,8 @@ const MinutesPage: React.FC = () => {
   const getMeetingTypeInfo = (type: string) => {
     return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[4];
   };
+
+  const filteredTemplates = templates.filter(t => t.meeting_type === form.meetingType);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -404,8 +435,8 @@ const MinutesPage: React.FC = () => {
       {/* Create Minutes Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
               <h3 className="text-lg font-medium text-gray-900">Record Meeting Minutes</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
@@ -447,6 +478,35 @@ const MinutesPage: React.FC = () => {
                     placeholder="e.g., Chief Johnson"
                   />
                 </div>
+              </div>
+
+              {/* Template Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <LayoutTemplate className="w-4 h-4 inline mr-1" />
+                  Minutes Template
+                </label>
+                {loadingTemplates ? (
+                  <p className="text-sm text-gray-400">Loading templates...</p>
+                ) : filteredTemplates.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic">No templates found for this meeting type.</p>
+                ) : (
+                  <select
+                    value={form.templateId}
+                    onChange={(e) => setForm({ ...form, templateId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="">No template (blank sections)</option>
+                    {filteredTemplates.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.section_count} sections){t.is_default ? ' - Default' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Templates pre-fill sections for the meeting type. You can customize sections after creation.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -520,20 +580,9 @@ const MinutesPage: React.FC = () => {
                   Optionally link these minutes to a scheduled meeting event. Fields will auto-populate.
                 </p>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Initial Notes</label>
-                <textarea
-                  rows={4}
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="Meeting opened at... Roll call taken... Old business..."
-                />
-              </div>
             </div>
 
-            <div className="px-6 py-3 bg-gray-50 flex justify-end space-x-3 rounded-b-lg">
+            <div className="px-6 py-3 bg-gray-50 flex justify-end space-x-3 rounded-b-lg sticky bottom-0">
               <button
                 onClick={() => setShowCreateModal(false)}
                 disabled={creating}
