@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Meeting Minutes & Documents Module (2026-02-13)
+
+#### Meeting Minutes Backend
+- **Database Models**: `MeetingMinutes`, `MinutesTemplate`, `MinutesSection` with UUID primary keys, organization scoping, and foreign keys to events
+- **8 Meeting Types**: `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other` — each with tailored default section templates
+- **Dynamic Sections System**: Minutes use a flexible JSON sections array (`order`, `key`, `title`, `content`) replacing hardcoded content fields — sections can be added, removed, and reordered
+- **Template System**: `MinutesTemplate` model with configurable sections, header/footer configs, meeting type defaults, and `is_default` flag per type
+- **Default Section Presets**:
+  - Business (9 sections): call to order, roll call, approval of previous, treasurer report, old/new business, etc.
+  - Trustee (11 sections): adds financial review, trust fund report, audit report, legal matters
+  - Executive (11 sections): adds officers' reports, strategic planning, personnel matters, executive session
+  - Annual (12 sections): adds annual report, election results, awards & recognition
+- **Minutes Lifecycle**: `draft` → `review` → `approved` status progression with edit protection for approved minutes
+- **Publish Workflow**: Approved minutes can be published to the Documents module as styled HTML with organization branding
+- **Event Linking**: Minutes can be linked to events via `event_id` foreign key
+- **Search**: Full-text search across title and section content with SQL LIKE injection protection
+
+#### Documents Backend
+- **Document Management**: `Document` and `DocumentFolder` models with folder hierarchy, tagging, and file metadata
+- **7 System Folders**: SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents — auto-created on first access, non-deletable
+- **Custom Folders**: Users can create, update, and delete custom folders alongside system folders
+- **Document Types**: `policy`, `procedure`, `form`, `report`, `minutes`, `training`, `certificate`, `general`
+- **Source Tracking**: Documents track their origin (`upload`, `generated`, `linked`) and source reference ID
+
+#### API Endpoints
+- **Minutes**: 10 endpoints — CRUD, list, search, templates CRUD, publish
+- **Documents**: 5 endpoints — folders CRUD, document list/get/delete
+- **Permissions**: `meetings.view` for read access, `meetings.manage` for write operations
+
+#### Frontend Pages
+- **MinutesPage.tsx**: Meeting type filtering with color-coded badges, template selector in create modal (auto-selects default template per meeting type), search, quick stats dashboard
+- **MinutesDetailPage.tsx**: Dynamic section editor with rich text, section reordering (up/down), add/delete sections, publish button for approved minutes, "View in Documents" link for published minutes
+- **DocumentsPage.tsx**: Folder-based browsing, document viewer modal with server-rendered HTML, grid/list view toggle, custom folder management, document count badges
+
+#### Database Migrations
+- Migration `add_meeting_minutes`: Creates `meeting_minutes` table with all fields and indexes
+- Migration `20260213_0800`: Adds `minutes_templates`, `document_folders`, `documents` tables with dynamic sections support
+- Migration `a7f3e2d91b04`: Extends MeetingType ENUM with `trustee`, `executive`, `annual` on both tables
+
+### Security - Meeting Minutes Module Review (2026-02-13)
+
+#### Fixes Applied
+- **HIGH: Audit log parameter mismatch** — 6 audit log calls in minutes and documents endpoints used wrong parameter names (`action=`, `details=` instead of `event_type=`, `event_data=`), causing silent `TypeError` at runtime. Fixed all calls to use correct `log_audit_event()` signature
+- **MEDIUM: SQL LIKE pattern injection** — Search inputs in `minute_service.py` (2 methods) and `document_service.py` (1 method) passed directly into `%{search}%` without escaping `%` and `_` wildcards. Fixed by escaping all three special characters before interpolation
+- **LOW: Unbounded query limits** — List and search endpoints accepted arbitrary `limit` values. Added `min(limit, 100)` for list endpoints and `min(limit, 50)` for search
+
+#### Verified Secure
+- Multi-tenancy via `organization_id` scoping on all queries
+- Permission checks (`meetings.view`/`meetings.manage`) on all endpoints
+- Status-based edit protection (approved minutes cannot be modified)
+- HTML generation uses `html.escape()` for all user content
+- System folder protection (cannot delete system folders)
+- Pydantic validation on all request schemas
+
+### Fixed - Migration Chain Integrity (2026-02-13)
+
+- **Broken Alembic migration chain**: Three minutes/documents migrations had incorrect `down_revision` values creating orphaned migration heads
+  - `add_meeting_minutes`: Fixed `down_revision` from `None` to `'20260212_0400'`
+  - `20260213_0800`: Fixed `down_revision` from `'20260212_1200'` (wrong revision ID) to `'add_meeting_minutes'`
+  - `a7f3e2d91b04`: Fixed `down_revision` from `None` to `'20260213_0800'`
+
 ### Enhanced - Email Ballot Voting Page (2026-02-12)
 
 #### Token-Based Ballot Page (`BallotVotingPage.tsx`)
