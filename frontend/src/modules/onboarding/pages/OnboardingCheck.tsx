@@ -400,7 +400,7 @@ const OnboardingCheck: React.FC = () => {
 
   const handleSkip = () => {
     // Attempt to proceed anyway - useful if only Redis is down
-    checkOnboardingStatus();
+    void checkOnboardingStatus();
   };
 
   const handleRetry = () => {

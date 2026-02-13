@@ -31,7 +31,7 @@ class Integration(Base):
     description = Column(Text, nullable=True)
     category = Column(String(50), nullable=False)  # Calendar, Messaging, Data
     status = Column(String(20), nullable=False, default="available")  # available, connected, error, coming_soon
-    config = Column(JSON, default={})
+    config = Column(JSON, default=dict)
     enabled = Column(Boolean, default=False)
     last_sync_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

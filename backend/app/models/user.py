@@ -124,7 +124,7 @@ class Organization(Base):
     type = Column(String(50), default="fire_department")
 
     # Settings JSON for extensibility
-    settings = Column(JSON, default={})
+    settings = Column(JSON, default=dict)
     active = Column(Boolean, default=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -183,11 +183,11 @@ class User(Base):
 
     # Emergency Contacts (stored as JSON array)
     # Format: [{"name": "...", "relationship": "...", "phone": "...", "email": "...", "is_primary": true}, ...]
-    emergency_contacts = Column(JSON, default=[])
+    emergency_contacts = Column(JSON, default=list)
 
     # Notification Preferences (stored as JSON object)
     # Format: {"email": true, "sms": false, "push": true, "digest": "daily", ...}
-    notification_preferences = Column(JSON, default={})
+    notification_preferences = Column(JSON, default=dict)
 
     # Status
     status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
@@ -262,7 +262,7 @@ class Role(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False)
     description = Column(Text)
-    permissions = Column(JSON, default=[])
+    permissions = Column(JSON, default=list)
     is_system = Column(Boolean, default=False)  # System roles can't be deleted
     priority = Column(Integer, default=0)  # Higher priority = more powerful
     

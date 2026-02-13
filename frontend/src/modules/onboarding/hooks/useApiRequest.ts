@@ -32,7 +32,7 @@ export interface ApiRequestOptions {
   /**
    * Callback after error (can be used for custom error handling)
    */
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
 }
 
 export const useApiRequest = () => {
@@ -85,16 +85,22 @@ export const useApiRequest = () => {
         }
 
         return { data: result, error: null };
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Handle abort (not an error, just cancelled)
-        if (err.name === 'AbortError') {
+        if (err instanceof DOMException && err.name === 'AbortError') {
           console.info('Request cancelled');
           setIsLoading(false);
           return { data: null, error: 'Request cancelled' };
         }
 
         // Handle actual errors
-        const errorMessage = err.message || 'An unexpected error occurred';
+        const isError = err instanceof Error;
+        const errorMessage = isError ? err.message : 'An unexpected error occurred';
+
+        // Extract response details if available (e.g., from Axios errors)
+        const response = typeof err === 'object' && err !== null && 'response' in err
+          ? (err as { response?: { data?: unknown; status?: number } }).response
+          : undefined;
 
         setIsLoading(false);
         setError(errorMessage);
@@ -106,10 +112,10 @@ export const useApiRequest = () => {
           action: options.action,
           errorMessage,
           errorDetails: {
-            name: err.name,
-            stack: err.stack,
-            response: err.response?.data,
-            status: err.response?.status,
+            name: isError ? err.name : undefined,
+            stack: isError ? err.stack : undefined,
+            response: response?.data,
+            status: response?.status,
           },
           userContext: options.userContext,
         });
