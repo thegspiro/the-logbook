@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.user import User
 from app.schemas.training_program import (
     # Requirements
@@ -170,6 +171,19 @@ async def update_training_requirement(
             detail=error
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="training_program_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "requirement_id": str(requirement_id),
+            "action": "requirement_updated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return requirement
 
 
@@ -200,6 +214,19 @@ async def create_training_program(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_program_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program.id),
+            "program_name": program.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return program
 
@@ -677,6 +704,21 @@ async def duplicate_program(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_program_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(new_program.id),
+            "program_name": new_program.name,
+            "source_program_id": str(program_id),
+            "action": "duplicated",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return new_program
 

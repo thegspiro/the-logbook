@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.schemas.role import (
     RoleResponse,
     RoleCreate,
@@ -136,6 +137,22 @@ async def create_role(
             priority=role_data.priority,
             is_system=False,
         )
+
+        await log_audit_event(
+            db=db,
+            event_type="role_created",
+            event_category="access_control",
+            severity="warning",
+            event_data={
+                "role_id": str(role.id),
+                "role_name": role.name,
+                "role_slug": role.slug,
+                "permissions": role_data.permissions,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return role
     except ValueError as e:
         raise HTTPException(
@@ -197,6 +214,22 @@ async def update_role(
             permissions=role_update.permissions,
             priority=role_update.priority,
         )
+
+        event_data = {"role_id": str(role_id)}
+        if role_update.name is not None:
+            event_data["name"] = role_update.name
+        if role_update.permissions is not None:
+            event_data["permissions_changed"] = True
+        await log_audit_event(
+            db=db,
+            event_type="role_updated",
+            event_category="access_control",
+            severity="warning",
+            event_data=event_data,
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return role
     except ValueError as e:
         raise HTTPException(
@@ -225,6 +258,16 @@ async def delete_role(
             role_id=str(role_id),
             organization_id=str(current_user.organization_id),
             deleted_by=str(current_user.id),
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="role_deleted",
+            event_category="access_control",
+            severity="warning",
+            event_data={"role_id": str(role_id)},
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -264,6 +307,21 @@ async def clone_role(
             created_by=str(current_user.id),
             new_description=clone_request.description,
         )
+
+        await log_audit_event(
+            db=db,
+            event_type="role_cloned",
+            event_category="access_control",
+            severity="warning",
+            event_data={
+                "source_role_id": str(role_id),
+                "new_role_id": str(role.id),
+                "new_role_name": role.name,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return role
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -412,6 +470,20 @@ async def set_user_roles(
         set_by=str(current_user.id),
     )
 
+    await log_audit_event(
+        db=db,
+        event_type="role_permissions_changed",
+        event_category="access_control",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "role_ids": [str(r) for r in assignment.role_ids],
+            "action": "roles_set",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return roles
 
 
@@ -463,6 +535,20 @@ async def assign_role_to_user(
         assigned_by=str(current_user.id),
     )
 
+    await log_audit_event(
+        db=db,
+        event_type="role_permissions_changed",
+        event_category="access_control",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "role_id": str(role_id),
+            "action": "role_assigned",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
 
 @router.delete("/user/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_role_from_user(
@@ -504,6 +590,20 @@ async def remove_role_from_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User does not have this role"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="role_permissions_changed",
+        event_category="access_control",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "role_id": str(role_id),
+            "action": "role_removed",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.get("/user/{user_id}/permissions", response_model=UserPermissionsResponse)

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.user import User
 from app.models.forms import FormStatus, FormCategory
 from app.schemas.forms import (
@@ -136,6 +137,19 @@ async def create_form(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="form_created",
+        event_category="forms",
+        severity="info",
+        event_data={
+            "form_id": str(new_form.id),
+            "form_title": new_form.title,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return new_form
 
 
@@ -232,6 +246,18 @@ async def update_form(
             detail=error,
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="form_updated",
+        event_category="forms",
+        severity="info",
+        event_data={
+            "form_id": str(form_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return updated_form
 
 
@@ -258,6 +284,16 @@ async def delete_form(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="form_deleted",
+        event_category="forms",
+        severity="info",
+        event_data={"form_id": str(form_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.post("/{form_id}/publish", response_model=FormDetailResponse)
@@ -555,6 +591,19 @@ async def submit_form(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="form_submission_received",
+        event_category="forms",
+        severity="info",
+        event_data={
+            "form_id": str(form_id),
+            "submission_id": str(result.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return result
 

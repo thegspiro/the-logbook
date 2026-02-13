@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.schemas.user import (
     UserListResponse,
     UserWithRolesResponse,
@@ -180,6 +181,21 @@ async def create_member(
 
     await db.commit()
     await db.refresh(new_user, ["roles"])
+
+    await log_audit_event(
+        db=db,
+        event_type="user_created",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "new_user_id": str(new_user.id),
+            "username": new_user.username,
+            "email": new_user.email,
+            "roles_assigned": [str(r.id) for r in new_user.roles],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
@@ -359,6 +375,20 @@ async def assign_user_roles(
     await db.commit()
     await db.refresh(user)
 
+    await log_audit_event(
+        db=db,
+        event_type="user_role_assigned",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "role_ids": [str(r) for r in role_assignment.role_ids],
+            "action": "roles_replaced",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "user_id": user.id,
         "username": user.username,
@@ -423,6 +453,21 @@ async def add_role_to_user(
     await db.commit()
     await db.refresh(user)
 
+    await log_audit_event(
+        db=db,
+        event_type="user_role_assigned",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "role_id": str(role_id),
+            "role_name": role.name,
+            "action": "role_added",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "user_id": user.id,
         "username": user.username,
@@ -478,6 +523,21 @@ async def remove_role_from_user(
     await db.commit()
     await db.refresh(user)
 
+    await log_audit_event(
+        db=db,
+        event_type="user_role_removed",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "role_id": str(role_id),
+            "role_name": role_to_remove.name,
+            "action": "role_removed",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "user_id": user.id,
         "username": user.username,
@@ -514,6 +574,19 @@ async def get_user_with_roles(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="user_viewed",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "viewed_user_id": str(user_id),
+            "viewed_username": user.username,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return user
 
@@ -587,5 +660,18 @@ async def update_contact_info(
 
     await db.commit()
     await db.refresh(user)
+
+    await log_audit_event(
+        db=db,
+        event_type="user_updated",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "updated_user_id": str(user_id),
+            "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return user

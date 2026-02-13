@@ -494,8 +494,6 @@ export const ProspectiveMembersPage: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Close active tab controls wrapper */}
       )}
 
       {/* Error State */}

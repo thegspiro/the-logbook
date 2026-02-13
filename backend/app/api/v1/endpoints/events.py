@@ -11,6 +11,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.event import Event, EventRSVP, EventType
 from app.models.user import User
 from app.schemas.event import (
@@ -108,6 +109,20 @@ async def create_event(
             event_data=event_data,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
+        )
+
+        await log_audit_event(
+            db=db,
+            event_type="event_created",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event.id),
+                "title": event.title,
+                "event_type": event.event_type.value,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
 
         return EventResponse(
@@ -236,6 +251,19 @@ async def update_event(
                 detail="Event not found"
             )
 
+        await log_audit_event(
+            db=db,
+            event_type="event_updated",
+            event_category="events",
+            severity="info",
+            event_data={
+                "event_id": str(event_id),
+                "title": event.title,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
         return EventResponse(
             id=event.id,
             organization_id=event.organization_id,
@@ -293,6 +321,16 @@ async def delete_event(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Event not found"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="event_deleted",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": str(event_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.post("/{event_id}/cancel", response_model=EventResponse)
@@ -481,6 +519,19 @@ async def check_in_attendee(
         select(User).where(User.id == rsvp.user_id)
     )
     user = user_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="event_checkin",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "checked_in_user_id": str(check_in_data.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return RSVPResponse(
         id=rsvp.id,
@@ -697,6 +748,19 @@ async def self_check_in(
         select(User).where(User.id == rsvp.user_id)
     )
     user = user_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="event_checkout" if is_checkout else "event_checkin",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "action": "self_checkout" if is_checkout else "self_checkin",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return RSVPResponse(
         id=rsvp.id,

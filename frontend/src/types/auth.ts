@@ -36,6 +36,7 @@ export interface CurrentUser {
   is_active: boolean;
   email_verified: boolean;
   mfa_enabled: boolean;
+  password_expired: boolean;
 }
 
 export interface PasswordChangeData {

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 import { useAuthStore } from '../../stores/authStore';
+import { useIdleTimer } from '../../hooks/useIdleTimer';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -15,7 +17,9 @@ const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((s) => s.user);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');

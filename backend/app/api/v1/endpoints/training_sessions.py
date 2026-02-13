@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.models.user import User
 from app.schemas.training_session import (
     TrainingSessionCreate,
@@ -52,6 +53,20 @@ async def create_training_session(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "session_id": str(training_session.id),
+            "course_name": training_session.course_name,
+            "event_id": str(training_session.event_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return TrainingSessionResponse(
         id=training_session.id,
@@ -108,6 +123,20 @@ async def finalize_training_session(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "session_id": str(training_session_id),
+            "action": "finalized",
+            "approval_id": str(approval.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {
         "message": "Training session finalized successfully",
@@ -171,6 +200,19 @@ async def submit_training_approval(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_approved",
+        event_category="training",
+        severity="info",
+        event_data={
+            "token": token,
+            "attendee_count": len(approval_data.attendees),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return {
         "message": "Training approval submitted successfully",

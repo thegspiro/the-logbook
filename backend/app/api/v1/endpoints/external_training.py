@@ -14,6 +14,7 @@ from datetime import datetime, date, timedelta
 import logging
 
 from app.core.database import get_db
+from app.core.audit import log_audit_event
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.models.training import (
     ExternalTrainingProvider,
@@ -115,6 +116,20 @@ async def create_provider(
     db.add(new_provider)
     await db.commit()
     await db.refresh(new_provider)
+
+    await log_audit_event(
+        db=db,
+        event_type="external_training_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "provider_id": str(new_provider.id),
+            "provider_name": new_provider.name,
+            "provider_type": new_provider.provider_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
     return new_provider
 
@@ -802,6 +817,21 @@ async def import_single_record(
 
         await db.commit()
         await db.refresh(ext_import)
+
+        await log_audit_event(
+            db=db,
+            event_type="external_training_verified",
+            event_category="training",
+            severity="info",
+            event_data={
+                "import_id": str(import_id),
+                "provider_id": str(provider_id),
+                "training_record_id": str(training_record.id),
+                "course_title": ext_import.course_title,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
 
         return ext_import
 

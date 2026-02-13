@@ -326,3 +326,24 @@ class Session(Base):
     
     def __repr__(self):
         return f"<Session(user_id={self.user_id}, expires_at={self.expires_at})>"
+
+
+class PasswordHistory(Base):
+    """
+    Password history for HIPAA compliance (§164.312(d))
+
+    Stores hashes of previous passwords to prevent reuse.
+    The system checks the last N entries (configured via
+    HIPAA_PASSWORD_HISTORY_COUNT) before allowing a password change.
+    """
+
+    __tablename__ = "password_history"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_password_history_user_created', 'user_id', 'created_at'),
+    )
