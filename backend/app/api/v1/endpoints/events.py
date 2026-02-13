@@ -6,6 +6,7 @@ Endpoints for event management including events, RSVPs, and attendance tracking.
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from datetime import datetime
@@ -27,11 +28,57 @@ from app.schemas.event import (
     EventStats,
     RecordActualTimes,
     QRCheckInData,
+    CheckInMonitoringStats,
 )
 from app.services.event_service import EventService
 from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
+
+
+def _build_event_response(event: Event, **extra_fields) -> EventResponse:
+    """Build an EventResponse from an Event model, including location and allowed_rsvp_statuses."""
+    location_name = None
+    if event.location_obj:
+        location_name = event.location_obj.name
+
+    return EventResponse(
+        id=event.id,
+        organization_id=event.organization_id,
+        title=event.title,
+        description=event.description,
+        event_type=event.event_type.value,
+        location_id=event.location_id,
+        location=event.location,
+        location_name=location_name,
+        location_details=event.location_details,
+        start_datetime=event.start_datetime,
+        end_datetime=event.end_datetime,
+        actual_start_time=event.actual_start_time,
+        actual_end_time=event.actual_end_time,
+        requires_rsvp=event.requires_rsvp,
+        rsvp_deadline=event.rsvp_deadline,
+        max_attendees=event.max_attendees,
+        allowed_rsvp_statuses=event.allowed_rsvp_statuses,
+        is_mandatory=event.is_mandatory,
+        eligible_roles=event.eligible_roles,
+        allow_guests=event.allow_guests,
+        send_reminders=event.send_reminders,
+        reminder_hours_before=event.reminder_hours_before,
+        check_in_window_type=event.check_in_window_type.value if event.check_in_window_type else "flexible",
+        check_in_minutes_before=event.check_in_minutes_before,
+        check_in_minutes_after=event.check_in_minutes_after,
+        require_checkout=event.require_checkout,
+        custom_fields=event.custom_fields,
+        attachments=event.attachments,
+        is_cancelled=event.is_cancelled,
+        cancellation_reason=event.cancellation_reason,
+        cancelled_at=event.cancelled_at,
+        created_by=event.created_by,
+        created_at=event.created_at,
+        updated_at=event.updated_at,
+        **extra_fields,
+    )
 
 
 # ============================================
@@ -71,6 +118,10 @@ async def list_events(
         rsvp_count = len(event.rsvps) if event.rsvps else 0
         going_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "going") if event.rsvps else 0
 
+        location_name = None
+        if event.location_obj:
+            location_name = event.location_obj.name
+
         event_list.append(
             EventListItem(
                 id=event.id,
@@ -78,7 +129,9 @@ async def list_events(
                 event_type=event.event_type.value,
                 start_datetime=event.start_datetime,
                 end_datetime=event.end_datetime,
+                location_id=event.location_id,
                 location=event.location,
+                location_name=location_name,
                 requires_rsvp=event.requires_rsvp,
                 is_mandatory=event.is_mandatory,
                 is_cancelled=event.is_cancelled,
@@ -125,33 +178,7 @@ async def create_event(
             username=current_user.username,
         )
 
-        return EventResponse(
-            id=event.id,
-            organization_id=event.organization_id,
-            title=event.title,
-            description=event.description,
-            event_type=event.event_type.value,
-            location=event.location,
-            location_details=event.location_details,
-            start_datetime=event.start_datetime,
-            end_datetime=event.end_datetime,
-            requires_rsvp=event.requires_rsvp,
-            rsvp_deadline=event.rsvp_deadline,
-            max_attendees=event.max_attendees,
-            is_mandatory=event.is_mandatory,
-            eligible_roles=event.eligible_roles,
-            allow_guests=event.allow_guests,
-            send_reminders=event.send_reminders,
-            reminder_hours_before=event.reminder_hours_before,
-            custom_fields=event.custom_fields,
-            attachments=event.attachments,
-            is_cancelled=event.is_cancelled,
-            cancellation_reason=event.cancellation_reason,
-            cancelled_at=event.cancelled_at,
-            created_by=event.created_by,
-            created_at=event.created_at,
-            updated_at=event.updated_at,
-        )
+        return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -189,32 +216,8 @@ async def get_event(
     not_going_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "not_going") if event.rsvps else 0
     maybe_count = sum(1 for rsvp in event.rsvps if rsvp.status.value == "maybe") if event.rsvps else 0
 
-    return EventResponse(
-        id=event.id,
-        organization_id=event.organization_id,
-        title=event.title,
-        description=event.description,
-        event_type=event.event_type.value,
-        location=event.location,
-        location_details=event.location_details,
-        start_datetime=event.start_datetime,
-        end_datetime=event.end_datetime,
-        requires_rsvp=event.requires_rsvp,
-        rsvp_deadline=event.rsvp_deadline,
-        max_attendees=event.max_attendees,
-        is_mandatory=event.is_mandatory,
-        eligible_roles=event.eligible_roles,
-        allow_guests=event.allow_guests,
-        send_reminders=event.send_reminders,
-        reminder_hours_before=event.reminder_hours_before,
-        custom_fields=event.custom_fields,
-        attachments=event.attachments,
-        is_cancelled=event.is_cancelled,
-        cancellation_reason=event.cancellation_reason,
-        cancelled_at=event.cancelled_at,
-        created_by=event.created_by,
-        created_at=event.created_at,
-        updated_at=event.updated_at,
+    return _build_event_response(
+        event,
         rsvp_count=rsvp_count,
         going_count=going_count,
         not_going_count=not_going_count,
@@ -264,33 +267,7 @@ async def update_event(
             username=current_user.username,
         )
 
-        return EventResponse(
-            id=event.id,
-            organization_id=event.organization_id,
-            title=event.title,
-            description=event.description,
-            event_type=event.event_type.value,
-            location=event.location,
-            location_details=event.location_details,
-            start_datetime=event.start_datetime,
-            end_datetime=event.end_datetime,
-            requires_rsvp=event.requires_rsvp,
-            rsvp_deadline=event.rsvp_deadline,
-            max_attendees=event.max_attendees,
-            is_mandatory=event.is_mandatory,
-            eligible_roles=event.eligible_roles,
-            allow_guests=event.allow_guests,
-            send_reminders=event.send_reminders,
-            reminder_hours_before=event.reminder_hours_before,
-            custom_fields=event.custom_fields,
-            attachments=event.attachments,
-            is_cancelled=event.is_cancelled,
-            cancellation_reason=event.cancellation_reason,
-            cancelled_at=event.cancelled_at,
-            created_by=event.created_by,
-            created_at=event.created_at,
-            updated_at=event.updated_at,
-        )
+        return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -361,33 +338,7 @@ async def cancel_event(
                 detail="Event not found"
             )
 
-        return EventResponse(
-            id=event.id,
-            organization_id=event.organization_id,
-            title=event.title,
-            description=event.description,
-            event_type=event.event_type.value,
-            location=event.location,
-            location_details=event.location_details,
-            start_datetime=event.start_datetime,
-            end_datetime=event.end_datetime,
-            requires_rsvp=event.requires_rsvp,
-            rsvp_deadline=event.rsvp_deadline,
-            max_attendees=event.max_attendees,
-            is_mandatory=event.is_mandatory,
-            eligible_roles=event.eligible_roles,
-            allow_guests=event.allow_guests,
-            send_reminders=event.send_reminders,
-            reminder_hours_before=event.reminder_hours_before,
-            custom_fields=event.custom_fields,
-            attachments=event.attachments,
-            is_cancelled=event.is_cancelled,
-            cancellation_reason=event.cancellation_reason,
-            cancelled_at=event.cancelled_at,
-            created_by=event.created_by,
-            created_at=event.created_at,
-            updated_at=event.updated_at,
-        )
+        return _build_event_response(event)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -514,7 +465,6 @@ async def check_in_attendee(
         )
 
     # Get user details
-    from sqlalchemy import select
     user_result = await db.execute(
         select(User).where(User.id == rsvp.user_id)
     )
@@ -638,7 +588,7 @@ async def record_actual_times(
             detail=error
         )
 
-    return event
+    return _build_event_response(event)
 
 
 # ============================================
@@ -707,7 +657,6 @@ async def self_check_in(
         # Special case: already checked in - return success with message
         if error == "ALREADY_CHECKED_IN":
             # Get user details
-            from sqlalchemy import select
             user_result = await db.execute(
                 select(User).where(User.id == rsvp.user_id)
             )
@@ -743,7 +692,6 @@ async def self_check_in(
         )
 
     # Get user details
-    from sqlalchemy import select
     user_result = await db.execute(
         select(User).where(User.id == rsvp.user_id)
     )
@@ -780,28 +728,31 @@ async def self_check_in(
     )
 
 
-@router.get("/{id}/check-in-monitoring", response_model=None)
+@router.get("/{event_id}/check-in-monitoring", response_model=CheckInMonitoringStats)
 async def get_check_in_monitoring(
-    id: UUID,
+    event_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("events.manage")),
 ):
     """
     Get real-time check-in monitoring statistics for an event.
-    
+
     Provides event managers with real-time visibility into check-in activity.
+
+    **Authentication required**
+    **Requires permission: events.manage**
     """
     service = EventService(db)
-    
+
     stats, error = await service.get_check_in_monitoring_stats(
-        event_id=id,
+        event_id=event_id,
         organization_id=current_user.organization_id
     )
-    
+
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error
         )
-    
+
     return stats

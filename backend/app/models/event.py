@@ -160,6 +160,7 @@ class EventRSVP(Base):
 
     # Relationships
     event = relationship("Event", back_populates="rsvps")
+    user = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("ix_event_rsvps_event_id", "event_id"),

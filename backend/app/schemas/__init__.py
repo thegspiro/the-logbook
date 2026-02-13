@@ -50,6 +50,21 @@ from app.schemas.auth import (
     MFAVerify,
     MFALogin,
 )
+from app.schemas.event import (
+    EventCreate,
+    EventUpdate,
+    EventResponse,
+    EventListItem,
+    EventCancel,
+    RSVPCreate,
+    RSVPResponse,
+    CheckInRequest,
+    SelfCheckInRequest,
+    EventStats as EventStatistics,
+    RecordActualTimes,
+    QRCheckInData,
+    CheckInMonitoringStats,
+)
 from app.schemas.election import (
     BallotItem,
     PositionEligibility,
@@ -118,6 +133,20 @@ __all__ = [
     "MFASetup",
     "MFAVerify",
     "MFALogin",
+    # Event schemas
+    "EventCreate",
+    "EventUpdate",
+    "EventResponse",
+    "EventListItem",
+    "EventCancel",
+    "RSVPCreate",
+    "RSVPResponse",
+    "CheckInRequest",
+    "SelfCheckInRequest",
+    "EventStatistics",
+    "RecordActualTimes",
+    "QRCheckInData",
+    "CheckInMonitoringStats",
     # Election schemas
     "BallotItem",
     "PositionEligibility",

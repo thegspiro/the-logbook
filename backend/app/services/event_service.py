@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus, CheckInWindowType
 from app.models.user import User, Role, user_roles
 from app.models.location import Location
+from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
 from app.schemas.event import (
     EventCreate,
     EventUpdate,
@@ -60,6 +61,15 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(event)
 
+        # Eagerly load location relationship for the response
+        if event.location_id:
+            result = await self.db.execute(
+                select(Event)
+                .where(Event.id == event.id)
+                .options(selectinload(Event.location_obj))
+            )
+            event = result.scalar_one()
+
         return event
 
     async def get_event(
@@ -74,7 +84,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
-            .options(selectinload(Event.rsvps))
+            .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
 
@@ -104,7 +114,11 @@ class EventService:
         limit: int = 100,
     ) -> List[Event]:
         """List events with filtering"""
-        query = select(Event).where(Event.organization_id == organization_id)
+        query = (
+            select(Event)
+            .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
+        )
 
         if event_type:
             query = query.where(Event.event_type == event_type)
@@ -131,6 +145,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
 
@@ -169,6 +184,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
 
@@ -266,13 +282,16 @@ class EventService:
 
         # Check capacity if user is going
         if rsvp_data.status == "going" and event.max_attendees:
-            # Count current "going" RSVPs
-            going_count_result = await self.db.execute(
+            # Count current "going" RSVPs, excluding this user's RSVP if updating
+            capacity_query = (
                 select(func.count(EventRSVP.id))
                 .where(EventRSVP.event_id == event_id)
                 .where(EventRSVP.status == RSVPStatus.GOING)
-                .where(EventRSVP.id != (rsvp.id if existing_rsvp else None))
             )
+            if existing_rsvp:
+                capacity_query = capacity_query.where(EventRSVP.id != existing_rsvp.id)
+
+            going_count_result = await self.db.execute(capacity_query)
             going_count = going_count_result.scalar() or 0
 
             if going_count >= event.max_attendees:
@@ -321,10 +340,11 @@ class EventService:
         self, event_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """
-        Check in an attendee
+        Check in an attendee (manager action)
 
         If RSVP doesn't exist, creates one automatically with status 'going'.
         This allows check-in to work for events that don't require RSVP.
+        Validates the check-in window to prevent check-ins outside allowed times.
         """
         # Verify event belongs to organization
         event_result = await self.db.execute(
@@ -336,6 +356,15 @@ class EventService:
 
         if not event:
             return None, "Event not found"
+
+        if event.is_cancelled:
+            return None, "Event has been cancelled"
+
+        # Validate check-in window
+        now = datetime.utcnow()
+        is_valid, error_msg = self._validate_check_in_window(event, now)
+        if not is_valid:
+            return None, error_msg
 
         # Verify user belongs to organization
         user_result = await self.db.execute(
@@ -494,6 +523,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = event_result.scalar_one_or_none()
 
@@ -529,11 +559,12 @@ class EventService:
 
         Returns: (data_dict, error_message)
         """
-        # Get event
+        # Get event with location
         event_result = await self.db.execute(
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = event_result.scalar_one_or_none()
 
@@ -552,10 +583,15 @@ class EventService:
 
         is_valid = check_in_start <= now <= check_in_end
 
+        location_name = None
+        if event.location_obj:
+            location_name = event.location_obj.name
+
         return {
             "event_id": str(event.id),
             "event_name": event.title,
             "event_type": event.event_type.value if event.event_type else None,
+            "event_description": event.description,
             "start_datetime": event.start_datetime.isoformat(),
             "end_datetime": event.end_datetime.isoformat(),
             "actual_end_time": event.actual_end_time.isoformat() if event.actual_end_time else None,
@@ -563,6 +599,8 @@ class EventService:
             "check_in_end": check_in_end.isoformat(),
             "is_valid": is_valid,
             "location": event.location,
+            "location_id": str(event.location_id) if event.location_id else None,
+            "location_name": location_name,
         }, None
 
     def _validate_check_in_window(self, event: Event, now: datetime) -> Tuple[bool, Optional[str]]:
@@ -843,7 +881,7 @@ class EventService:
 
         stats = {
             "event_id": str(event.id),
-            "event_name": event.name,
+            "event_name": event.title,
             "event_type": event.event_type.value,
             "start_datetime": event.start_datetime,
             "end_datetime": event.end_datetime,
