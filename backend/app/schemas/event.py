@@ -32,7 +32,7 @@ class EventBase(BaseModel):
     send_reminders: bool = Field(default=True)
     reminder_hours_before: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
     check_in_window_type: Optional[str] = Field(default="flexible", description="Check-in window type: flexible, strict, window")
-    check_in_minutes_before: Optional[int] = Field(default=15, description="For 'window' type: minutes before event start")
+    check_in_minutes_before: Optional[int] = Field(default=30, description="Minutes before event start to allow check-in")
     check_in_minutes_after: Optional[int] = Field(default=15, description="For 'window' type: minutes after event start")
     require_checkout: bool = Field(default=False, description="Require manual check-out")
     custom_fields: Optional[Dict[str, Any]] = None
@@ -74,6 +74,7 @@ class EventUpdate(BaseModel):
 class EventCancel(BaseModel):
     """Schema for cancelling an event"""
     cancellation_reason: str = Field(..., min_length=10, max_length=500)
+    send_notifications: bool = Field(default=False, description="Send cancellation notifications to RSVPs")
 
 
 class EventResponse(EventBase):
@@ -169,6 +170,21 @@ class SelfCheckInRequest(BaseModel):
     is_checkout: bool = Field(default=False, description="Set to true for check-out")
 
 
+class ManagerAddAttendee(BaseModel):
+    """Schema for a manager adding someone to an event"""
+    user_id: UUID
+    status: str = Field(default="going", description="RSVP status: going, not_going, maybe")
+    checked_in: bool = Field(default=False, description="Mark as checked in immediately")
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class RSVPOverride(BaseModel):
+    """Schema for manager overriding attendance details"""
+    override_check_in_at: Optional[datetime] = Field(None, description="Override check-in time")
+    override_check_out_at: Optional[datetime] = Field(None, description="Override check-out time")
+    override_duration_minutes: Optional[int] = Field(None, ge=0, description="Override total attendance duration in minutes")
+
+
 class RecordActualTimes(BaseModel):
     """Schema for recording actual event start/end times"""
     actual_start_time: Optional[datetime] = Field(None, description="When the event actually started")
@@ -190,6 +206,7 @@ class QRCheckInData(BaseModel):
     location: Optional[str] = None
     location_id: Optional[str] = None
     location_name: Optional[str] = None
+    require_checkout: bool = Field(default=False, description="Whether this event requires checkout")
 
 
 class EventStats(BaseModel):

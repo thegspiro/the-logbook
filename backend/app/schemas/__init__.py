@@ -64,6 +64,8 @@ from app.schemas.event import (
     RecordActualTimes,
     QRCheckInData,
     CheckInMonitoringStats,
+    ManagerAddAttendee,
+    RSVPOverride,
 )
 from app.schemas.election import (
     BallotItem,
@@ -147,6 +149,8 @@ __all__ = [
     "RecordActualTimes",
     "QRCheckInData",
     "CheckInMonitoringStats",
+    "ManagerAddAttendee",
+    "RSVPOverride",
     # Election schemas
     "BallotItem",
     "PositionEligibility",

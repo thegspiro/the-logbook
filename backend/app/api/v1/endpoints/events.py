@@ -29,6 +29,8 @@ from app.schemas.event import (
     RecordActualTimes,
     QRCheckInData,
     CheckInMonitoringStats,
+    ManagerAddAttendee,
+    RSVPOverride,
 )
 from app.services.event_service import EventService
 from app.api.dependencies import get_current_user, require_permission
@@ -330,6 +332,7 @@ async def cancel_event(
             event_id=event_id,
             organization_id=current_user.organization_id,
             reason=cancel_data.cancellation_reason,
+            send_notifications=cancel_data.send_notifications,
         )
 
         if not event:
@@ -494,6 +497,153 @@ async def check_in_attendee(
         updated_at=rsvp.updated_at,
         checked_in=rsvp.checked_in,
         checked_in_at=rsvp.checked_in_at,
+        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_email=user.email if user else None,
+    )
+
+
+@router.post("/{event_id}/add-attendee", response_model=RSVPResponse)
+async def manager_add_attendee(
+    event_id: UUID,
+    attendee_data: ManagerAddAttendee,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Add an attendee to an event (manager action)
+
+    Allows managers to add someone to an event and optionally mark them checked in.
+    Useful for members who had trouble logging in or scanning the QR code.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    rsvp, error = await service.manager_add_attendee(
+        event_id=event_id,
+        user_id=attendee_data.user_id,
+        organization_id=current_user.organization_id,
+        manager_id=current_user.id,
+        status=attendee_data.status,
+        checked_in=attendee_data.checked_in,
+        notes=attendee_data.notes,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    # Get user details
+    user_result = await db.execute(
+        select(User).where(User.id == rsvp.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="event_attendee_added",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "added_user_id": str(attendee_data.user_id),
+            "checked_in": attendee_data.checked_in,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return RSVPResponse(
+        id=rsvp.id,
+        event_id=rsvp.event_id,
+        user_id=rsvp.user_id,
+        status=rsvp.status.value,
+        guest_count=rsvp.guest_count,
+        notes=rsvp.notes,
+        responded_at=rsvp.responded_at,
+        updated_at=rsvp.updated_at,
+        checked_in=rsvp.checked_in,
+        checked_in_at=rsvp.checked_in_at,
+        checked_out_at=rsvp.checked_out_at,
+        attendance_duration_minutes=rsvp.attendance_duration_minutes,
+        override_check_in_at=rsvp.override_check_in_at,
+        override_check_out_at=rsvp.override_check_out_at,
+        override_duration_minutes=rsvp.override_duration_minutes,
+        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_email=user.email if user else None,
+    )
+
+
+@router.patch("/{event_id}/rsvps/{user_id}/override", response_model=RSVPResponse)
+async def override_rsvp_attendance(
+    event_id: UUID,
+    user_id: UUID,
+    override_data: RSVPOverride,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Override attendance details for an RSVP (manager action)
+
+    Allows managers to correct check-in/check-out times and credit hours
+    for attendees who had issues with the automated system.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    rsvp, error = await service.override_rsvp_attendance(
+        event_id=event_id,
+        user_id=user_id,
+        organization_id=current_user.organization_id,
+        manager_id=current_user.id,
+        override_data=override_data,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    # Get user details
+    user_result = await db.execute(
+        select(User).where(User.id == rsvp.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+
+    await log_audit_event(
+        db=db,
+        event_type="event_attendance_override",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "overridden_user_id": str(user_id),
+            "override_fields": list(override_data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return RSVPResponse(
+        id=rsvp.id,
+        event_id=rsvp.event_id,
+        user_id=rsvp.user_id,
+        status=rsvp.status.value,
+        guest_count=rsvp.guest_count,
+        notes=rsvp.notes,
+        responded_at=rsvp.responded_at,
+        updated_at=rsvp.updated_at,
+        checked_in=rsvp.checked_in,
+        checked_in_at=rsvp.checked_in_at,
+        checked_out_at=rsvp.checked_out_at,
+        attendance_duration_minutes=rsvp.attendance_duration_minutes,
+        override_check_in_at=rsvp.override_check_in_at,
+        override_check_out_at=rsvp.override_check_out_at,
+        override_duration_minutes=rsvp.override_duration_minutes,
         user_name=f"{user.first_name} {user.last_name}" if user else None,
         user_email=user.email if user else None,
     )

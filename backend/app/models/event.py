@@ -94,8 +94,8 @@ class Event(Base):
 
     # Check-in window settings
     check_in_window_type = Column(SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=CheckInWindowType.FLEXIBLE)
-    check_in_minutes_before = Column(Integer, nullable=True, default=15)  # For WINDOW type
-    check_in_minutes_after = Column(Integer, nullable=True, default=15)  # For WINDOW type
+    check_in_minutes_before = Column(Integer, nullable=True, default=30)  # Minutes before start to allow check-in
+    check_in_minutes_after = Column(Integer, nullable=True, default=15)  # For WINDOW type: minutes after start
     require_checkout = Column(Boolean, nullable=False, default=False)  # Require manual check-out
 
     # Custom fields

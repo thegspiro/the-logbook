@@ -22,7 +22,11 @@ from app.schemas.event import (
     EventStats,
     EventResponse,
     RSVPResponse,
+    RSVPOverride,
 )
+from app.services.location_service import LocationService
+from app.services.notifications_service import NotificationsService
+from app.models.notification import NotificationChannel, NotificationCategory
 
 
 class EventService:
@@ -42,6 +46,22 @@ class EventService:
         if event_data.requires_rsvp and event_data.rsvp_deadline:
             if event_data.rsvp_deadline >= event_data.start_datetime:
                 raise ValueError("RSVP deadline must be before event start")
+
+        # Check for location double-booking
+        if event_data.location_id:
+            location_service = LocationService(self.db)
+            overlapping = await location_service.check_overlapping_events(
+                location_id=event_data.location_id,
+                organization_id=str(organization_id),
+                start_datetime=event_data.start_datetime,
+                end_datetime=event_data.end_datetime,
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                raise ValueError(
+                    f"Location is already booked during this time. "
+                    f"Conflicting event(s): {titles}"
+                )
 
         # Prepare event data
         event_dict = event_data.model_dump()
@@ -166,6 +186,24 @@ class EventService:
         if end_dt <= start_dt:
             raise ValueError("End date must be after start date")
 
+        # Check for location double-booking if location or times are changing
+        check_location_id = update_data.get("location_id", event.location_id)
+        if check_location_id:
+            location_service = LocationService(self.db)
+            overlapping = await location_service.check_overlapping_events(
+                location_id=check_location_id,
+                organization_id=str(organization_id),
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                exclude_event_id=event_id,
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                raise ValueError(
+                    f"Location is already booked during this time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
         for field, value in update_data.items():
             setattr(event, field, value)
 
@@ -177,14 +215,15 @@ class EventService:
         return event
 
     async def cancel_event(
-        self, event_id: UUID, organization_id: UUID, reason: str
+        self, event_id: UUID, organization_id: UUID, reason: str,
+        send_notifications: bool = False,
     ) -> Optional[Event]:
-        """Cancel an event"""
+        """Cancel an event and optionally notify RSVPs"""
         result = await self.db.execute(
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
-            .options(selectinload(Event.location_obj))
+            .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
         )
         event = result.scalar_one_or_none()
 
@@ -202,7 +241,20 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(event)
 
-        # TODO: Send cancellation notifications to RSVPs
+        # Send cancellation notifications if requested
+        if send_notifications and event.rsvps:
+            notifications_service = NotificationsService(self.db)
+            for rsvp in event.rsvps:
+                if rsvp.status == RSVPStatus.GOING or rsvp.status == RSVPStatus.MAYBE:
+                    await notifications_service.log_notification(
+                        organization_id=organization_id,
+                        log_data={
+                            "channel": NotificationChannel.IN_APP,
+                            "recipient_id": str(rsvp.user_id),
+                            "subject": f"Event Cancelled: {event.title}",
+                            "message": f"The event \"{event.title}\" has been cancelled. Reason: {reason}",
+                        },
+                    )
 
         return event
 
@@ -335,6 +387,161 @@ class EventService:
 
         result = await self.db.execute(query.order_by(EventRSVP.responded_at.desc()))
         return list(result.scalars().all())
+
+    async def manager_add_attendee(
+        self,
+        event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        manager_id: UUID,
+        status: str = "going",
+        checked_in: bool = False,
+        notes: Optional[str] = None,
+    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+        """
+        Manager adds an attendee to an event and optionally marks them checked in.
+
+        This allows managers to add someone who had trouble logging in, or
+        to retroactively give credit for attendance.
+        """
+        # Verify event exists and belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        if event.is_cancelled:
+            return None, "Cannot add attendees to a cancelled event"
+
+        # Verify target user belongs to organization
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .where(User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return None, "User not found in organization"
+
+        # Check if RSVP already exists
+        existing_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.user_id == user_id)
+        )
+        existing_rsvp = existing_result.scalar_one_or_none()
+
+        now = datetime.utcnow()
+
+        if existing_rsvp:
+            # Update existing RSVP
+            existing_rsvp.status = RSVPStatus(status)
+            if notes is not None:
+                existing_rsvp.notes = notes
+            existing_rsvp.updated_at = now
+
+            if checked_in and not existing_rsvp.checked_in:
+                existing_rsvp.checked_in = True
+                existing_rsvp.checked_in_at = now
+                existing_rsvp.overridden_by = manager_id
+                existing_rsvp.overridden_at = now
+
+            rsvp = existing_rsvp
+        else:
+            # Create new RSVP
+            rsvp = EventRSVP(
+                event_id=event_id,
+                user_id=user_id,
+                status=RSVPStatus(status),
+                guest_count=0,
+                notes=notes,
+                responded_at=now,
+                checked_in=checked_in,
+                checked_in_at=now if checked_in else None,
+                overridden_by=manager_id if checked_in else None,
+                overridden_at=now if checked_in else None,
+            )
+            self.db.add(rsvp)
+
+        await self.db.commit()
+        await self.db.refresh(rsvp)
+
+        return rsvp, None
+
+    async def override_rsvp_attendance(
+        self,
+        event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        manager_id: UUID,
+        override_data: RSVPOverride,
+    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+        """
+        Override attendance details for an RSVP (manager action).
+
+        Allows managers to fix check-in/check-out times and credit hours
+        for attendees who had issues scanning in/out.
+        """
+        # Verify event exists and belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        # Get the RSVP
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.user_id == user_id)
+        )
+        rsvp = rsvp_result.scalar_one_or_none()
+
+        if not rsvp:
+            return None, "RSVP not found for this user"
+
+        now = datetime.utcnow()
+        override_fields = override_data.model_dump(exclude_unset=True)
+
+        # Validate override times if both provided
+        check_in = override_fields.get("override_check_in_at", rsvp.override_check_in_at)
+        check_out = override_fields.get("override_check_out_at", rsvp.override_check_out_at)
+        if check_in and check_out and check_out <= check_in:
+            return None, "Override check-out time must be after check-in time"
+
+        for field, value in override_fields.items():
+            setattr(rsvp, field, value)
+
+        # If overriding check-in time, also mark as checked in
+        if override_fields.get("override_check_in_at"):
+            rsvp.checked_in = True
+            if not rsvp.checked_in_at:
+                rsvp.checked_in_at = override_fields["override_check_in_at"]
+
+        # Auto-calculate duration if both override times are set and no explicit duration override
+        if (rsvp.override_check_in_at and rsvp.override_check_out_at
+                and "override_duration_minutes" not in override_fields):
+            duration = (rsvp.override_check_out_at - rsvp.override_check_in_at).total_seconds() / 60
+            rsvp.override_duration_minutes = int(duration)
+
+        rsvp.overridden_by = manager_id
+        rsvp.overridden_at = now
+        rsvp.updated_at = now
+
+        await self.db.commit()
+        await self.db.refresh(rsvp)
+
+        return rsvp, None
 
     async def check_in_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
@@ -480,13 +687,12 @@ class EventService:
             if status == RSVPStatus.GOING:
                 going_count = count
                 total_guests = guests or 0
+                # Only count checked-in attendees who are still GOING
+                checked_in_count = checked_in or 0
             elif status == RSVPStatus.NOT_GOING:
                 not_going_count = count
             elif status == RSVPStatus.MAYBE:
                 maybe_count = count
-
-            if checked_in:
-                checked_in_count += checked_in
 
         total_rsvps = going_count + not_going_count + maybe_count
 
@@ -601,6 +807,7 @@ class EventService:
             "location": event.location,
             "location_id": str(event.location_id) if event.location_id else None,
             "location_name": location_name,
+            "require_checkout": event.require_checkout or False,
         }, None
 
     def _validate_check_in_window(self, event: Event, now: datetime) -> Tuple[bool, Optional[str]]:
@@ -612,8 +819,9 @@ class EventService:
         check_in_window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
 
         if check_in_window_type == CheckInWindowType.FLEXIBLE:
-            # Allow check-in anytime before event ends
-            check_in_start = event.start_datetime - timedelta(hours=24)  # Allow up to 24 hours before
+            # Allow check-in within configurable window before event starts, until event ends
+            minutes_before = event.check_in_minutes_before or 30  # Default 30 minutes before
+            check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
             check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
 
         elif check_in_window_type == CheckInWindowType.STRICT:

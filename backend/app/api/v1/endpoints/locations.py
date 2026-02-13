@@ -281,6 +281,7 @@ async def get_location_display_info(
                 location=event.location,
                 location_id=str(event.location_id) if event.location_id else None,
                 location_name=location.name,
+                require_checkout=event.require_checkout or False,
             ).model_dump()
         )
 
