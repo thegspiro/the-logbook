@@ -17,13 +17,8 @@ export type {
   Certification,
 } from '../../../types/member';
 
-import type { User } from '../../../types/user';
-export type {
-  User,
-  ContactInfoSettings,
-  NotificationPreferences,
-  ContactInfoUpdate,
-} from '../../../types/user';
+import type { User, ContactInfoSettings, NotificationPreferences, ContactInfoUpdate } from '../../../types/user';
+export type { User, ContactInfoSettings, NotificationPreferences, ContactInfoUpdate };
 
 // =============================================================================
 // Pagination & Filtering
