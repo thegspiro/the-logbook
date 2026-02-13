@@ -37,9 +37,12 @@ class DocumentFolderResponse(BaseModel):
     id: UUID
     organization_id: UUID
     name: str
+    slug: Optional[str] = None
     description: Optional[str] = None
     color: str
     icon: str
+    is_system: bool = False
+    sort_order: int = 0
     parent_id: Optional[UUID] = None
     document_count: Optional[int] = 0
     created_at: datetime
@@ -77,7 +80,7 @@ class DocumentResponse(BaseModel):
     folder_id: Optional[UUID] = None
     name: str
     description: Optional[str] = None
-    file_name: str
+    file_name: Optional[str] = None
     file_size: int = 0
     file_type: Optional[str] = None
     status: str = "active"

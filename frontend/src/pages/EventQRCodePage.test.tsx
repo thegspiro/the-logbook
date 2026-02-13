@@ -3,6 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter, mockQRCheckInData, createMockApiResponse, createMockApiError } from '../test/utils';
 import EventQRCodePage from './EventQRCodePage';
+import type { QRCheckInData } from '../types/event';
 import * as apiModule from '../services/api';
 
 // Mock the API module
@@ -355,7 +356,7 @@ describe('EventQRCodePage', () => {
     });
 
     it('should handle null QR data', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(null as any);
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(null as unknown as QRCheckInData);
 
       renderWithRouter(<EventQRCodePage />);
 

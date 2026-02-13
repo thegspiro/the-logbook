@@ -4,7 +4,13 @@
  * Handles all API calls for the Apparatus module.
  */
 
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+
+declare module 'axios' {
+  export interface InternalAxiosRequestConfig {
+    _retry?: boolean;
+  }
+}
 import type {
   Apparatus,
   ApparatusCreate,
@@ -66,10 +72,10 @@ api.interceptors.request.use(
 // Response interceptor to handle token expiration
 api.interceptors.response.use(
   (response) => response,
-  async (error: Error) => {
-    const originalRequest = (error as any).config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config;
 
-    if ((error as any).response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
