@@ -116,6 +116,7 @@ export interface ElectionUpdate {
   victory_condition?: VictoryCondition;
   victory_threshold?: number;
   victory_percentage?: number;
+  ballot_items?: BallotItem[];
 }
 
 export interface Candidate {
