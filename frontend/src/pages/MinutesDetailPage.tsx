@@ -22,6 +22,7 @@ import type {
   MeetingMinutes,
   MeetingType,
   MotionCreate,
+  MotionStatus,
   ActionItemCreate,
   ActionItemPriority,
   SectionEntry,
@@ -318,7 +319,7 @@ export const MinutesDetailPage: React.FC = () => {
   const handleUpdateActionItemStatus = async (itemId: string, newStatus: string) => {
     if (!minutesId) return;
     try {
-      await minutesService.updateActionItem(minutesId, itemId, { status: newStatus as any });
+      await minutesService.updateActionItem(minutesId, itemId, { status: newStatus });
       fetchMinutes();
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to update');
@@ -368,7 +369,7 @@ export const MinutesDetailPage: React.FC = () => {
   const handleUnlinkEvent = async () => {
     if (!minutesId) return;
     try {
-      const updated = await minutesService.updateMinutes(minutesId, { event_id: '' as any });
+      const updated = await minutesService.updateMinutes(minutesId, { event_id: '' });
       setMinutes(updated);
       setLinkedEvent(null);
       toast.success('Event unlinked');
@@ -810,7 +811,7 @@ export const MinutesDetailPage: React.FC = () => {
                 <select
                   id="motion-status"
                   value={motionForm.status}
-                  onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as any })}
+                  onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as MotionStatus })}
                   aria-label="Motion status"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >

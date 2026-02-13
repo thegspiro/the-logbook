@@ -15,6 +15,18 @@ export interface AppError {
 }
 
 /**
+ * Shape of an Axios-like error with a response property.
+ * Used for narrowing unknown catch values without importing axios.
+ */
+interface HttpErrorResponse {
+  response: {
+    data?: { detail?: string; message?: string; code?: string; details?: Record<string, unknown> };
+    status?: number;
+    statusText?: string;
+  };
+}
+
+/**
  * Type guard to check if an error is an AppError
  */
 export function isAppError(error: unknown): error is AppError {
@@ -48,9 +60,9 @@ export function toAppError(error: unknown): AppError {
     typeof error === 'object' &&
     error !== null &&
     'response' in error &&
-    typeof (error as any).response === 'object'
+    typeof (error as HttpErrorResponse).response === 'object'
   ) {
-    const response = (error as any).response;
+    const response = (error as HttpErrorResponse).response;
     return {
       message: response.data?.detail || response.data?.message || response.statusText || 'Request failed',
       code: response.data?.code,

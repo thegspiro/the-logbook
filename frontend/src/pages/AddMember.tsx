@@ -486,7 +486,7 @@ const AddMember: React.FC = () => {
                 </label>
                 <select
                   value={formData.status}
-                  onChange={(e) => handleInputChange('status', e.target.value as any)}
+                  onChange={(e) => handleInputChange('status', e.target.value)}
                   className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="active">Active</option>
@@ -502,7 +502,7 @@ const AddMember: React.FC = () => {
                 </label>
                 <select
                   value={formData.membershipType}
-                  onChange={(e) => handleInputChange('membershipType', e.target.value as any)}
+                  onChange={(e) => handleInputChange('membershipType', e.target.value)}
                   className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="probationary">Probationary</option>

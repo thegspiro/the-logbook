@@ -31,22 +31,25 @@ Object.defineProperty(window, 'print', {
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
+  readonly root: Element | null = null;
+  readonly rootMargin: string = '';
+  readonly thresholds: ReadonlyArray<number> = [];
+  constructor(_callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
   disconnect() {}
-  observe() {}
-  takeRecords() {
+  observe(_target: Element) {}
+  takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
-  unobserve() {}
-} as any;
+  unobserve(_target: Element) {}
+};
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {
-  constructor() {}
+  constructor(_callback: ResizeObserverCallback) {}
   disconnect() {}
-  observe() {}
-  unobserve() {}
-} as any;
+  observe(_target: Element, _options?: ResizeObserverOptions) {}
+  unobserve(_target: Element) {}
+};
 
 // Suppress console errors during tests (optional)
 const originalError = console.error;

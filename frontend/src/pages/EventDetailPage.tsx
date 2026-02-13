@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
@@ -62,7 +63,7 @@ export const EventDetailPage: React.FC = () => {
       setEvent(data);
     } catch (err) {
       console.error('Error fetching event:', err);
-      setError((err as any).response?.data?.detail || 'Failed to load event');
+      setError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to load event');
     } finally {
       setLoading(false);
     }
@@ -132,7 +133,7 @@ export const EventDetailPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Error submitting RSVP:', err);
-      setSubmitError((err as any).response?.data?.detail || 'Failed to submit RSVP');
+      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to submit RSVP');
     } finally {
       setSubmitting(false);
     }
@@ -155,7 +156,7 @@ export const EventDetailPage: React.FC = () => {
       await fetchEvent();
     } catch (err) {
       console.error('Error cancelling event:', err);
-      setSubmitError((err as any).response?.data?.detail || 'Failed to cancel event');
+      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to cancel event');
     } finally {
       setSubmitting(false);
     }
@@ -171,7 +172,7 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Member checked in successfully');
     } catch (err) {
       console.error('Error checking in attendee:', err);
-      toast.error((err as any).response?.data?.detail || 'Failed to check in attendee');
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to check in attendee');
     }
   };
 
@@ -205,7 +206,7 @@ export const EventDetailPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Error recording times:', err);
-      setSubmitError((err as any).response?.data?.detail || 'Failed to record times');
+      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to record times');
     } finally {
       setSubmitting(false);
     }
