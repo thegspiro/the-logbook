@@ -1453,6 +1453,22 @@ export const eventService = {
     const response = await api.get(`/events/${eventId}/check-in-monitoring`);
     return response.data;
   },
+
+  /**
+   * Add an attendee to an event (manager action)
+   */
+  async addAttendee(eventId: string, data: import('../types/event').ManagerAddAttendee): Promise<import('../types/event').RSVP> {
+    const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/add-attendee`, data);
+    return response.data;
+  },
+
+  /**
+   * Override attendance details for an RSVP (manager action)
+   */
+  async overrideAttendance(eventId: string, userId: string, data: import('../types/event').RSVPOverride): Promise<import('../types/event').RSVP> {
+    const response = await api.patch<import('../types/event').RSVP>(`/events/${eventId}/rsvps/${userId}/override`, data);
+    return response.data;
+  },
 };
 
 export interface UserInventoryItem {

@@ -115,12 +115,30 @@ export interface EventUpdate {
   allow_guests?: boolean;
   send_reminders?: boolean;
   reminder_hours_before?: number;
+  check_in_window_type?: 'flexible' | 'strict' | 'window';
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
   custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: Array<{ [key: string]: string }>;
 }
 
 export interface EventCancel {
   cancellation_reason: string;
+  send_notifications?: boolean;
+}
+
+export interface ManagerAddAttendee {
+  user_id: string;
+  status?: RSVPStatus;
+  checked_in?: boolean;
+  notes?: string;
+}
+
+export interface RSVPOverride {
+  override_check_in_at?: string;
+  override_check_out_at?: string;
+  override_duration_minutes?: number;
 }
 
 export interface RSVP {
@@ -183,6 +201,7 @@ export interface QRCheckInData {
   location?: string;
   location_id?: string;
   location_name?: string;
+  require_checkout?: boolean;
 }
 
 export interface CheckInActivity {
