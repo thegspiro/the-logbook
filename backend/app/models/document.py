@@ -1,132 +1,123 @@
 """
-Document Models
+Documents Database Models
 
-Database models for the organization document management system.
-Supports folder-based organization, file uploads, and generated documents
-(such as published meeting minutes).
+SQLAlchemy models for document management including folders,
+documents, and version tracking.
 """
 
 from sqlalchemy import (
     Column,
     String,
-    Text,
     Boolean,
     DateTime,
-    ForeignKey,
     Integer,
-    Enum as SQLEnum,
+    Text,
+    Enum,
+    ForeignKey,
     Index,
-    JSON,
+    BigInteger,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
-from enum import Enum
+from sqlalchemy.sql import func
+import enum
 import uuid
 
 from app.core.database import Base
 
 
 def generate_uuid() -> str:
+    """Generate a UUID string for MySQL compatibility"""
     return str(uuid.uuid4())
 
 
-class DocumentType(str, Enum):
-    """How the document was created"""
-    UPLOADED = "uploaded"
-    GENERATED = "generated"  # e.g., published meeting minutes
+class DocumentStatus(str, enum.Enum):
+    """Status of a document"""
+    ACTIVE = "active"
+    ARCHIVED = "archived"
 
 
 class DocumentFolder(Base):
     """
-    Document Folder
+    Document Folder model
 
-    Organizes documents into a hierarchical folder structure.
-    System folders (is_system=True) are auto-created and cannot be deleted.
+    Represents a folder for organizing documents.
+    Supports nested folders via parent_id.
     """
+
     __tablename__ = "document_folders"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    name = Column(String(200), nullable=False)
-    slug = Column(String(100), nullable=False)
-    description = Column(Text, nullable=True)
-    parent_folder_id = Column(String(36), ForeignKey("document_folders.id", ondelete="CASCADE"), nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0)
-    is_system = Column(Boolean, nullable=False, default=False)
-    icon = Column(String(50), nullable=True)
-    color = Column(String(50), nullable=True)
+    # Folder Information
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    color = Column(String(20), default="#3B82F6")
+    icon = Column(String(50), default="folder")
 
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Hierarchy
+    parent_id = Column(String(36), ForeignKey("document_folders.id", ondelete="CASCADE"))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     documents = relationship("Document", back_populates="folder", cascade="all, delete-orphan")
-    children = relationship("DocumentFolder", backref="parent", remote_side=[id], cascade="all, delete-orphan")
+    children = relationship("DocumentFolder", backref="parent", remote_side=[id], cascade="all, delete-orphan", single_parent=True)
 
     __table_args__ = (
-        Index("ix_document_folders_organization_id", "organization_id"),
-        Index("ix_document_folders_slug", "organization_id", "slug"),
-        Index("ix_document_folders_parent", "parent_folder_id"),
+        Index("idx_doc_folders_org", "organization_id"),
+        Index("idx_doc_folders_parent", "parent_id"),
     )
 
-
-# Default system folders created for every organization
-SYSTEM_FOLDERS = [
-    {"slug": "meeting-minutes", "name": "Meeting Minutes", "description": "Published meeting minutes", "sort_order": 0, "icon": "clipboard-list", "color": "text-cyan-400"},
-    {"slug": "sops", "name": "SOPs & Procedures", "description": "Standard Operating Procedures", "sort_order": 1, "icon": "file-text", "color": "text-amber-400"},
-    {"slug": "policies", "name": "Policies", "description": "Department policies and guidelines", "sort_order": 2, "icon": "shield", "color": "text-blue-400"},
-    {"slug": "forms", "name": "Forms & Templates", "description": "Blank forms and document templates", "sort_order": 3, "icon": "file", "color": "text-green-400"},
-    {"slug": "reports", "name": "Reports", "description": "Monthly, quarterly, and annual reports", "sort_order": 4, "icon": "bar-chart", "color": "text-purple-400"},
-    {"slug": "training", "name": "Training Materials", "description": "Training manuals and reference materials", "sort_order": 5, "icon": "book-open", "color": "text-red-400"},
-    {"slug": "general", "name": "General Documents", "description": "Miscellaneous department files", "sort_order": 6, "icon": "folder", "color": "text-slate-400"},
-]
+    def __repr__(self):
+        return f"<DocumentFolder(name={self.name})>"
 
 
 class Document(Base):
     """
     Document model
 
-    Represents either an uploaded file or a system-generated document
-    (like published meeting minutes). Belongs to a folder.
+    Represents a file uploaded to the document management system.
     """
+
     __tablename__ = "documents"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    folder_id = Column(String(36), ForeignKey("document_folders.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    folder_id = Column(String(36), ForeignKey("document_folders.id", ondelete="SET NULL"), index=True)
 
-    title = Column(String(300), nullable=False)
-    description = Column(Text, nullable=True)
-    document_type = Column(SQLEnum(DocumentType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=DocumentType.UPLOADED)
+    # Document Information
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(BigInteger, default=0)  # Size in bytes
+    file_type = Column(String(100))  # MIME type
+    status = Column(Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]), default=DocumentStatus.ACTIVE, nullable=False)
 
-    # For uploaded files
-    file_path = Column(Text, nullable=True)
-    file_name = Column(String(255), nullable=True)
-    file_size = Column(Integer, nullable=True)
-    mime_type = Column(String(100), nullable=True)
+    # Versioning
+    version = Column(Integer, default=1)
 
-    # For generated documents (e.g., published minutes HTML)
-    content_html = Column(Text, nullable=True)
+    # Metadata
+    tags = Column(Text)  # Comma-separated tags
 
-    # Source reference (e.g., minutes_id for published minutes)
-    source_type = Column(String(50), nullable=True)  # "meeting_minutes"
-    source_id = Column(String(36), nullable=True)
-
-    # Tags for search/filtering
-    tags = Column(JSON, nullable=True)
-
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    uploaded_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
     folder = relationship("DocumentFolder", back_populates="documents")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
 
     __table_args__ = (
-        Index("ix_documents_organization_id", "organization_id"),
-        Index("ix_documents_folder_id", "folder_id"),
-        Index("ix_documents_source", "source_type", "source_id"),
-        Index("ix_documents_document_type", "document_type"),
+        Index("idx_documents_org", "organization_id"),
+        Index("idx_documents_folder", "folder_id"),
+        Index("idx_documents_org_status", "organization_id", "status"),
     )
+
+    def __repr__(self):
+        return f"<Document(name={self.name}, type={self.file_type})>"

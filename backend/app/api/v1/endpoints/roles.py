@@ -715,7 +715,7 @@ async def check_admin_access(
         "admin.access", "members.manage",
     }
 
-    has_admin_permission = bool(permissions.intersection(admin_permissions))
+    has_admin_permission = "*" in permissions or bool(permissions.intersection(admin_permissions))
 
     return {
         "has_access": has_admin_role or has_admin_permission,

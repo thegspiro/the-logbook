@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bell,
   Mail,
@@ -15,94 +15,211 @@ import {
   X,
   AlertCircle,
   CheckCircle,
+  Loader2,
+  FileText,
+  Wrench,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import {
+  notificationsService,
+} from '../services/api';
+import type {
+  NotificationRuleRecord,
+  NotificationLogRecord,
+  NotificationsSummary,
+} from '../services/api';
 
-interface NotificationRule {
-  id: string;
-  name: string;
-  description: string;
-  trigger: string;
-  icon: React.ReactNode;
-  color: string;
-  enabled: boolean;
-  category: string;
+// Maps trigger enum values to display-friendly icons and colors
+const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  event_reminder: {
+    icon: <Calendar className="w-5 h-5" />,
+    color: 'text-blue-400',
+    label: 'Event Reminder',
+  },
+  training_expiry: {
+    icon: <GraduationCap className="w-5 h-5" />,
+    color: 'text-purple-400',
+    label: 'Training Expiry',
+  },
+  schedule_change: {
+    icon: <Clock className="w-5 h-5" />,
+    color: 'text-violet-400',
+    label: 'Schedule Change',
+  },
+  new_member: {
+    icon: <Users className="w-5 h-5" />,
+    color: 'text-green-400',
+    label: 'Member Added',
+  },
+  maintenance_due: {
+    icon: <AlertTriangle className="w-5 h-5" />,
+    color: 'text-orange-400',
+    label: 'Maintenance Due',
+  },
+  form_submitted: {
+    icon: <FileText className="w-5 h-5" />,
+    color: 'text-cyan-400',
+    label: 'Form Submitted',
+  },
+};
+
+// Dropdown options for the create modal
+const TRIGGER_OPTIONS = [
+  { label: 'Event Reminder', value: 'event_reminder' },
+  { label: 'Training Expiry', value: 'training_expiry' },
+  { label: 'Schedule Change', value: 'schedule_change' },
+  { label: 'Member Added', value: 'new_member' },
+  { label: 'Maintenance Due', value: 'maintenance_due' },
+  { label: 'Form Submitted', value: 'form_submitted' },
+];
+
+// Category mapping from trigger to category
+const TRIGGER_CATEGORY_MAP: Record<string, string> = {
+  event_reminder: 'events',
+  training_expiry: 'training',
+  schedule_change: 'scheduling',
+  new_member: 'members',
+  maintenance_due: 'maintenance',
+  form_submitted: 'general',
+};
+
+function getTriggerDisplay(trigger: string) {
+  return TRIGGER_DISPLAY[trigger] || {
+    icon: <Wrench className="w-5 h-5" />,
+    color: 'text-slate-400',
+    label: trigger,
+  };
 }
 
-const DEFAULT_RULES: NotificationRule[] = [
-  {
-    id: 'event-reminder',
-    name: 'Event Reminders',
-    description: 'Send reminder emails before scheduled events',
-    trigger: '24 hours before event',
-    icon: <Calendar className="w-5 h-5" aria-hidden="true" />,
-    color: 'text-blue-400',
-    enabled: true,
-    category: 'Events',
-  },
-  {
-    id: 'training-expiry',
-    name: 'Training Expiry Alerts',
-    description: 'Notify members when certifications are expiring',
-    trigger: '30 days before expiry',
-    icon: <GraduationCap className="w-5 h-5" aria-hidden="true" />,
-    color: 'text-purple-400',
-    enabled: true,
-    category: 'Training',
-  },
-  {
-    id: 'shift-change',
-    name: 'Schedule Changes',
-    description: 'Notify members when shift schedules are updated',
-    trigger: 'When schedule changes',
-    icon: <Clock className="w-5 h-5" aria-hidden="true" />,
-    color: 'text-violet-400',
-    enabled: false,
-    category: 'Scheduling',
-  },
-  {
-    id: 'new-member',
-    name: 'New Member Welcome',
-    description: 'Send welcome email to newly added members',
-    trigger: 'When member is added',
-    icon: <Users className="w-5 h-5" aria-hidden="true" />,
-    color: 'text-green-400',
-    enabled: true,
-    category: 'Members',
-  },
-  {
-    id: 'maintenance-due',
-    name: 'Maintenance Reminders',
-    description: 'Alert when equipment maintenance is due',
-    trigger: '7 days before due date',
-    icon: <AlertTriangle className="w-5 h-5" aria-hidden="true" />,
-    color: 'text-orange-400',
-    enabled: false,
-    category: 'Inventory',
-  },
-];
+function formatCategory(category: string): string {
+  return category.charAt(0).toUpperCase() + category.slice(1);
+}
 
 const NotificationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('notifications.manage');
 
-  const [rules, setRules] = useState<NotificationRule[]>(DEFAULT_RULES);
+  // Data states
+  const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
+  const [logs, setLogs] = useState<NotificationLogRecord[]>([]);
+  const [summary, setSummary] = useState<NotificationsSummary | null>(null);
+
+  // UI states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'rules' | 'templates' | 'log'>('rules');
 
-  const toggleRule = (ruleId: string) => {
-    setRules(prev => prev.map(r =>
-      r.id === ruleId ? { ...r, enabled: !r.enabled } : r
-    ));
+  // Create form states
+  const [createName, setCreateName] = useState('');
+  const [createTrigger, setCreateTrigger] = useState('event_reminder');
+  const [createDescription, setCreateDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Fetch all data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [rulesRes, summaryRes, logsRes] = await Promise.all([
+          notificationsService.getRules(),
+          notificationsService.getSummary(),
+          notificationsService.getLogs(),
+        ]);
+        setRules(rulesRes.rules);
+        setSummary(summaryRes);
+        setLogs(logsRes.logs);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load notification data';
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const toggleRule = async (ruleId: string, currentEnabled: boolean) => {
+    setTogglingRuleId(ruleId);
+    try {
+      const updated = await notificationsService.toggleRule(ruleId, !currentEnabled);
+      setRules(prev => prev.map(r => r.id === ruleId ? updated : r));
+      // Update summary counts
+      setSummary(prev => {
+        if (!prev) return prev;
+        const delta = currentEnabled ? -1 : 1;
+        return {
+          ...prev,
+          active_rules: prev.active_rules + delta,
+        };
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to toggle rule';
+      setError(message);
+    } finally {
+      setTogglingRuleId(null);
+    }
+  };
+
+  const handleCreateRule = async () => {
+    if (!createName.trim()) {
+      setCreateError('Rule name is required.');
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const category = TRIGGER_CATEGORY_MAP[createTrigger] || 'general';
+      const newRule = await notificationsService.createRule({
+        name: createName.trim(),
+        trigger: createTrigger,
+        description: createDescription.trim() || undefined,
+        category,
+        channel: 'in_app',
+      });
+      setRules(prev => [...prev, newRule]);
+      // Update summary
+      setSummary(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          total_rules: prev.total_rules + 1,
+          active_rules: newRule.enabled ? prev.active_rules + 1 : prev.active_rules,
+        };
+      });
+      // Reset form and close modal
+      setCreateName('');
+      setCreateTrigger('event_reminder');
+      setCreateDescription('');
+      setShowCreateModal(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create rule';
+      setCreateError(message);
+    } finally {
+      setCreating(false);
+    }
   };
 
   const filteredRules = rules.filter(r =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.description.toLowerCase().includes(searchQuery.toLowerCase())
+    (r.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const enabledCount = rules.filter(r => r.enabled).length;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
+          <p className="text-slate-300 text-sm">Loading notifications...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
@@ -131,19 +248,32 @@ const NotificationsPage: React.FC = () => {
           )}
         </div>
 
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-300 text-sm">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Notification statistics">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Notification Rules</p>
-            <p className="text-white text-2xl font-bold mt-1">{rules.length}</p>
+            <p className="text-white text-2xl font-bold mt-1">{summary?.total_rules ?? rules.length}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Active Rules</p>
-            <p className="text-green-400 text-2xl font-bold mt-1">{enabledCount}</p>
+            <p className="text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Emails Sent (This Month)</p>
-            <p className="text-orange-400 text-2xl font-bold mt-1">0</p>
+            <p className="text-orange-400 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
           </div>
         </div>
 
@@ -201,53 +331,78 @@ const NotificationsPage: React.FC = () => {
 
             {/* Rules List */}
             <div className="space-y-3">
-              {filteredRules.map((rule) => (
-                <div key={rule.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className={`p-2 rounded-lg bg-white/5 ${rule.color}`}>
-                        {rule.icon}
+              {filteredRules.length === 0 && (
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                  <Bell className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                  <h3 className="text-white text-xl font-bold mb-2">No Notification Rules</h3>
+                  <p className="text-slate-300 mb-6">
+                    {searchQuery
+                      ? 'No rules match your search query.'
+                      : 'Create your first notification rule to start sending automated notifications.'}
+                  </p>
+                  {canManage && !searchQuery && (
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create Rule</span>
+                    </button>
+                  )}
+                </div>
+              )}
+              {filteredRules.map((rule) => {
+                const display = getTriggerDisplay(rule.trigger);
+                return (
+                  <div key={rule.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className={`p-2 rounded-lg bg-white/5 ${display.color}`}>
+                          {display.icon}
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="text-white font-semibold">{rule.name}</h3>
+                            <span className="px-2 py-0.5 text-xs bg-slate-500/10 text-slate-400 rounded">
+                              {formatCategory(rule.category)}
+                            </span>
+                          </div>
+                          <p className="text-slate-300 text-sm mt-0.5">{rule.description || 'No description'}</p>
+                          <div className="flex items-center space-x-1 mt-1">
+                            <Zap className="w-3 h-3 text-slate-500" />
+                            <span className="text-slate-500 text-xs">{display.label}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-white font-semibold">{rule.name}</h3>
-                          <span className="px-2 py-0.5 text-xs bg-slate-500/10 text-slate-400 rounded">
-                            {rule.category}
+                      <div className="flex items-center space-x-3">
+                        {rule.enabled ? (
+                          <span className="flex items-center space-x-1 text-green-400 text-sm">
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Active</span>
                           </span>
-                        </div>
-                        <p className="text-slate-300 text-sm mt-0.5">{rule.description}</p>
-                        <div className="flex items-center space-x-1 mt-1">
-                          <Zap className="w-3 h-3 text-slate-500" aria-hidden="true" />
-                          <span className="text-slate-500 text-xs">{rule.trigger}</span>
-                        </div>
+                        ) : (
+                          <span className="text-slate-500 text-sm">Disabled</span>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => toggleRule(rule.id, rule.enabled)}
+                            disabled={togglingRuleId === rule.id}
+                            className="text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            {togglingRuleId === rule.id ? (
+                              <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                            ) : rule.enabled ? (
+                              <ToggleRight className="w-8 h-8 text-green-400" />
+                            ) : (
+                              <ToggleLeft className="w-8 h-8 text-slate-500" />
+                            )}
+                          </button>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      {rule.enabled ? (
-                        <span className="flex items-center space-x-1 text-green-400 text-sm">
-                          <CheckCircle className="w-4 h-4" aria-hidden="true" />
-                          <span>Active</span>
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 text-sm">Disabled</span>
-                      )}
-                      {canManage && (
-                        <button
-                          onClick={() => toggleRule(rule.id)}
-                          className="text-slate-400 hover:text-white transition-colors"
-                          aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`}
-                        >
-                          {rule.enabled ? (
-                            <ToggleRight className="w-8 h-8 text-green-400" aria-hidden="true" />
-                          ) : (
-                            <ToggleLeft className="w-8 h-8 text-slate-500" aria-hidden="true" />
-                          )}
-                        </button>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -268,13 +423,76 @@ const NotificationsPage: React.FC = () => {
         )}
 
         {activeTab === 'log' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center" role="tabpanel">
-            <Clock className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
-            <h3 className="text-white text-xl font-bold mb-2">No Notifications Sent</h3>
-            <p className="text-slate-300 mb-6">
-              The notification send log will show all sent emails with delivery status and timestamps.
-            </p>
-          </div>
+          <>
+            {logs.length === 0 ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <Clock className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">No Notifications Sent</h3>
+                <p className="text-slate-300 mb-6">
+                  The notification send log will show all sent emails with delivery status and timestamps.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-white/10 text-xs font-medium text-slate-400 uppercase">
+                    <div className="col-span-4">Subject</div>
+                    <div className="col-span-3">Recipient</div>
+                    <div className="col-span-2">Channel</div>
+                    <div className="col-span-2">Sent At</div>
+                    <div className="col-span-1">Status</div>
+                  </div>
+                  {/* Table Rows */}
+                  {logs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors"
+                    >
+                      <div className="col-span-4">
+                        <p className="text-white text-sm truncate">{log.subject || '(No subject)'}</p>
+                        {log.rule_name && (
+                          <p className="text-slate-500 text-xs mt-0.5 truncate">Rule: {log.rule_name}</p>
+                        )}
+                      </div>
+                      <div className="col-span-3">
+                        <p className="text-slate-300 text-sm truncate">
+                          {log.recipient_name || log.recipient_email || 'Unknown'}
+                        </p>
+                        {log.recipient_name && log.recipient_email && (
+                          <p className="text-slate-500 text-xs mt-0.5 truncate">{log.recipient_email}</p>
+                        )}
+                      </div>
+                      <div className="col-span-2">
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded bg-slate-500/10 text-slate-400">
+                          {log.channel === 'in_app' ? 'In-App' : log.channel === 'email' ? 'Email' : log.channel}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-slate-300 text-sm">
+                          {new Date(log.sent_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-slate-500 text-xs mt-0.5">
+                          {new Date(log.sent_at).toLocaleTimeString()}
+                        </p>
+                      </div>
+                      <div className="col-span-1">
+                        {log.delivered ? (
+                          <span className="flex items-center space-x-1 text-green-400" title="Delivered">
+                            <CheckCircle className="w-4 h-4" />
+                          </span>
+                        ) : (
+                          <span className="flex items-center space-x-1 text-red-400" title={log.error || 'Not delivered'}>
+                            <AlertCircle className="w-4 h-4" />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Create Rule Modal */}
@@ -291,17 +509,25 @@ const NotificationsPage: React.FC = () => {
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 id="create-rule-title" className="text-lg font-medium text-white">Create Notification Rule</h3>
-                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
-                      <X className="w-5 h-5" aria-hidden="true" />
+                    <h3 className="text-lg font-medium text-white">Create Notification Rule</h3>
+                    <button onClick={() => { setShowCreateModal(false); setCreateError(null); }} className="text-slate-400 hover:text-white">
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
+                  {createError && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start space-x-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-red-300 text-sm">{createError}</p>
+                    </div>
+                  )}
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="rule-name" className="block text-sm font-medium text-slate-300 mb-1">Rule Name <span aria-hidden="true">*</span></label>
                       <input
                         id="rule-name"
                         type="text"
+                        value={createName}
+                        onChange={(e) => setCreateName(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                         placeholder="e.g., Monthly Report Reminder"
                         required
@@ -309,17 +535,15 @@ const NotificationsPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label htmlFor="rule-trigger" className="block text-sm font-medium text-slate-300 mb-1">Trigger Event</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Trigger Event</label>
                       <select
-                        id="rule-trigger"
+                        value={createTrigger}
+                        onChange={(e) => setCreateTrigger(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                       >
-                        <option>Event Reminder</option>
-                        <option>Training Expiry</option>
-                        <option>Schedule Change</option>
-                        <option>Member Added</option>
-                        <option>Maintenance Due</option>
-                        <option>Custom Schedule</option>
+                        {TRIGGER_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -327,14 +551,16 @@ const NotificationsPage: React.FC = () => {
                       <textarea
                         id="rule-description"
                         rows={2}
+                        value={createDescription}
+                        onChange={(e) => setCreateDescription(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                     </div>
-                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                    <div className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-3">
                       <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-                        <p className="text-orange-300 text-sm">
-                          Custom notification rules will be available once the notification service backend is configured.
+                        <AlertCircle className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                        <p className="text-slate-400 text-sm">
+                          Category will be set to <strong className="text-slate-300">{formatCategory(TRIGGER_CATEGORY_MAP[createTrigger] || 'general')}</strong> based on the selected trigger. Channel defaults to <strong className="text-slate-300">In-App</strong>.
                         </p>
                       </div>
                     </div>
@@ -342,16 +568,18 @@ const NotificationsPage: React.FC = () => {
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => { setShowCreateModal(false); setCreateError(null); }}
                     className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    disabled
-                    className="px-4 py-2 bg-orange-600/50 text-white/50 rounded-lg cursor-not-allowed"
+                    onClick={handleCreateRule}
+                    disabled={creating}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >
-                    Create Rule
+                    {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <span>Create Rule</span>
                   </button>
                 </div>
               </div>

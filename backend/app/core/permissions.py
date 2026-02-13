@@ -241,7 +241,7 @@ DEFAULT_ROLES = {
         "description": "Full system access for IT administration",
         "is_system": True,
         "priority": 100,
-        "permissions": get_all_permissions(),  # All permissions
+        "permissions": ["*"],  # Wildcard grants all current and future permissions
     },
     "chief": {
         "name": "Chief",
