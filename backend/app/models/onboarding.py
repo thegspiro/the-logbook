@@ -30,7 +30,7 @@ class OnboardingStatus(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # Onboarding steps tracking
-    steps_completed = Column(JSON, default={})
+    steps_completed = Column(JSON, default=dict)
     current_step = Column(Integer, default=0)
 
     # System information collected during onboarding
@@ -45,7 +45,7 @@ class OnboardingStatus(Base):
     email_configured = Column(Boolean, default=False)
 
     # Configuration choices
-    enabled_modules = Column(JSON, default=[])
+    enabled_modules = Column(JSON, default=list)
     timezone = Column(String(50), default="America/New_York")
 
     # Metadata
@@ -123,7 +123,7 @@ class OnboardingSessionModel(Base):
     session_id = Column(String(64), unique=True, nullable=False, index=True)
 
     # Session data (JSON with encrypted sensitive fields)
-    data = Column(MutableDict.as_mutable(JSON), default={}, nullable=False)
+    data = Column(MutableDict.as_mutable(JSON), default=dict, nullable=False)
 
     # Client information for security tracking
     ip_address = Column(String(45), nullable=False)

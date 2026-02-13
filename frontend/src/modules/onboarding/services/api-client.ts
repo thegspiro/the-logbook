@@ -119,12 +119,12 @@ class SecureApiClient {
   /**
    * Handle network-level errors from fetch (connection refused, DNS failure, etc.)
    */
-  private handleNetworkError(error: any): { error: string; statusCode: number } {
-    if (error.name === 'AbortError') {
+  private handleNetworkError(error: unknown): { error: string; statusCode: number } {
+    if (error instanceof DOMException && error.name === 'AbortError') {
       return { error: 'Request was cancelled.', statusCode: 0 };
     }
 
-    if (error.name === 'TypeError' && error.message?.includes('Failed to fetch')) {
+    if (error instanceof TypeError && error.message?.includes('Failed to fetch')) {
       return {
         error: 'Unable to reach the server. Please verify the backend is running and check your network connection.',
         statusCode: 0,
@@ -140,8 +140,8 @@ class SecureApiClient {
   /**
    * Map HTTP error status codes to user-friendly messages
    */
-  private handleHttpError(status: number, errorData: any): { error: string; statusCode: number } {
-    const detail = errorData.detail || errorData.message;
+  private handleHttpError(status: number, errorData: Record<string, unknown>): { error: string; statusCode: number } {
+    const detail = (errorData.detail || errorData.message) as string | undefined;
 
     switch (status) {
       case 429: {
@@ -189,7 +189,7 @@ class SecureApiClient {
   private async request<T>(
     method: string,
     endpoint: string,
-    body?: any,
+    body?: Record<string, unknown>,
     requiresCSRF: boolean = false
   ): Promise<ApiResponse<T>> {
     try {
@@ -225,7 +225,7 @@ class SecureApiClient {
         data: data as T,
         statusCode: response.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return this.handleNetworkError(error);
     }
   }
@@ -278,7 +278,7 @@ class SecureApiClient {
         data: data as HealthStatus,
         statusCode: response.status,
       };
-    } catch (error: any) {
+    } catch {
       return {
         error: 'Unable to connect to backend',
         statusCode: 0,
