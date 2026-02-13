@@ -13,6 +13,7 @@ from sqlalchemy import select, func
 from app.models.minute import (
     MinutesTemplate, MeetingType,
     DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS, DEFAULT_EXECUTIVE_SECTIONS, DEFAULT_ANNUAL_SECTIONS,
 )
 from app.schemas.minute import TemplateCreate, TemplateUpdate
 
@@ -83,6 +84,65 @@ class TemplateService:
                     "org_name": None,
                     "logo_url": None,
                     "subtitle": "Committee Meeting Minutes",
+                    "show_date": True,
+                    "show_meeting_type": True,
+                },
+                "footer_config": {
+                    "show_page_numbers": True,
+                },
+            },
+            {
+                "name": "Trustee Meeting",
+                "description": "Template for Board of Trustees meetings with financial and fiduciary sections.",
+                "meeting_type": MeetingType.TRUSTEE,
+                "is_default": True,
+                "sections": DEFAULT_TRUSTEE_SECTIONS,
+                "header_config": {
+                    "org_name": None,
+                    "logo_url": None,
+                    "subtitle": "Board of Trustees Meeting Minutes",
+                    "show_date": True,
+                    "show_meeting_type": True,
+                },
+                "footer_config": {
+                    "left_text": None,
+                    "center_text": "Confidential — For Internal Use Only",
+                    "right_text": None,
+                    "show_page_numbers": True,
+                    "confidentiality_notice": None,
+                },
+            },
+            {
+                "name": "Executive Meeting",
+                "description": "Template for executive/officer meetings with strategic planning and personnel sections.",
+                "meeting_type": MeetingType.EXECUTIVE,
+                "is_default": True,
+                "sections": DEFAULT_EXECUTIVE_SECTIONS,
+                "header_config": {
+                    "org_name": None,
+                    "logo_url": None,
+                    "subtitle": "Executive Meeting Minutes",
+                    "show_date": True,
+                    "show_meeting_type": True,
+                },
+                "footer_config": {
+                    "left_text": None,
+                    "center_text": "Confidential — Executive Session",
+                    "right_text": None,
+                    "show_page_numbers": True,
+                    "confidentiality_notice": "This document contains confidential information discussed in executive session.",
+                },
+            },
+            {
+                "name": "Annual Meeting",
+                "description": "Template for annual general meetings with year-end reports, elections, and awards.",
+                "meeting_type": MeetingType.ANNUAL,
+                "is_default": True,
+                "sections": DEFAULT_ANNUAL_SECTIONS,
+                "header_config": {
+                    "org_name": None,
+                    "logo_url": None,
+                    "subtitle": "Annual Meeting Minutes",
                     "show_date": True,
                     "show_meeting_type": True,
                 },

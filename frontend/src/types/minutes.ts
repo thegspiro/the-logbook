@@ -2,7 +2,7 @@
  * Meeting Minutes Type Definitions
  */
 
-export type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'other';
+export type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
 export type MinutesStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 export type MotionStatus = 'passed' | 'failed' | 'tabled' | 'withdrawn';
 export type ActionItemStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'overdue';

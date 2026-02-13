@@ -30,6 +30,9 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   { value: 'special', label: 'Special Meeting', color: 'bg-purple-100 text-purple-800' },
   { value: 'committee', label: 'Committee Meeting', color: 'bg-blue-100 text-blue-800' },
   { value: 'board', label: 'Board Meeting', color: 'bg-amber-100 text-amber-800' },
+  { value: 'trustee', label: 'Trustee Meeting', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'executive', label: 'Executive Meeting', color: 'bg-indigo-100 text-indigo-800' },
+  { value: 'annual', label: 'Annual Meeting', color: 'bg-rose-100 text-rose-800' },
   { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-800' },
 ];
 
@@ -202,7 +205,7 @@ const MinutesPage: React.FC = () => {
   };
 
   const getMeetingTypeInfo = (type: string) => {
-    return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[4];
+    return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[MEETING_TYPES.length - 1];
   };
 
   const filteredTemplates = templates.filter(t => t.meeting_type === form.meetingType);

@@ -35,6 +35,9 @@ class MeetingType(str, Enum):
     SPECIAL = "special"
     COMMITTEE = "committee"
     BOARD = "board"
+    TRUSTEE = "trustee"
+    EXECUTIVE = "executive"
+    ANNUAL = "annual"
     OTHER = "other"
 
 
@@ -102,6 +105,49 @@ DEFAULT_COMMITTEE_SECTIONS = [
     {"order": 3, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
     {"order": 4, "key": "recommendations", "title": "Recommendations to Full Body", "default_content": "", "required": False},
     {"order": 5, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+]
+
+DEFAULT_TRUSTEE_SECTIONS = [
+    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
+    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
+    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Minutes", "default_content": "", "required": False},
+    {"order": 3, "key": "treasurer_report", "title": "Treasurer's Report", "default_content": "", "required": True},
+    {"order": 4, "key": "financial_review", "title": "Financial Review & Budget", "default_content": "", "required": False},
+    {"order": 5, "key": "trust_fund_report", "title": "Trust Fund Report", "default_content": "", "required": False},
+    {"order": 6, "key": "audit_report", "title": "Audit Report", "default_content": "", "required": False},
+    {"order": 7, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
+    {"order": 8, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
+    {"order": 9, "key": "legal_matters", "title": "Legal Matters", "default_content": "", "required": False},
+    {"order": 10, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+]
+
+DEFAULT_EXECUTIVE_SECTIONS = [
+    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
+    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
+    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Minutes", "default_content": "", "required": False},
+    {"order": 3, "key": "officers_reports", "title": "Officers' Reports", "default_content": "", "required": False},
+    {"order": 4, "key": "chief_report", "title": "Chief's Report", "default_content": "", "required": False},
+    {"order": 5, "key": "strategic_planning", "title": "Strategic Planning & Goals", "default_content": "", "required": False},
+    {"order": 6, "key": "personnel_matters", "title": "Personnel Matters", "default_content": "", "required": False},
+    {"order": 7, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
+    {"order": 8, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
+    {"order": 9, "key": "executive_session", "title": "Executive Session", "default_content": "", "required": False},
+    {"order": 10, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
+]
+
+DEFAULT_ANNUAL_SECTIONS = [
+    {"order": 0, "key": "call_to_order", "title": "Call to Order", "default_content": "", "required": True},
+    {"order": 1, "key": "roll_call", "title": "Roll Call / Attendance", "default_content": "", "required": True},
+    {"order": 2, "key": "approval_of_previous", "title": "Approval of Previous Annual Minutes", "default_content": "", "required": False},
+    {"order": 3, "key": "annual_report", "title": "Annual Report", "default_content": "", "required": True},
+    {"order": 4, "key": "treasurer_report", "title": "Treasurer's Annual Report", "default_content": "", "required": True},
+    {"order": 5, "key": "chief_report", "title": "Chief's Annual Report", "default_content": "", "required": False},
+    {"order": 6, "key": "committee_reports", "title": "Committee Reports", "default_content": "", "required": False},
+    {"order": 7, "key": "election_results", "title": "Election Results", "default_content": "", "required": False},
+    {"order": 8, "key": "awards_recognition", "title": "Awards & Recognition", "default_content": "", "required": False},
+    {"order": 9, "key": "old_business", "title": "Old Business", "default_content": "", "required": False},
+    {"order": 10, "key": "new_business", "title": "New Business", "default_content": "", "required": False},
+    {"order": 11, "key": "adjournment", "title": "Adjournment", "default_content": "", "required": True},
 ]
 
 

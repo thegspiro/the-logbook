@@ -17,6 +17,7 @@ from app.models.minute import (
     MeetingType, MinutesStatus, MotionStatus,
     ActionItemStatus, ActionItemPriority,
     DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS, DEFAULT_EXECUTIVE_SECTIONS, DEFAULT_ANNUAL_SECTIONS,
 )
 from app.models.user import User
 from app.schemas.minute import (
@@ -81,12 +82,14 @@ class MinuteService:
         # If no template and no sections, generate default sections for the meeting type
         if not minutes_dict.get("sections"):
             mt = minutes_dict.get("meeting_type", "business")
-            if mt == "special":
-                default = DEFAULT_SPECIAL_SECTIONS
-            elif mt == "committee":
-                default = DEFAULT_COMMITTEE_SECTIONS
-            else:
-                default = DEFAULT_BUSINESS_SECTIONS
+            defaults_map = {
+                "special": DEFAULT_SPECIAL_SECTIONS,
+                "committee": DEFAULT_COMMITTEE_SECTIONS,
+                "trustee": DEFAULT_TRUSTEE_SECTIONS,
+                "executive": DEFAULT_EXECUTIVE_SECTIONS,
+                "annual": DEFAULT_ANNUAL_SECTIONS,
+            }
+            default = defaults_map.get(mt, DEFAULT_BUSINESS_SECTIONS)
             minutes_dict["sections"] = [
                 {"order": s["order"], "key": s["key"], "title": s["title"], "content": s.get("default_content", "")}
                 for s in default
