@@ -43,6 +43,7 @@ const EventDetailPage = lazy(() => import('./pages/EventDetailPage').then(m => (
 const EventQRCodePage = lazy(() => import('./pages/EventQRCodePage'));
 const EventSelfCheckInPage = lazy(() => import('./pages/EventSelfCheckInPage'));
 const EventCheckInMonitoringPage = lazy(() => import('./pages/EventCheckInMonitoringPage'));
+const EventCreatePage = lazy(() => import('./pages/EventCreatePage').then(m => ({ default: m.EventCreatePage })));
 
 // Training Module
 const TrainingDashboardPage = lazy(() => import('./pages/TrainingDashboardPage'));
@@ -140,6 +141,7 @@ function App() {
 
               {/* Events Module */}
               <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/new" element={<ProtectedRoute requiredPermission="events.manage"><EventCreatePage /></ProtectedRoute>} />
               <Route path="/events/:id" element={<EventDetailPage />} />
               <Route path="/events/:id/qr-code" element={<EventQRCodePage />} />
               <Route path="/events/:id/check-in" element={<EventSelfCheckInPage />} />
