@@ -37,7 +37,7 @@ export const MemberListPage: React.FC = () => {
         setMembers(users);
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load members. Please try again later.');
+        setError('Unable to load the member directory. Please check your connection and refresh the page.');
       } finally {
         setLoading(false);
       }

@@ -30,7 +30,7 @@ export const SettingsPage: React.FC = () => {
         setSettings(data.contact_info_visibility);
       } catch (err) {
         console.error('Error fetching settings:', err);
-        setError('Failed to load settings. Please try again later.');
+        setError('Unable to load settings. Please check your connection and refresh the page.');
       } finally {
         setLoading(false);
       }
@@ -51,7 +51,7 @@ export const SettingsPage: React.FC = () => {
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Error saving settings:', err);
-      setError('Failed to save settings. Please try again.');
+      setError('Unable to save settings. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }

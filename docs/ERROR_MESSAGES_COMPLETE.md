@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document catalogs **every error message** in The Logbook application, provides troubleshooting steps for each, and identifies messages that need improvement.
+This document catalogs **every error message** in The Logbook application (94+ errors across all modules), provides troubleshooting steps for each, and identifies messages that need improvement.
 
 **Purpose**:
 - ✅ Complete error message reference
@@ -32,6 +32,11 @@ This document catalogs **every error message** in The Logbook application, provi
 10. [Module Configuration Errors](#module-configuration-errors)
 11. [Network & Connectivity Errors](#network--connectivity-errors)
 12. [File System Errors](#file-system-errors)
+13. [Documents Module Errors](#documents-module-errors)
+14. [Meetings Module Errors](#meetings-module-errors)
+15. [Scheduling Module Errors](#scheduling-module-errors)
+16. [Reports Module Errors](#reports-module-errors)
+17. [Notifications Module Errors](#notifications-module-errors)
 
 ---
 
@@ -1255,10 +1260,423 @@ Every error should have:
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-02-07
-**Total Errors Documented**: 61
+**Document Version**: 1.1
+**Last Updated**: 2026-02-12
+**Total Errors Documented**: 75+
 **Maintainer**: Development Team
+
+---
+
+## Security & Session Errors (Added 2026-02-12)
+
+### Session Inactivity
+
+#### 62. Inactivity Timeout
+**Message**: `"You have been logged out due to inactivity."`
+
+**Quality**: ✅ **GOOD** - Clear reason, appears on login redirect
+
+**Current Behavior**:
+- Location: `frontend/src/components/layout/AppLayout.tsx:33`
+- Triggered when: No user activity (mouse/keyboard/scroll/touch) for 30 minutes
+- User sees: Redirected to login page with message
+
+**Troubleshooting**: Log in again. No data loss for saved work.
+
+---
+
+### Password Reset
+
+#### 63. Invalid Reset Link
+**Message**: `"Invalid password reset link. Please request a new reset link from the login page."`
+
+**Quality**: ✅ **GOOD** - Clear action with guidance
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/auth.py:525`
+- Triggered when: POST to validate-reset-token with missing token
+
+---
+
+#### 64. Expired Reset Token
+**Message**: `"This password reset link has expired. Reset links are valid for 30 minutes. Please request a new one from the login page."`
+
+**Quality**: ✅ **GOOD** - Shows expiry duration and next step
+
+**Current Behavior**:
+- Location: `backend/app/services/auth_service.py:602`
+- Triggered when: Reset token older than 30 minutes
+
+---
+
+#### 65. Used/Invalid Reset Token
+**Message**: `"This password reset link is invalid or has already been used. Please request a new reset link from the login page."`
+
+**Quality**: ✅ **GOOD** - Covers both cases, clear next step
+
+**Current Behavior**:
+- Location: `backend/app/services/auth_service.py:592`
+- Triggered when: Token not found (already used, or invalid)
+
+---
+
+### Logout Errors
+
+#### 66. Logout Session Error
+**Message**: `"Unable to end your session. Please close your browser and log in again."`
+
+**Quality**: ✅ **GOOD** - Provides workaround
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/auth.py:253`
+- Triggered when: Server-side session invalidation fails
+
+---
+
+#### 67. Logout Auth Error
+**Message**: `"Unable to process logout. Please clear your browser data and log in again."`
+
+**Quality**: ✅ **GOOD** - Provides alternative action
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/auth.py:244`
+- Triggered when: Authorization header is malformed
+
+---
+
+### Token Refresh
+
+#### 68. Expired Session (Token Refresh)
+**Message**: `"Your session has expired. Please log in again."`
+
+**Quality**: ✅ **GOOD** - Non-technical, clear action
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/auth.py:215`
+- Triggered when: Refresh token is invalid/expired
+
+---
+
+### Onboarding Session
+
+#### 69. Onboarding Session Expired
+**Message**: `"Your onboarding session has expired due to inactivity (30-minute limit). Please refresh the page to start a new session. Your previously saved progress will be retained."`
+
+**Quality**: ✅ **GOOD** - Shows time limit, reassures about data
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/onboarding.py:432`
+- Triggered when: Onboarding session exceeds 30-minute inactivity window
+
+---
+
+#### 70. Organization Must Be Created First
+**Message**: `"Organization must be created before adding an admin user. Please complete the organization setup step first."`
+
+**Quality**: ✅ **GOOD** - Guides user to correct step
+
+---
+
+#### 71. Organization Not Found During Admin Creation
+**Message**: `"Organization not found. The organization setup may not have completed. Please go back and complete the organization setup step."`
+
+**Quality**: ✅ **GOOD** - Explains likely cause and action
+
+---
+
+### Password Change
+
+#### 72. Incorrect Current Password
+**Message**: `"Current password is incorrect. Please verify your existing password and try again."`
+
+**Quality**: ✅ **GOOD** - Clear and non-technical
+
+---
+
+### Production Security
+
+#### 73. Missing Encryption Salt (Production)
+**Message**: `"ENCRYPTION_SALT must be set in production. Generate one with: python -c \"import secrets; print(secrets.token_hex(16))\""`
+
+**Quality**: ✅ **GOOD** - Includes generation command
+
+**Current Behavior**:
+- Location: `backend/app/core/security.py:201`
+- Triggered when: ENCRYPTION_SALT env var not set in production
+- Application will not start until configured
+
+---
+
+### Bulk Import
+
+#### 74. Bulk Import Size Exceeded
+**Message**: Pydantic validation error for list exceeding 500 items
+
+**Quality**: ⚠️ **NEEDS IMPROVEMENT** - Pydantic default message
+
+**Current Behavior**:
+- Location: `backend/app/schemas/training.py:555`
+- Triggered when: More than 500 external_import_ids submitted
+
+**Troubleshooting**: Split imports into batches of 500 or fewer records.
+
+---
+
+## Documents Module Errors
+
+### Document Operations
+
+#### 75. Unable to Load Documents
+**Message**: `"Unable to load documents. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD** - Standard error pattern with action
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: GET `/api/v1/documents/` or `/api/v1/documents/summary` fails
+
+**Troubleshooting**: Check network connection, verify backend is running, ensure `documents` table exists.
+
+---
+
+#### 76. Unable to Upload Document
+**Message**: `"Unable to upload the document. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD** - Clear action guidance
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: POST `/api/v1/documents/` with FormData fails
+
+**Troubleshooting**: Check file size limits, verify required fields (name), ensure folder exists.
+
+---
+
+#### 77. Unable to Create Folder
+**Message**: `"Unable to create the folder. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: POST `/api/v1/documents/folders/` fails
+
+**Troubleshooting**: Check for duplicate folder name, verify parent folder exists, check `documents.manage` permission.
+
+---
+
+#### 78. Unable to Delete Document
+**Message**: `"Unable to delete the document. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/DocumentsPage.tsx`
+- Triggered when: DELETE `/api/v1/documents/{id}` fails
+
+---
+
+#### 79. Document Not Found
+**Message**: `"Document not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/documents.py`
+- Triggered when: Requested document ID does not exist
+
+---
+
+## Meetings Module Errors
+
+### Meeting Operations
+
+#### 80. Unable to Load Meetings
+**Message**: `"Unable to load meetings. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/MinutesPage.tsx`
+- Triggered when: GET `/api/v1/meetings/` fails
+
+---
+
+#### 81. Unable to Create Meeting
+**Message**: `"Unable to create the meeting. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/MinutesPage.tsx`
+- Triggered when: POST `/api/v1/meetings/` fails
+
+**Troubleshooting**: Verify required fields (title, meeting_type, meeting_date). Valid types: regular, special, emergency, committee, board.
+
+---
+
+#### 82. Unable to Delete Meeting
+**Message**: `"Unable to delete the meeting. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/MinutesPage.tsx`
+- Triggered when: DELETE `/api/v1/meetings/{id}` fails
+
+---
+
+#### 83. Meeting Not Found
+**Message**: `"Meeting not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/meetings.py`
+- Triggered when: Requested meeting ID does not exist
+
+---
+
+#### 84. Failed to Add Attendee
+**Message**: `"Failed to add attendee"`
+
+**Quality**: ⚠️ **NEEDS IMPROVEMENT** - No guidance on cause
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/meetings.py`
+- Triggered when: POST `/api/v1/meetings/{id}/attendees` fails
+
+**Troubleshooting**: Verify the user_id exists and hasn't already been added as attendee.
+
+---
+
+## Scheduling Module Errors
+
+### Shift Operations
+
+#### 85. Unable to Load Shifts
+**Message**: `"Unable to load shifts. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/SchedulingPage.tsx`
+- Triggered when: GET `/api/v1/scheduling/week-calendar` or `/api/v1/scheduling/summary` fails
+
+---
+
+#### 86. Unable to Create Shift
+**Message**: `"Unable to create the shift. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/SchedulingPage.tsx`
+- Triggered when: POST `/api/v1/scheduling/shifts/` fails
+
+**Troubleshooting**: Verify required fields (title, shift_date, start_time, end_time). Ensure end_time is after start_time.
+
+---
+
+#### 87. Shift Not Found
+**Message**: `"Shift not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/scheduling.py`
+- Triggered when: Requested shift ID does not exist
+
+---
+
+## Reports Module Errors
+
+### Report Generation
+
+#### 88. Unable to Generate Report
+**Message**: `"Unable to generate report. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/ReportsPage.tsx`
+- Triggered when: POST `/api/v1/reports/generate` fails
+
+**Troubleshooting**: Check network connection, verify `reports.manage` permission, ensure data exists for the report type.
+
+---
+
+#### 89. Invalid Report Type
+**Message**: `"Invalid report type"`
+
+**Quality**: ⚠️ **NEEDS IMPROVEMENT** - Should list valid types
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/reports.py`
+- Triggered when: report_type not in supported list
+
+**Valid Types**: `member_roster`, `training_summary`, `event_attendance`
+
+---
+
+## Notifications Module Errors
+
+### Notification Rule Operations
+
+#### 90. Unable to Load Notification Rules
+**Message**: `"Unable to load notification rules. Please check your connection and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: GET `/api/v1/notifications/rules/` fails
+
+---
+
+#### 91. Unable to Create Notification Rule
+**Message**: `"Unable to create the notification rule. Please check your input and try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: POST `/api/v1/notifications/rules/` fails
+
+**Troubleshooting**: Verify required fields (name, trigger_type, category). See valid values in TROUBLESHOOTING.md.
+
+---
+
+#### 92. Unable to Toggle Rule
+**Message**: `"Unable to toggle the notification rule. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: POST `/api/v1/notifications/rules/{id}/toggle` fails
+
+---
+
+#### 93. Notification Rule Not Found
+**Message**: `"Notification rule not found"`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `backend/app/api/v1/endpoints/notifications.py`
+- Triggered when: Requested rule ID does not exist
+
+---
+
+#### 94. Unable to Delete Notification Rule
+**Message**: `"Unable to delete the notification rule. Please try again."`
+
+**Quality**: ✅ **GOOD**
+
+**Current Behavior**:
+- Location: `frontend/src/pages/NotificationsPage.tsx`
+- Triggered when: DELETE `/api/v1/notifications/rules/{id}` fails
 
 ---
 
@@ -1270,12 +1688,16 @@ Every error should have:
 3. Password too weak → Add uppercase, numbers, special chars
 4. Email already registered → Use different email or reset password
 5. Session expired → Restart onboarding
+6. Unable to load [module] → Check connection, verify migration applied
+7. Unable to create [item] → Check required fields and permissions
 
 **For Administrators**:
 - CORS errors → Update ALLOWED_ORIGINS in .env
 - Database errors → Check logs, verify migrations
 - OAuth setup → Follow provider documentation links
 - Network timeouts → Check server load and database
+- Missing module tables → Run `alembic upgrade head` to apply latest migrations
+- Permission errors → Verify user role has the required module permission (e.g., `documents.manage`)
 
 **For Developers**:
 - Error message location → Search this document by error text

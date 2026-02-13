@@ -476,13 +476,18 @@ def validate_security_configuration():
         logger.warning("=" * 60)
 
         # Block startup in production if critical issues exist
-        if settings.SECURITY_BLOCK_INSECURE_DEFAULTS:
-            critical_warnings = [w for w in warnings if "CRITICAL" in w]
-            if critical_warnings:
-                raise RuntimeError(
-                    "SECURITY FAILURE: Cannot start with insecure default configuration. "
-                    "Set required environment variables or disable SECURITY_BLOCK_INSECURE_DEFAULTS."
-                )
+        critical_warnings = [w for w in warnings if "CRITICAL" in w]
+        if critical_warnings and settings.ENVIRONMENT == "production":
+            raise RuntimeError(
+                "SECURITY FAILURE: Cannot start in production with insecure defaults. "
+                f"{len(critical_warnings)} critical issue(s) found. "
+                "Set required environment variables before deploying."
+            )
+        elif critical_warnings and settings.SECURITY_BLOCK_INSECURE_DEFAULTS:
+            logger.error(
+                f"SECURITY WARNING: {len(critical_warnings)} critical issue(s) found. "
+                "These MUST be resolved before deploying to production."
+            )
 
 
 @asynccontextmanager

@@ -12,6 +12,9 @@ interface AppLayoutProps {
   children?: React.ReactNode;
 }
 
+// Inactivity timeout: auto-logout after 30 minutes of no user activity
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,20 +25,28 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // HIPAA §164.312(a)(2)(iii): Automatic logoff after inactivity
-  useIdleTimer();
-
-  // HIPAA password age enforcement: redirect to change-password if expired
+  // Session inactivity timeout
   useEffect(() => {
-    if (user?.password_expired && location.pathname !== '/settings/account') {
-      toast('Your password has expired. Please change it to continue.', {
-        id: 'password-expired',
-        duration: 6000,
-        icon: '\uD83D\uDD12',
-      });
-      navigate('/settings/account', { replace: true });
-    }
-  }, [user?.password_expired, location.pathname, navigate]);
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(async () => {
+        await logout();
+        sessionStorage.clear();
+        navigate('/login', { state: { message: 'You have been logged out due to inactivity.' } });
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((event) => document.addEventListener(event, resetTimer));
+    resetTimer();
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      events.forEach((event) => document.removeEventListener(event, resetTimer));
+    };
+  }, [logout, navigate]);
 
   useEffect(() => {
     // Load department info and navigation preference from sessionStorage first

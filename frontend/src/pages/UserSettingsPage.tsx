@@ -4,16 +4,18 @@
  * Allows users to manage their personal account settings, password, and preferences.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Lock, Bell, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { authService } from '../services/api';
+import { authService, userService } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
 
 type TabType = 'account' | 'password' | 'notifications';
 
 export const UserSettingsPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('account');
 
   // Password change state
@@ -31,6 +33,27 @@ export const UserSettingsPage: React.FC = () => {
   const [trainingReminders, setTrainingReminders] = useState(true);
   const [announcementNotifications, setAnnouncementNotifications] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [loadingPreferences, setLoadingPreferences] = useState(false);
+
+  // Load notification preferences from backend
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadPreferences = async () => {
+      setLoadingPreferences(true);
+      try {
+        const prefs = await userService.getNotificationPreferences(user.id);
+        setEmailNotifications(prefs.email_notifications ?? true);
+        setEventReminders(prefs.event_reminders ?? true);
+        setTrainingReminders(prefs.training_reminders ?? true);
+        setAnnouncementNotifications(prefs.announcement_notifications ?? true);
+      } catch {
+        // Use defaults if fetch fails
+      } finally {
+        setLoadingPreferences(false);
+      }
+    };
+    loadPreferences();
+  }, [user?.id]);
 
   const passwordValidation = validatePasswordStrength(newPassword);
 
@@ -76,23 +99,23 @@ export const UserSettingsPage: React.FC = () => {
   };
 
   const handleSavePreferences = async () => {
+    if (!user?.id) return;
     setSavingPreferences(true);
 
     try {
-      // TODO: Add API endpoint for saving notification preferences
-      // await userService.updateNotificationPreferences({
-      //   email_notifications: emailNotifications,
-      //   event_reminders: eventReminders,
-      //   training_reminders: trainingReminders,
-      //   announcement_notifications: announcementNotifications,
-      // });
-
-      // Simulated API call for now
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await userService.updateNotificationPreferences(user.id, {
+        email_notifications: emailNotifications,
+        event_reminders: eventReminders,
+        training_reminders: trainingReminders,
+        announcement_notifications: announcementNotifications,
+      });
 
       toast.success('Preferences saved successfully!');
     } catch (err: any) {
-      toast.error('Failed to save preferences. Please try again.');
+      toast.error(
+        err.response?.data?.detail ||
+        'Failed to save preferences. Please try again.'
+      );
     } finally {
       setSavingPreferences(false);
     }
