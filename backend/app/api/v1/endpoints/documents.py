@@ -73,9 +73,9 @@ async def create_folder(
     folder = await service.create_folder(data, current_user.organization_id, current_user.id)
 
     await log_audit_event(
-        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
-        action="folder.created", resource_type="document_folder", resource_id=folder.id,
-        details={"name": folder.name},
+        db=db, event_type="folder_created", event_category="documents", severity="info",
+        event_data={"folder_id": folder.id, "name": folder.name},
+        user_id=str(current_user.id),
     )
 
     count = await service.get_folder_document_count(folder.id, current_user.organization_id)
@@ -120,7 +120,7 @@ async def list_documents(
     docs = await service.list_documents(
         organization_id=current_user.organization_id,
         folder_id=folder_id, document_type=document_type,
-        search=search, skip=skip, limit=limit,
+        search=search, skip=skip, limit=min(limit, 100),
     )
     return [
         DocumentListItem(
@@ -170,6 +170,7 @@ async def delete_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     await log_audit_event(
-        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
-        action="document.deleted", resource_type="document", resource_id=document_id,
+        db=db, event_type="document_deleted", event_category="documents", severity="warning",
+        event_data={"document_id": document_id},
+        user_id=str(current_user.id),
     )

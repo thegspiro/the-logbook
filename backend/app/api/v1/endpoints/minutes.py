@@ -57,7 +57,7 @@ async def list_minutes(
     status_filter: Optional[str] = None,
     search: Optional[str] = None,
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 50,  # max 100 enforced below
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.view")),
 ):
@@ -74,7 +74,7 @@ async def list_minutes(
         status=status_filter,
         search=search,
         skip=skip,
-        limit=limit,
+        limit=min(limit, 100),
     )
 
     return [
@@ -136,7 +136,7 @@ async def search_minutes(
     return await service.search_minutes(
         organization_id=current_user.organization_id,
         query=q.strip(),
-        limit=limit,
+        limit=min(limit, 50),
     )
 
 
@@ -552,12 +552,11 @@ async def publish_minutes(
 
     await log_audit_event(
         db=db,
+        event_type="minutes_published",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "document_id": doc.id, "title": minutes.title},
         user_id=str(current_user.id),
-        organization_id=str(current_user.organization_id),
-        action="minutes.published",
-        resource_type="meeting_minutes",
-        resource_id=minutes_id,
-        details={"document_id": doc.id, "title": minutes.title},
     )
 
     return DocumentResponse(
@@ -630,9 +629,9 @@ async def create_template(
     service = TemplateService(db)
     tpl = await service.create_template(data, current_user.organization_id, current_user.id)
     await log_audit_event(
-        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
-        action="template.created", resource_type="minutes_template", resource_id=tpl.id,
-        details={"name": tpl.name},
+        db=db, event_type="template_created", event_category="meetings", severity="info",
+        event_data={"template_id": tpl.id, "name": tpl.name},
+        user_id=str(current_user.id),
     )
     return _build_template_response(tpl)
 
@@ -650,9 +649,9 @@ async def update_template(
     if not tpl:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     await log_audit_event(
-        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
-        action="template.updated", resource_type="minutes_template", resource_id=tpl.id,
-        details={"name": tpl.name},
+        db=db, event_type="template_updated", event_category="meetings", severity="info",
+        event_data={"template_id": tpl.id, "name": tpl.name},
+        user_id=str(current_user.id),
     )
     return _build_template_response(tpl)
 
@@ -669,8 +668,9 @@ async def delete_template(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     await log_audit_event(
-        db=db, user_id=str(current_user.id), organization_id=str(current_user.organization_id),
-        action="template.deleted", resource_type="minutes_template", resource_id=template_id,
+        db=db, event_type="template_deleted", event_category="meetings", severity="warning",
+        event_data={"template_id": template_id},
+        user_id=str(current_user.id),
     )
 
 

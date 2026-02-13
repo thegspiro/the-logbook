@@ -179,7 +179,8 @@ class DocumentService:
         if document_type:
             query = query.where(Document.document_type == document_type)
         if search:
-            query = query.where(Document.title.ilike(f"%{search}%"))
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.where(Document.title.ilike(f"%{safe_search}%"))
 
         query = query.order_by(Document.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)

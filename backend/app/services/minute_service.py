@@ -194,7 +194,8 @@ class MinuteService:
             query = query.where(MeetingMinutes.status == status)
 
         if search:
-            search_term = f"%{search}%"
+            safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
                     MeetingMinutes.title.ilike(search_term),
@@ -565,7 +566,8 @@ class MinuteService:
         self, organization_id: UUID, query: str, limit: int = 20
     ) -> List[dict]:
         """Full-text search across meeting minutes content"""
-        search_term = f"%{query}%"
+        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_term = f"%{safe_query}%"
 
         # Search across all text fields
         search_fields = [
