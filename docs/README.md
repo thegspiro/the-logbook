@@ -14,10 +14,10 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-07 with latest error handling
+   - **Updated**: 2026-02-12 with security hardening, session management, error improvements
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
-   - Complete catalog of all 61 error messages in the application
+   - Complete catalog of all 94+ error messages in the application
    - Quality ratings and improvement status for each error
    - Troubleshooting steps for every error
    - Implementation roadmap
@@ -29,10 +29,16 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Testing procedures
 
 4. **[ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md)**
-   - Latest error message improvements (Feb 7, 2026)
+   - Error message improvements (Feb 7, 2026)
    - Before/after comparisons
    - New error handler features
    - Developer guidelines
+
+5. **[ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md)**
+   - Security hardening error messages (Feb 12, 2026)
+   - Session timeout and password reset messages
+   - Frontend error message standardization
+   - Updated error message guidelines
 
 ---
 
@@ -91,6 +97,41 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Public API v1.1.0 with public form endpoints
     - Form retrieval and submission without authentication
     - Rate limiting, security notes, integration examples
+
+10. **Documents Module**
+    - Document storage with folder hierarchy (create, browse, upload, delete)
+    - File metadata tracking (size, MIME type, upload date)
+    - Document status workflow (draft, active, archived)
+    - API endpoints: 8 endpoints for folder CRUD, document CRUD, summary
+    - Permissions: `documents.view`, `documents.manage`
+
+11. **Meetings & Minutes Module**
+    - Meeting creation with type classification (regular, special, emergency, committee, board)
+    - Attendee tracking and action item management
+    - Meeting approval workflow (draft, approved, archived)
+    - API endpoints: 12 endpoints for meeting CRUD, attendees, action items, summary
+    - Permissions: `meetings.view`, `meetings.manage`
+
+12. **Scheduling Module**
+    - Shift creation and management with position types
+    - Week and month calendar views with real shift data
+    - Attendance tracking per shift
+    - API endpoints: 10 endpoints for shift CRUD, attendance, calendar views, summary
+    - Permissions: `scheduling.view`, `scheduling.manage`
+
+13. **Reports Module**
+    - Report generation: member roster, training summary, event attendance
+    - Data aggregation from members, training records, and events
+    - Tabular report display with filtering
+    - API endpoints: 2 endpoints (available reports list, generate report)
+    - Permissions: `reports.view`, `reports.manage`
+
+14. **Notifications Module**
+    - Notification rule creation with trigger/category configuration
+    - Rule toggle (enable/disable) with persistence
+    - Notification log tracking with delivery status and read state
+    - API endpoints: 8 endpoints for rule CRUD, toggle, logs, mark-read, summary
+    - Permissions: `notifications.view`, `notifications.manage`
 
 ---
 
@@ -172,24 +213,31 @@ python backend/scripts/verify_database_enums.py
 
 ---
 
-## 📊 Error Message Quality (As of 2026-02-07)
+## 📊 Error Message Quality (As of 2026-02-12)
 
 Current Status:
 ```
-✅ Good: 40 errors (66%)
-⚠️  Needs Improvement: 14 errors (23%)
-❌ Poor: 7 errors (11%)
+✅ Good: 73+ errors (78%)
+⚠️  Needs Improvement: 15 errors (16%)
+❌ Poor: 6 errors (6%)
 
-Total: 61 errors documented
+Total: 94+ errors documented
 ```
 
-Recent Improvements:
-- ✅ Email/username duplicate errors - Now specific with suggestions
+Recent Improvements (2026-02-12):
+- ✅ Session timeout & inactivity messages - Show time limits and data retention
+- ✅ Password reset messages - Include expiry duration and clear next steps
+- ✅ Logout errors - Provide workaround actions
+- ✅ Onboarding errors - Guide users to correct step
+- ✅ Frontend errors standardized - "Unable to [action]. Please [fix]." pattern
+- ✅ 25+ messages improved across 15+ files
+
+Previous Improvements (2026-02-07):
+- ✅ Email/username duplicate errors - Specific with suggestions
 - ✅ Network error standardization - Comprehensive error handler
 - ✅ SMTP errors - User-friendly instead of technical
-- ✅ Soft-delete filtering - Prevents false duplicates
 
-See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md) for details.
+See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md) for latest details.
 
 ---
 
@@ -206,6 +254,11 @@ See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.m
 | Network/connection issues | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#network--connection-problems) |
 | Enum case mismatch | [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md) |
 | Custom forms / public forms | [FORMS_MODULE.md](./FORMS_MODULE.md) |
+| Documents / file management | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#documents-module) |
+| Meeting minutes / action items | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meetings--minutes-module) |
+| Shift scheduling / calendar | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module) |
+| Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
+| Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
 | Prospective members pipeline | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md) |
 | Inactivity timeouts / purging | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system) |
 | Meeting minutes / templates | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) |
@@ -292,6 +345,7 @@ docker-compose ps
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
+| ERROR_MESSAGES_UPDATES_2026_02_12.md | 1.0 | 2026-02-12 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
 | ENUM_CONVENTIONS.md | 1.0 | 2026-02-07 | Current |
 | FORMS_MODULE.md | 1.0 | 2026-02-12 | Current |
@@ -331,22 +385,47 @@ docker-compose ps
 
 ## 🔄 Recent Updates
 
-### 2026-02-13 - Meeting Minutes & Documents Module
+### 2026-02-12 - Five New Modules: Documents, Minutes, Scheduling, Reports, Notifications
 
 **What Changed**:
-- Added complete Meeting Minutes module with 8 meeting types, dynamic sections, and template system
-- Added Documents module with 7 system folders, custom folders, and document viewer
-- Added publish workflow: approved minutes → styled HTML → Documents module
-- Added default section templates for each meeting type (business, trustee, executive, annual, etc.)
-- Security review: fixed audit log parameter mismatches, SQL LIKE injection, unbounded query limits
-- Fixed Alembic migration chain integrity for all minutes/documents migrations
+- Built complete backend stack for 5 new modules (models, schemas, services, endpoints, migration)
+- Connected all 5 frontend pages to real database APIs (replacing placeholder/static data)
+- **Documents**: Folder hierarchy, file upload/download, document status management
+- **Meetings/Minutes**: Meeting CRUD with attendees, action items, approval workflow
+- **Scheduling**: Shift management, week/month calendar views, attendance tracking
+- **Reports**: Member roster, training summary, event attendance report generation
+- **Notifications**: Rule-based notification configuration, delivery logging, read tracking
+- Database migration creates 7 new tables: document_folders, documents, meetings, meeting_attendees, meeting_action_items, notification_rules, notification_logs
+- Updated TROUBLESHOOTING.md with module-specific troubleshooting sections
+- Updated ERROR_MESSAGES_COMPLETE.md with 20+ new error messages for new modules
 
-**New Documentation**:
-- Created [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) - Complete meeting minutes and documents module documentation
-- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Added meeting minutes and documents troubleshooting sections
+**Rollout Status** (36 of 40 pages production-ready):
+- Ready: Dashboard, Auth, Members, Events, Elections, Training, Forms, Inventory, Settings, Documents, Minutes, Scheduling, Reports, Notifications
+- Deferred: Integrations (needs OAuth), Analytics Dashboard (localStorage), Error Monitoring (localStorage), Create Training Session (partial)
 
 ---
 
+### 2026-02-12 - Security Hardening & Error Message Review
+
+**What Changed**:
+- Added 30-minute frontend session inactivity auto-logout
+- Added DOMPurify sanitization for all form submissions
+- Added 500-item limit on bulk external training imports
+- Increased login password minimum from 1 to 8 characters
+- Reduced onboarding session expiry from 2 hours to 30 minutes
+- Blocked encryption salt fallback in production (hard failure)
+- Added POST `/validate-reset-token` endpoint (replaced GET to prevent token in logs)
+- Added bulk role replacement audit logging
+- Added wildcard permission check to admin access endpoint
+- Improved 25+ error messages across backend and frontend for clarity
+- Updated TROUBLESHOOTING.md with security & session management section
+- Updated ERROR_MESSAGES_COMPLETE.md with 14 new error entries
+
+See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md) for error message details.
+
+---
+
+### 2026-02-12 - Forms Module & Public Forms
 ### 2026-02-12 - Prospective Members Module, Inactivity System & Forms
 
 **What Changed**:

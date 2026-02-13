@@ -29,6 +29,10 @@ export interface NotificationPreferences {
   email: boolean;
   sms: boolean;
   push: boolean;
+  email_notifications: boolean;
+  event_reminders: boolean;
+  training_reminders: boolean;
+  announcement_notifications: boolean;
 }
 
 export interface ContactInfoUpdate {

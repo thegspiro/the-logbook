@@ -133,7 +133,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   checkPermission: (permission: string) => {
     const { user } = get();
     if (!user?.permissions) return false;
-    // Wildcard "*" grants all permissions (super_admin role)
+    // Wildcard "*" grants all permissions (it_administrator role)
     return user.permissions.includes('*') || user.permissions.includes(permission);
   },
 

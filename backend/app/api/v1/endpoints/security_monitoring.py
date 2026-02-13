@@ -123,7 +123,7 @@ async def acknowledge_alert(
     success = security_monitor.acknowledge_alert(alert_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise HTTPException(status_code=404, detail="Security alert not found. It may have already been resolved or removed.")
 
     await log_audit_event(
         db=db,
@@ -154,7 +154,7 @@ async def resolve_alert(
     success = security_monitor.resolve_alert(alert_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise HTTPException(status_code=404, detail="Security alert not found. It may have already been resolved or removed.")
 
     await log_audit_event(
         db=db,

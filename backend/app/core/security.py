@@ -199,6 +199,11 @@ def get_encryption_salt() -> bytes:
     salt = settings.ENCRYPTION_SALT
 
     if not salt:
+        if settings.ENVIRONMENT == "production":
+            raise RuntimeError(
+                "ENCRYPTION_SALT must be set in production. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(16))\""
+            )
         # Fallback for development only - log warning
         import logging
         logging.warning(

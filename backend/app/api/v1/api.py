@@ -9,12 +9,21 @@ from fastapi import APIRouter
 # Import route modules
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
+    analytics,
     auth,
     dashboard,
+    documents,
+    error_logs,
     events,
     forms,
+    integrations,
     locations,
+    meetings,
+    membership_pipeline,
+    notifications,
     roles,
+    reports,
+    scheduling,
     users,
     organizations,
     apparatus,
@@ -51,8 +60,15 @@ api_router.include_router(inventory.router, prefix="/inventory", tags=["inventor
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
-api_router.include_router(minutes.router, prefix="/minutes", tags=["minutes"])
+api_router.include_router(membership_pipeline.router, prefix="/membership-pipeline", tags=["membership-pipeline"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
+api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
+api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 api_router.include_router(public_portal_admin.router)
 
 # Placeholder routes
@@ -82,8 +98,15 @@ async def api_root():
             "security": "/api/v1/security",
             "email_templates": "/api/v1/email-templates",
             "forms": "/api/v1/forms",
-            "minutes": "/api/v1/minutes",
             "documents": "/api/v1/documents",
+            "meetings": "/api/v1/meetings",
+            "scheduling": "/api/v1/scheduling",
+            "reports": "/api/v1/reports",
+            "notifications": "/api/v1/notifications",
+            "analytics": "/api/v1/analytics",
+            "errors": "/api/v1/errors",
+            "integrations": "/api/v1/integrations",
+            "membership_pipeline": "/api/v1/membership-pipeline",
             "public_portal": "/api/v1/public-portal"
         }
     }

@@ -200,13 +200,25 @@ async def upload_attachment(
             detail="File exceeds 10MB limit"
         )
 
-    # Store file
+    # Validate file extension — block executable and script types
+    ALLOWED_EXTENSIONS = {
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+        '.txt', '.csv', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg',
+        '.zip', '.ics',
+    }
+    _, ext = os.path.splitext(file.filename or "attachment")
+    ext = ext.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type '{ext}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    # Store file with UUID name (prevents path traversal)
     attachment_dir = os.path.join("storage", "email_attachments", current_user.organization_id)
     os.makedirs(attachment_dir, exist_ok=True)
 
     file_id = str(uuid.uuid4())
-    # Preserve original extension
-    _, ext = os.path.splitext(file.filename or "attachment")
     storage_filename = f"{file_id}{ext}"
     storage_path = os.path.join(attachment_dir, storage_filename)
 

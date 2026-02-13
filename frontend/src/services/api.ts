@@ -280,6 +280,31 @@ export const userService = {
     const response = await api.post<UserWithRoles>('/users', memberData);
     return response.data;
   },
+
+  /**
+   * Get notification preferences for the current user
+   */
+  async getNotificationPreferences(userId: string): Promise<import('../types/user').NotificationPreferences> {
+    const response = await api.get<{ notification_preferences: import('../types/user').NotificationPreferences }>(`/users/${userId}/with-roles`);
+    return response.data.notification_preferences || {
+      email: true,
+      sms: false,
+      push: false,
+      email_notifications: true,
+      event_reminders: true,
+      training_reminders: true,
+      announcement_notifications: true,
+    };
+  },
+
+  /**
+   * Update notification preferences for a user
+   */
+  async updateNotificationPreferences(userId: string, preferences: Partial<import('../types/user').NotificationPreferences>): Promise<void> {
+    await api.patch(`/users/${userId}/contact-info`, {
+      notification_preferences: preferences,
+    });
+  },
 };
 
 export interface EnabledModulesResponse {
@@ -389,6 +414,14 @@ export const roleService = {
   async deleteRole(roleId: string): Promise<void> {
     await api.delete(`/roles/${roleId}`);
   },
+
+  /**
+   * Clone an existing role
+   */
+  async cloneRole(roleId: string): Promise<Role> {
+    const response = await api.post<Role>(`/roles/${roleId}/clone`);
+    return response.data;
+  },
 };
 
 export const authService = {
@@ -450,7 +483,7 @@ export const authService = {
    * Validate password reset token
    */
   async validateResetToken(token: string): Promise<{ valid: boolean; email?: string }> {
-    const response = await api.get<{ valid: boolean; email?: string }>(`/auth/password-reset/validate/${token}`);
+    const response = await api.post<{ valid: boolean; email?: string }>('/auth/validate-reset-token', { token });
     return response.data;
   },
 
@@ -1203,110 +1236,10 @@ export const electionService = {
   },
 
   /**
-   * Cast multiple votes at once (bulk, atomic)
+   * Cast votes in bulk
    */
-  async castBulkVotes(electionId: string, votes: Array<Record<string, string>>): Promise<import('../types/election').Vote[]> {
-    const response = await api.post<import('../types/election').Vote[]>(`/elections/${electionId}/vote/bulk`, {
-      election_id: electionId,
-      votes,
-    });
-    return response.data;
-  },
-
-  /**
-   * Verify vote integrity (admin only)
-   */
-  async verifyIntegrity(electionId: string): Promise<import('../types/election').VoteIntegrityResult> {
-    const response = await api.get<import('../types/election').VoteIntegrityResult>(`/elections/${electionId}/integrity`);
-    return response.data;
-  },
-
-  /**
-   * Get comprehensive forensics report (admin only)
-   */
-  async getForensics(electionId: string): Promise<import('../types/election').ForensicsReport> {
-    const response = await api.get<import('../types/election').ForensicsReport>(`/elections/${electionId}/forensics`);
-    return response.data;
-  },
-
-  /**
-   * Soft-delete a vote with audit trail (admin only)
-   */
-  async softDeleteVote(electionId: string, voteId: string, reason: string): Promise<{ message: string; vote_id: string }> {
-    const response = await api.delete<{ message: string; vote_id: string }>(`/elections/${electionId}/votes/${voteId}`, {
-      params: { reason },
-    });
-    return response.data;
-  },
-
-  // ========================================
-  // Meeting Attendance
-  // ========================================
-
-  /**
-   * Get attendees for an election/meeting
-   */
-  async getAttendees(electionId: string): Promise<{ attendees: import('../types/election').Attendee[]; total: number }> {
-    const response = await api.get(`/elections/${electionId}/attendees`);
-    return response.data;
-  },
-
-  /**
-   * Check in a member as present at the meeting
-   */
-  async checkInAttendee(electionId: string, userId: string): Promise<import('../types/election').AttendeeCheckInResponse> {
-    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees`, { user_id: userId });
-    return response.data;
-  },
-
-  /**
-   * Remove a member from the attendance list
-   */
-  async removeAttendee(electionId: string, userId: string): Promise<void> {
-    await api.delete(`/elections/${electionId}/attendees/${userId}`);
-  },
-
-  // ========================================
-  // Ballot Templates
-  // ========================================
-
-  /**
-   * Get available ballot item templates
-   */
-  async getBallotTemplates(): Promise<import('../types/election').BallotTemplate[]> {
-    const response = await api.get<{ templates: import('../types/election').BallotTemplate[] }>('/elections/templates/ballot-items');
-    return response.data.templates;
-  },
-
-  // ========================================
-  // Token-Based Ballot (Public / No Auth)
-  // ========================================
-
-  /**
-   * Get ballot information using a voting token (no auth required)
-   */
-  async getBallotByToken(token: string): Promise<import('../types/election').Election> {
-    const response = await api.get<import('../types/election').Election>('/elections/ballot', { params: { token } });
-    return response.data;
-  },
-
-  /**
-   * Get candidates for a ballot using voting token (no auth required)
-   */
-  async getBallotCandidates(token: string): Promise<import('../types/election').Candidate[]> {
-    const response = await api.get<import('../types/election').Candidate[]>(`/elections/ballot/${token}/candidates`);
-    return response.data;
-  },
-
-  /**
-   * Submit an entire ballot using a voting token (no auth required)
-   */
-  async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
-    const response = await api.post<import('../types/election').BallotSubmissionResponse>(
-      '/elections/ballot/vote/bulk',
-      { votes },
-      { params: { token } }
-    );
+  async bulkCastVotes(electionId: string, votes: import('../types/election').VoteCreate[]): Promise<{ success: boolean; votes_cast: number }> {
+    const response = await api.post<{ success: boolean; votes_cast: number }>(`/elections/${electionId}/vote/bulk`, { votes });
     return response.data;
   },
 };
@@ -1617,6 +1550,40 @@ export const inventoryService = {
   async retireItem(itemId: string, notes?: string): Promise<void> {
     await api.post(`/inventory/items/${itemId}/retire`, { notes });
   },
+
+  async assignItem(itemId: string, userId: string): Promise<InventoryItem> {
+    const response = await api.post<InventoryItem>(`/inventory/items/${itemId}/assign`, { user_id: userId });
+    return response.data;
+  },
+
+  async unassignItem(itemId: string): Promise<InventoryItem> {
+    const response = await api.post<InventoryItem>(`/inventory/items/${itemId}/unassign`);
+    return response.data;
+  },
+
+  async checkoutItem(data: { item_id: string; user_id: string; due_date?: string; notes?: string }): Promise<{ id: string }> {
+    const response = await api.post<{ id: string }>('/inventory/checkout', data);
+    return response.data;
+  },
+
+  async checkInItem(checkoutId: string): Promise<void> {
+    await api.post(`/inventory/checkout/${checkoutId}/checkin`);
+  },
+
+  async getActiveCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/active');
+    return response.data;
+  },
+
+  async getOverdueCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
+    return response.data;
+  },
+
+  async getLowStockItems(): Promise<InventoryItem[]> {
+    const response = await api.get<InventoryItem[]>('/inventory/low-stock');
+    return response.data;
+  },
 };
 
 // ============================================
@@ -1923,6 +1890,13 @@ export const formsService = {
     });
     return response.data;
   },
+
+  /**
+   * Reorder form fields
+   */
+  async reorderFields(formId: string, fieldIds: string[]): Promise<void> {
+    await api.post(`/forms/${formId}/fields/reorder`, { field_ids: fieldIds });
+  },
 };
 
 // Public forms service (no auth required)
@@ -1948,6 +1922,425 @@ export const publicFormsService = {
   },
 };
 
+// ============================================
+// Documents Service
+// ============================================
+
+export interface DocumentFolder {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  color: string;
+  icon: string;
+  parent_id?: string;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface DocumentRecord {
+  id: string;
+  organization_id: string;
+  folder_id?: string;
+  name: string;
+  description?: string;
+  file_name: string;
+  file_size: number;
+  file_type?: string;
+  status: string;
+  version: number;
+  tags?: string;
+  created_at: string;
+  updated_at: string;
+  uploaded_by?: string;
+  uploader_name?: string;
+  folder_name?: string;
+}
+
+export interface DocumentsSummary {
+  total_documents: number;
+  total_folders: number;
+  total_size_bytes: number;
+  documents_this_month: number;
+}
+
+export const documentsService = {
+  async getFolders(parentId?: string): Promise<{ folders: DocumentFolder[]; total: number }> {
+    const params: Record<string, string> = {};
+    if (parentId) params.parent_id = parentId;
+    const response = await api.get('/documents/folders', { params });
+    return response.data;
+  },
+
+  async createFolder(data: { name: string; description?: string; color?: string; icon?: string; parent_id?: string }): Promise<DocumentFolder> {
+    const response = await api.post<DocumentFolder>('/documents/folders', data);
+    return response.data;
+  },
+
+  async updateFolder(folderId: string, data: Partial<{ name: string; description: string; color: string }>): Promise<DocumentFolder> {
+    const response = await api.patch<DocumentFolder>(`/documents/folders/${folderId}`, data);
+    return response.data;
+  },
+
+  async deleteFolder(folderId: string): Promise<void> {
+    await api.delete(`/documents/folders/${folderId}`);
+  },
+
+  async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/documents/', { params });
+    return response.data;
+  },
+
+  async uploadDocument(formData: FormData): Promise<DocumentRecord> {
+    const response = await api.post<DocumentRecord>('/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async getDocument(documentId: string): Promise<DocumentRecord> {
+    const response = await api.get<DocumentRecord>(`/documents/${documentId}`);
+    return response.data;
+  },
+
+  async updateDocument(documentId: string, data: Partial<{ name: string; description: string; folder_id: string; tags: string; status: string }>): Promise<DocumentRecord> {
+    const response = await api.patch<DocumentRecord>(`/documents/${documentId}`, data);
+    return response.data;
+  },
+
+  async deleteDocument(documentId: string): Promise<void> {
+    await api.delete(`/documents/${documentId}`);
+  },
+
+  async getSummary(): Promise<DocumentsSummary> {
+    const response = await api.get<DocumentsSummary>('/documents/stats/summary');
+    return response.data;
+  },
+};
+
+// ============================================
+// Meetings (Minutes) Service
+// ============================================
+
+export interface MeetingRecord {
+  id: string;
+  organization_id: string;
+  title: string;
+  meeting_type: string;
+  meeting_date: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  called_by?: string;
+  status: string;
+  agenda?: string;
+  notes?: string;
+  motions?: string;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  creator_name?: string;
+  attendee_count: number;
+  action_item_count: number;
+  attendees?: MeetingAttendee[];
+  action_items?: MeetingActionItem[];
+}
+
+export interface MeetingAttendee {
+  id: string;
+  meeting_id: string;
+  user_id: string;
+  present: boolean;
+  excused: boolean;
+  user_name?: string;
+  created_at: string;
+}
+
+export interface MeetingActionItem {
+  id: string;
+  meeting_id: string;
+  organization_id: string;
+  description: string;
+  assigned_to?: string;
+  assignee_name?: string;
+  due_date?: string;
+  status: string;
+  priority: number;
+  completed_at?: string;
+  completion_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MeetingsSummary {
+  total_meetings: number;
+  meetings_this_month: number;
+  open_action_items: number;
+  pending_approval: number;
+}
+
+export const meetingsService = {
+  async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/meetings/', { params });
+    return response.data;
+  },
+
+  async createMeeting(data: Record<string, unknown>): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>('/meetings/', data);
+    return response.data;
+  },
+
+  async getMeeting(meetingId: string): Promise<MeetingRecord> {
+    const response = await api.get<MeetingRecord>(`/meetings/${meetingId}`);
+    return response.data;
+  },
+
+  async updateMeeting(meetingId: string, data: Record<string, unknown>): Promise<MeetingRecord> {
+    const response = await api.patch<MeetingRecord>(`/meetings/${meetingId}`, data);
+    return response.data;
+  },
+
+  async deleteMeeting(meetingId: string): Promise<void> {
+    await api.delete(`/meetings/${meetingId}`);
+  },
+
+  async approveMeeting(meetingId: string): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>(`/meetings/${meetingId}/approve`);
+    return response.data;
+  },
+
+  async addAttendee(meetingId: string, data: { user_id: string; present?: boolean; excused?: boolean }): Promise<MeetingAttendee> {
+    const response = await api.post<MeetingAttendee>(`/meetings/${meetingId}/attendees`, data);
+    return response.data;
+  },
+
+  async removeAttendee(meetingId: string, attendeeId: string): Promise<void> {
+    await api.delete(`/meetings/${meetingId}/attendees/${attendeeId}`);
+  },
+
+  async createActionItem(meetingId: string, data: Record<string, unknown>): Promise<MeetingActionItem> {
+    const response = await api.post<MeetingActionItem>(`/meetings/${meetingId}/action-items`, data);
+    return response.data;
+  },
+
+  async updateActionItem(itemId: string, data: Record<string, unknown>): Promise<MeetingActionItem> {
+    const response = await api.patch<MeetingActionItem>(`/meetings/action-items/${itemId}`, data);
+    return response.data;
+  },
+
+  async deleteActionItem(itemId: string): Promise<void> {
+    await api.delete(`/meetings/action-items/${itemId}`);
+  },
+
+  async getSummary(): Promise<MeetingsSummary> {
+    const response = await api.get<MeetingsSummary>('/meetings/stats/summary');
+    return response.data;
+  },
+};
+
+// ============================================
+// Scheduling Service
+// ============================================
+
+export interface ShiftRecord {
+  id: string;
+  organization_id: string;
+  shift_date: string;
+  start_time: string;
+  end_time?: string;
+  apparatus_id?: string;
+  station_id?: string;
+  shift_officer_id?: string;
+  shift_officer_name?: string;
+  notes?: string;
+  activities?: unknown;
+  attendee_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  attendees?: ShiftAttendanceRecord[];
+}
+
+export interface ShiftAttendanceRecord {
+  id: string;
+  shift_id: string;
+  user_id: string;
+  user_name?: string;
+  checked_in_at?: string;
+  checked_out_at?: string;
+  duration_minutes?: number;
+  created_at: string;
+}
+
+export interface SchedulingSummary {
+  total_shifts: number;
+  shifts_this_week: number;
+  shifts_this_month: number;
+  total_hours_this_month: number;
+}
+
+export const schedulingService = {
+  async getShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/scheduling/shifts', { params });
+    return response.data;
+  },
+
+  async createShift(data: Record<string, unknown>): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>('/scheduling/shifts', data);
+    return response.data;
+  },
+
+  async getShift(shiftId: string): Promise<ShiftRecord> {
+    const response = await api.get<ShiftRecord>(`/scheduling/shifts/${shiftId}`);
+    return response.data;
+  },
+
+  async updateShift(shiftId: string, data: Record<string, unknown>): Promise<ShiftRecord> {
+    const response = await api.patch<ShiftRecord>(`/scheduling/shifts/${shiftId}`, data);
+    return response.data;
+  },
+
+  async deleteShift(shiftId: string): Promise<void> {
+    await api.delete(`/scheduling/shifts/${shiftId}`);
+  },
+
+  async addAttendance(shiftId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
+    const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/attendance`, data);
+    return response.data;
+  },
+
+  async getWeekCalendar(weekStart?: string): Promise<ShiftRecord[]> {
+    const params: Record<string, string> = {};
+    if (weekStart) params.week_start = weekStart;
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
+    return response.data;
+  },
+
+  async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
+    const params: Record<string, number> = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
+    return response.data;
+  },
+
+  async getSummary(): Promise<SchedulingSummary> {
+    const response = await api.get<SchedulingSummary>('/scheduling/summary');
+    return response.data;
+  },
+};
+
+// ============================================
+// Reports Service
+// ============================================
+
+export const reportsService = {
+  async getAvailableReports(): Promise<{ available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }> }> {
+    const response = await api.get('/reports/available');
+    return response.data;
+  },
+
+  async generateReport(data: { report_type: string; start_date?: string; end_date?: string; filters?: Record<string, unknown> }): Promise<Record<string, unknown>> {
+    const response = await api.post('/reports/generate', data);
+    return response.data;
+  },
+};
+
+// ============================================
+// Notifications Service
+// ============================================
+
+export interface NotificationRuleRecord {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  trigger: string;
+  category: string;
+  channel: string;
+  enabled: boolean;
+  config?: unknown;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface NotificationLogRecord {
+  id: string;
+  organization_id: string;
+  rule_id?: string;
+  rule_name?: string;
+  recipient_id?: string;
+  recipient_email?: string;
+  recipient_name?: string;
+  channel: string;
+  subject?: string;
+  message?: string;
+  sent_at: string;
+  delivered: boolean;
+  read: boolean;
+  read_at?: string;
+  error?: string;
+  created_at: string;
+}
+
+export interface NotificationsSummary {
+  total_rules: number;
+  active_rules: number;
+  emails_sent_this_month: number;
+  notifications_sent_this_month: number;
+}
+
+export const notificationsService = {
+  async getRules(params?: { category?: string; enabled?: boolean; search?: string }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
+    const response = await api.get('/notifications/rules', { params });
+    return response.data;
+  },
+
+  async createRule(data: Record<string, unknown>): Promise<NotificationRuleRecord> {
+    const response = await api.post<NotificationRuleRecord>('/notifications/rules', data);
+    return response.data;
+  },
+
+  async getRule(ruleId: string): Promise<NotificationRuleRecord> {
+    const response = await api.get<NotificationRuleRecord>(`/notifications/rules/${ruleId}`);
+    return response.data;
+  },
+
+  async updateRule(ruleId: string, data: Record<string, unknown>): Promise<NotificationRuleRecord> {
+    const response = await api.patch<NotificationRuleRecord>(`/notifications/rules/${ruleId}`, data);
+    return response.data;
+  },
+
+  async deleteRule(ruleId: string): Promise<void> {
+    await api.delete(`/notifications/rules/${ruleId}`);
+  },
+
+  async toggleRule(ruleId: string, enabled: boolean): Promise<NotificationRuleRecord> {
+    const response = await api.post<NotificationRuleRecord>(`/notifications/rules/${ruleId}/toggle`, null, { params: { enabled } });
+    return response.data;
+  },
+
+  async getLogs(params?: { channel?: string; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get('/notifications/logs', { params });
+    return response.data;
+  },
+
+  async markAsRead(logId: string): Promise<NotificationLogRecord> {
+    const response = await api.post<NotificationLogRecord>(`/notifications/logs/${logId}/read`);
+    return response.data;
+  },
+
+  async getSummary(): Promise<NotificationsSummary> {
+    const response = await api.get<NotificationsSummary>('/notifications/summary');
+    return response.data;
+  },
+};
+
 export interface DashboardStats {
   total_members: number;
   active_members: number;
@@ -1968,216 +2361,384 @@ export const dashboardService = {
 };
 
 // ============================================
-// Minutes Service
+// Email Templates Service
 // ============================================
 
-export const minutesService = {
-  /**
-   * List meeting minutes with optional filtering
-   */
-  async listMinutes(params?: {
-    meeting_type?: string;
-    status_filter?: string;
-    search?: string;
-    skip?: number;
-    limit?: number;
-  }): Promise<import('../types/minutes').MinutesListItem[]> {
-    const response = await api.get<import('../types/minutes').MinutesListItem[]>('/minutes', { params });
+export interface EmailTemplate {
+  id: string;
+  organization_id: string;
+  template_type: string;
+  name: string;
+  subject: string;
+  html_body: string;
+  text_body?: string;
+  css_styles?: string;
+  allow_attachments: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  attachments: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  id: string;
+  template_id: string;
+  filename: string;
+  content_type: string;
+  file_size: string;
+  created_at: string;
+}
+
+export interface EmailTemplateUpdate {
+  subject?: string;
+  html_body?: string;
+  text_body?: string;
+  css_styles?: string;
+  is_active?: boolean;
+}
+
+export interface EmailTemplatePreview {
+  subject: string;
+  html_body: string;
+  text_body: string;
+}
+
+export const emailTemplatesService = {
+  async getTemplates(): Promise<EmailTemplate[]> {
+    const response = await api.get<EmailTemplate[]>('/email-templates');
     return response.data;
   },
 
-  /**
-   * Get aggregate stats for the minutes dashboard
-   */
-  async getStats(): Promise<import('../types/minutes').MinutesStats> {
-    const response = await api.get<import('../types/minutes').MinutesStats>('/minutes/stats');
+  async getTemplate(templateId: string): Promise<EmailTemplate> {
+    const response = await api.get<EmailTemplate>(`/email-templates/${templateId}`);
     return response.data;
   },
 
-  /**
-   * Full-text search across meeting minutes
-   */
-  async search(q: string, limit?: number): Promise<import('../types/minutes').MinutesSearchResult[]> {
-    const response = await api.get<import('../types/minutes').MinutesSearchResult[]>('/minutes/search', {
-      params: { q, limit },
+  async updateTemplate(templateId: string, data: EmailTemplateUpdate): Promise<EmailTemplate> {
+    const response = await api.put<EmailTemplate>(`/email-templates/${templateId}`, data);
+    return response.data;
+  },
+
+  async previewTemplate(templateId: string, context?: Record<string, unknown>, overrides?: { subject?: string; html_body?: string; css_styles?: string }): Promise<EmailTemplatePreview> {
+    const response = await api.post<EmailTemplatePreview>(`/email-templates/${templateId}/preview`, {
+      context: context || {},
+      ...overrides,
     });
     return response.data;
   },
 
-  /**
-   * Get a single meeting minutes record with motions and action items
-   */
-  async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}`);
-    return response.data;
-  },
-
-  /**
-   * Create new meeting minutes
-   */
-  async createMinutes(data: import('../types/minutes').MinutesCreate): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>('/minutes', data);
-    return response.data;
-  },
-
-  /**
-   * Update meeting minutes
-   */
-  async updateMinutes(minutesId: string, data: import('../types/minutes').MinutesUpdate): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.put<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}`, data);
-    return response.data;
-  },
-
-  /**
-   * Delete meeting minutes (only drafts)
-   */
-  async deleteMinutes(minutesId: string): Promise<void> {
-    await api.delete(`/minutes/${minutesId}`);
-  },
-
-  /**
-   * Submit minutes for approval
-   */
-  async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}/submit`);
-    return response.data;
-  },
-
-  /**
-   * Approve submitted minutes
-   */
-  async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}/approve`);
-    return response.data;
-  },
-
-  /**
-   * Reject submitted minutes
-   */
-  async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes/${minutesId}/reject`, { reason });
-    return response.data;
-  },
-
-  /**
-   * Add a motion to meeting minutes
-   */
-  async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
-    const response = await api.post<import('../types/minutes').Motion>(`/minutes/${minutesId}/motions`, data);
-    return response.data;
-  },
-
-  /**
-   * Update a motion
-   */
-  async updateMotion(minutesId: string, motionId: string, data: import('../types/minutes').MotionUpdate): Promise<import('../types/minutes').Motion> {
-    const response = await api.put<import('../types/minutes').Motion>(`/minutes/${minutesId}/motions/${motionId}`, data);
-    return response.data;
-  },
-
-  /**
-   * Delete a motion
-   */
-  async deleteMotion(minutesId: string, motionId: string): Promise<void> {
-    await api.delete(`/minutes/${minutesId}/motions/${motionId}`);
-  },
-
-  /**
-   * Add an action item to meeting minutes
-   */
-  async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.post<import('../types/minutes').ActionItem>(`/minutes/${minutesId}/action-items`, data);
-    return response.data;
-  },
-
-  /**
-   * Update an action item
-   */
-  async updateActionItem(minutesId: string, itemId: string, data: import('../types/minutes').ActionItemUpdate): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.put<import('../types/minutes').ActionItem>(`/minutes/${minutesId}/action-items/${itemId}`, data);
-    return response.data;
-  },
-
-  /**
-   * Delete an action item
-   */
-  async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
-    await api.delete(`/minutes/${minutesId}/action-items/${itemId}`);
-  },
-
-  // Templates
-  async listTemplates(meetingType?: string): Promise<import('../types/minutes').TemplateListItem[]> {
-    const response = await api.get<import('../types/minutes').TemplateListItem[]>('/minutes/templates', {
-      params: meetingType ? { meeting_type: meetingType } : undefined,
+  async uploadAttachment(templateId: string, file: File): Promise<EmailAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<EmailAttachment>(`/email-templates/${templateId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
 
-  async getTemplate(templateId: string): Promise<import('../types/minutes').MinutesTemplate> {
-    const response = await api.get<import('../types/minutes').MinutesTemplate>(`/minutes/templates/${templateId}`);
+  async deleteAttachment(templateId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/email-templates/${templateId}/attachments/${attachmentId}`);
+  },
+};
+
+// ============================================
+// Locations Service
+// ============================================
+
+export interface Location {
+  id: string;
+  organization_id: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  latitude?: number;
+  longitude?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationCreate {
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export const locationsService = {
+  async getLocations(params?: { is_active?: boolean; skip?: number; limit?: number }): Promise<Location[]> {
+    const response = await api.get<Location[]>('/locations', { params });
     return response.data;
   },
 
-  async createTemplate(data: import('../types/minutes').TemplateCreate): Promise<import('../types/minutes').MinutesTemplate> {
-    const response = await api.post<import('../types/minutes').MinutesTemplate>('/minutes/templates', data);
+  async getLocation(locationId: string): Promise<Location> {
+    const response = await api.get<Location>(`/locations/${locationId}`);
     return response.data;
   },
 
-  async updateTemplate(templateId: string, data: import('../types/minutes').TemplateUpdate): Promise<import('../types/minutes').MinutesTemplate> {
-    const response = await api.put<import('../types/minutes').MinutesTemplate>(`/minutes/templates/${templateId}`, data);
+  async createLocation(data: LocationCreate): Promise<Location> {
+    const response = await api.post<Location>('/locations', data);
     return response.data;
   },
 
-  async deleteTemplate(templateId: string): Promise<void> {
-    await api.delete(`/minutes/templates/${templateId}`);
+  async updateLocation(locationId: string, data: Partial<LocationCreate>): Promise<Location> {
+    const response = await api.patch<Location>(`/locations/${locationId}`, data);
+    return response.data;
   },
 
-  // Publishing
-  async publishMinutes(minutesId: string): Promise<import('../types/document').DocumentItem> {
-    const response = await api.post<import('../types/document').DocumentItem>(`/minutes/${minutesId}/publish`);
+  async deleteLocation(locationId: string): Promise<void> {
+    await api.delete(`/locations/${locationId}`);
+  },
+};
+
+// ============================================
+// Security Monitoring Service
+// ============================================
+
+export interface SecurityStatus {
+  timestamp: string;
+  overall_status: string;
+  alerts: {
+    total_last_hour: number;
+    by_severity: Record<string, number>;
+  };
+  metrics: Record<string, unknown>;
+}
+
+export interface SecurityAlert {
+  id: string;
+  alert_type: string;
+  threat_level: string;
+  message: string;
+  timestamp: string;
+  acknowledged: boolean;
+}
+
+export const securityService = {
+  async getStatus(): Promise<SecurityStatus> {
+    const response = await api.get<SecurityStatus>('/security/status');
+    return response.data;
+  },
+
+  async getAlerts(params?: { limit?: number; threat_level?: string; alert_type?: string }): Promise<{ alerts: SecurityAlert[]; total: number }> {
+    const response = await api.get<{ alerts: SecurityAlert[]; total: number }>('/security/alerts', { params });
+    return response.data;
+  },
+
+  async acknowledgeAlert(alertId: string): Promise<{ status: string; alert_id: string }> {
+    const response = await api.post<{ status: string; alert_id: string }>(`/security/alerts/${alertId}/acknowledge`);
+    return response.data;
+  },
+
+  async verifyAuditIntegrity(params?: { start_id?: number; end_id?: number }): Promise<{ verified: boolean; total_checked: number; errors: string[] }> {
+    const response = await api.get<{ verified: boolean; total_checked: number; errors: string[] }>('/security/audit-log/integrity', { params });
+    return response.data;
+  },
+
+  async triggerManualCheck(): Promise<{ check_completed: boolean; overall_status: string; integrity: Record<string, unknown> }> {
+    const response = await api.post<{ check_completed: boolean; overall_status: string; integrity: Record<string, unknown> }>('/security/manual-check');
     return response.data;
   },
 };
 
+// ============================================
+// Training Sessions Service
+// ============================================
+
+export interface TrainingSession {
+  id: string;
+  organization_id: string;
+  event_id: string;
+  course_id?: string;
+  course_name: string;
+  course_code?: string;
+  training_type: string;
+  credit_hours: number;
+  instructor?: string;
+  max_participants?: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainingSessionCreate {
+  title: string;
+  description?: string;
+  course_id?: string;
+  course_name: string;
+  training_type: string;
+  credit_hours: number;
+  instructor?: string;
+  max_participants?: number;
+  start_time: string;
+  end_time: string;
+  location?: string;
+}
+
+export const trainingSessionService = {
+  async getSessions(params?: { skip?: number; limit?: number; status?: string }): Promise<TrainingSession[]> {
+    const response = await api.get<TrainingSession[]>('/training/sessions', { params });
+    return response.data;
+  },
+
+  async getSession(sessionId: string): Promise<TrainingSession> {
+    const response = await api.get<TrainingSession>(`/training/sessions/${sessionId}`);
+    return response.data;
+  },
+
+  async createSession(data: TrainingSessionCreate): Promise<TrainingSession> {
+    const response = await api.post<TrainingSession>('/training/sessions', data);
+    return response.data;
+  },
+
+  async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
+    const response = await api.post<{ message: string; approval_id: string }>(`/training/sessions/${sessionId}/finalize`);
+    return response.data;
+  },
+};
 
 // ============================================
-// Documents Service
+// Integrations Service
 // ============================================
 
-export const documentService = {
-  async listFolders(parentFolderId?: string): Promise<import('../types/document').DocumentFolder[]> {
-    const response = await api.get<import('../types/document').DocumentFolder[]>('/documents/folders', {
-      params: parentFolderId ? { parent_folder_id: parentFolderId } : undefined,
+export interface IntegrationConfig {
+  id: string;
+  organization_id: string;
+  integration_type: string;
+  name: string;
+  status: 'available' | 'connected' | 'error' | 'coming_soon';
+  config: Record<string, unknown>;
+  enabled: boolean;
+  last_sync_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const integrationsService = {
+  async getIntegrations(): Promise<IntegrationConfig[]> {
+    const response = await api.get<IntegrationConfig[]>('/integrations');
+    return response.data;
+  },
+
+  async getIntegration(integrationId: string): Promise<IntegrationConfig> {
+    const response = await api.get<IntegrationConfig>(`/integrations/${integrationId}`);
+    return response.data;
+  },
+
+  async connectIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {
+    const response = await api.post<IntegrationConfig>(`/integrations/${integrationId}/connect`, config);
+    return response.data;
+  },
+
+  async disconnectIntegration(integrationId: string): Promise<void> {
+    await api.post(`/integrations/${integrationId}/disconnect`);
+  },
+
+  async updateIntegration(integrationId: string, config: Record<string, unknown>): Promise<IntegrationConfig> {
+    const response = await api.patch<IntegrationConfig>(`/integrations/${integrationId}`, config);
+    return response.data;
+  },
+};
+
+// ============================================
+// Analytics API Service (backend-persisted)
+// ============================================
+
+export interface AnalyticsEventRecord {
+  id: string;
+  event_type: string;
+  event_id: string;
+  user_id?: string;
+  metadata: Record<string, unknown>;
+  device_type: string;
+  created_at: string;
+}
+
+export interface AnalyticsMetrics {
+  total_scans: number;
+  successful_check_ins: number;
+  failed_check_ins: number;
+  success_rate: number;
+  avg_time_to_check_in: number;
+  device_breakdown: Record<string, number>;
+  error_breakdown: Record<string, number>;
+  hourly_activity: Array<{ hour: number; count: number }>;
+}
+
+export const analyticsApiService = {
+  async trackEvent(data: { event_type: string; event_id: string; user_id?: string; metadata: Record<string, unknown> }): Promise<void> {
+    await api.post('/analytics/track', data);
+  },
+
+  async getMetrics(eventId?: string): Promise<AnalyticsMetrics> {
+    const response = await api.get<AnalyticsMetrics>('/analytics/metrics', {
+      params: eventId ? { event_id: eventId } : undefined,
     });
     return response.data;
   },
 
-  async createFolder(data: import('../types/document').FolderCreate): Promise<import('../types/document').DocumentFolder> {
-    const response = await api.post<import('../types/document').DocumentFolder>('/documents/folders', data);
+  async exportAnalytics(eventId?: string): Promise<string> {
+    const response = await api.get('/analytics/export', {
+      params: eventId ? { event_id: eventId } : undefined,
+    });
+    return JSON.stringify(response.data, null, 2);
+  },
+};
+
+// ============================================
+// Error Logs Service (backend-persisted)
+// ============================================
+
+export interface ErrorLogRecord {
+  id: string;
+  error_type: string;
+  error_message: string;
+  user_message: string;
+  troubleshooting_steps: string[];
+  context: Record<string, unknown>;
+  user_id?: string;
+  event_id?: string;
+  created_at: string;
+}
+
+export interface ErrorLogStats {
+  total: number;
+  by_type: Record<string, number>;
+  recent_errors: ErrorLogRecord[];
+}
+
+export const errorLogsService = {
+  async logError(data: {
+    error_type: string;
+    error_message: string;
+    user_message: string;
+    context: Record<string, unknown>;
+    event_id?: string;
+  }): Promise<void> {
+    await api.post('/errors/log', data);
+  },
+
+  async getErrors(params?: { error_type?: string; event_id?: string; skip?: number; limit?: number }): Promise<{ errors: ErrorLogRecord[]; total: number }> {
+    const response = await api.get<{ errors: ErrorLogRecord[]; total: number }>('/errors', { params });
     return response.data;
   },
 
-  async deleteFolder(folderId: string): Promise<void> {
-    await api.delete(`/documents/folders/${folderId}`);
-  },
-
-  async listDocuments(params?: {
-    folder_id?: string;
-    document_type?: string;
-    search?: string;
-    skip?: number;
-    limit?: number;
-  }): Promise<import('../types/document').DocumentListItem[]> {
-    const response = await api.get<import('../types/document').DocumentListItem[]>('/documents', { params });
+  async getStats(): Promise<ErrorLogStats> {
+    const response = await api.get<ErrorLogStats>('/errors/stats');
     return response.data;
   },
 
-  async getDocument(documentId: string): Promise<import('../types/document').DocumentItem> {
-    const response = await api.get<import('../types/document').DocumentItem>(`/documents/${documentId}`);
-    return response.data;
+  async clearErrors(): Promise<void> {
+    await api.delete('/errors');
   },
 
-  async deleteDocument(documentId: string): Promise<void> {
-    await api.delete(`/documents/${documentId}`);
+  async exportErrors(params?: { event_id?: string }): Promise<string> {
+    const response = await api.get('/errors/export', { params });
+    return JSON.stringify(response.data, null, 2);
   },
 };

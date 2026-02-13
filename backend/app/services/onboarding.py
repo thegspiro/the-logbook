@@ -436,22 +436,12 @@ class OnboardingService:
     async def _create_default_roles(self, organization_id: str):
         """Create default roles for an organization.
 
-        Uses DEFAULT_ROLES from permissions.py as the single source of truth,
-        plus a special super_admin bootstrap role. The user may later customize
-        which roles to keep during the RoleSetup onboarding step.
+        Uses DEFAULT_ROLES from permissions.py as the single source of truth.
+        The it_administrator role (priority 100, all permissions) serves as
+        the top-level system role for the person who sets up the platform.
+        The user may later customize which roles to keep during the RoleSetup
+        onboarding step.
         """
-        # Special bootstrap role not in DEFAULT_ROLES
-        super_admin = Role(
-            organization_id=organization_id,
-            name="Super Administrator",
-            slug="super_admin",
-            description="Full system access and management",
-            permissions=["*"],
-            is_system=True,
-            priority=100,
-        )
-        self.db.add(super_admin)
-
         # Create all roles from the central DEFAULT_ROLES registry
         for slug, role_data in DEFAULT_ROLES.items():
             role = Role(
@@ -508,19 +498,21 @@ class OnboardingService:
         if error or not user:
             raise ValueError(error or "Failed to create admin user")
 
-        # Assign Super Admin role
+        # Assign IT Administrator role — the top-level system role for the
+        # person who sets up the platform (distinct from operational admin
+        # roles like Chief or Deputy Chief)
         result = await self.db.execute(
             select(Role).where(
                 Role.organization_id == organization_id,
-                Role.slug == "super_admin"
+                Role.slug == "it_administrator"
             )
         )
-        super_admin_role = result.scalar_one_or_none()
+        it_admin_role = result.scalar_one_or_none()
 
-        if super_admin_role:
+        if it_admin_role:
             # Refresh user with roles relationship loaded to avoid MissingGreenlet error
             await self.db.refresh(user, ['roles'])
-            user.roles.append(super_admin_role)
+            user.roles.append(it_admin_role)
             await self.db.flush()
 
         # Update onboarding status

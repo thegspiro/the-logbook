@@ -16,6 +16,7 @@
  *   />
  */
 import { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { Send, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import FieldRenderer from './FieldRenderer';
 import { formsService } from '../../services/api';
@@ -204,15 +205,21 @@ const FormRenderer = ({
       setSubmitting(true);
       setError(null);
 
+      // Sanitize all form values before submission
+      const sanitizedData: Record<string, string> = {};
+      for (const [key, value] of Object.entries(formData)) {
+        sanitizedData[key] = DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
+      }
+
       if (onSubmit) {
         // Custom submit handler
-        const success = await onSubmit(formData);
+        const success = await onSubmit(sanitizedData);
         if (success) {
           setSubmitted(true);
         }
       } else if (formId) {
         // Use formsService
-        const submission = await formsService.submitForm(formId, formData);
+        const submission = await formsService.submitForm(formId, sanitizedData);
         setSubmitted(true);
         onSubmitSuccess?.(submission);
       }

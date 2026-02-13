@@ -53,7 +53,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       setTrainings(records);
     } catch (err) {
       console.error('Error fetching data:', err);
-      setError('Failed to load training history.');
+      setError('Unable to load training history. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }

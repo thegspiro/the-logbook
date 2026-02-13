@@ -94,7 +94,7 @@ async def register(
     from sqlalchemy import select
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.deleted_at.is_(None))
+        .where(Organization.active == True)
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -211,7 +211,7 @@ async def refresh_token(
     if not new_access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="Your session has expired. Please log in again.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -241,7 +241,7 @@ async def logout(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid authorization header"
+            detail="Unable to process logout. Please clear your browser data and log in again."
         )
 
     auth_service = AuthService(db)
@@ -250,7 +250,7 @@ async def logout(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Logout failed"
+            detail="Unable to end your session. Please close your browser and log in again."
         )
 
     return {"message": "Successfully logged out"}
@@ -359,7 +359,7 @@ async def forgot_password(
     # Look up the organization (single-org system)
     org_result = await db.execute(
         select(Organization)
-        .where(Organization.deleted_at.is_(None))
+        .where(Organization.active == True)
         .order_by(Organization.created_at.asc())
         .limit(1)
     )
@@ -506,3 +506,32 @@ async def reset_password(
         )
 
     return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+
+@router.post("/validate-reset-token", dependencies=[Depends(check_rate_limit)])
+async def validate_reset_token(
+    token_data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Validate a password reset token (POST to avoid token in URL/logs).
+
+    Returns whether the token is valid and the associated email.
+    """
+    token = token_data.get("token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password reset link. Please request a new reset link from the login page."
+        )
+
+    auth_service = AuthService(db)
+    is_valid, email = await auth_service.validate_reset_token(token)
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired. Please request a new one from the login page."
+        )
+
+    return {"valid": True, "email": email}
