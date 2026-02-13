@@ -494,8 +494,8 @@ export const ProspectDetailPage: React.FC = () => {
                     )}
                     {entry.details && (
                       <div className="mt-1 text-xs text-gray-500">
-                        {entry.details.notes && <span>Note: {entry.details.notes as string}</span>}
-                        {entry.details.to_step_name && <span>Moved to: {entry.details.to_step_name as string}</span>}
+                        {entry.details.notes ? <span>Note: {String(entry.details.notes)}</span> : null}
+                        {entry.details.to_step_name ? <span>Moved to: {String(entry.details.to_step_name)}</span> : null}
                       </div>
                     )}
                   </div>

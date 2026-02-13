@@ -304,10 +304,10 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         <span className="flex items-center gap-1">
                           {applicant.days_in_stage}d
                           {applicant.inactivity_alert_level === 'critical' && (
-                            <AlertTriangle className="w-3 h-3 text-red-400" title="Approaching timeout" />
+                            <span title="Approaching timeout"><AlertTriangle className="w-3 h-3 text-red-400" /></span>
                           )}
                           {applicant.inactivity_alert_level === 'warning' && (
-                            <AlertTriangle className="w-3 h-3 text-amber-400" title="Activity slowing" />
+                            <span title="Activity slowing"><AlertTriangle className="w-3 h-3 text-amber-400" /></span>
                           )}
                         </span>
                       </td>

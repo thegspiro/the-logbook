@@ -17,6 +17,7 @@ export type {
   Certification,
 } from '../../../types/member';
 
+import type { User } from '../../../types/user';
 export type {
   User,
   ContactInfoSettings,

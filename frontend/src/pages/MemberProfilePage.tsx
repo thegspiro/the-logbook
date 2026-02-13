@@ -60,6 +60,10 @@ export const MemberProfilePage: React.FC = () => {
       email: true,
       sms: false,
       push: false,
+      email_notifications: true,
+      event_reminders: true,
+      training_reminders: true,
+      announcement_notifications: true,
     },
   });
 
@@ -197,6 +201,10 @@ export const MemberProfilePage: React.FC = () => {
         email: true,
         sms: false,
         push: false,
+        email_notifications: true,
+        event_reminders: true,
+        training_reminders: true,
+        announcement_notifications: true,
       },
     });
     setIsEditing(true);

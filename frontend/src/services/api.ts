@@ -1242,6 +1242,84 @@ export const electionService = {
     const response = await api.post<{ success: boolean; votes_cast: number }>(`/elections/${electionId}/vote/bulk`, { votes });
     return response.data;
   },
+
+  /**
+   * Get ballot templates
+   */
+  async getBallotTemplates(): Promise<import('../types/election').BallotTemplate[]> {
+    const response = await api.get<import('../types/election').BallotTemplate[]>('/elections/ballot-templates');
+    return response.data;
+  },
+
+  /**
+   * Get attendees for an election meeting
+   */
+  async getAttendees(electionId: string): Promise<{ attendees: import('../types/election').Attendee[] }> {
+    const response = await api.get<{ attendees: import('../types/election').Attendee[] }>(`/elections/${electionId}/attendees`);
+    return response.data;
+  },
+
+  /**
+   * Check in an attendee at an election meeting
+   */
+  async checkInAttendee(electionId: string, userId: string): Promise<import('../types/election').AttendeeCheckInResponse> {
+    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees/${userId}/check-in`);
+    return response.data;
+  },
+
+  /**
+   * Remove an attendee from an election meeting
+   */
+  async removeAttendee(electionId: string, userId: string): Promise<void> {
+    await api.delete(`/elections/${electionId}/attendees/${userId}`);
+  },
+
+  /**
+   * Get ballot by voting token (public/anonymous access)
+   */
+  async getBallotByToken(token: string): Promise<import('../types/election').Election> {
+    const response = await api.get<import('../types/election').Election>(`/elections/ballot/${token}`);
+    return response.data;
+  },
+
+  /**
+   * Get candidates for a ballot by voting token
+   */
+  async getBallotCandidates(token: string): Promise<import('../types/election').Candidate[]> {
+    const response = await api.get<import('../types/election').Candidate[]>(`/elections/ballot/${token}/candidates`);
+    return response.data;
+  },
+
+  /**
+   * Submit a ballot using a voting token
+   */
+  async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
+    const response = await api.post<import('../types/election').BallotSubmissionResponse>(`/elections/ballot/${token}/submit`, { votes });
+    return response.data;
+  },
+
+  /**
+   * Verify vote integrity for an election
+   */
+  async verifyIntegrity(electionId: string): Promise<import('../types/election').VoteIntegrityResult> {
+    const response = await api.get<import('../types/election').VoteIntegrityResult>(`/elections/${electionId}/integrity`);
+    return response.data;
+  },
+
+  /**
+   * Get forensics report for an election
+   */
+  async getForensics(electionId: string): Promise<import('../types/election').ForensicsReport> {
+    const response = await api.get<import('../types/election').ForensicsReport>(`/elections/${electionId}/forensics`);
+    return response.data;
+  },
+
+  /**
+   * Soft-delete (void) a vote
+   */
+  async softDeleteVote(electionId: string, voteId: string, reason: string): Promise<void> {
+    await api.delete(`/elections/${electionId}/votes/${voteId}`, { data: { reason } });
+  },
 };
 
 export const eventService = {
@@ -2142,6 +2220,66 @@ export const meetingsService = {
   },
 };
 
+// Minutes Detail Service — wraps meetings API with minutes-specific method names
+// Used by MinutesDetailPage for full minutes CRUD, motions, action items, and workflow
+export const minutesService = {
+  async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`);
+    return response.data;
+  },
+
+  async updateMinutes(minutesId: string, data: Record<string, unknown>): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.patch<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`, data);
+    return response.data;
+  },
+
+  async deleteMinutes(minutesId: string): Promise<void> {
+    await api.delete(`/meetings/${minutesId}`);
+  },
+
+  async publishMinutes(minutesId: string): Promise<void> {
+    await api.post(`/meetings/${minutesId}/publish`);
+  },
+
+  async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/submit`);
+    return response.data;
+  },
+
+  async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/approve`);
+    return response.data;
+  },
+
+  async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/reject`, { reason });
+    return response.data;
+  },
+
+  async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
+    const response = await api.post<import('../types/minutes').Motion>(`/meetings/${minutesId}/motions`, data);
+    return response.data;
+  },
+
+  async deleteMotion(minutesId: string, motionId: string): Promise<void> {
+    await api.delete(`/meetings/${minutesId}/motions/${motionId}`);
+  },
+
+  async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
+    const response = await api.post<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items`, data);
+    return response.data;
+  },
+
+  async updateActionItem(minutesId: string, itemId: string, data: Record<string, unknown>): Promise<import('../types/minutes').ActionItem> {
+    const response = await api.patch<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items/${itemId}`, data);
+    return response.data;
+  },
+
+  async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
+    await api.delete(`/meetings/${minutesId}/action-items/${itemId}`);
+  },
+};
+
 // ============================================
 // Scheduling Service
 // ============================================
@@ -2611,6 +2749,8 @@ export interface IntegrationConfig {
   organization_id: string;
   integration_type: string;
   name: string;
+  description?: string;
+  category?: string;
   status: 'available' | 'connected' | 'error' | 'coming_soon';
   config: Record<string, unknown>;
   enabled: boolean;

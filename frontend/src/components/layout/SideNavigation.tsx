@@ -26,7 +26,6 @@ import {
   Bell,
   FormInput,
   Plug,
-  UserPlus,
 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 

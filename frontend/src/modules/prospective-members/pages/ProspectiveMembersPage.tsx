@@ -101,7 +101,7 @@ export const ProspectiveMembersPage: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-    target_membership_type: 'probationary' as const,
+    target_membership_type: 'probationary' as 'probationary' | 'administrative',
   });
   const [isCreating, setIsCreating] = useState(false);
 
