@@ -342,7 +342,7 @@ export const ElectionDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
+        <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
           <div className="text-gray-500">Loading election...</div>
         </div>
       </div>
@@ -352,7 +352,7 @@ export const ElectionDetailPage: React.FC = () => {
   if (error || !election) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
           <p className="text-sm text-red-700">{error || 'Election not found'}</p>
         </div>
       </div>
@@ -531,7 +531,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {election.email_sent && (
                 <div className="flex items-center text-sm text-gray-600">
-                  <svg className="h-5 w-5 mr-1 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-5 w-5 mr-1 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                   </svg>
@@ -600,6 +600,7 @@ export const ElectionDetailPage: React.FC = () => {
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -646,6 +647,7 @@ export const ElectionDetailPage: React.FC = () => {
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -736,6 +738,7 @@ export const ElectionDetailPage: React.FC = () => {
                     value={voidVoteId}
                     onChange={(e) => setVoidVoteId(e.target.value)}
                     placeholder="Vote ID (UUID)"
+                    aria-label="Vote ID (UUID)"
                     className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
                   <input
@@ -743,6 +746,7 @@ export const ElectionDetailPage: React.FC = () => {
                     value={voidVoteReason}
                     onChange={(e) => setVoidVoteReason(e.target.value)}
                     placeholder="Reason for voiding"
+                    aria-label="Reason for voiding"
                     className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
                   <button
@@ -757,7 +761,7 @@ export const ElectionDetailPage: React.FC = () => {
 
               {/* Forensics Report Detail */}
               {loadingForensics && (
-                <div className="text-center text-gray-500 py-4">Loading forensics report...</div>
+                <div className="text-center text-gray-500 py-4" role="status" aria-live="polite">Loading forensics report...</div>
               )}
 
               {forensicsReport && (
@@ -771,13 +775,13 @@ export const ElectionDetailPage: React.FC = () => {
                       <p className="text-sm text-gray-500">No votes have been voided.</p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
+                        <table className="min-w-full text-sm" aria-label="Voided votes">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Vote ID</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Position</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Deleted At</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Vote ID</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Position</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Deleted At</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -870,12 +874,12 @@ export const ElectionDetailPage: React.FC = () => {
                       <p className="text-sm text-gray-500">No audit entries.</p>
                     ) : (
                       <div className="max-h-64 overflow-y-auto">
-                        <table className="min-w-full text-sm">
+                        <table className="min-w-full text-sm" aria-label="Audit log entries">
                           <thead className="bg-gray-50 sticky top-0">
                             <tr>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Time</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Event</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Severity</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Time</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Event</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Severity</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -924,10 +928,16 @@ export const ElectionDetailPage: React.FC = () => {
 
       {/* Send Ballot Emails Modal */}
       {showSendEmailModal && election && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-email-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowSendEmailModal(false); setSendEmailError(null); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 id="send-email-modal-title" className="text-lg font-medium text-gray-900">
                 {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
               </h3>
             </div>
@@ -943,7 +953,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {sendEmailError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
                   <p className="text-sm text-red-700">{sendEmailError}</p>
                 </div>
               )}
@@ -954,27 +964,31 @@ export const ElectionDetailPage: React.FC = () => {
                 </p>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="ballot-email-subject" className="block text-sm font-medium text-gray-700">
                     Custom Subject Line <span className="text-xs text-gray-400">(optional)</span>
                   </label>
                   <input
                     type="text"
+                    id="ballot-email-subject"
                     value={emailSubject}
                     onChange={(e) => setEmailSubject(e.target.value)}
                     placeholder={`Vote Now: ${election.title}`}
+                    aria-label="Custom subject line"
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="ballot-email-message" className="block text-sm font-medium text-gray-700">
                     Additional Message <span className="text-xs text-gray-400">(optional)</span>
                   </label>
                   <textarea
+                    id="ballot-email-message"
                     value={emailMessage}
                     onChange={(e) => setEmailMessage(e.target.value)}
                     rows={3}
                     placeholder="Include any additional instructions or context for voters..."
+                    aria-label="Additional message"
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
@@ -1010,10 +1024,16 @@ export const ElectionDetailPage: React.FC = () => {
 
       {/* Delete Election Modal */}
       {showDeleteModal && election && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-election-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowDeleteModal(false); setDeleteReason(''); setDeleteError(null); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
             <div className={`px-6 py-4 border-b ${isDraft ? 'border-gray-200' : 'border-red-300 bg-red-50'}`}>
-              <h3 className={`text-lg font-medium ${isDraft ? 'text-gray-900' : 'text-red-900'}`}>
+              <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-gray-900' : 'text-red-900'}`}>
                 {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
               </h3>
             </div>
@@ -1021,10 +1041,10 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="px-6 py-4">
               {/* Critical warning for non-draft elections */}
               {!isDraft && (
-                <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-4">
+                <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-4" role="alert">
                   <div className="flex">
                     <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+                      <svg className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -1055,7 +1075,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {deleteError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
                   <p className="text-sm text-red-700">{deleteError}</p>
                 </div>
               )}
@@ -1073,16 +1093,18 @@ export const ElectionDetailPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Reason for Deletion * <span className="text-xs text-gray-500">(minimum 10 characters)</span>
+                    <label htmlFor="delete-election-reason" className="block text-sm font-medium text-gray-700">
+                      Reason for Deletion <span aria-hidden="true">*</span> <span className="text-xs text-gray-500">(minimum 10 characters)</span>
                     </label>
                     <textarea
+                      id="delete-election-reason"
                       value={deleteReason}
                       onChange={(e) => setDeleteReason(e.target.value)}
                       rows={4}
                       placeholder="Provide a detailed reason why this active election must be deleted..."
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-red-500 focus:border-red-500"
                       required
+                      aria-required="true"
                     />
                     <p className="mt-1 text-xs text-red-600">
                       This reason will be emailed to ALL leadership members and permanently logged in the audit trail.
@@ -1128,15 +1150,21 @@ export const ElectionDetailPage: React.FC = () => {
 
       {/* Extend Time Modal */}
       {showExtendModal && election && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="extend-election-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowExtendModal(false); setNewEndDate(''); setExtendError(null); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Extend Election Time</h3>
+              <h3 id="extend-election-modal-title" className="text-lg font-medium text-gray-900">Extend Election Time</h3>
             </div>
 
             <div className="px-6 py-4">
               {extendError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
                   <p className="text-sm text-red-700">{extendError}</p>
                 </div>
               )}
@@ -1152,11 +1180,12 @@ export const ElectionDetailPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="extend-new-end-time" className="block text-sm font-medium text-gray-700">
                     New End Time
                   </label>
                   <input
                     type="datetime-local"
+                    id="extend-new-end-time"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -1225,10 +1254,16 @@ export const ElectionDetailPage: React.FC = () => {
 
       {/* Rollback Modal */}
       {showRollbackModal && election && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rollback-election-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRollbackModal(false); setRollbackReason(''); setRollbackError(null); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Rollback Election</h3>
+              <h3 id="rollback-election-modal-title" className="text-lg font-medium text-gray-900">Rollback Election</h3>
             </div>
 
             <div className="px-6 py-4">
@@ -1236,7 +1271,7 @@ export const ElectionDetailPage: React.FC = () => {
               <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -1258,7 +1293,7 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
 
               {rollbackError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
+                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
                   <p className="text-sm text-red-700">{rollbackError}</p>
                 </div>
               )}
@@ -1283,16 +1318,18 @@ export const ElectionDetailPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Reason for Rollback * <span className="text-xs text-gray-500">(minimum 10 characters)</span>
+                  <label htmlFor="rollback-reason" className="block text-sm font-medium text-gray-700">
+                    Reason for Rollback <span aria-hidden="true">*</span> <span className="text-xs text-gray-500">(minimum 10 characters)</span>
                   </label>
                   <textarea
+                    id="rollback-reason"
                     value={rollbackReason}
                     onChange={(e) => setRollbackReason(e.target.value)}
                     rows={4}
                     placeholder="Example: Vote counting error discovered, need to recount all ballots..."
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
                     required
+                    aria-required="true"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     This reason will be sent to all leadership members and logged in the audit trail.

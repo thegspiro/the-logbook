@@ -192,18 +192,25 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const approvalConfig = config as ManualApprovalConfig;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stage-config-modal-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div className="bg-slate-800 border border-white/10 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-xl font-bold text-white">
+          <h2 id="stage-config-modal-title" className="text-xl font-bold text-white">
             {editingStage ? 'Edit Stage' : 'Add Pipeline Stage'}
           </h2>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white transition-colors"
+            aria-label="Close dialog"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -211,14 +218,17 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         <div className="p-6 space-y-6">
           {/* Stage Name */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Stage Name *
+            <label htmlFor="stage-name" className="block text-sm font-medium text-slate-300 mb-2">
+              Stage Name <span aria-hidden="true">*</span>
             </label>
             <input
+              id="stage-name"
               type="text"
               value={name}
               onChange={(e) => { setName(e.target.value); setErrors(prev => ({ ...prev, name: '' })); }}
               placeholder="e.g., Application Review"
+              required
+              aria-required="true"
               className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
             />
             {errors.name && <p className="mt-1 text-sm text-red-400">{errors.name}</p>}
@@ -226,10 +236,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label htmlFor="stage-description" className="block text-sm font-medium text-slate-300 mb-2">
               Description
             </label>
             <textarea
+              id="stage-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe what happens at this stage..."
@@ -258,7 +269,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <Icon className={`w-4 h-4 ${selected ? 'text-red-400' : 'text-slate-400'}`} />
+                      <Icon className={`w-4 h-4 ${selected ? 'text-red-400' : 'text-slate-400'}`} aria-hidden="true" />
                       <span className={`text-sm font-medium ${selected ? 'text-white' : 'text-slate-300'}`}>
                         {opt.label}
                       </span>
@@ -277,10 +288,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {/* Form Submission Config */}
             {stageType === 'form_submission' && (
               <div>
-                <label className="block text-sm text-slate-400 mb-2">
+                <label htmlFor="stage-form-id" className="block text-sm text-slate-400 mb-2">
                   Form ID (from Forms module)
                 </label>
                 <input
+                  id="stage-form-id"
                   type="text"
                   value={(config as FormStageConfig).form_id}
                   onChange={(e) =>
@@ -313,6 +325,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                           setConfig({ ...docConfig, required_document_types: updated });
                         }}
                         placeholder="e.g., Photo ID, Background Check"
+                        aria-label={`Document type ${idx + 1}`}
                         className="flex-1 bg-slate-700 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       {docConfig.required_document_types.length > 1 && (
@@ -322,8 +335,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             setConfig({ ...docConfig, required_document_types: updated });
                           }}
                           className="text-slate-400 hover:text-red-400 transition-colors"
+                          aria-label={`Remove document type ${idx + 1}`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </button>
                       )}
                     </div>
@@ -337,7 +351,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     }
                     className="flex items-center gap-1 text-sm text-red-400 hover:text-red-300 transition-colors"
                   >
-                    <Plus className="w-3 h-3" /> Add document type
+                    <Plus className="w-3 h-3" aria-hidden="true" /> Add document type
                   </button>
                   {errors.document_types && (
                     <p className="mt-1 text-sm text-red-400">{errors.document_types}</p>
@@ -361,8 +375,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {stageType === 'election_vote' && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">Voting Method</label>
+                  <label htmlFor="stage-voting-method" className="block text-sm text-slate-400 mb-2">Voting Method</label>
                   <select
+                    id="stage-voting-method"
                     value={electionConfig.voting_method}
                     onChange={(e) =>
                       setConfig({ ...electionConfig, voting_method: e.target.value as ElectionStageConfig['voting_method'] })
@@ -375,8 +390,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">Victory Condition</label>
+                  <label htmlFor="stage-victory-condition" className="block text-sm text-slate-400 mb-2">Victory Condition</label>
                   <select
+                    id="stage-victory-condition"
                     value={electionConfig.victory_condition}
                     onChange={(e) =>
                       setConfig({ ...electionConfig, victory_condition: e.target.value as ElectionStageConfig['victory_condition'] })
@@ -390,10 +406,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 </div>
                 {electionConfig.victory_condition === 'supermajority' && (
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">
+                    <label htmlFor="stage-victory-percentage" className="block text-sm text-slate-400 mb-2">
                       Required Percentage
                     </label>
                     <input
+                      id="stage-victory-percentage"
                       type="number"
                       min={51}
                       max={100}
@@ -492,10 +509,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                           Include stage completion history
                         </label>
                         <div className="pt-1">
-                          <label className="block text-xs text-slate-400 mb-1">
+                          <label htmlFor="stage-custom-note-prompt" className="block text-xs text-slate-400 mb-1">
                             Custom note prompt (optional)
                           </label>
                           <input
+                            id="stage-custom-note-prompt"
                             type="text"
                             value={fields.custom_note_prompt ?? ''}
                             onChange={(e) => updateField('custom_note_prompt', e.target.value)}
@@ -535,7 +553,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
           {/* Inactivity Timeout Override */}
           <div className="border-t border-white/10 pt-6">
             <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-slate-400" />
+              <Clock className="w-4 h-4 text-slate-400" aria-hidden="true" />
               <h3 className="text-sm font-medium text-slate-300">Inactivity Timeout Override</h3>
             </div>
             <p className="text-xs text-slate-500 mb-3">
@@ -559,6 +577,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   max={730}
                   value={timeoutOverrideDays}
                   onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
+                  aria-label="Timeout override days"
                   className="w-24 bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 <span className="text-sm text-slate-400">days before marked inactive</span>

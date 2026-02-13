@@ -163,8 +163,9 @@ export const EventsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+        <span className="sr-only">Loading events...</span>
       </div>
     );
   }
@@ -172,7 +173,7 @@ export const EventsPage: React.FC = () => {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
           <p className="text-red-800">{error}</p>
           <button
             onClick={fetchEvents}
@@ -201,7 +202,7 @@ export const EventsPage: React.FC = () => {
               to="/training/create-session"
               className="inline-flex items-center px-4 py-2 border border-purple-600 rounded-md shadow-sm text-sm font-medium text-purple-600 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
             >
-              <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
               Create Training Session
@@ -210,7 +211,7 @@ export const EventsPage: React.FC = () => {
               onClick={() => setShowCreateModal(true)}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
-              <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Create Event
@@ -246,6 +247,7 @@ export const EventsPage: React.FC = () => {
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -274,7 +276,7 @@ export const EventsPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       {event.event_type === 'training' && (
-                        <svg className="h-5 w-5 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-5 w-5 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                       )}
@@ -300,7 +302,7 @@ export const EventsPage: React.FC = () => {
 
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center text-sm text-gray-500">
-                    <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     {new Date(event.start_datetime).toLocaleString('en-US', {
@@ -314,7 +316,7 @@ export const EventsPage: React.FC = () => {
 
                   {event.location && (
                     <div className="flex items-center text-sm text-gray-500">
-                      <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
@@ -324,7 +326,7 @@ export const EventsPage: React.FC = () => {
 
                   {event.requires_rsvp && (
                     <div className="flex items-center text-sm text-gray-500">
-                      <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
                       {event.going_count} attending
@@ -339,7 +341,13 @@ export const EventsPage: React.FC = () => {
 
       {/* Create Event Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-event-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowCreateModal(false); setCreateError(null); } }}
+        >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
@@ -349,7 +357,7 @@ export const EventsPage: React.FC = () => {
               <form onSubmit={handleCreateEvent}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Create New Event</h3>
+                    <h3 id="create-event-title" className="text-lg font-medium text-gray-900">Create New Event</h3>
                     <button
                       type="button"
                       onClick={() => {
@@ -357,15 +365,16 @@ export const EventsPage: React.FC = () => {
                         setCreateError(null);
                       }}
                       className="text-gray-400 hover:text-gray-500"
+                      aria-label="Close dialog"
                     >
-                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
 
                   {createError && (
-                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3" role="alert">
                       <p className="text-sm text-red-800">{createError}</p>
                     </div>
                   )}
@@ -373,13 +382,14 @@ export const EventsPage: React.FC = () => {
                   <div className="space-y-4 max-h-96 overflow-y-auto">
                     {/* Title */}
                     <div>
-                      <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                        Title *
+                      <label htmlFor="event-title" className="block text-sm font-medium text-gray-700">
+                        Title <span aria-hidden="true">*</span>
                       </label>
                       <input
                         type="text"
-                        id="title"
+                        id="event-title"
                         required
+                        aria-required="true"
                         value={formData.title}
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
@@ -388,11 +398,11 @@ export const EventsPage: React.FC = () => {
 
                     {/* Description */}
                     <div>
-                      <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="event-description" className="block text-sm font-medium text-gray-700">
                         Description
                       </label>
                       <textarea
-                        id="description"
+                        id="event-description"
                         rows={3}
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -403,11 +413,12 @@ export const EventsPage: React.FC = () => {
                     {/* Event Type */}
                     <div>
                       <label htmlFor="event_type" className="block text-sm font-medium text-gray-700">
-                        Event Type *
+                        Event Type <span aria-hidden="true">*</span>
                       </label>
                       <select
                         id="event_type"
                         required
+                        aria-required="true"
                         value={formData.event_type}
                         onChange={(e) => setFormData({ ...formData, event_type: e.target.value as EventType })}
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
@@ -440,12 +451,13 @@ export const EventsPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label htmlFor="start_datetime" className="block text-sm font-medium text-gray-700">
-                          Start Date & Time *
+                          Start Date & Time <span aria-hidden="true">*</span>
                         </label>
                         <input
                           type="datetime-local"
                           id="start_datetime"
                           required
+                          aria-required="true"
                           value={formData.start_datetime}
                           onChange={(e) => handleStartDateChange(e.target.value)}
                           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
@@ -453,12 +465,13 @@ export const EventsPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="end_datetime" className="block text-sm font-medium text-gray-700">
-                          End Date & Time *
+                          End Date & Time <span aria-hidden="true">*</span>
                         </label>
                         <input
                           type="datetime-local"
                           id="end_datetime"
                           required
+                          aria-required="true"
                           value={formData.end_datetime}
                           onChange={(e) => setFormData({ ...formData, end_datetime: e.target.value })}
                           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
@@ -553,10 +566,10 @@ export const EventsPage: React.FC = () => {
                             </label>
                           </div>
 
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <fieldset>
+                            <legend className="block text-sm font-medium text-gray-700 mb-2">
                               RSVP Status Options
-                            </label>
+                            </legend>
                             <div className="space-y-2">
                               <div className="flex items-center">
                                 <input
@@ -616,7 +629,7 @@ export const EventsPage: React.FC = () => {
                                 </label>
                               </div>
                             </div>
-                          </div>
+                          </fieldset>
                         </>
                       )}
                     </div>

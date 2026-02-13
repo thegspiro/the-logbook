@@ -138,7 +138,7 @@ export const RoleManagementPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500">Loading...</div>
+          <div className="text-gray-500" role="status" aria-live="polite">Loading...</div>
         </div>
       </div>
     );
@@ -225,10 +225,16 @@ export const RoleManagementPage: React.FC = () => {
 
       {/* Create/Edit Role Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="role-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 id="role-modal-title" className="text-lg font-medium text-gray-900">
                 {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
               </h3>
             </div>
@@ -244,20 +250,24 @@ export const RoleManagementPage: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Role Name</label>
+                <label htmlFor="role-name" className="block text-sm font-medium text-gray-700">Role Name</label>
                 <input
+                  id="role-name"
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   disabled={editingRole?.is_system}
+                  required
+                  aria-required="true"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100"
                 />
               </div>
 
               {!editingRole && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Slug</label>
+                  <label htmlFor="role-slug" className="block text-sm font-medium text-gray-700">Slug</label>
                   <input
+                    id="role-slug"
                     type="text"
                     value={formData.slug}
                     onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
@@ -268,8 +278,9 @@ export const RoleManagementPage: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <label htmlFor="role-description" className="block text-sm font-medium text-gray-700">Description</label>
                 <textarea
+                  id="role-description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={2}
@@ -279,8 +290,9 @@ export const RoleManagementPage: React.FC = () => {
 
               {!editingRole?.is_system && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Priority (0-100)</label>
+                  <label htmlFor="role-priority" className="block text-sm font-medium text-gray-700">Priority (0-100)</label>
                   <input
+                    id="role-priority"
                     type="number"
                     min="0"
                     max="100"

@@ -153,25 +153,31 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="field-editor-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
       <div className="relative bg-slate-800 border border-white/20 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 bg-slate-800 border-b border-white/10 px-6 py-4 flex items-center justify-between z-10">
-          <h3 className="text-lg font-semibold text-white">
+          <h3 id="field-editor-title" className="text-lg font-semibold text-white">
             {isEditing ? 'Edit Field' : 'Add Field'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="text-slate-400 hover:text-white p-1" aria-label="Close dialog">
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-5">
           {/* Field Type Selector */}
-          <div>
+          <div role="radiogroup" aria-label="Field Type">
             <label className="block text-sm font-medium text-slate-300 mb-2">Field Type</label>
             <div className="grid grid-cols-4 gap-2">
               {FIELD_TYPES.map((ft) => (
@@ -194,14 +200,17 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
 
           {/* Label */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
+            <label htmlFor="field-label" className="block text-sm font-medium text-slate-300 mb-1">
               {isSectionHeader ? 'Section Title' : 'Field Label'}
             </label>
             <input
+              id="field-label"
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder={isSectionHeader ? 'e.g., Equipment Details' : 'e.g., Full Name'}
+              required
+              aria-required="true"
               className={`w-full px-3 py-2 bg-white/5 border rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
                 errors.label ? 'border-red-500/50' : 'border-white/20'
               }`}
@@ -211,10 +220,11 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
 
           {/* Help Text (all types) */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
+            <label htmlFor="field-help-text" className="block text-sm font-medium text-slate-300 mb-1">
               {isSectionHeader ? 'Subtitle (optional)' : 'Help Text (optional)'}
             </label>
             <input
+              id="field-help-text"
               type="text"
               value={helpText}
               onChange={(e) => setHelpText(e.target.value)}
@@ -228,8 +238,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
             <>
               {/* Placeholder */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Placeholder (optional)</label>
+                <label htmlFor="field-placeholder" className="block text-sm font-medium text-slate-300 mb-1">Placeholder (optional)</label>
                 <input
+                  id="field-placeholder"
                   type="text"
                   value={placeholder}
                   onChange={(e) => setPlaceholder(e.target.value)}
@@ -240,8 +251,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
 
               {/* Default Value */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Default Value (optional)</label>
+                <label htmlFor="field-default-value" className="block text-sm font-medium text-slate-300 mb-1">Default Value (optional)</label>
                 <input
+                  id="field-default-value"
                   type="text"
                   value={defaultValue}
                   onChange={(e) => setDefaultValue(e.target.value)}
@@ -266,6 +278,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                   <select
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
+                    aria-label="Field width"
                     className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-sm"
                   >
                     {WIDTH_OPTIONS.map((w) => (
@@ -279,8 +292,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
               {isTextLike && (
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Min Length</label>
+                    <label htmlFor="field-min-length" className="block text-xs font-medium text-slate-400 mb-1">Min Length</label>
                     <input
+                      id="field-min-length"
                       type="number"
                       value={minLength ?? ''}
                       onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : undefined)}
@@ -289,8 +303,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Max Length</label>
+                    <label htmlFor="field-max-length" className="block text-xs font-medium text-slate-400 mb-1">Max Length</label>
                     <input
+                      id="field-max-length"
                       type="number"
                       value={maxLength ?? ''}
                       onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : undefined)}
@@ -305,8 +320,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
               {isNumeric && (
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Min Value</label>
+                    <label htmlFor="field-min-value" className="block text-xs font-medium text-slate-400 mb-1">Min Value</label>
                     <input
+                      id="field-min-value"
                       type="number"
                       value={defaultValue}
                       onChange={(e) => setDefaultValue(e.target.value)}
@@ -315,8 +331,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Max Value</label>
+                    <label htmlFor="field-max-value" className="block text-xs font-medium text-slate-400 mb-1">Max Value</label>
                     <input
+                      id="field-max-value"
                       type="number"
                       className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                       placeholder="No maximum"
@@ -333,12 +350,13 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                   <div className="space-y-2">
                     {options.map((opt, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <GripVertical className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                        <GripVertical className="w-4 h-4 text-slate-600 flex-shrink-0" aria-hidden="true" />
                         <input
                           type="text"
                           value={opt.label}
                           onChange={(e) => updateOption(i, 'label', e.target.value)}
                           placeholder="Option label"
+                          aria-label={`Option ${i + 1} label`}
                           className="flex-1 px-3 py-1.5 bg-white/5 border border-white/20 rounded-lg text-white text-sm placeholder-slate-500 focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                         />
                         <input
@@ -346,6 +364,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                           value={opt.value}
                           onChange={(e) => updateOption(i, 'value', e.target.value)}
                           placeholder="value"
+                          aria-label={`Option ${i + 1} value`}
                           className="w-28 px-3 py-1.5 bg-white/5 border border-white/20 rounded-lg text-white text-sm placeholder-slate-500 focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                         />
                         <button
@@ -353,8 +372,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                           onClick={() => removeOption(i)}
                           disabled={options.length <= 1}
                           className="p-1 text-slate-500 hover:text-red-400 disabled:opacity-30"
+                          aria-label={`Remove option ${i + 1}`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </div>
                     ))}
@@ -364,7 +384,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                     onClick={addOption}
                     className="mt-2 flex items-center gap-1 text-xs text-pink-400 hover:text-pink-300"
                   >
-                    <Plus className="w-3 h-3" />
+                    <Plus className="w-3 h-3" aria-hidden="true" />
                     Add Option
                   </button>
                 </div>

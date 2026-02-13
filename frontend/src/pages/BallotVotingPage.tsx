@@ -174,7 +174,7 @@ export const BallotVotingPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-red-600 mb-4"></div>
           <p className="text-gray-600">Loading your ballot...</p>
         </div>
@@ -202,7 +202,7 @@ export const BallotVotingPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
@@ -363,6 +363,7 @@ export const BallotVotingPage: React.FC = () => {
                           value={itemChoice.write_in_name}
                           onChange={(e) => updateWriteInName(item.id, e.target.value)}
                           placeholder="Enter name or option..."
+                          aria-label="Enter name or option"
                           className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-purple-500 focus:border-purple-500 text-sm"
                           autoFocus
                         />
@@ -410,10 +411,16 @@ export const BallotVotingPage: React.FC = () => {
 
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-ballot-title"
+          onKeyDown={(e) => { if (e.key === 'Escape' && !submitting) setShowConfirmation(false); }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-bold text-gray-900">Confirm Your Ballot</h3>
+              <h3 id="confirm-ballot-title" className="text-lg font-bold text-gray-900">Confirm Your Ballot</h3>
               <p className="text-sm text-gray-500 mt-1">
                 Please review your selections below. Once submitted, your ballot cannot be changed.
               </p>

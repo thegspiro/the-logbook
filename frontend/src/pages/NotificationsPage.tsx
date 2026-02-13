@@ -35,7 +35,7 @@ const DEFAULT_RULES: NotificationRule[] = [
     name: 'Event Reminders',
     description: 'Send reminder emails before scheduled events',
     trigger: '24 hours before event',
-    icon: <Calendar className="w-5 h-5" />,
+    icon: <Calendar className="w-5 h-5" aria-hidden="true" />,
     color: 'text-blue-400',
     enabled: true,
     category: 'Events',
@@ -45,7 +45,7 @@ const DEFAULT_RULES: NotificationRule[] = [
     name: 'Training Expiry Alerts',
     description: 'Notify members when certifications are expiring',
     trigger: '30 days before expiry',
-    icon: <GraduationCap className="w-5 h-5" />,
+    icon: <GraduationCap className="w-5 h-5" aria-hidden="true" />,
     color: 'text-purple-400',
     enabled: true,
     category: 'Training',
@@ -55,7 +55,7 @@ const DEFAULT_RULES: NotificationRule[] = [
     name: 'Schedule Changes',
     description: 'Notify members when shift schedules are updated',
     trigger: 'When schedule changes',
-    icon: <Clock className="w-5 h-5" />,
+    icon: <Clock className="w-5 h-5" aria-hidden="true" />,
     color: 'text-violet-400',
     enabled: false,
     category: 'Scheduling',
@@ -65,7 +65,7 @@ const DEFAULT_RULES: NotificationRule[] = [
     name: 'New Member Welcome',
     description: 'Send welcome email to newly added members',
     trigger: 'When member is added',
-    icon: <Users className="w-5 h-5" />,
+    icon: <Users className="w-5 h-5" aria-hidden="true" />,
     color: 'text-green-400',
     enabled: true,
     category: 'Members',
@@ -75,7 +75,7 @@ const DEFAULT_RULES: NotificationRule[] = [
     name: 'Maintenance Reminders',
     description: 'Alert when equipment maintenance is due',
     trigger: '7 days before due date',
-    icon: <AlertTriangle className="w-5 h-5" />,
+    icon: <AlertTriangle className="w-5 h-5" aria-hidden="true" />,
     color: 'text-orange-400',
     enabled: false,
     category: 'Inventory',
@@ -111,7 +111,7 @@ const NotificationsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-orange-600 rounded-lg p-2">
-              <Bell className="w-6 h-6 text-white" />
+              <Bell className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Email Notifications</h1>
@@ -125,14 +125,14 @@ const NotificationsPage: React.FC = () => {
               onClick={() => setShowCreateModal(true)}
               className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" aria-hidden="true" />
               <span>Add Rule</span>
             </button>
           )}
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Notification statistics">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Notification Rules</p>
             <p className="text-white text-2xl font-bold mt-1">{rules.length}</p>
@@ -148,9 +148,11 @@ const NotificationsPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Notification views">
           <button
             onClick={() => setActiveTab('rules')}
+            role="tab"
+            aria-selected={activeTab === 'rules'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'rules' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -159,6 +161,8 @@ const NotificationsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('templates')}
+            role="tab"
+            aria-selected={activeTab === 'templates'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'templates' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -167,6 +171,8 @@ const NotificationsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('log')}
+            role="tab"
+            aria-selected={activeTab === 'log'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'log' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -176,12 +182,14 @@ const NotificationsPage: React.FC = () => {
         </div>
 
         {activeTab === 'rules' && (
-          <>
+          <div role="tabpanel">
             {/* Search */}
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
               <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+                <label htmlFor="notif-search" className="sr-only">Search notification rules</label>
                 <input
+                  id="notif-search"
                   type="text"
                   placeholder="Search notification rules..."
                   value={searchQuery}
@@ -209,7 +217,7 @@ const NotificationsPage: React.FC = () => {
                         </div>
                         <p className="text-slate-300 text-sm mt-0.5">{rule.description}</p>
                         <div className="flex items-center space-x-1 mt-1">
-                          <Zap className="w-3 h-3 text-slate-500" />
+                          <Zap className="w-3 h-3 text-slate-500" aria-hidden="true" />
                           <span className="text-slate-500 text-xs">{rule.trigger}</span>
                         </div>
                       </div>
@@ -217,7 +225,7 @@ const NotificationsPage: React.FC = () => {
                     <div className="flex items-center space-x-3">
                       {rule.enabled ? (
                         <span className="flex items-center space-x-1 text-green-400 text-sm">
-                          <CheckCircle className="w-4 h-4" />
+                          <CheckCircle className="w-4 h-4" aria-hidden="true" />
                           <span>Active</span>
                         </span>
                       ) : (
@@ -227,11 +235,12 @@ const NotificationsPage: React.FC = () => {
                         <button
                           onClick={() => toggleRule(rule.id)}
                           className="text-slate-400 hover:text-white transition-colors"
+                          aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`}
                         >
                           {rule.enabled ? (
-                            <ToggleRight className="w-8 h-8 text-green-400" />
+                            <ToggleRight className="w-8 h-8 text-green-400" aria-hidden="true" />
                           ) : (
-                            <ToggleLeft className="w-8 h-8 text-slate-500" />
+                            <ToggleLeft className="w-8 h-8 text-slate-500" aria-hidden="true" />
                           )}
                         </button>
                       )}
@@ -240,12 +249,12 @@ const NotificationsPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          </>
+          </div>
         )}
 
         {activeTab === 'templates' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-            <Mail className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center" role="tabpanel">
+            <Mail className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-white text-xl font-bold mb-2">Email Templates</h3>
             <p className="text-slate-300 mb-6">
               Customize email templates for different notification types. Templates support dynamic placeholders for personalization.
@@ -259,8 +268,8 @@ const NotificationsPage: React.FC = () => {
         )}
 
         {activeTab === 'log' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-            <Clock className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center" role="tabpanel">
+            <Clock className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-white text-xl font-bold mb-2">No Notifications Sent</h3>
             <p className="text-slate-300 mb-6">
               The notification send log will show all sent emails with delivery status and timestamps.
@@ -270,29 +279,41 @@ const NotificationsPage: React.FC = () => {
 
         {/* Create Rule Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-rule-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Create Notification Rule</h3>
-                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <h3 id="create-rule-title" className="text-lg font-medium text-white">Create Notification Rule</h3>
+                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Rule Name *</label>
+                      <label htmlFor="rule-name" className="block text-sm font-medium text-slate-300 mb-1">Rule Name <span aria-hidden="true">*</span></label>
                       <input
+                        id="rule-name"
                         type="text"
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                         placeholder="e.g., Monthly Report Reminder"
+                        required
+                        aria-required="true"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Trigger Event</label>
-                      <select className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                      <label htmlFor="rule-trigger" className="block text-sm font-medium text-slate-300 mb-1">Trigger Event</label>
+                      <select
+                        id="rule-trigger"
+                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      >
                         <option>Event Reminder</option>
                         <option>Training Expiry</option>
                         <option>Schedule Change</option>
@@ -302,15 +323,16 @@ const NotificationsPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="rule-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                       <textarea
+                        id="rule-description"
                         rows={2}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                     </div>
                     <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
                       <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
                         <p className="text-orange-300 text-sm">
                           Custom notification rules will be available once the notification service backend is configured.
                         </p>

@@ -183,12 +183,13 @@ export const PipelineSettingsPage: React.FC = () => {
         <button
           onClick={() => navigate('/prospective-members')}
           className="p-2 text-slate-400 hover:text-white transition-colors"
+          aria-label="Back to prospective members"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
         </button>
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Settings className="w-7 h-7 text-red-500" />
+            <Settings className="w-7 h-7 text-red-500" aria-hidden="true" />
             Pipeline Settings
           </h1>
           <p className="text-slate-400 mt-1">
@@ -210,15 +211,16 @@ export const PipelineSettingsPage: React.FC = () => {
                   setShowCreateModal(true);
                 }}
                 className="p-1.5 text-slate-400 hover:text-white transition-colors"
-                title="Create pipeline"
+                aria-label="Create pipeline"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             {isLoadingPipelines ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+              <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
+                <Loader2 className="w-5 h-5 animate-spin text-slate-400" aria-hidden="true" />
+                <span className="sr-only">Loading pipelines...</span>
               </div>
             ) : pipelines.length === 0 ? (
               <div className="p-4 text-center text-sm text-slate-500">
@@ -259,12 +261,13 @@ export const PipelineSettingsPage: React.FC = () => {
         {/* Pipeline Editor */}
         <div className="col-span-8">
           {isLoadingPipeline ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+              <Loader2 className="w-8 h-8 animate-spin text-red-500" aria-hidden="true" />
+              <span className="sr-only">Loading pipeline...</span>
             </div>
           ) : !currentPipeline ? (
             <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-white/10">
-              <Settings className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <Settings className="w-12 h-12 text-slate-600 mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-lg font-medium text-white mb-2">
                 {pipelines.length === 0
                   ? 'Create your first pipeline'
@@ -298,12 +301,14 @@ export const PipelineSettingsPage: React.FC = () => {
                       type="text"
                       value={pipelineName}
                       onChange={(e) => setPipelineName(e.target.value)}
+                      aria-label="Pipeline name"
                       className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <textarea
                       value={pipelineDescription}
                       onChange={(e) => setPipelineDescription(e.target.value)}
                       placeholder="Description (optional)"
+                      aria-label="Pipeline description"
                       rows={2}
                       className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
@@ -322,7 +327,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         onClick={handleUpdatePipelineName}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
                       >
-                        <Save className="w-3.5 h-3.5" />
+                        <Save className="w-3.5 h-3.5" aria-hidden="true" />
                         Save
                       </button>
                     </div>
@@ -354,27 +359,27 @@ export const PipelineSettingsPage: React.FC = () => {
                       <button
                         onClick={() => setEditingPipelineName(true)}
                         className="p-2 text-slate-400 hover:text-white transition-colors"
-                        title="Edit name"
+                        aria-label="Edit pipeline name"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                       <button
                         onClick={handleToggleActive}
                         className="p-2 text-slate-400 hover:text-white transition-colors"
-                        title={currentPipeline.is_active ? 'Deactivate' : 'Activate'}
+                        aria-label={currentPipeline.is_active ? 'Deactivate pipeline' : 'Activate pipeline'}
                       >
                         {currentPipeline.is_active ? (
-                          <PowerOff className="w-4 h-4" />
+                          <PowerOff className="w-4 h-4" aria-hidden="true" />
                         ) : (
-                          <Power className="w-4 h-4" />
+                          <Power className="w-4 h-4" aria-hidden="true" />
                         )}
                       </button>
                       <button
                         onClick={handleDeletePipeline}
                         className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                        title="Delete pipeline"
+                        aria-label="Delete pipeline"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -395,7 +400,7 @@ export const PipelineSettingsPage: React.FC = () => {
               {/* Inactivity Configuration */}
               <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4 mt-4">
                 <div className="flex items-center gap-2 mb-1">
-                  <Clock className="w-4 h-4 text-amber-400" />
+                  <Clock className="w-4 h-4 text-amber-400" aria-hidden="true" />
                   <h3 className="text-sm font-medium text-slate-300">
                     Inactivity Timeout
                   </h3>
@@ -435,10 +440,11 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Custom Days Input */}
                   {inactivityConfig.timeout_preset === 'custom' && (
                     <div>
-                      <label className="block text-sm text-slate-400 mb-2">
+                      <label htmlFor="custom-timeout-days" className="block text-sm text-slate-400 mb-2">
                         Custom Timeout (days)
                       </label>
                       <input
+                        id="custom-timeout-days"
                         type="number"
                         min={1}
                         max={1095}
@@ -457,11 +463,12 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Warning Threshold */}
                   {inactivityConfig.timeout_preset !== 'never' && (
                     <div>
-                      <label className="block text-sm text-slate-400 mb-2">
+                      <label htmlFor="warning-threshold" className="block text-sm text-slate-400 mb-2">
                         Warning Threshold
                       </label>
                       <div className="flex items-center gap-3">
                         <input
+                          id="warning-threshold"
                           type="range"
                           min={50}
                           max={95}
@@ -490,7 +497,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Notifications */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Bell className="w-3.5 h-3.5 text-slate-400" />
+                      <Bell className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
                       <label className="text-sm text-slate-400">Notifications</label>
                     </div>
                     <div className="space-y-2 ml-5">
@@ -528,7 +535,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Auto-Purge */}
                   <div className="border-t border-white/10 pt-5">
                     <div className="flex items-center gap-2 mb-3">
-                      <Trash className="w-3.5 h-3.5 text-red-400" />
+                      <Trash className="w-3.5 h-3.5 text-red-400" aria-hidden="true" />
                       <label className="text-sm text-slate-400">Auto-Purge</label>
                     </div>
                     <label className="flex items-center gap-2 text-sm text-slate-300 mb-3">
@@ -559,6 +566,7 @@ export const PipelineSettingsPage: React.FC = () => {
                                 purge_days_after_inactive: Math.max(30, Number(e.target.value)),
                               })
                             }
+                            aria-label="Days after becoming inactive before purging"
                             className="w-24 bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                           />
                           <span className="text-sm text-slate-400">
@@ -566,7 +574,7 @@ export const PipelineSettingsPage: React.FC = () => {
                           </span>
                         </div>
                         <div className="flex items-start gap-2 ml-6 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
                           <p className="text-xs text-amber-300/80">
                             Purged applications are permanently deleted and cannot be recovered. This
                             helps reduce the amount of private information stored in the event of a
@@ -585,9 +593,9 @@ export const PipelineSettingsPage: React.FC = () => {
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                     >
                       {isSavingInactivity ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                       ) : (
-                        <Save className="w-3.5 h-3.5" />
+                        <Save className="w-3.5 h-3.5" aria-hidden="true" />
                       )}
                       Save Inactivity Settings
                     </button>
@@ -601,35 +609,46 @@ export const PipelineSettingsPage: React.FC = () => {
 
       {/* Create Pipeline Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-pipeline-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+        >
           <div className="bg-slate-800 border border-white/10 rounded-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <h2 className="text-lg font-bold text-white">Create Pipeline</h2>
+              <h2 id="create-pipeline-title" className="text-lg font-bold text-white">Create Pipeline</h2>
               <button
                 onClick={() => setShowCreateModal(false)}
                 className="text-slate-400 hover:text-white transition-colors"
+                aria-label="Close dialog"
               >
-                <Plus className="w-5 h-5 rotate-45" />
+                <Plus className="w-5 h-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
-                  Pipeline Name *
+                <label htmlFor="create-pipeline-name" className="block text-sm text-slate-400 mb-1">
+                  Pipeline Name <span aria-hidden="true">*</span>
                 </label>
                 <input
+                  id="create-pipeline-name"
                   type="text"
                   value={pipelineName}
                   onChange={(e) => setPipelineName(e.target.value)}
                   placeholder="e.g., New Member Onboarding"
+                  required
+                  aria-required="true"
                   className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="create-pipeline-description" className="block text-sm text-slate-400 mb-1">
                   Description
                 </label>
                 <textarea
+                  id="create-pipeline-description"
                   value={pipelineDescription}
                   onChange={(e) => setPipelineDescription(e.target.value)}
                   placeholder="Describe this pipeline's purpose..."
@@ -650,7 +669,7 @@ export const PipelineSettingsPage: React.FC = () => {
                 disabled={isCreating}
                 className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
-                {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isCreating && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                 Create Pipeline
               </button>
             </div>

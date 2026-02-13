@@ -41,16 +41,23 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-api-key-title"
+      onKeyDown={(e) => { if (e.key === 'Escape' && !isSubmitting) onClose(); }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Create API Key</h3>
+          <h3 id="create-api-key-title" className="text-lg font-semibold">Create API Key</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
             disabled={isSubmitting}
+            aria-label="Close dialog"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -60,15 +67,17 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
           <div className="space-y-4">
             {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Key Name *
+              <label htmlFor="api-key-name" className="block text-sm font-medium text-gray-700 mb-1">
+                Key Name <span aria-hidden="true">*</span>
               </label>
               <input
+                id="api-key-name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Website Integration Key"
                 required
+                aria-required="true"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -78,10 +87,11 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
 
             {/* Rate Limit Override */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="api-key-rate-limit" className="block text-sm font-medium text-gray-700 mb-1">
                 Rate Limit (requests/hour)
               </label>
               <input
+                id="api-key-rate-limit"
                 type="number"
                 min="1"
                 max="100000"
@@ -100,10 +110,11 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
 
             {/* Expiration Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="api-key-expiration" className="block text-sm font-medium text-gray-700 mb-1">
                 Expiration Date
               </label>
               <input
+                id="api-key-expiration"
                 type="datetime-local"
                 value={formData.expires_at || ''}
                 onChange={(e) => setFormData({
@@ -160,17 +171,23 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="api-key-created-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">API Key Created Successfully</h3>
+          <h3 id="api-key-created-title" className="text-lg font-semibold text-gray-900">API Key Created Successfully</h3>
         </div>
 
         {/* Warning Banner */}
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
             </div>
@@ -192,10 +209,11 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
             <button
               onClick={copyToClipboard}
               className="ml-4 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex-shrink-0"
+              aria-label={copied ? 'Copied to clipboard' : 'Copy API key to clipboard'}
             >
               {copied ? (
                 <>
-                  <svg className="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                   Copied!
@@ -250,9 +268,15 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="revoke-api-key-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Revoke API Key?</h3>
+        <h3 id="revoke-api-key-title" className="text-lg font-semibold text-gray-900 mb-4">Revoke API Key?</h3>
 
         <p className="text-gray-700 mb-4">
           Are you sure you want to revoke the API key <strong>"{keyName}"</strong>?
@@ -315,8 +339,9 @@ export const APIKeysTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
+      <div className="flex justify-center items-center py-12" role="status" aria-live="polite">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <span className="sr-only">Loading API keys...</span>
       </div>
     );
   }
@@ -343,7 +368,7 @@ export const APIKeysTab: React.FC = () => {
           onClick={() => setIsCreateModalOpen(true)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Create API Key
@@ -353,7 +378,7 @@ export const APIKeysTab: React.FC = () => {
       {/* API Keys Table */}
       {apiKeys.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 rounded-md p-8 text-center">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
           </svg>
           <h3 className="mt-2 text-sm font-medium text-gray-900">No API keys</h3>
@@ -369,28 +394,28 @@ export const APIKeysTab: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" aria-label="API keys list">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Key Prefix
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Rate Limit
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Last Used
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
