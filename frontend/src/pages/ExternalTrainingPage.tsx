@@ -99,10 +99,16 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-provider-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div className="bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-700">
-          <h2 className="text-2xl font-bold text-white">
+          <h2 id="create-provider-title" className="text-2xl font-bold text-white">
             {step === 'type' ? 'Select Provider Type' : 'Configure Provider'}
           </h2>
         </div>
@@ -120,7 +126,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                     <h3 className="text-lg font-semibold text-white">{type.label}</h3>
                     <p className="text-sm text-gray-400 mt-1">{type.description}</p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                  <ChevronRight className="w-5 h-5 text-gray-400" aria-hidden="true" />
                 </div>
               </button>
             ))}
@@ -138,44 +144,49 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {error && (
-              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded">
+              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
                 {error}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Display Name *
+              <label htmlFor="provider-name" className="block text-sm font-medium text-gray-300 mb-2">
+                Display Name <span aria-hidden="true">*</span>
               </label>
               <input
+                id="provider-name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
                 placeholder="e.g., Vector Solutions - Main Account"
                 required
+                aria-required="true"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                API Base URL *
+              <label htmlFor="provider-api-url" className="block text-sm font-medium text-gray-300 mb-2">
+                API Base URL <span aria-hidden="true">*</span>
               </label>
               <input
+                id="provider-api-url"
                 type="url"
                 value={formData.api_base_url}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
                 placeholder="https://api.vectorsolutions.com"
                 required
+                aria-required="true"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="provider-auth-type" className="block text-sm font-medium text-gray-300 mb-2">
                 Authentication Type
               </label>
               <select
+                id="provider-auth-type"
                 value={formData.auth_type}
                 onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
@@ -187,25 +198,28 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                API Key *
+              <label htmlFor="provider-api-key" className="block text-sm font-medium text-gray-300 mb-2">
+                API Key <span aria-hidden="true">*</span>
               </label>
               <input
+                id="provider-api-key"
                 type="password"
                 value={formData.api_key}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
                 placeholder="Enter your API key"
                 required
+                aria-required="true"
               />
             </div>
 
             {formData.auth_type === 'basic' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="provider-api-secret" className="block text-sm font-medium text-gray-300 mb-2">
                   API Secret
                 </label>
                 <input
+                  id="provider-api-secret"
                   type="password"
                   value={formData.api_secret || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
@@ -216,10 +230,11 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="provider-description" className="block text-sm font-medium text-gray-300 mb-2">
                 Description
               </label>
               <textarea
+                id="provider-description"
                 value={formData.description || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
@@ -233,7 +248,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-300">
+                  <label htmlFor="provider-auto-sync" className="text-sm font-medium text-gray-300">
                     Enable Auto-Sync
                   </label>
                   <p className="text-xs text-gray-500">
@@ -241,26 +256,32 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   </p>
                 </div>
                 <button
+                  id="provider-auto-sync"
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, auto_sync_enabled: !prev.auto_sync_enabled }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     formData.auto_sync_enabled ? 'bg-red-600' : 'bg-gray-600'
                   }`}
+                  role="switch"
+                  aria-checked={formData.auto_sync_enabled}
+                  aria-label="Enable auto-sync"
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       formData.auto_sync_enabled ? 'translate-x-6' : 'translate-x-1'
                     }`}
+                    aria-hidden="true"
                   />
                 </button>
               </div>
 
               {formData.auto_sync_enabled && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="provider-sync-interval" className="block text-sm font-medium text-gray-300 mb-2">
                     Sync Interval (hours)
                   </label>
                   <select
+                    id="provider-sync-interval"
                     value={formData.sync_interval_hours}
                     onChange={(e) => setFormData(prev => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
                     className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
@@ -330,12 +351,18 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
 }) => {
   const getStatusIcon = () => {
     if (provider.connection_verified) {
-      return <CheckCircle className="w-5 h-5 text-green-500" />;
+      return <CheckCircle className="w-5 h-5 text-green-500" aria-hidden="true" />;
     }
     if (provider.connection_error) {
-      return <XCircle className="w-5 h-5 text-red-500" />;
+      return <XCircle className="w-5 h-5 text-red-500" aria-hidden="true" />;
     }
-    return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+    return <AlertTriangle className="w-5 h-5 text-yellow-500" aria-hidden="true" />;
+  };
+
+  const getStatusLabel = () => {
+    if (provider.connection_verified) return 'Connection verified';
+    if (provider.connection_error) return 'Connection error';
+    return 'Connection not verified';
   };
 
   const getProviderTypeLabel = () => {
@@ -347,7 +374,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-gray-700 rounded-lg">
-            <Link2 className="w-6 h-6 text-red-500" />
+            <Link2 className="w-6 h-6 text-red-500" aria-hidden="true" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white">{provider.name}</h3>
@@ -355,7 +382,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {getStatusIcon()}
+          <span aria-label={getStatusLabel()}>{getStatusIcon()}</span>
           <span className={`text-sm ${provider.active ? 'text-green-400' : 'text-gray-500'}`}>
             {provider.active ? 'Active' : 'Inactive'}
           </span>
@@ -386,7 +413,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
       </div>
 
       {provider.connection_error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4" role="alert">
           <p className="text-xs text-red-400">Connection Error:</p>
           <p className="text-sm text-red-300">{provider.connection_error}</p>
         </div>
@@ -399,9 +426,9 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg disabled:opacity-50"
         >
           {isTestingConnection ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
+            <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : (
-            <CheckCircle className="w-4 h-4" />
+            <CheckCircle className="w-4 h-4" aria-hidden="true" />
           )}
           Test
         </button>
@@ -411,9 +438,9 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg disabled:opacity-50"
         >
           {isSyncing ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
+            <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : (
-            <PlayCircle className="w-4 h-4" />
+            <PlayCircle className="w-4 h-4" aria-hidden="true" />
           )}
           Sync Now
         </button>
@@ -421,20 +448,22 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           onClick={() => onViewMappings(provider.id)}
           className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg"
         >
-          <FolderTree className="w-4 h-4" />
+          <FolderTree className="w-4 h-4" aria-hidden="true" />
           Mappings
         </button>
         <button
           onClick={() => onEdit(provider)}
           className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg"
+          aria-label="Edit provider"
         >
-          <Edit2 className="w-4 h-4" />
+          <Edit2 className="w-4 h-4" aria-hidden="true" />
         </button>
         <button
           onClick={() => onDelete(provider.id)}
           className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-red-600 text-white text-sm rounded-lg"
+          aria-label="Delete provider"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -479,43 +508,53 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mappings-modal-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div className="bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-gray-700">
-          <h2 className="text-2xl font-bold text-white">Mappings - {providerName}</h2>
+          <h2 id="mappings-modal-title" className="text-2xl font-bold text-white">Mappings - {providerName}</h2>
           <p className="text-sm text-gray-400 mt-1">
             Map external categories and users to your internal records
           </p>
         </div>
 
-        <div className="flex border-b border-gray-700">
+        <div className="flex border-b border-gray-700" role="tablist" aria-label="Mapping types">
           <button
             onClick={() => setActiveTab('categories')}
+            role="tab"
+            aria-selected={activeTab === 'categories'}
             className={`flex-1 px-4 py-3 text-sm font-medium ${
               activeTab === 'categories'
                 ? 'text-red-500 border-b-2 border-red-500'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <FolderTree className="w-4 h-4 inline-block mr-2" />
+            <FolderTree className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
             Categories ({categoryMappings.filter(m => !m.is_mapped).length} unmapped)
           </button>
           <button
             onClick={() => setActiveTab('users')}
+            role="tab"
+            aria-selected={activeTab === 'users'}
             className={`flex-1 px-4 py-3 text-sm font-medium ${
               activeTab === 'users'
                 ? 'text-red-500 border-b-2 border-red-500'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <Users className="w-4 h-4 inline-block mr-2" />
+            <Users className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
             Users ({userMappings.filter(m => !m.is_mapped).length} unmapped)
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6" role="tabpanel">
           {loading ? (
-            <div className="text-center text-gray-400 py-8">Loading mappings...</div>
+            <div className="text-center text-gray-400 py-8" role="status" aria-live="polite">Loading mappings...</div>
           ) : activeTab === 'categories' ? (
             <div className="space-y-3">
               {categoryMappings.length === 0 ? (
@@ -543,7 +582,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                       <div className="flex items-center gap-2">
                         {mapping.is_mapped ? (
                           <span className="text-sm text-green-400 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
+                            <CheckCircle className="w-4 h-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
@@ -587,7 +626,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                       <div className="flex items-center gap-2">
                         {mapping.is_mapped ? (
                           <span className="text-sm text-green-400 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
+                            <CheckCircle className="w-4 h-4" aria-hidden="true" />
                             Mapped
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
@@ -720,58 +759,65 @@ const ExternalTrainingPage: React.FC = () => {
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-5 h-5" aria-hidden="true" />
             Add Provider
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-700 mb-6">
+        <div className="flex border-b border-gray-700 mb-6" role="tablist" aria-label="External training views">
           <button
             onClick={() => setActiveTab('providers')}
+            role="tab"
+            aria-selected={activeTab === 'providers'}
             className={`px-4 py-3 text-sm font-medium ${
               activeTab === 'providers'
                 ? 'text-red-500 border-b-2 border-red-500'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <Link2 className="w-4 h-4 inline-block mr-2" />
+            <Link2 className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
             Providers
           </button>
           <button
             onClick={() => setActiveTab('imports')}
+            role="tab"
+            aria-selected={activeTab === 'imports'}
             className={`px-4 py-3 text-sm font-medium ${
               activeTab === 'imports'
                 ? 'text-red-500 border-b-2 border-red-500'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <Download className="w-4 h-4 inline-block mr-2" />
+            <Download className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
             Import Queue
           </button>
           <button
             onClick={() => setActiveTab('mappings')}
+            role="tab"
+            aria-selected={activeTab === 'mappings'}
             className={`px-4 py-3 text-sm font-medium ${
               activeTab === 'mappings'
                 ? 'text-red-500 border-b-2 border-red-500'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <FolderTree className="w-4 h-4 inline-block mr-2" />
+            <FolderTree className="w-4 h-4 inline-block mr-2" aria-hidden="true" />
             All Mappings
           </button>
         </div>
 
         {/* Content */}
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <RefreshCw className="w-8 h-8 text-gray-400 animate-spin" />
+          <div className="flex justify-center items-center py-12" role="status" aria-live="polite">
+            <RefreshCw className="w-8 h-8 text-gray-400 animate-spin" aria-hidden="true" />
+            <span className="sr-only">Loading providers...</span>
           </div>
         ) : activeTab === 'providers' ? (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2" role="tabpanel">
             {providers.length === 0 ? (
               <div className="col-span-2 text-center py-12 bg-gray-800 rounded-lg border border-gray-700">
-                <Link2 className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <Link2 className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-lg font-semibold text-white mb-2">No Integrations Yet</h3>
                 <p className="text-gray-400 mb-4">
                   Connect an external training platform to start syncing records
@@ -780,7 +826,7 @@ const ExternalTrainingPage: React.FC = () => {
                   onClick={() => setShowCreateModal(true)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-5 h-5" aria-hidden="true" />
                   Add Provider
                 </button>
               </div>
@@ -801,16 +847,16 @@ const ExternalTrainingPage: React.FC = () => {
             )}
           </div>
         ) : activeTab === 'imports' ? (
-          <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
-            <Download className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center" role="tabpanel">
+            <Download className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-lg font-semibold text-white mb-2">Import Queue</h3>
             <p className="text-gray-400">
               After syncing, pending imports will appear here for review and processing
             </p>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
-            <FolderTree className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center" role="tabpanel">
+            <FolderTree className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-lg font-semibold text-white mb-2">All Mappings</h3>
             <p className="text-gray-400">
               View and manage all category and user mappings across providers

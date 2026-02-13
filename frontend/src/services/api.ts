@@ -1131,10 +1131,13 @@ export const electionService = {
   },
 
   /**
-   * Delete an election
+   * Delete an election (reason required for non-draft elections)
    */
-  async deleteElection(electionId: string): Promise<void> {
-    await api.delete(`/elections/${electionId}`);
+  async deleteElection(electionId: string, reason?: string): Promise<import('../types/election').ElectionDeleteResponse> {
+    const response = await api.delete<import('../types/election').ElectionDeleteResponse>(`/elections/${electionId}`, {
+      data: reason ? { reason } : undefined,
+    });
+    return response.data;
   },
 
   /**

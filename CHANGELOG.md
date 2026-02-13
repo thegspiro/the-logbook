@@ -7,6 +7,200 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Meeting Minutes & Documents Module (2026-02-13)
+
+#### Meeting Minutes Backend
+- **Database Models**: `MeetingMinutes`, `MinutesTemplate`, `MinutesSection` with UUID primary keys, organization scoping, and foreign keys to events
+- **8 Meeting Types**: `business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other` — each with tailored default section templates
+- **Dynamic Sections System**: Minutes use a flexible JSON sections array (`order`, `key`, `title`, `content`) replacing hardcoded content fields — sections can be added, removed, and reordered
+- **Template System**: `MinutesTemplate` model with configurable sections, header/footer configs, meeting type defaults, and `is_default` flag per type
+- **Default Section Presets**:
+  - Business (9 sections): call to order, roll call, approval of previous, treasurer report, old/new business, etc.
+  - Trustee (11 sections): adds financial review, trust fund report, audit report, legal matters
+  - Executive (11 sections): adds officers' reports, strategic planning, personnel matters, executive session
+  - Annual (12 sections): adds annual report, election results, awards & recognition
+- **Minutes Lifecycle**: `draft` → `review` → `approved` status progression with edit protection for approved minutes
+- **Publish Workflow**: Approved minutes can be published to the Documents module as styled HTML with organization branding
+- **Event Linking**: Minutes can be linked to events via `event_id` foreign key
+- **Search**: Full-text search across title and section content with SQL LIKE injection protection
+
+#### Documents Backend
+- **Document Management**: `Document` and `DocumentFolder` models with folder hierarchy, tagging, and file metadata
+- **7 System Folders**: SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents — auto-created on first access, non-deletable
+- **Custom Folders**: Users can create, update, and delete custom folders alongside system folders
+- **Document Types**: `policy`, `procedure`, `form`, `report`, `minutes`, `training`, `certificate`, `general`
+- **Source Tracking**: Documents track their origin (`upload`, `generated`, `linked`) and source reference ID
+
+#### API Endpoints
+- **Minutes**: 10 endpoints — CRUD, list, search, templates CRUD, publish
+- **Documents**: 5 endpoints — folders CRUD, document list/get/delete
+- **Permissions**: `meetings.view` for read access, `meetings.manage` for write operations
+
+#### Frontend Pages
+- **MinutesPage.tsx**: Meeting type filtering with color-coded badges, template selector in create modal (auto-selects default template per meeting type), search, quick stats dashboard
+- **MinutesDetailPage.tsx**: Dynamic section editor with rich text, section reordering (up/down), add/delete sections, publish button for approved minutes, "View in Documents" link for published minutes
+- **DocumentsPage.tsx**: Folder-based browsing, document viewer modal with server-rendered HTML, grid/list view toggle, custom folder management, document count badges
+
+#### Database Migrations
+- Migration `add_meeting_minutes`: Creates `meeting_minutes` table with all fields and indexes
+- Migration `20260213_0800`: Adds `minutes_templates`, `document_folders`, `documents` tables with dynamic sections support
+- Migration `a7f3e2d91b04`: Extends MeetingType ENUM with `trustee`, `executive`, `annual` on both tables
+
+### Security - Meeting Minutes Module Review (2026-02-13)
+
+#### Fixes Applied
+- **HIGH: Audit log parameter mismatch** — 6 audit log calls in minutes and documents endpoints used wrong parameter names (`action=`, `details=` instead of `event_type=`, `event_data=`), causing silent `TypeError` at runtime. Fixed all calls to use correct `log_audit_event()` signature
+- **MEDIUM: SQL LIKE pattern injection** — Search inputs in `minute_service.py` (2 methods) and `document_service.py` (1 method) passed directly into `%{search}%` without escaping `%` and `_` wildcards. Fixed by escaping all three special characters before interpolation
+- **LOW: Unbounded query limits** — List and search endpoints accepted arbitrary `limit` values. Added `min(limit, 100)` for list endpoints and `min(limit, 50)` for search
+
+#### Verified Secure
+- Multi-tenancy via `organization_id` scoping on all queries
+- Permission checks (`meetings.view`/`meetings.manage`) on all endpoints
+- Status-based edit protection (approved minutes cannot be modified)
+- HTML generation uses `html.escape()` for all user content
+- System folder protection (cannot delete system folders)
+- Pydantic validation on all request schemas
+
+### Fixed - Migration Chain Integrity (2026-02-13)
+
+- **Broken Alembic migration chain**: Three minutes/documents migrations had incorrect `down_revision` values creating orphaned migration heads
+  - `add_meeting_minutes`: Fixed `down_revision` from `None` to `'20260212_0400'`
+  - `20260213_0800`: Fixed `down_revision` from `'20260212_1200'` (wrong revision ID) to `'add_meeting_minutes'`
+  - `a7f3e2d91b04`: Fixed `down_revision` from `None` to `'20260213_0800'`
+
+### Enhanced - Email Ballot Voting Page (2026-02-12)
+
+#### Token-Based Ballot Page (`BallotVotingPage.tsx`)
+- **Public ballot page** at `/ballot?token=xxx` — no authentication required, accessed via "Vote Now" link in email
+- **Full ballot display**: Shows all ballot items with item numbers, titles, descriptions
+- **Voting options per item**: Approve/Deny for approval items, candidate selection for elections, write-in for custom entries, or abstain
+- **Submit Ballot button** at bottom of page with review prompt
+- **Confirmation modal**: Shows summary of all choices (item title + selected option) before final submission
+- **"Change Ballot" / "Cast Ballot"** options in confirmation — member can go back and modify or confirm
+- **Success confirmation**: Green checkmark with submission summary (votes cast, abstentions)
+- **Error handling**: Clear messages for expired tokens, already-submitted ballots, invalid links
+
+#### Backend: Bulk Ballot Submission
+- **`POST /ballot/vote/bulk?token=xxx`** endpoint: Submits all ballot item votes atomically in one transaction
+- **Write-in support**: Creates write-in candidates on the fly when member enters a custom name
+- **Approve/Deny candidates**: Auto-created for approval-type ballot items
+- **Abstain handling**: Items marked as abstain are skipped (no vote recorded)
+- **Token lifecycle**: Token marked as used after full ballot submission, preventing reuse
+- **HMAC-SHA256 signatures** on every vote for tamper detection
+- **Audit logging**: Full ballot submission logged with vote count and abstention count
+
+#### Email Template Updates
+- **"Vote Now" button** (was "Cast Your Vote") — centered, prominent blue button
+- **Ballot URL** now points to frontend `/ballot` page instead of API endpoint
+
+### Enhanced - Ballot Builder, Meeting Attendance & Member Class Eligibility (2026-02-12)
+
+#### Meeting Attendance Tracking
+- **Attendance management endpoints**: `POST /elections/{id}/attendees` (check in), `DELETE /elections/{id}/attendees/{user_id}` (remove), `GET /elections/{id}/attendees` (list)
+- **`attendees` JSON column** on Election model to track who is present at meetings
+- **Audit logging**: All attendance check-ins and removals are logged to the tamper-proof audit trail
+
+#### Member Class Eligibility System
+- **Extended `_user_has_role_type()`** with member class categories: `regular` (active non-probationary), `life` (life_member role), `probationary` (probationary status)
+- **Per-ballot-item eligibility**: Each ballot item can specify which member classes may vote (e.g., only regular + life members for membership approvals)
+- **Attendance requirement**: Ballot items can require meeting attendance (`require_attendance` flag) — voters must be checked in to participate
+- **Combined checks**: Voting eligibility now evaluates both member class AND attendance for each ballot item
+
+#### Ballot Templates API
+- **7 pre-configured templates**: Probationary to Regular, Admin Member Acceptance, Officer Election, Board Election, General Resolution, Bylaw Amendment, Budget Approval
+- **`GET /elections/templates/ballot-items`** endpoint returns templates with title/description placeholders
+- **One-click creation**: Secretary selects a template, fills in the name/topic, and the ballot item is created with correct eligibility rules
+
+#### Ballot Builder UI (`BallotBuilder.tsx`)
+- **Template picker**: Visual grid of available templates with eligibility badges
+- **Custom item form**: Create custom ballot items with configurable type, vote type, voter eligibility, and attendance requirements
+- **Reorder and remove**: Drag items up/down, remove unwanted items
+- **Live preview**: Shows title preview as secretary types the name/topic
+
+#### Meeting Attendance UI (`MeetingAttendance.tsx`)
+- **Check-in interface**: Search members by name or badge number, one-click check-in
+- **Attendance display**: Green pills showing checked-in members with timestamps
+- **Attendance percentage**: Shows percentage of organization members present
+- **Remove capability**: Remove accidentally checked-in members
+
+#### Database Migration
+- Migration `20260212_0400`: Adds `attendees` JSON column to elections table
+
+### Enhanced - Elections Audit Logging & Ballot Forensics (2026-02-12)
+
+#### Tamper-Proof Audit Logging
+- **Full audit trail integration**: All election operations now log to the tamper-proof `audit_logs` table with blockchain-style hash chains
+- **14 event types**: `election_created`, `election_opened`, `election_closed`, `election_deleted`, `election_rollback`, `vote_cast`, `vote_cast_token`, `vote_double_attempt`, `vote_double_attempt_token`, `vote_soft_deleted`, `vote_integrity_check`, `ballot_emails_sent`, `runoff_election_created`, `forensics_report_generated`
+- **Loguru structured logging**: All election operations emit structured log messages with election IDs, positions, and outcomes for operational monitoring
+
+#### Ballot Forensics
+- **Forensics aggregation endpoint** (`GET /elections/{id}/forensics`): Single API call returning vote integrity, deleted votes, rollback history, token access logs, audit trail, anomaly detection (suspicious IPs), and voting timeline
+- **Anomaly detection**: Flags IP addresses with suspiciously high vote counts; provides per-hour voting timeline for detecting ballot stuffing patterns
+- **BALLOT_FORENSICS_GUIDE.md**: Step-by-step playbook for investigating disputed elections with 5 scenario walkthroughs, complete API reference, and audit event reference table
+
+### Enhanced - Elections Module Low-Priority Improvements (2026-02-12)
+
+#### Vote Integrity & Audit Trail
+- **Vote Signatures**: HMAC-SHA256 cryptographic signatures on every vote for tampering detection. New `verify_vote_integrity()` endpoint validates all signatures and reports any anomalies
+- **Soft-Delete for Votes**: Votes are never hard-deleted — `deleted_at`, `deleted_by`, and `deletion_reason` columns maintain full audit trail. All queries filter out soft-deleted votes
+- **Vote Integrity Verification Endpoint**: `GET /elections/{id}/integrity` returns signature validation results (PASS/FAIL, tampered vote IDs)
+- **Soft-Delete Vote Endpoint**: `DELETE /elections/{id}/votes/{vote_id}` marks votes as deleted with reason, preserving audit trail
+
+#### Voting Methods
+- **Ranked-Choice (Instant-Runoff) Voting**: Full IRV implementation with iterative elimination rounds. Voters rank candidates; lowest-ranked candidate eliminated each round until majority winner found
+- **Approval Voting**: Voters can approve multiple candidates; percentages calculated based on unique voters rather than total ballot count
+- **Vote Rank Support**: `vote_rank` field on votes (schema, model, migration) for ranked-choice ballots
+
+#### Bulk & Multi-Position Improvements
+- **Atomic Bulk Voting**: `POST /elections/{id}/vote/bulk` now uses database savepoints — either all votes succeed or none are committed
+- **Multi-Position Token Tracking**: Token-based voting tracks `positions_voted` per token; tokens are only marked as "used" when all positions are voted on
+
+#### Frontend Components
+- **Voter-Facing Ballot UI** (`ElectionBallot.tsx`): Full voting interface supporting simple, ranked-choice, and approval voting methods. Shows eligibility status, per-position voting, and confirmation
+- **Candidate Management UI** (`CandidateManagement.tsx`): Admin interface for adding, editing, accepting/declining, and removing candidates with position grouping and write-in support
+- **ElectionDetailPage Integration**: Ballot and candidate management sections embedded in the election detail page
+
+#### Database Migration
+- Migration `20260212_0300`: Adds `vote_signature`, `deleted_at`, `deleted_by`, `deletion_reason`, `vote_rank` to votes table; `positions_voted` to voting_tokens table; `ix_votes_deleted_at` index
+
+### Security - Elections Module Deep Review (2026-02-12)
+
+#### Critical Fixes (4)
+- **SEC-C1: Remove status from ElectionUpdate** — Prevents bypassing `/open`, `/close`, `/rollback` validation logic by directly PATCHing the status field on DRAFT elections
+- **SEC-C2: Add IntegrityError handling to `cast_vote_with_token()`** — Token-based anonymous voting now catches database constraint violations instead of returning 500 errors
+- **SEC-C3: Fix anonymous vote eligibility check** — `check_voter_eligibility()`, `_get_user_votes()`, and `has_user_voted()` now query by `voter_hash` for anonymous elections instead of `voter_id` (which is NULL)
+- **SEC-C4: Fix `datetime.now()` to `datetime.utcnow()`** — Results visibility check now uses consistent UTC time, preventing timezone-dependent early/late result disclosure
+
+#### Medium Fixes (6)
+- **SEC-M3: Add enum validation** — `voting_method`, `victory_condition`, and `runoff_type` are now validated against allowed values via Pydantic field validators
+- **SEC-M4: Validate candidate positions** — Candidate creation now rejects positions not defined in the election's positions list
+- **SEC-M5: HTML-escape rollback email content** — Election titles, performer names, reasons, and user names are HTML-escaped in rollback notification emails
+- **SEC-M6: Block results visibility toggle for OPEN elections** — `results_visible_immediately` can no longer be toggled while voting is active, preventing strategic voting via live result disclosure
+- **Guard `close_election()` to require OPEN status** — Prevents closing DRAFT or CANCELLED elections that were never opened
+- **Frontend: Hide results visibility toggle for open elections** — Matches backend restriction
+
+#### Updated
+- **ELECTION_SECURITY_AUDIT.md** — Updated scores (7.1/10 → 9.0/10), marked all critical/high items as fixed, added new test recommendations, added audit history
+
+### Added - Prospective Members: Withdraw & Election Package Integration (2026-02-12)
+
+#### Withdraw / Archive Feature
+- **Withdraw Action**: Active or on-hold applicants can be voluntarily withdrawn from the pipeline with an optional reason
+- **Withdrawn Tab**: New tab on the main page showing all withdrawn applications with date, reason, and reactivate option
+- **Withdrawn Stats Card**: Stats bar shows withdrawn count when greater than zero
+- **Reactivation from Withdrawn**: Coordinators can reactivate withdrawn applications back to their previous pipeline stage
+- **Confirmation Dialogs**: Withdraw action requires confirmation in both the detail drawer and table action menu
+
+#### Election Package Integration
+- **Auto-Created Packages**: When an applicant advances to an `election_vote` stage, the system automatically creates an election package bundling their data
+- **Configurable Package Fields**: Stage config lets coordinators choose what applicant data to include (email, phone, address, DOB, documents, stage history)
+- **Package Review UI**: Election package section in the applicant detail drawer with status badge, applicant snapshot, and editable fields
+- **Coordinator Notes**: Draft packages can be edited with coordinator notes and a supporting statement for voters
+- **Submit for Ballot**: "Mark Ready for Ballot" button transitions package from draft to ready for the secretary
+- **Cross-Module Query**: `electionPackageService` provides endpoints for the Elections module to discover ready packages
+- **Recommended Ballot Item**: Each package includes pre-configured ballot item settings from the stage's election config (voting method, victory condition, anonymous voting)
+- **Package Status Tracking**: Five statuses (draft, ready, added_to_ballot, elected, not_elected) with appropriate UI for each
+
 ### Added - Prospective Members Module (2026-02-12)
 
 #### Pipeline Management

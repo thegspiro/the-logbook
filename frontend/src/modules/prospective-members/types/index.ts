@@ -134,12 +134,32 @@ export interface DocumentStageConfig {
   allow_multiple: boolean;
 }
 
+export interface ElectionPackageFieldConfig {
+  include_email: boolean;
+  include_phone: boolean;
+  include_address: boolean;
+  include_date_of_birth: boolean;
+  include_documents: boolean;
+  include_stage_history: boolean;
+  custom_note_prompt?: string; // prompt shown to coordinator when packaging
+}
+
+export const DEFAULT_ELECTION_PACKAGE_FIELDS: ElectionPackageFieldConfig = {
+  include_email: true,
+  include_phone: false,
+  include_address: false,
+  include_date_of_birth: false,
+  include_documents: true,
+  include_stage_history: true,
+};
+
 export interface ElectionStageConfig {
   voting_method: 'simple_majority' | 'approval' | 'supermajority';
   victory_condition: 'most_votes' | 'majority' | 'supermajority';
   victory_percentage?: number;
   eligible_voter_roles: string[];
   anonymous_voting: boolean;
+  package_fields?: ElectionPackageFieldConfig;
 }
 
 export interface ManualApprovalConfig {
@@ -481,4 +501,71 @@ export interface PurgeInactiveRequest {
 export interface PurgeInactiveResponse {
   purged_count: number;
   message: string;
+}
+
+// =============================================================================
+// Election Package — Integration with Elections Module
+// =============================================================================
+
+export type ElectionPackageStatus = 'draft' | 'ready' | 'added_to_ballot' | 'elected' | 'not_elected';
+
+export interface ElectionPackage {
+  id: string;
+  applicant_id: string;
+  pipeline_id: string;
+  stage_id: string;
+
+  // Applicant snapshot (captured at package creation time)
+  applicant_name: string;
+  applicant_email?: string;
+  applicant_phone?: string;
+  target_membership_type: TargetMembershipType;
+  target_role_name?: string;
+
+  // Coordinator-provided context
+  coordinator_notes?: string;
+  supporting_statement?: string; // shown on ballot or to voters
+
+  // Collected pipeline data
+  documents?: { name: string; url: string }[];
+  stage_summary?: { stage_name: string; completed_at?: string }[];
+  custom_fields?: Record<string, string>;
+
+  // Recommended ballot item configuration (from stage config)
+  recommended_ballot_item?: {
+    type: 'membership_approval';
+    title: string;
+    description: string;
+    eligible_voter_types: string[];
+    vote_type: 'approval';
+    voting_method: string;
+    victory_condition: string;
+    victory_percentage?: number;
+    anonymous_voting: boolean;
+  };
+
+  // Status tracking
+  status: ElectionPackageStatus;
+  election_id?: string;
+  candidate_id?: string;
+
+  created_at: string;
+  updated_at: string;
+  submitted_at?: string; // when coordinator marked as ready
+  submitted_by?: string;
+}
+
+export interface ElectionPackageCreate {
+  applicant_id: string;
+  pipeline_id: string;
+  stage_id: string;
+  coordinator_notes?: string;
+  supporting_statement?: string;
+}
+
+export interface ElectionPackageUpdate {
+  coordinator_notes?: string;
+  supporting_statement?: string;
+  custom_fields?: Record<string, string>;
+  status?: ElectionPackageStatus;
 }

@@ -228,7 +228,7 @@ const NotificationsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-orange-600 rounded-lg p-2">
-              <Bell className="w-6 h-6 text-white" />
+              <Bell className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Email Notifications</h1>
@@ -242,7 +242,7 @@ const NotificationsPage: React.FC = () => {
               onClick={() => setShowCreateModal(true)}
               className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" aria-hidden="true" />
               <span>Add Rule</span>
             </button>
           )}
@@ -262,7 +262,7 @@ const NotificationsPage: React.FC = () => {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Notification statistics">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Notification Rules</p>
             <p className="text-white text-2xl font-bold mt-1">{summary?.total_rules ?? rules.length}</p>
@@ -278,9 +278,11 @@ const NotificationsPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Notification views">
           <button
             onClick={() => setActiveTab('rules')}
+            role="tab"
+            aria-selected={activeTab === 'rules'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'rules' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -289,6 +291,8 @@ const NotificationsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('templates')}
+            role="tab"
+            aria-selected={activeTab === 'templates'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'templates' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -297,6 +301,8 @@ const NotificationsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('log')}
+            role="tab"
+            aria-selected={activeTab === 'log'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'log' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -306,12 +312,14 @@ const NotificationsPage: React.FC = () => {
         </div>
 
         {activeTab === 'rules' && (
-          <>
+          <div role="tabpanel">
             {/* Search */}
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
               <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+                <label htmlFor="notif-search" className="sr-only">Search notification rules</label>
                 <input
+                  id="notif-search"
                   type="text"
                   placeholder="Search notification rules..."
                   value={searchQuery}
@@ -396,12 +404,12 @@ const NotificationsPage: React.FC = () => {
                 );
               })}
             </div>
-          </>
+          </div>
         )}
 
         {activeTab === 'templates' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-            <Mail className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center" role="tabpanel">
+            <Mail className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-white text-xl font-bold mb-2">Email Templates</h3>
             <p className="text-slate-300 mb-6">
               Customize email templates for different notification types. Templates support dynamic placeholders for personalization.
@@ -489,9 +497,15 @@ const NotificationsPage: React.FC = () => {
 
         {/* Create Rule Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-rule-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
@@ -508,13 +522,16 @@ const NotificationsPage: React.FC = () => {
                   )}
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Rule Name *</label>
+                      <label htmlFor="rule-name" className="block text-sm font-medium text-slate-300 mb-1">Rule Name <span aria-hidden="true">*</span></label>
                       <input
+                        id="rule-name"
                         type="text"
                         value={createName}
                         onChange={(e) => setCreateName(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                         placeholder="e.g., Monthly Report Reminder"
+                        required
+                        aria-required="true"
                       />
                     </div>
                     <div>
@@ -530,8 +547,9 @@ const NotificationsPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="rule-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                       <textarea
+                        id="rule-description"
                         rows={2}
                         value={createDescription}
                         onChange={(e) => setCreateDescription(e.target.value)}

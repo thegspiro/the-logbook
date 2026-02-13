@@ -595,7 +595,7 @@ const RoleSetup: React.FC = () => {
             </div>
           ) : (
             <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-              <Shield className="w-6 h-6 text-white" />
+              <Shield className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
           )}
           <div>
@@ -612,7 +612,7 @@ const RoleSetup: React.FC = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-              <Users className="w-8 h-8 text-white" />
+              <Users className="w-8 h-8 text-white" aria-hidden="true" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
               Set Up Roles & Permissions
@@ -629,7 +629,7 @@ const RoleSetup: React.FC = () => {
           <div className="space-y-4 mb-6">
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
               <div className="flex items-start">
-                <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+                <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
                   <p className="text-slate-300 text-sm">
@@ -643,7 +643,7 @@ const RoleSetup: React.FC = () => {
 
             <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
               <div className="flex items-start">
-                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
+                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-green-400 font-semibold mb-1">Don't Worry - You Can Change These Later</p>
                   <p className="text-slate-300 text-sm">
@@ -668,7 +668,7 @@ const RoleSetup: React.FC = () => {
                 onClick={() => setShowCustomModal(true)}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4" aria-hidden="true" />
                 Create Custom Role
               </button>
               <button
@@ -701,9 +701,9 @@ const RoleSetup: React.FC = () => {
                       <p className="text-slate-400 text-sm">{category.description}</p>
                     </div>
                     {expandedCategories.includes(categoryId) ? (
-                      <ChevronDown className="w-5 h-5 text-slate-400" />
+                      <ChevronDown className="w-5 h-5 text-slate-400" aria-hidden="true" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-slate-400" />
+                      <ChevronRight className="w-5 h-5 text-slate-400" aria-hidden="true" />
                     )}
                   </button>
 
@@ -722,13 +722,18 @@ const RoleSetup: React.FC = () => {
                                 : 'border-slate-600 hover:border-slate-500'
                             }`}
                             onClick={() => toggleRole(role)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRole(role); } }}
+                            tabIndex={0}
+                            role="checkbox"
+                            aria-checked={isSelected}
+                            aria-label={`${role.name} - ${role.description}`}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                                   isSelected ? 'bg-green-600' : 'bg-slate-700'
                                 }`}>
-                                  <Icon className="w-5 h-5 text-white" />
+                                  <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                                 </div>
                                 <div>
                                   <p className={`font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}>
@@ -738,7 +743,7 @@ const RoleSetup: React.FC = () => {
                                 </div>
                               </div>
                               {isSelected && (
-                                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" aria-hidden="true" />
                               )}
                             </div>
                           </div>
@@ -772,12 +777,17 @@ const RoleSetup: React.FC = () => {
                         <div
                           className="p-4 flex items-center justify-between cursor-pointer"
                           onClick={() => setEditingRole(isEditing ? null : role.id)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingRole(isEditing ? null : role.id); } }}
+                          tabIndex={0}
+                          role="button"
+                          aria-expanded={isEditing}
+                          aria-label={`${role.name} - click to ${isEditing ? 'collapse' : 'expand'} permissions`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                               isAdmin ? 'bg-purple-600' : role.isCustom ? 'bg-blue-600' : 'bg-green-600'
                             }`}>
-                              <Icon className="w-5 h-5 text-white" />
+                              <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
@@ -804,14 +814,15 @@ const RoleSetup: React.FC = () => {
                                   toggleRole(role);
                                 }}
                                 className="p-1 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400 transition-colors"
+                                aria-label={`Remove ${role.name} role`}
                               >
-                                <X className="w-4 h-4" />
+                                <X className="w-4 h-4" aria-hidden="true" />
                               </button>
                             )}
                             {isEditing ? (
-                              <ChevronDown className="w-5 h-5 text-orange-400" />
+                              <ChevronDown className="w-5 h-5 text-orange-400" aria-hidden="true" />
                             ) : (
-                              <ChevronRight className="w-5 h-5 text-slate-400" />
+                              <ChevronRight className="w-5 h-5 text-slate-400" aria-hidden="true" />
                             )}
                           </div>
                         </div>
@@ -838,25 +849,27 @@ const RoleSetup: React.FC = () => {
                                       <button
                                         onClick={() => updateRolePermission(role.id, catId, 'view', !perms.view)}
                                         disabled={isAdmin}
+                                        aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.view
                                             ? 'bg-green-500/20 text-green-400'
                                             : 'bg-slate-700 text-slate-500'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
-                                        <Eye className="w-3 h-3" />
+                                        <Eye className="w-3 h-3" aria-hidden="true" />
                                         View
                                       </button>
                                       <button
                                         onClick={() => updateRolePermission(role.id, catId, 'manage', !perms.manage)}
                                         disabled={isAdmin}
+                                        aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.manage
                                             ? 'bg-orange-500/20 text-orange-400'
                                             : 'bg-slate-700 text-slate-500'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
-                                        <Edit3 className="w-3 h-3" />
+                                        <Edit3 className="w-3 h-3" aria-hidden="true" />
                                         Manage
                                       </button>
                                     </div>
@@ -883,29 +896,39 @@ const RoleSetup: React.FC = () => {
 
       {/* Custom Role Modal */}
       {showCustomModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="custom-role-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
+        >
           <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-white/20">
-            <h3 className="text-white font-bold text-xl mb-4">Create Custom Role</h3>
+            <h3 id="custom-role-modal-title" className="text-white font-bold text-xl mb-4">Create Custom Role</h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-200 mb-2">
-                  Role Name *
+                <label htmlFor="custom-role-name" className="block text-sm font-semibold text-slate-200 mb-2">
+                  Role Name <span aria-hidden="true">*</span>
                 </label>
                 <input
+                  id="custom-role-name"
                   type="text"
                   value={customRoleName}
                   onChange={(e) => setCustomRoleName(e.target.value)}
                   placeholder="e.g., Social Media Manager"
+                  required
+                  aria-required="true"
                   className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-200 mb-2">
+                <label htmlFor="custom-role-description" className="block text-sm font-semibold text-slate-200 mb-2">
                   Description
                 </label>
                 <input
+                  id="custom-role-description"
                   type="text"
                   value={customRoleDescription}
                   onChange={(e) => setCustomRoleDescription(e.target.value)}

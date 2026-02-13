@@ -10,9 +10,10 @@ export interface BallotItem {
   title: string;
   description?: string;
   position?: string;
-  eligible_voter_types: string[]; // ['operational'], ['administrative'], ['all'], or specific role slugs
+  eligible_voter_types: string[]; // ['all'], ['regular'], ['life'], ['probationary'], ['operational'], ['administrative'], or specific role slugs
   vote_type: string; // approval, candidate_selection
   required_for_approval?: number;
+  require_attendance?: boolean; // If true, voter must be checked in as present at the meeting
 }
 
 export interface PositionEligibility {
@@ -33,6 +34,7 @@ export interface Election {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
+  attendees?: Attendee[];
   start_date: string;
   end_date: string;
   status: ElectionStatus;
@@ -104,7 +106,7 @@ export interface ElectionUpdate {
   positions?: string[];
   start_date?: string;
   end_date?: string;
-  status?: ElectionStatus;
+  // NOTE: status is intentionally excluded — use /open, /close, /rollback endpoints
   anonymous_voting?: boolean;
   allow_write_ins?: boolean;
   max_votes_per_position?: number;
@@ -159,6 +161,7 @@ export interface Vote {
   election_id: string;
   candidate_id: string;
   position?: string;
+  vote_rank?: number; // For ranked-choice voting (1 = first choice)
   voted_at: string;
   voter_id?: string;
 }
@@ -167,6 +170,17 @@ export interface VoteCreate {
   election_id: string;
   candidate_id: string;
   position?: string;
+  vote_rank?: number; // For ranked-choice voting (1 = first choice)
+}
+
+export interface VoteIntegrityResult {
+  election_id: string;
+  total_votes: number;
+  valid_signatures: number;
+  unsigned_votes: number;
+  tampered_votes: number;
+  tampered_vote_ids: string[];
+  integrity_status: 'PASS' | 'FAIL';
 }
 
 export interface VoterEligibility {
@@ -232,5 +246,109 @@ export interface EmailBallotResponse {
   success: boolean;
   recipients_count: number;
   failed_count: number;
+  message: string;
+}
+
+export interface ElectionDeleteResponse {
+  success: boolean;
+  message: string;
+  notifications_sent: number;
+}
+
+export interface ForensicsReport {
+  election_id: string;
+  election_title: string;
+  election_status: string;
+  anonymous_voting: boolean;
+  voting_method: string;
+  created_at: string;
+  vote_integrity: VoteIntegrityResult;
+  deleted_votes: {
+    count: number;
+    records: Array<{
+      vote_id: string;
+      candidate_id: string;
+      position: string | null;
+      deleted_at: string | null;
+      deleted_by: string | null;
+      deletion_reason: string | null;
+    }>;
+  };
+  rollback_history: Array<Record<string, unknown>>;
+  voting_tokens: {
+    total_issued: number;
+    total_used: number;
+    records: Array<{
+      token_id: string;
+      used: boolean;
+      used_at: string | null;
+      first_accessed_at: string | null;
+      access_count: number;
+      positions_voted: string[];
+      created_at: string | null;
+      expires_at: string | null;
+    }>;
+  };
+  audit_log: {
+    total_entries: number;
+    entries: Array<{
+      id: string;
+      timestamp: string | null;
+      event_type: string;
+      severity: string | null;
+      user_id: string | null;
+      ip_address: string | null;
+      event_data: Record<string, unknown>;
+    }>;
+  };
+  anomaly_detection: {
+    suspicious_ips: Record<string, number>;
+    ip_vote_distribution: Record<string, number>;
+  };
+  voting_timeline: Record<string, number>;
+}
+
+// Attendance types
+
+export interface Attendee {
+  user_id: string;
+  name: string;
+  checked_in_at: string;
+  checked_in_by: string;
+}
+
+export interface AttendeeCheckInResponse {
+  success: boolean;
+  attendee: Attendee;
+  message: string;
+  total_attendees: number;
+}
+
+// Ballot template types
+
+export interface BallotTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  vote_type: string;
+  eligible_voter_types: string[];
+  require_attendance: boolean;
+  title_template: string;
+  description_template?: string;
+}
+
+// Ballot submission types (token-based voting)
+
+export interface BallotItemVote {
+  ballot_item_id: string;
+  choice: string; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+  write_in_name?: string;
+}
+
+export interface BallotSubmissionResponse {
+  success: boolean;
+  votes_cast: number;
+  abstentions: number;
   message: string;
 }

@@ -208,7 +208,7 @@ const InventoryPage: React.FC = () => {
         <main className="max-w-7xl mx-auto px-6 py-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-slate-300">Loading inventory...</p>
+            <p className="text-slate-300" role="status" aria-live="polite">Loading inventory...</p>
           </div>
         </main>
       </div>
@@ -222,7 +222,7 @@ const InventoryPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-emerald-600 rounded-lg p-2">
-              <Package className="w-6 h-6 text-white" />
+              <Package className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Equipment & Inventory</h1>
@@ -237,14 +237,14 @@ const InventoryPage: React.FC = () => {
                 onClick={() => setShowAddCategory(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4" aria-hidden="true" />
                 <span>Add Category</span>
               </button>
               <button
                 onClick={() => setShowAddItem(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4" aria-hidden="true" />
                 <span>Add Item</span>
               </button>
             </div>
@@ -253,18 +253,18 @@ const InventoryPage: React.FC = () => {
 
         {/* Error Banner */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3" role="alert">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" aria-hidden="true" />
             <p className="text-red-300 text-sm flex-1">{error}</p>
-            <button onClick={loadData} className="flex items-center gap-1 text-red-400 hover:text-red-300 text-sm">
-              <RefreshCw className="w-4 h-4" /> Retry
+            <button onClick={loadData} className="flex items-center gap-1 text-red-400 hover:text-red-300 text-sm" aria-label="Retry loading inventory">
+              <RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry
             </button>
           </div>
         )}
 
         {/* Summary Stats */}
         {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" role="region" aria-label="Inventory statistics">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-slate-400 text-xs font-medium uppercase">Total Items</p>
               <p className="text-white text-2xl font-bold mt-1">{summary.total_items}</p>
@@ -290,9 +290,11 @@ const InventoryPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Inventory views">
           <button
             onClick={() => setActiveTab('items')}
+            role="tab"
+            aria-selected={activeTab === 'items'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'items'
                 ? 'bg-emerald-600 text-white'
@@ -303,6 +305,8 @@ const InventoryPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('categories')}
+            role="tab"
+            aria-selected={activeTab === 'categories'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'categories'
                 ? 'bg-emerald-600 text-white'
@@ -317,11 +321,13 @@ const InventoryPage: React.FC = () => {
         {activeTab === 'items' && (
           <>
             {/* Search & Filters */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6" role="search" aria-label="Search and filter inventory">
               <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="relative flex-1 w-full md:max-w-md">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+                  <label htmlFor="inventory-search" className="sr-only">Search inventory</label>
                   <input
+                    id="inventory-search"
                     type="text"
                     placeholder="Search by name, serial number, asset tag..."
                     value={searchQuery}
@@ -330,8 +336,10 @@ const InventoryPage: React.FC = () => {
                   />
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Filter className="w-5 h-5 text-slate-400" />
+                  <Filter className="w-5 h-5 text-slate-400" aria-hidden="true" />
+                  <label htmlFor="inventory-status-filter" className="sr-only">Filter by status</label>
                   <select
+                    id="inventory-status-filter"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -341,7 +349,9 @@ const InventoryPage: React.FC = () => {
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
+                  <label htmlFor="inventory-category-filter" className="sr-only">Filter by category</label>
                   <select
+                    id="inventory-category-filter"
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
                     className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -358,7 +368,7 @@ const InventoryPage: React.FC = () => {
             {/* Items Table */}
             {items.length === 0 ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-white text-xl font-bold mb-2">No Items Found</h3>
                 <p className="text-slate-300 mb-6">
                   {searchQuery || statusFilter || categoryFilter
@@ -377,16 +387,16 @@ const InventoryPage: React.FC = () => {
             ) : (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full" aria-label="Inventory items list">
                     <thead className="bg-slate-900/50 border-b border-white/10">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Item</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Serial #</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Location</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Condition</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Qty</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Item</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Category</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Serial #</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Location</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Condition</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Status</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">Qty</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
@@ -431,7 +441,7 @@ const InventoryPage: React.FC = () => {
           <>
             {categories.length === 0 ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <Tag className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <Tag className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-white text-xl font-bold mb-2">No Categories</h3>
                 <p className="text-slate-300 mb-6">
                   Create categories to organize your inventory items.
@@ -483,38 +493,46 @@ const InventoryPage: React.FC = () => {
 
         {/* Add Item Modal */}
         {showAddItem && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-item-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowAddItem(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddItem(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddItem(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full border border-white/20">
                 <form onSubmit={handleCreateItem}>
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-medium text-white">Add Inventory Item</h3>
-                      <button type="button" onClick={() => setShowAddItem(false)} className="text-slate-400 hover:text-white">
-                        <X className="w-5 h-5" />
+                      <h3 id="add-item-title" className="text-lg font-medium text-white">Add Inventory Item</h3>
+                      <button type="button" onClick={() => setShowAddItem(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                        <X className="w-5 h-5" aria-hidden="true" />
                       </button>
                     </div>
 
                     {formError && (
-                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
                         <p className="text-sm text-red-300">{formError}</p>
                       </div>
                     )}
 
                     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
+                        <label htmlFor="item-name" className="block text-sm font-medium text-slate-300 mb-1">Name <span aria-hidden="true">*</span></label>
                         <input
-                          type="text" required value={itemForm.name}
+                          id="item-name"
+                          type="text" required aria-required="true" value={itemForm.name}
                           onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+                        <label htmlFor="item-category" className="block text-sm font-medium text-slate-300 mb-1">Category</label>
                         <select
+                          id="item-category"
                           value={itemForm.category_id}
                           onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -527,8 +545,9 @@ const InventoryPage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                        <label htmlFor="item-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                         <textarea
+                          id="item-description"
                           rows={2} value={itemForm.description}
                           onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -537,16 +556,18 @@ const InventoryPage: React.FC = () => {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Manufacturer</label>
+                          <label htmlFor="item-manufacturer" className="block text-sm font-medium text-slate-300 mb-1">Manufacturer</label>
                           <input
+                            id="item-manufacturer"
                             type="text" value={itemForm.manufacturer}
                             onChange={(e) => setItemForm({ ...itemForm, manufacturer: e.target.value })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Model Number</label>
+                          <label htmlFor="item-model-number" className="block text-sm font-medium text-slate-300 mb-1">Model Number</label>
                           <input
+                            id="item-model-number"
                             type="text" value={itemForm.model_number}
                             onChange={(e) => setItemForm({ ...itemForm, model_number: e.target.value })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -556,16 +577,18 @@ const InventoryPage: React.FC = () => {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Serial Number</label>
+                          <label htmlFor="item-serial-number" className="block text-sm font-medium text-slate-300 mb-1">Serial Number</label>
                           <input
+                            id="item-serial-number"
                             type="text" value={itemForm.serial_number}
                             onChange={(e) => setItemForm({ ...itemForm, serial_number: e.target.value })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
+                          <label htmlFor="item-storage-location" className="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
                           <input
+                            id="item-storage-location"
                             type="text" value={itemForm.storage_location}
                             onChange={(e) => setItemForm({ ...itemForm, storage_location: e.target.value })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -575,8 +598,9 @@ const InventoryPage: React.FC = () => {
 
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Condition</label>
+                          <label htmlFor="item-condition" className="block text-sm font-medium text-slate-300 mb-1">Condition</label>
                           <select
+                            id="item-condition"
                             value={itemForm.condition}
                             onChange={(e) => setItemForm({ ...itemForm, condition: e.target.value })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -587,8 +611,9 @@ const InventoryPage: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
+                          <label htmlFor="item-status" className="block text-sm font-medium text-slate-300 mb-1">Status</label>
                           <select
+                            id="item-status"
                             value={itemForm.status}
                             onChange={(e) => setItemForm({ ...itemForm, status: e.target.value })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -599,8 +624,9 @@ const InventoryPage: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-slate-300 mb-1">Quantity</label>
+                          <label htmlFor="item-quantity" className="block text-sm font-medium text-slate-300 mb-1">Quantity</label>
                           <input
+                            id="item-quantity"
                             type="number" min="1" value={itemForm.quantity}
                             onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 1 })}
                             className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -609,8 +635,9 @@ const InventoryPage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+                        <label htmlFor="item-notes" className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
                         <textarea
+                          id="item-notes"
                           rows={2} value={itemForm.notes}
                           onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -641,39 +668,47 @@ const InventoryPage: React.FC = () => {
 
         {/* Add Category Modal */}
         {showAddCategory && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-category-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowAddCategory(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <form onSubmit={handleCreateCategory}>
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-medium text-white">Add Category</h3>
-                      <button type="button" onClick={() => setShowAddCategory(false)} className="text-slate-400 hover:text-white">
-                        <X className="w-5 h-5" />
+                      <h3 id="add-category-title" className="text-lg font-medium text-white">Add Category</h3>
+                      <button type="button" onClick={() => setShowAddCategory(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                        <X className="w-5 h-5" aria-hidden="true" />
                       </button>
                     </div>
 
                     {formError && (
-                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                      <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
                         <p className="text-sm text-red-300">{formError}</p>
                       </div>
                     )}
 
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
+                        <label htmlFor="category-name" className="block text-sm font-medium text-slate-300 mb-1">Name <span aria-hidden="true">*</span></label>
                         <input
-                          type="text" required value={categoryForm.name}
+                          id="category-name"
+                          type="text" required aria-required="true" value={categoryForm.name}
                           onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           placeholder="e.g., Bunker Gear, SCBA, Radios"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Item Type *</label>
+                        <label htmlFor="category-item-type" className="block text-sm font-medium text-slate-300 mb-1">Item Type <span aria-hidden="true">*</span></label>
                         <select
-                          value={categoryForm.item_type}
+                          id="category-item-type"
+                          value={categoryForm.item_type} required aria-required="true"
                           onChange={(e) => setCategoryForm({ ...categoryForm, item_type: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         >
@@ -683,8 +718,9 @@ const InventoryPage: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                        <label htmlFor="category-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                         <textarea
+                          id="category-description"
                           rows={2} value={categoryForm.description}
                           onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -717,8 +753,9 @@ const InventoryPage: React.FC = () => {
                         </label>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Low Stock Threshold</label>
+                        <label htmlFor="category-low-stock" className="block text-sm font-medium text-slate-300 mb-1">Low Stock Threshold</label>
                         <input
+                          id="category-low-stock"
                           type="number" min="0" value={categoryForm.low_stock_threshold || ''}
                           onChange={(e) => setCategoryForm({ ...categoryForm, low_stock_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"

@@ -70,6 +70,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     resumeApplicant,
     withdrawApplicant,
     reactivateApplicant,
+    fetchElectionPackage,
+    updateElectionPackage,
+    submitElectionPackage,
+    currentElectionPackage,
+    isLoadingElectionPackage,
     isAdvancing,
     isRejecting,
     isHolding,
@@ -84,6 +89,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
   const [showPii, setShowPii] = useState(true);
+  const [pkgNotes, setPkgNotes] = useState('');
+  const [pkgStatement, setPkgStatement] = useState('');
+  const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
+
+  const isOnElectionStage = applicant?.current_stage_type === 'election_vote' && applicant?.status === 'active';
 
   // Reset action notes and confirm state when applicant changes
   useEffect(() => {
@@ -92,6 +102,24 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setShowRejectConfirm(false);
     setShowWithdrawConfirm(false);
   }, [applicant?.id]);
+
+  // Load election package when applicant is on an election stage
+  useEffect(() => {
+    if (isOnElectionStage && applicant) {
+      fetchElectionPackage(applicant.id);
+    }
+  }, [applicant?.id, isOnElectionStage, fetchElectionPackage]);
+
+  // Sync package fields to local state when package loads
+  useEffect(() => {
+    if (currentElectionPackage) {
+      setPkgNotes(currentElectionPackage.coordinator_notes ?? '');
+      setPkgStatement(currentElectionPackage.supporting_statement ?? '');
+    } else {
+      setPkgNotes('');
+      setPkgStatement('');
+    }
+  }, [currentElectionPackage?.id]);
 
   if (!isOpen) return null;
 
@@ -172,6 +200,39 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setShowWithdrawConfirm(false);
     } catch {
       toast.error('Failed to withdraw application');
+    }
+  };
+
+  const handleSavePackage = async () => {
+    if (!applicant || !currentElectionPackage) return;
+    try {
+      await updateElectionPackage(applicant.id, {
+        coordinator_notes: pkgNotes || undefined,
+        supporting_statement: pkgStatement || undefined,
+      });
+      toast.success('Election package saved');
+    } catch {
+      toast.error('Failed to save election package');
+    }
+  };
+
+  const handleSubmitPackage = async () => {
+    if (!applicant) return;
+    setIsSubmittingPackage(true);
+    try {
+      // Save any pending edits first
+      if (currentElectionPackage) {
+        await updateElectionPackage(applicant.id, {
+          coordinator_notes: pkgNotes || undefined,
+          supporting_statement: pkgStatement || undefined,
+        });
+      }
+      await submitElectionPackage(applicant.id);
+      toast.success('Election package marked as ready for ballot');
+    } catch {
+      toast.error('Failed to submit election package');
+    } finally {
+      setIsSubmittingPackage(false);
     }
   };
 
@@ -362,6 +423,173 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Election Package Section */}
+              {isOnElectionStage && (
+                <div className="p-4 border-b border-white/10">
+                  <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+                    Election Package
+                  </h3>
+                  {isLoadingElectionPackage ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                    </div>
+                  ) : currentElectionPackage ? (
+                    <div className="space-y-3">
+                      {/* Package status badge */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-400">Status</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          currentElectionPackage.status === 'draft'
+                            ? 'bg-slate-600/50 text-slate-300'
+                            : currentElectionPackage.status === 'ready'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : currentElectionPackage.status === 'added_to_ballot'
+                                ? 'bg-purple-500/20 text-purple-300'
+                                : currentElectionPackage.status === 'elected'
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : 'bg-red-500/20 text-red-300'
+                        }`}>
+                          {currentElectionPackage.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      {/* Applicant snapshot info */}
+                      <div className="bg-slate-800/70 rounded-lg p-3 text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Name</span>
+                          <span className="text-slate-300">{currentElectionPackage.applicant_name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Membership Type</span>
+                          <span className="text-slate-300 capitalize">{currentElectionPackage.target_membership_type}</span>
+                        </div>
+                        {currentElectionPackage.target_role_name && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Target Role</span>
+                            <span className="text-slate-300">{currentElectionPackage.target_role_name}</span>
+                          </div>
+                        )}
+                        {currentElectionPackage.documents && currentElectionPackage.documents.length > 0 && (
+                          <div className="pt-1">
+                            <span className="text-slate-500">Documents:</span>
+                            <div className="mt-1 space-y-0.5">
+                              {currentElectionPackage.documents.map((doc, i) => (
+                                <div key={i} className="flex items-center gap-1 text-blue-400">
+                                  <FileText className="w-3 h-3" />
+                                  {isSafeUrl(doc.url) ? (
+                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                      {doc.name}
+                                    </a>
+                                  ) : (
+                                    <span>{doc.name}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Editable fields — only for draft packages */}
+                      {currentElectionPackage.status === 'draft' && (
+                        <>
+                          <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                              Coordinator Notes
+                            </label>
+                            <textarea
+                              value={pkgNotes}
+                              onChange={(e) => setPkgNotes(e.target.value)}
+                              placeholder="Internal notes about this applicant..."
+                              rows={2}
+                              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                              Supporting Statement
+                            </label>
+                            <textarea
+                              value={pkgStatement}
+                              onChange={(e) => setPkgStatement(e.target.value)}
+                              placeholder="Statement shown to voters on the ballot..."
+                              rows={2}
+                              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              onClick={handleSavePackage}
+                              className="px-3 py-1.5 text-xs text-slate-300 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                            >
+                              Save Draft
+                            </button>
+                            <button
+                              onClick={handleSubmitPackage}
+                              disabled={isSubmittingPackage}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {isSubmittingPackage && <Loader2 className="w-3 h-3 animate-spin" />}
+                              <Vote className="w-3 h-3" />
+                              Mark Ready for Ballot
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Ready state info */}
+                      {currentElectionPackage.status === 'ready' && (
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
+                          <p className="text-xs text-emerald-300">
+                            This package is ready for the secretary to add to a ballot.
+                            {currentElectionPackage.submitted_at && (
+                              <> Submitted {formatDateTime(currentElectionPackage.submitted_at)}.</>
+                            )}
+                          </p>
+                          {currentElectionPackage.coordinator_notes && (
+                            <p className="text-xs text-slate-400 mt-1">
+                              Notes: {currentElectionPackage.coordinator_notes}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Added to ballot info */}
+                      {(currentElectionPackage.status === 'added_to_ballot' ||
+                        currentElectionPackage.status === 'elected' ||
+                        currentElectionPackage.status === 'not_elected') && (
+                        <div className={`border rounded-lg p-3 ${
+                          currentElectionPackage.status === 'elected'
+                            ? 'bg-emerald-500/5 border-emerald-500/20'
+                            : currentElectionPackage.status === 'not_elected'
+                              ? 'bg-red-500/5 border-red-500/20'
+                              : 'bg-purple-500/5 border-purple-500/20'
+                        }`}>
+                          <p className={`text-xs ${
+                            currentElectionPackage.status === 'elected'
+                              ? 'text-emerald-300'
+                              : currentElectionPackage.status === 'not_elected'
+                                ? 'text-red-300'
+                                : 'text-purple-300'
+                          }`}>
+                            {currentElectionPackage.status === 'added_to_ballot' &&
+                              'This applicant has been added to a ballot and is awaiting election results.'}
+                            {currentElectionPackage.status === 'elected' &&
+                              'This applicant was elected. They can now be converted to a member.'}
+                            {currentElectionPackage.status === 'not_elected' &&
+                              'This applicant was not elected by the membership vote.'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      No election package has been created yet. It will be auto-generated when the applicant reaches this stage.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Stage History Timeline */}
               <div className="p-4 border-b border-white/10">

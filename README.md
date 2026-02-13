@@ -37,7 +37,13 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 - **Scheduling & Shift Management** - Week/month calendar views, shift templates (day, night, morning), staffing requirements
 - **Inventory Management** - Full CRUD with item types, status/condition tracking, category management, search and filtering
 - **Member Directory & Tracking** - Member list, profiles, add/import, training history per member
-- **Meeting Minutes** - Minutes management with type filtering, quick stats, search
+- **Meeting Minutes** ([Documentation](docs/MEETING_MINUTES_MODULE.md))
+  - 8 meeting types (business, special, committee, board, trustee, executive, annual, other)
+  - Template system with configurable default sections per meeting type
+  - Dynamic sections with reordering, add/remove
+  - Draft → Review → Approved lifecycle with edit protection
+  - Publish approved minutes to Documents module as styled HTML
+  - Event linking and full-text search
 - **Elections & Voting** - Full election system with ballots and candidate management
 - Incident Reporting
 - Equipment Maintenance
@@ -46,7 +52,7 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 - Budget & Finance Tracking
 - **Event Management** - Event creation with type filtering, RSVP settings, reminders, QR code check-in, self-check-in pages, check-out, analytics
 - **Reports** - Reports catalog with member, training, event, and compliance report categories
-- **Documents** - Folder-based document management with 6 default categories, grid/list views, upload and folder creation
+- **Documents** - Folder-based document management with 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents), custom folders, grid/list views, document viewer
 - **Custom Forms** ([Documentation](docs/FORMS_MODULE.md))
   - Drag-and-drop form builder with 15+ field types
   - Public-facing forms via unique URL slugs with QR code generation
@@ -236,6 +242,7 @@ The wiki includes:
 
 ### Modules & Features
 - [Training Programs Module](docs/TRAINING_PROGRAMS.md) - Comprehensive training management system
+- [Meeting Minutes Module](docs/MEETING_MINUTES_MODULE.md) - Minutes management, templates, dynamic sections, document publishing
 - [Custom Forms Module](docs/FORMS_MODULE.md) - Form builder, public forms, cross-module integrations
 - [Role System](ROLE_SYSTEM_README.md) - Role-based access control (16 system roles)
 - [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details

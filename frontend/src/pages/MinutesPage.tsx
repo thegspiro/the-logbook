@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   ClipboardList,
   FileSearch,
-  CheckSquare,
-  Archive,
   Plus,
   Search,
   Filter,
   X,
+  CheckCircle,
+  Clock,
   AlertCircle,
   Trash2,
   Calendar,
@@ -15,6 +15,8 @@ import {
   User,
   Loader2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { meetingsService } from '../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../services/api';
@@ -22,20 +24,42 @@ import type { MeetingRecord, MeetingsSummary } from '../services/api';
 type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'other';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
-  { value: 'business', label: 'Business Meeting', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' },
-  { value: 'special', label: 'Special Meeting', color: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
-  { value: 'committee', label: 'Committee Meeting', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
-  { value: 'board', label: 'Board Meeting', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
-  { value: 'other', label: 'Other', color: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800' },
+  { value: 'special', label: 'Special Meeting', color: 'bg-purple-100 text-purple-800' },
+  { value: 'committee', label: 'Committee Meeting', color: 'bg-blue-100 text-blue-800' },
+  { value: 'board', label: 'Board Meeting', color: 'bg-amber-100 text-amber-800' },
+  { value: 'trustee', label: 'Trustee Meeting', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'executive', label: 'Executive Meeting', color: 'bg-indigo-100 text-indigo-800' },
+  { value: 'annual', label: 'Annual Meeting', color: 'bg-rose-100 text-rose-800' },
+  { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-800' },
 ];
 
-const MinutesPage: React.FC = () => {
-  const { checkPermission } = useAuthStore();
-  const canManage = checkPermission('minutes.manage');
+const STATUS_BADGES: Record<string, string> = {
+  draft: 'bg-yellow-100 text-yellow-800',
+  submitted: 'bg-blue-100 text-blue-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+};
 
+const MinutesPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { checkPermission } = useAuthStore();
+  const canManage = checkPermission('meetings.manage');
+
+  const [minutesList, setMinutesList] = useState<MinutesListItem[]>([]);
+  const [stats, setStats] = useState<MinutesStats | null>(null);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<MinutesSearchResult[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [meetingEvents, setMeetingEvents] = useState<EventListItem[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [templates, setTemplates] = useState<TemplateListItem[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [summary, setSummary] = useState<MeetingsSummary | null>(null);
@@ -53,6 +77,8 @@ const MinutesPage: React.FC = () => {
     location: '',
     calledBy: '',
     notes: '',
+    eventId: '',
+    templateId: '',
   });
 
   const fetchData = async () => {
@@ -134,31 +160,30 @@ const MinutesPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-3">
-            <div className="bg-cyan-600 rounded-lg p-2">
-              <ClipboardList className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-white text-2xl font-bold">Meeting Minutes</h1>
-              <p className="text-slate-400 text-sm">
-                Record meeting minutes, track action items, and maintain organizational history
-              </p>
-            </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center space-x-3">
+          <div className="bg-cyan-600 rounded-lg p-2">
+            <ClipboardList className="w-6 h-6 text-white" aria-hidden="true" />
           </div>
-          {canManage && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Record Minutes</span>
-            </button>
-          )}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Meeting Minutes</h1>
+            <p className="text-gray-500 text-sm">
+              Record meeting minutes, track action items, and maintain organizational history
+            </p>
+          </div>
         </div>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            <span>Record Minutes</span>
+          </button>
+        )}
+      </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -178,36 +203,26 @@ const MinutesPage: React.FC = () => {
             <p className="text-slate-400 text-xs font-medium uppercase">Pending Approval</p>
             <p className="text-orange-400 text-2xl font-bold mt-1">{summary?.pending_approval ?? 0}</p>
           </div>
-        </div>
-
-        {/* Search & Filters */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
-          <div className="flex flex-col md:flex-row items-center gap-4">
-            <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search minutes by title, content, or action item..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
+          <div className="bg-white shadow rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-xs font-medium uppercase">Open Action Items</p>
+                <p className="text-2xl font-bold text-yellow-600 mt-1">{stats.open_action_items}</p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-200" aria-hidden="true" />
             </div>
-            <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-slate-400" />
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="all">All Meeting Types</option>
-                {MEETING_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
+          </div>
+          <div className="bg-white shadow rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-xs font-medium uppercase">Pending Approval</p>
+                <p className="text-2xl font-bold text-orange-600 mt-1">{stats.pending_approval}</p>
+              </div>
+              <AlertCircle className="w-8 h-8 text-orange-200" aria-hidden="true" />
             </div>
           </div>
         </div>
+      )}
 
         {/* Error State */}
         {error && (
@@ -427,34 +442,47 @@ const MinutesPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Date</label>
-                        <input
-                          type="date" value={minutesForm.meetingDate}
-                          onChange={(e) => setMinutesForm({ ...minutesForm, meetingDate: e.target.value })}
-                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Time</label>
-                        <input
-                          type="time" value={minutesForm.meetingTime}
-                          onChange={(e) => setMinutesForm({ ...minutesForm, meetingTime: e.target.value })}
-                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                        />
-                      </div>
-                    </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label htmlFor="meeting-title" className="block text-sm font-medium text-gray-700 mb-1">Meeting Title <span aria-hidden="true">*</span></label>
+                <input
+                  id="meeting-title"
+                  type="text"
+                  required
+                  aria-required="true"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="e.g., Regular Business Meeting - February 2026"
+                />
+              </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Location</label>
-                      <input
-                        type="text" value={minutesForm.location}
-                        onChange={(e) => setMinutesForm({ ...minutesForm, location: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                        placeholder="e.g., Station 1 Meeting Room"
-                      />
-                    </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="meeting-type" className="block text-sm font-medium text-gray-700 mb-1">Meeting Type</label>
+                  <select
+                    id="meeting-type"
+                    value={form.meetingType}
+                    onChange={(e) => setForm({ ...form, meetingType: e.target.value as MeetingType })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
+                    {MEETING_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="called-by" className="block text-sm font-medium text-gray-700 mb-1">Called By</label>
+                  <input
+                    id="called-by"
+                    type="text"
+                    value={form.calledBy}
+                    onChange={(e) => setForm({ ...form, calledBy: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    placeholder="e.g., Chief Johnson"
+                  />
+                </div>
+              </div>
 
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">Initial Notes</label>
@@ -484,10 +512,80 @@ const MinutesPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              <div>
+                <label htmlFor="meeting-location" className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  id="meeting-location"
+                  type="text"
+                  value={form.location}
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="e.g., Station 1 Meeting Room"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="link-event" className="block text-sm font-medium text-gray-700 mb-1">Link to Event</label>
+                <select
+                  id="link-event"
+                  value={form.eventId}
+                  onChange={(e) => {
+                    const eventId = e.target.value;
+                    setForm(prev => ({ ...prev, eventId }));
+                    if (eventId) {
+                      const ev = meetingEvents.find(ev => ev.id === eventId);
+                      if (ev) {
+                        const start = new Date(ev.start_datetime);
+                        setForm(prev => ({
+                          ...prev,
+                          eventId,
+                          title: prev.title || ev.title,
+                          meetingDate: prev.meetingDate || start.toISOString().split('T')[0],
+                          meetingTime: prev.meetingTime || start.toTimeString().slice(0, 5),
+                          location: prev.location || ev.location || '',
+                        }));
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <option value="">None — standalone minutes</option>
+                  {loadingEvents ? (
+                    <option disabled>Loading events...</option>
+                  ) : (
+                    meetingEvents.map(ev => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.title} ({new Date(ev.start_datetime).toLocaleDateString()})
+                      </option>
+                    ))
+                  )}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Optionally link these minutes to a scheduled meeting event. Fields will auto-populate.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-3 bg-gray-50 flex justify-end space-x-3 rounded-b-lg sticky bottom-0">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                disabled={creating}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={creating || !form.title.trim() || !form.meetingDate}
+                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50"
+              >
+                {creating ? 'Creating...' : 'Start Recording'}
+              </button>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   );
 };

@@ -149,7 +149,7 @@ const IntegrationsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-indigo-600 rounded-lg p-2">
-              <Plug className="w-6 h-6 text-white" />
+              <Plug className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">External Integrations</h1>
@@ -161,7 +161,7 @@ const IntegrationsPage: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Integration statistics">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
             <p className="text-slate-400 text-xs font-medium uppercase">Available Integrations</p>
             <p className="text-white text-2xl font-bold mt-1">{integrations.length}</p>
@@ -177,11 +177,13 @@ const IntegrationsPage: React.FC = () => {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6" role="search" aria-label="Search and filter integrations">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+              <label htmlFor="integrations-search" className="sr-only">Search integrations</label>
               <input
+                id="integrations-search"
                 type="text"
                 placeholder="Search integrations..."
                 value={searchQuery}
@@ -189,11 +191,12 @@ const IntegrationsPage: React.FC = () => {
                 className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <div className="flex space-x-2">
+            <div className="flex space-x-2" role="group" aria-label="Filter by category">
               {(['all', 'Calendar', 'Messaging', 'Data'] as CategoryFilter[]).map(cat => (
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
+                  aria-pressed={categoryFilter === cat}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     categoryFilter === cat
                       ? 'bg-indigo-600 text-white'

@@ -81,17 +81,24 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
         className={`inline-flex items-center px-4 py-2 text-red-400 hover:text-red-300 bg-transparent border border-red-600/50 hover:border-red-500 rounded-lg font-medium transition-all duration-300 ${className}`}
         aria-label="Reset onboarding progress"
       >
-        <RotateCcw className="w-4 h-4 mr-2" />
+        <RotateCcw className="w-4 h-4 mr-2" aria-hidden="true" />
         Reset Progress
       </button>
 
       {/* Confirmation Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-progress-title"
+          onKeyDown={(e) => { if (e.key === 'Escape' && !isResetting) setShowModal(false); }}
+        >
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => !isResetting && setShowModal(false)}
+            aria-hidden="true"
           />
 
           {/* Modal Content */}
@@ -101,21 +108,21 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
               <button
                 onClick={() => setShowModal(false)}
                 className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
-                aria-label="Close modal"
+                aria-label="Close dialog"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             )}
 
             {/* Warning Icon */}
             <div className="flex justify-center mb-4">
               <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-8 h-8 text-red-500" />
+                <AlertTriangle className="w-8 h-8 text-red-500" aria-hidden="true" />
               </div>
             </div>
 
             {/* Title */}
-            <h3 className="text-xl font-bold text-white text-center mb-2">
+            <h3 id="reset-progress-title" className="text-xl font-bold text-white text-center mb-2">
               Reset Onboarding Progress?
             </h3>
 
@@ -171,6 +178,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <circle
                         className="opacity-25"

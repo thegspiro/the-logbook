@@ -123,6 +123,11 @@ class Election(Base):
     # the election closes to make de-anonymization impossible.
     voter_anonymity_salt = Column(String(64), nullable=True)
 
+    # Meeting attendance tracking
+    # Format: [{"user_id": "abc-123", "name": "John Doe", "checked_in_at": "2026-02-10T09:00:00",
+    #           "checked_in_by": "user-456"}]
+    attendees = Column(JSON, nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",
@@ -216,6 +221,9 @@ class VotingToken(Base):
     first_accessed_at = Column(DateTime, nullable=True)
     access_count = Column(Integer, nullable=False, default=0)
 
+    # Multi-position tracking: which positions have been voted on via this token
+    positions_voted = Column(JSON, nullable=True)  # ["Chief", "President"]
+
     # Relationships
     election = relationship("Election", backref="voting_tokens")
 
@@ -246,11 +254,21 @@ class Vote(Base):
 
     # Vote details
     position = Column(String(100), nullable=True)  # Position being voted for (multi-position elections)
+    vote_rank = Column(Integer, nullable=True)  # For ranked-choice voting (1 = first choice)
     voted_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Cryptographic signature for tampering detection
+    # HMAC-SHA256(election_id:candidate_id:voter_hash:voted_at, VOTE_SIGNING_KEY)
+    vote_signature = Column(String(128), nullable=True)
 
     # IP and user agent for audit (not shown to users)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
+
+    # Soft-delete for audit trail (votes are never hard-deleted)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by = Column(String(36), nullable=True)
+    deletion_reason = Column(Text, nullable=True)
 
     # Relationships
     election = relationship("Election", back_populates="votes")
@@ -261,4 +279,5 @@ class Vote(Base):
         Index("ix_votes_candidate_id", "candidate_id"),
         Index("ix_votes_voter_id", "voter_id"),
         Index("ix_votes_voter_hash", "voter_hash"),
+        Index("ix_votes_deleted_at", "deleted_at"),
     )

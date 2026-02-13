@@ -46,6 +46,12 @@ from app.models.training import (
 # Events
 from app.models.event import Event, EventRSVP
 
+# Minutes
+from app.models.minute import MeetingMinutes, MinutesTemplate, Motion, ActionItem
+
+# Documents
+from app.models.document import Document, DocumentFolder
+
 # Elections
 from app.models.election import Election, Candidate, VotingToken, Vote
 

@@ -74,7 +74,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Supervisor Notified', field_type: 'radio', required: true },
       { label: 'Additional Notes', field_type: 'textarea', required: false },
     ],
-    icon: <AlertTriangle className="w-6 h-6" />,
+    icon: <AlertTriangle className="w-6 h-6" aria-hidden="true" />,
     color: 'text-red-400',
   },
   {
@@ -99,7 +99,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Availability', field_type: 'select', required: true },
       { label: 'Additional Information', field_type: 'textarea', required: false },
     ],
-    icon: <Globe className="w-6 h-6" />,
+    icon: <Globe className="w-6 h-6" aria-hidden="true" />,
     color: 'text-cyan-400',
     isPublic: true,
     integrationHint: 'membership_interest',
@@ -123,7 +123,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Pass/Fail', field_type: 'radio', required: true },
       { label: 'Next Inspection Due', field_type: 'date', required: false },
     ],
-    icon: <ClipboardCheck className="w-6 h-6" />,
+    icon: <ClipboardCheck className="w-6 h-6" aria-hidden="true" />,
     color: 'text-emerald-400',
   },
   {
@@ -143,7 +143,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Acknowledgment', field_type: 'checkbox', required: true },
       { label: 'Notes', field_type: 'textarea', required: false },
     ],
-    icon: <Plug className="w-6 h-6" />,
+    icon: <Plug className="w-6 h-6" aria-hidden="true" />,
     color: 'text-orange-400',
     integrationHint: 'equipment_assignment',
   },
@@ -174,7 +174,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Actions Taken', field_type: 'textarea', required: false },
       { label: 'Overall Status', field_type: 'radio', required: true },
     ],
-    icon: <Clipboard className="w-6 h-6" />,
+    icon: <Clipboard className="w-6 h-6" aria-hidden="true" />,
     color: 'text-blue-400',
   },
   {
@@ -194,7 +194,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Equipment requests', field_type: 'textarea', required: false },
       { label: 'Additional comments', field_type: 'textarea', required: false },
     ],
-    icon: <FileText className="w-6 h-6" />,
+    icon: <FileText className="w-6 h-6" aria-hidden="true" />,
     color: 'text-purple-400',
   },
 ];
@@ -450,7 +450,7 @@ const FormsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-pink-600 rounded-lg p-2">
-              <FormInput className="w-6 h-6 text-white" />
+              <FormInput className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Custom Forms</h1>
@@ -463,15 +463,16 @@ const FormsPage: React.FC = () => {
             <button
               onClick={loadData}
               className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Refresh forms"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-5 h-5" aria-hidden="true" />
             </button>
             {canManage && (
               <button
                 onClick={() => setShowCreateModal(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4" aria-hidden="true" />
                 <span>Create Form</span>
               </button>
             )}
@@ -480,7 +481,7 @@ const FormsPage: React.FC = () => {
 
         {/* Stats */}
         {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8" role="region" aria-label="Forms statistics">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
               <p className="text-slate-400 text-xs font-medium uppercase">Total Forms</p>
               <p className="text-white text-2xl font-bold mt-1">{summary.total_forms}</p>
@@ -506,21 +507,23 @@ const FormsPage: React.FC = () => {
 
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6" role="alert">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" aria-hidden="true" />
               <p className="text-red-300 text-sm">{error}</p>
-              <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300">
-                <X className="w-4 h-4" />
+              <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300" aria-label="Dismiss error">
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
         )}
 
         {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Forms views">
           <button
             onClick={() => setActiveTab('forms')}
+            role="tab"
+            aria-selected={activeTab === 'forms'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -529,6 +532,8 @@ const FormsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('templates')}
+            role="tab"
+            aria-selected={activeTab === 'templates'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -537,6 +542,8 @@ const FormsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('submissions')}
+            role="tab"
+            aria-selected={activeTab === 'submissions'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
@@ -546,11 +553,13 @@ const FormsPage: React.FC = () => {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6" role="search" aria-label="Search and filter forms">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+              <label htmlFor="forms-search" className="sr-only">Search forms</label>
               <input
+                id="forms-search"
                 type="text"
                 placeholder="Search forms..."
                 value={searchQuery}
@@ -559,8 +568,10 @@ const FormsPage: React.FC = () => {
               />
             </div>
             <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-slate-400" />
+              <Filter className="w-5 h-5 text-slate-400" aria-hidden="true" />
+              <label htmlFor="forms-category-filter" className="sr-only">Filter by category</label>
               <select
+                id="forms-category-filter"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value as FormCategory)}
                 className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
@@ -580,12 +591,12 @@ const FormsPage: React.FC = () => {
           <>
             {loading ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <RefreshCw className="w-8 h-8 text-slate-400 mx-auto mb-3 animate-spin" />
-                <p className="text-slate-300">Loading forms...</p>
+                <RefreshCw className="w-8 h-8 text-slate-400 mx-auto mb-3 animate-spin" aria-hidden="true" />
+                <p className="text-slate-300" role="status" aria-live="polite">Loading forms...</p>
               </div>
             ) : forms.length === 0 ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <FormInput className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <FormInput className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-white text-xl font-bold mb-2">No Custom Forms</h3>
                 <p className="text-slate-300 mb-6">
                   Create a custom form from scratch or start from a starter template.
@@ -596,14 +607,14 @@ const FormsPage: React.FC = () => {
                       onClick={() => setShowCreateModal(true)}
                       className="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-colors inline-flex items-center space-x-2"
                     >
-                      <Plus className="w-5 h-5" />
+                      <Plus className="w-5 h-5" aria-hidden="true" />
                       <span>Create Form</span>
                     </button>
                     <button
                       onClick={() => setActiveTab('templates')}
                       className="px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg transition-colors inline-flex items-center space-x-2"
                     >
-                      <Copy className="w-5 h-5" />
+                      <Copy className="w-5 h-5" aria-hidden="true" />
                       <span>Use Template</span>
                     </button>
                   </div>
@@ -625,7 +636,7 @@ const FormsPage: React.FC = () => {
                           </span>
                           {form.is_public && (
                             <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30 inline-flex items-center space-x-1">
-                              <Globe className="w-3 h-3" />
+                              <Globe className="w-3 h-3" aria-hidden="true" />
                               <span>Public</span>
                             </span>
                           )}
@@ -639,17 +650,17 @@ const FormsPage: React.FC = () => {
                     {/* Public URL */}
                     {form.is_public && form.public_slug && form.status === 'published' && (
                       <div className="flex items-center space-x-2 mb-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-3 py-2">
-                        <Link className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                        <Link className="w-4 h-4 text-cyan-400 flex-shrink-0" aria-hidden="true" />
                         <span className="text-cyan-300 text-xs truncate flex-1">{getPublicUrl(form.public_slug)}</span>
                         <button
                           onClick={() => copyPublicUrl(form.public_slug!)}
                           className="flex-shrink-0 text-cyan-400 hover:text-cyan-300 transition-colors"
-                          title="Copy public URL"
+                          aria-label="Copy public URL"
                         >
                           {copiedSlug === form.public_slug ? (
-                            <Check className="w-4 h-4 text-green-400" />
+                            <Check className="w-4 h-4 text-green-400" aria-hidden="true" />
                           ) : (
-                            <Copy className="w-4 h-4" />
+                            <Copy className="w-4 h-4" aria-hidden="true" />
                           )}
                         </button>
                       </div>
@@ -665,61 +676,61 @@ const FormsPage: React.FC = () => {
                           <button
                             onClick={() => handleEditForm(form.id)}
                             className="p-1.5 text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 rounded transition-colors"
-                            title="Edit form fields"
+                            aria-label="Edit form fields"
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                         <button
                           onClick={() => handleViewSubmissions(form.id)}
                           className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                          title="View submissions"
+                          aria-label="View submissions"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-4 h-4" aria-hidden="true" />
                         </button>
                         {canManage && (
                           <button
                             onClick={() => handleShareForm(form)}
                             className="p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
-                            title="Public sharing settings"
+                            aria-label="Public sharing settings"
                           >
-                            <Globe className="w-4 h-4" />
+                            <Globe className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                         {canManage && (
                           <button
                             onClick={() => handleOpenIntegrationModal(form.id)}
                             className="p-1.5 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
-                            title="Manage integrations"
+                            aria-label="Manage integrations"
                           >
-                            <Plug className="w-4 h-4" />
+                            <Plug className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                         {canManage && form.status === 'draft' && (
                           <button
                             onClick={() => handlePublish(form.id)}
                             className="p-1.5 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
-                            title="Publish form"
+                            aria-label="Publish form"
                           >
-                            <Send className="w-4 h-4" />
+                            <Send className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                         {canManage && form.status === 'published' && (
                           <button
                             onClick={() => handleArchive(form.id)}
                             className="p-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
-                            title="Archive form"
+                            aria-label="Archive form"
                           >
-                            <Archive className="w-4 h-4" />
+                            <Archive className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                         {canManage && (
                           <button
                             onClick={() => handleDelete(form.id)}
                             className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                            title="Delete form"
+                            aria-label="Delete form"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -757,7 +768,7 @@ const FormsPage: React.FC = () => {
                     <p className="text-slate-300 text-sm mt-1">{template.description}</p>
                     {template.integrationHint && (
                       <div className="flex items-center space-x-1 mt-2">
-                        <Plug className="w-3 h-3 text-orange-400" />
+                        <Plug className="w-3 h-3 text-orange-400" aria-hidden="true" />
                         <span className="text-orange-400 text-xs">Supports cross-module integration</span>
                       </div>
                     )}
@@ -770,7 +781,7 @@ const FormsPage: React.FC = () => {
                             disabled={creating}
                             className="px-3 py-1 text-xs bg-pink-600/20 text-pink-400 hover:bg-pink-600/30 rounded transition-colors flex items-center space-x-1 disabled:opacity-50"
                           >
-                            <Copy className="w-3 h-3" />
+                            <Copy className="w-3 h-3" aria-hidden="true" />
                             <span>{creating ? 'Creating...' : 'Use Template'}</span>
                           </button>
                         )}
@@ -806,7 +817,7 @@ const FormsPage: React.FC = () => {
               </div>
             ) : (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-white text-xl font-bold mb-2">View Submissions</h3>
                 <p className="text-slate-300 mb-6">
                   Select a form from the &quot;My Forms&quot; tab to view its submissions.
@@ -824,7 +835,13 @@ const FormsPage: React.FC = () => {
 
         {/* Form Detail / Editor View */}
         {editingForm && (
-          <div className="fixed inset-0 z-50 bg-slate-900/95 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/95 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="form-editor-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') handleCloseEditor(); }}
+          >
             <div className="max-w-4xl mx-auto px-6 py-8">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
@@ -832,11 +849,12 @@ const FormsPage: React.FC = () => {
                   <button
                     onClick={handleCloseEditor}
                     className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    aria-label="Close editor"
                   >
-                    <ArrowLeft className="w-5 h-5" />
+                    <ArrowLeft className="w-5 h-5" aria-hidden="true" />
                   </button>
                   <div>
-                    <h2 className="text-white text-xl font-bold">{editingForm.name}</h2>
+                    <h2 id="form-editor-title" className="text-white text-xl font-bold">{editingForm.name}</h2>
                     <p className="text-slate-400 text-sm">{editingForm.description || 'No description'}</p>
                   </div>
                 </div>
@@ -851,9 +869,11 @@ const FormsPage: React.FC = () => {
               </div>
 
               {/* Detail Tabs */}
-              <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
+              <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Form editor views">
                 <button
                   onClick={() => setDetailTab('builder')}
+                  role="tab"
+                  aria-selected={detailTab === 'builder'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
@@ -862,6 +882,8 @@ const FormsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setDetailTab('preview')}
+                  role="tab"
+                  aria-selected={detailTab === 'preview'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
@@ -870,6 +892,8 @@ const FormsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setDetailTab('submissions')}
+                  role="tab"
+                  aria-selected={detailTab === 'submissions'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
@@ -911,30 +935,38 @@ const FormsPage: React.FC = () => {
 
         {/* Create Form Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-form-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Create New Form</h3>
-                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <h3 id="create-form-title" className="text-lg font-medium text-white">Create New Form</h3>
+                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Form Name *</label>
+                      <label htmlFor="form-name" className="block text-sm font-medium text-slate-300 mb-1">Form Name <span aria-hidden="true">*</span></label>
                       <input
-                        type="text" value={formData.name}
+                        id="form-name"
+                        type="text" required aria-required="true" value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                         placeholder="e.g., Monthly Safety Report"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+                      <label htmlFor="form-category" className="block text-sm font-medium text-slate-300 mb-1">Category</label>
                       <select
+                        id="form-category"
                         value={formData.category}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
@@ -946,8 +978,9 @@ const FormsPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="form-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                       <textarea
+                        id="form-description"
                         rows={3} value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
@@ -993,18 +1026,24 @@ const FormsPage: React.FC = () => {
 
         {/* Share / Public Settings Modal */}
         {showShareModal && selectedFormId && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-form-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowShareModal(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white flex items-center space-x-2">
-                      <Globe className="w-5 h-5 text-cyan-400" />
+                    <h3 id="share-form-title" className="text-lg font-medium text-white flex items-center space-x-2">
+                      <Globe className="w-5 h-5 text-cyan-400" aria-hidden="true" />
                       <span>Public Sharing Settings</span>
                     </h3>
-                    <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   {(() => {
@@ -1021,6 +1060,7 @@ const FormsPage: React.FC = () => {
                           </div>
                           <button
                             onClick={() => handleTogglePublic(form)}
+                            aria-label={form.is_public ? 'Disable public access' : 'Enable public access'}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                               form.is_public ? 'bg-cyan-600' : 'bg-slate-600'
                             }`}
@@ -1034,26 +1074,30 @@ const FormsPage: React.FC = () => {
                         {form.is_public && form.public_slug && (
                           <>
                             <div>
-                              <label className="block text-sm font-medium text-slate-300 mb-2">Public URL</label>
+                              <label htmlFor="share-public-url" className="block text-sm font-medium text-slate-300 mb-2">Public URL</label>
                               <div className="flex items-center space-x-2">
                                 <input
+                                  id="share-public-url"
                                   readOnly
                                   value={getPublicUrl(form.public_slug)}
                                   className="flex-1 px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-cyan-300 text-sm"
+                                  aria-label="Public URL"
                                 />
                                 <button
                                   onClick={() => copyPublicUrl(form.public_slug!)}
                                   className="px-3 py-2 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
+                                  aria-label="Copy public URL"
                                 >
-                                  {copiedSlug === form.public_slug ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                  {copiedSlug === form.public_slug ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
                                 </button>
                                 <a
                                   href={getPublicUrl(form.public_slug)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-3 py-2 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
+                                  aria-label="Open public URL in new tab"
                                 >
-                                  <ExternalLink className="w-4 h-4" />
+                                  <ExternalLink className="w-4 h-4" aria-hidden="true" />
                                 </a>
                               </div>
                             </div>
@@ -1061,7 +1105,7 @@ const FormsPage: React.FC = () => {
                             {/* QR Code */}
                             <div>
                               <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center space-x-2">
-                                <QrCode className="w-4 h-4" />
+                                <QrCode className="w-4 h-4" aria-hidden="true" />
                                 <span>QR Code</span>
                               </label>
                               <div className="flex flex-col items-center p-4 bg-white rounded-lg">
@@ -1094,8 +1138,9 @@ const FormsPage: React.FC = () => {
                                     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
                                   }}
                                   className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
+                                  aria-label="Download QR code as PNG"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
+                                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
                                   <span>Download PNG</span>
                                 </button>
                                 <button
@@ -1111,8 +1156,9 @@ const FormsPage: React.FC = () => {
                                     URL.revokeObjectURL(a.href);
                                   }}
                                   className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
+                                  aria-label="Download QR code as SVG"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
+                                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
                                   <span>Download SVG</span>
                                 </button>
                               </div>
@@ -1156,18 +1202,24 @@ const FormsPage: React.FC = () => {
 
         {/* Integration Modal */}
         {showIntegrationModal && selectedFormId && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="integration-modal-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowIntegrationModal(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowIntegrationModal(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white flex items-center space-x-2">
-                      <Plug className="w-5 h-5 text-orange-400" />
+                    <h3 id="integration-modal-title" className="text-lg font-medium text-white flex items-center space-x-2">
+                      <Plug className="w-5 h-5 text-orange-400" aria-hidden="true" />
                       <span>Cross-Module Integrations</span>
                     </h3>
-                    <button onClick={() => setShowIntegrationModal(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <button onClick={() => setShowIntegrationModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
 
@@ -1189,8 +1241,9 @@ const FormsPage: React.FC = () => {
                             <button
                               onClick={() => handleDeleteIntegration(integ.id)}
                               className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                              aria-label="Delete integration"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                           </div>
                         ))}
@@ -1203,8 +1256,9 @@ const FormsPage: React.FC = () => {
                     <p className="text-slate-300 text-sm font-medium mb-3">Add Integration</p>
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs text-slate-400 mb-1">Target Module</label>
+                        <label htmlFor="integration-target" className="block text-xs text-slate-400 mb-1">Target Module</label>
                         <select
+                          id="integration-target"
                           value={integrationTarget}
                           onChange={(e) => {
                             setIntegrationTarget(e.target.value);
@@ -1219,8 +1273,9 @@ const FormsPage: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs text-slate-400 mb-1">Integration Type</label>
+                        <label htmlFor="integration-type" className="block text-xs text-slate-400 mb-1">Integration Type</label>
                         <select
+                          id="integration-type"
                           value={integrationType}
                           onChange={(e) => setIntegrationType(e.target.value)}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -1246,7 +1301,7 @@ const FormsPage: React.FC = () => {
                         onClick={handleAddIntegration}
                         className="w-full px-4 py-2 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded-lg transition-colors flex items-center justify-center space-x-2"
                       >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-4 h-4" aria-hidden="true" />
                         <span>Add Integration</span>
                       </button>
                     </div>

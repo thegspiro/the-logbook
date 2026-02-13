@@ -28,9 +28,9 @@ interface ShiftTemplate {
 }
 
 const SHIFT_TEMPLATES: ShiftTemplate[] = [
-  { id: 'day', name: 'Day Shift', startTime: '07:00', endTime: '19:00', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30', icon: <Sun className="w-4 h-4" /> },
-  { id: 'night', name: 'Night Shift', startTime: '19:00', endTime: '07:00', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30', icon: <Moon className="w-4 h-4" /> },
-  { id: 'morning', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30', icon: <Sunrise className="w-4 h-4" /> },
+  { id: 'day', name: 'Day Shift', startTime: '07:00', endTime: '19:00', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30', icon: <Sun className="w-4 h-4" aria-hidden="true" /> },
+  { id: 'night', name: 'Night Shift', startTime: '19:00', endTime: '07:00', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30', icon: <Moon className="w-4 h-4" aria-hidden="true" /> },
+  { id: 'morning', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30', icon: <Sunrise className="w-4 h-4" aria-hidden="true" /> },
 ];
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -229,7 +229,7 @@ const SchedulingPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-violet-600 rounded-lg p-2">
-              <Clock className="w-6 h-6 text-white" />
+              <Clock className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Scheduling & Shifts</h1>
@@ -243,7 +243,7 @@ const SchedulingPage: React.FC = () => {
               onClick={() => setShowCreateShift(true)}
               className="flex items-center space-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" aria-hidden="true" />
               <span>Create Schedule</span>
             </button>
           )}
@@ -291,15 +291,17 @@ const SchedulingPage: React.FC = () => {
               <button
                 onClick={() => navigateWeek(-1)}
                 className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Previous week"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5" aria-hidden="true" />
               </button>
               <h2 className="text-white font-semibold text-lg">{formatDateRange()}</h2>
               <button
                 onClick={() => navigateWeek(1)}
                 className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Next week"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
             <div className="flex items-center space-x-2">
@@ -309,15 +311,19 @@ const SchedulingPage: React.FC = () => {
               >
                 Today
               </button>
-              <div className="flex bg-slate-900/50 rounded-lg p-1">
+              <div className="flex bg-slate-900/50 rounded-lg p-1" role="tablist" aria-label="Calendar view mode">
                 <button
                   onClick={() => setViewMode('week')}
+                  role="tab"
+                  aria-selected={viewMode === 'week'}
                   className={`px-3 py-1 rounded text-sm ${viewMode === 'week' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
                 >
                   Week
                 </button>
                 <button
                   onClick={() => setViewMode('month')}
+                  role="tab"
+                  aria-selected={viewMode === 'month'}
                   className={`px-3 py-1 rounded text-sm ${viewMode === 'month' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
                 >
                   Month
@@ -419,30 +425,38 @@ const SchedulingPage: React.FC = () => {
 
         {/* Create Schedule Modal */}
         {showCreateShift && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-schedule-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateShift(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateShift(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Create Schedule</h3>
-                    <button onClick={() => setShowCreateShift(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <h3 id="create-schedule-title" className="text-lg font-medium text-white">Create Schedule</h3>
+                    <button onClick={() => setShowCreateShift(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">Schedule Name</label>
                       <input
-                        type="text" value={shiftForm.name}
+                        id="schedule-name"
+                        type="text" required aria-required="true" value={shiftForm.name}
                         onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
                         placeholder="e.g., February Week 3 Schedule"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Shift Template</label>
+                      <label htmlFor="shift-template" className="block text-sm font-medium text-slate-300 mb-1">Shift Template</label>
                       <select
+                        id="shift-template"
                         value={shiftForm.shiftTemplate}
                         onChange={(e) => setShiftForm({ ...shiftForm, shiftTemplate: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
@@ -456,14 +470,16 @@ const SchedulingPage: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">Start Date *</label>
                         <input
+                          id="schedule-start-date"
                           type="date" value={shiftForm.startDate}
                           onChange={(e) => setShiftForm({ ...shiftForm, startDate: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">End Date</label>
+                        <label htmlFor="schedule-end-date" className="block text-sm font-medium text-slate-300 mb-1">End Date</label>
                         <input
+                          id="schedule-end-date"
                           type="date" value={shiftForm.endDate}
                           onChange={(e) => setShiftForm({ ...shiftForm, endDate: e.target.value })}
                           className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"

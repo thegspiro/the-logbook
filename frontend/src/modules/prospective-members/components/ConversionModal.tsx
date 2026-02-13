@@ -90,16 +90,22 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="conversion-modal-title"
+      onKeyDown={(e) => { if (e.key === 'Escape' && !isConverting) onClose(); }}
+    >
       <div className="bg-slate-800 border border-white/10 rounded-xl max-w-lg w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-              <UserCheck className="w-5 h-5 text-emerald-400" />
+              <UserCheck className="w-5 h-5 text-emerald-400" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">
+              <h2 id="conversion-modal-title" className="text-lg font-bold text-white">
                 Convert to Member
               </h2>
               <p className="text-sm text-slate-400">
@@ -110,8 +116,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white transition-colors"
+            aria-label="Close dialog"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -119,7 +126,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
         {conversionResult ? (
           <div className="p-6">
             <div className="text-center py-6">
-              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
+              <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-xl font-bold text-white mb-2">
                 Conversion Complete
               </h3>
@@ -144,23 +151,23 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
               {/* Applicant Summary */}
               <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Mail className="w-4 h-4 text-slate-500" />
+                  <Mail className="w-4 h-4 text-slate-500" aria-hidden="true" />
                   <span className="text-slate-300">{applicant.email}</span>
                 </div>
                 {applicant.phone && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Phone className="w-4 h-4 text-slate-500" />
+                    <Phone className="w-4 h-4 text-slate-500" aria-hidden="true" />
                     <span className="text-slate-300">{applicant.phone}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <Calendar className="w-4 h-4 text-slate-500" aria-hidden="true" />
                   <span className="text-slate-300">
                     Applied {formatDate(applicant.created_at)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Shield className="w-4 h-4 text-slate-500" />
+                  <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
                   <span className="text-slate-300">
                     Completed {applicant.stage_history.filter(s => s.completed_at).length} stages
                   </span>
@@ -209,7 +216,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
               {/* Target Role */}
               {applicant.target_role_name && (
                 <div className="flex items-center gap-2 text-sm bg-slate-700/30 rounded-lg p-3">
-                  <Shield className="w-4 h-4 text-slate-500" />
+                  <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
                   <span className="text-slate-400">Assigned role:</span>
                   <span className="text-white font-medium">
                     {applicant.target_role_name}
@@ -230,10 +237,11 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="conversion-notes" className="block text-sm font-medium text-slate-300 mb-2">
                   Conversion Notes (optional)
                 </label>
                 <textarea
+                  id="conversion-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Any notes about this conversion..."
@@ -244,7 +252,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
 
               {/* Warning */}
               <div className="flex items-start gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <p>
                   This will create a new member account and mark this applicant
                   as converted. This action cannot be undone.
@@ -266,9 +274,9 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 {isConverting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <UserCheck className="w-4 h-4" />
+                  <UserCheck className="w-4 h-4" aria-hidden="true" />
                 )}
                 Convert to Member
               </button>

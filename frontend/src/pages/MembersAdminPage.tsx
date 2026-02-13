@@ -204,7 +204,7 @@ export const MembersAdminPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500">Loading...</div>
+          <div className="text-gray-500" role="status" aria-live="polite">Loading...</div>
         </div>
       </div>
     );
@@ -213,7 +213,7 @@ export const MembersAdminPage: React.FC = () => {
   if (error && !editingRoles && !editingMembers) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
           <div className="flex">
             <div className="ml-3">
               <p className="text-sm text-red-700">{error}</p>
@@ -243,6 +243,7 @@ export const MembersAdminPage: React.FC = () => {
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
+              aria-hidden="true"
             >
               <path
                 fillRule="evenodd"
@@ -256,14 +257,14 @@ export const MembersAdminPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
           <p className="text-sm text-red-700">{error}</p>
         </div>
       )}
 
       {/* View Toggle */}
       <div className="mb-6">
-        <div className="inline-flex rounded-md shadow-sm" role="group">
+        <div className="inline-flex rounded-md shadow-sm" role="group" aria-label="View mode">
           <button
             type="button"
             onClick={() => setViewMode('by-member')}
@@ -292,22 +293,22 @@ export const MembersAdminPage: React.FC = () => {
       {/* View by Member */}
       {viewMode === 'by-member' && (
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" aria-label="Members and their roles">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Member
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Badge
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Roles
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -351,7 +352,7 @@ export const MembersAdminPage: React.FC = () => {
                             <button
                               onClick={() => handleQuickRemoveRole(user, role.id)}
                               className="ml-1 hover:text-red-600"
-                              title="Remove role"
+                              aria-label={`Remove ${role.name} role from ${user.full_name || user.username}`}
                             >
                               ×
                             </button>
@@ -450,7 +451,7 @@ export const MembersAdminPage: React.FC = () => {
                           <button
                             onClick={() => handleQuickRemoveUser(user.id, role)}
                             className="ml-2 text-gray-400 hover:text-red-600"
-                            title="Remove from role"
+                            aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
                             ×
                           </button>
@@ -467,10 +468,16 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* Role Assignment Modal (for View by Member) */}
       {editingRoles && selectedUser && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="manage-roles-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 id="manage-roles-title" className="text-lg font-medium text-gray-900">
                 Manage Roles for {selectedUser.full_name || selectedUser.username}
               </h3>
             </div>
@@ -538,10 +545,16 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* Member Assignment Modal (for View by Role) */}
       {editingMembers && selectedRole && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="manage-members-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 id="manage-members-title" className="text-lg font-medium text-gray-900">
                 Manage Members for {selectedRole.name}
               </h3>
             </div>

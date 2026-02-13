@@ -79,37 +79,46 @@ const CreateProgramModal: React.FC<CreateProgramModalProps> = ({ isOpen, onClose
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-program-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div className="bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-700">
-          <h2 className="text-2xl font-bold text-white">Create Training Program</h2>
+          <h2 id="create-program-title" className="text-2xl font-bold text-white">Create Training Program</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded">
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Program Name *
+            <label htmlFor="program-name" className="block text-sm font-medium text-gray-300 mb-2">
+              Program Name <span aria-hidden="true">*</span>
             </label>
             <input
+              id="program-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
               required
+              aria-required="true"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="program-description" className="block text-sm font-medium text-gray-300 mb-2">
               Description
             </label>
             <textarea
+              id="program-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
@@ -119,10 +128,11 @@ const CreateProgramModal: React.FC<CreateProgramModalProps> = ({ isOpen, onClose
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="program-target-position" className="block text-sm font-medium text-gray-300 mb-2">
                 Target Position
               </label>
               <select
+                id="program-target-position"
                 value={formData.target_position}
                 onChange={(e) => setFormData({ ...formData, target_position: e.target.value })}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -138,10 +148,11 @@ const CreateProgramModal: React.FC<CreateProgramModalProps> = ({ isOpen, onClose
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="program-structure-type" className="block text-sm font-medium text-gray-300 mb-2">
                 Structure Type
               </label>
               <select
+                id="program-structure-type"
                 value={formData.structure_type}
                 onChange={(e) => setFormData({ ...formData, structure_type: e.target.value as ProgramStructureType })}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -155,10 +166,11 @@ const CreateProgramModal: React.FC<CreateProgramModalProps> = ({ isOpen, onClose
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="program-time-limit" className="block text-sm font-medium text-gray-300 mb-2">
                 Time Limit (days)
               </label>
               <input
+                id="program-time-limit"
                 type="number"
                 value={formData.time_limit_days}
                 onChange={(e) => setFormData({ ...formData, time_limit_days: e.target.value })}
@@ -168,10 +180,11 @@ const CreateProgramModal: React.FC<CreateProgramModalProps> = ({ isOpen, onClose
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="program-warning-days" className="block text-sm font-medium text-gray-300 mb-2">
                 Warning (days before)
               </label>
               <input
+                id="program-warning-days"
                 type="number"
                 value={formData.warning_days_before}
                 onChange={(e) => setFormData({ ...formData, warning_days_before: e.target.value })}
@@ -279,7 +292,7 @@ const TrainingProgramsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-white flex items-center space-x-3">
-              <GraduationCap className="w-8 h-8 text-red-500" />
+              <GraduationCap className="w-8 h-8 text-red-500" aria-hidden="true" />
               <span>Training Programs</span>
             </h1>
             <p className="text-gray-400 mt-2">
@@ -292,45 +305,54 @@ const TrainingProgramsPage: React.FC = () => {
               onClick={() => setShowCreateModal(true)}
               className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-5 h-5" aria-hidden="true" />
               <span>New Program</span>
             </button>
           )}
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6">
+        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6" role="tablist" aria-label="Training program views">
           <button
             onClick={() => setActiveTab('programs')}
+            role="tab"
+            aria-selected={activeTab === 'programs'}
+            aria-controls="tab-panel-programs"
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'programs'
                 ? 'bg-red-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
           >
-            <Target className="w-4 h-4 inline mr-2" />
+            <Target className="w-4 h-4 inline mr-2" aria-hidden="true" />
             Programs
           </button>
           <button
             onClick={() => setActiveTab('requirements')}
+            role="tab"
+            aria-selected={activeTab === 'requirements'}
+            aria-controls="tab-panel-requirements"
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'requirements'
                 ? 'bg-red-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
           >
-            <ListChecks className="w-4 h-4 inline mr-2" />
+            <ListChecks className="w-4 h-4 inline mr-2" aria-hidden="true" />
             Requirements
           </button>
           <button
             onClick={() => setActiveTab('templates')}
+            role="tab"
+            aria-selected={activeTab === 'templates'}
+            aria-controls="tab-panel-templates"
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'bg-red-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
           >
-            <Award className="w-4 h-4 inline mr-2" />
+            <Award className="w-4 h-4 inline mr-2" aria-hidden="true" />
             Templates
           </button>
         </div>
@@ -338,8 +360,10 @@ const TrainingProgramsPage: React.FC = () => {
         {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+            <label htmlFor="programs-search" className="sr-only">Search {activeTab}</label>
             <input
+              id="programs-search"
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -351,17 +375,17 @@ const TrainingProgramsPage: React.FC = () => {
 
         {/* Content */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+          <div className="text-center py-12" role="status" aria-live="polite">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500" aria-hidden="true"></div>
             <p className="text-gray-400 mt-4">Loading {activeTab}...</p>
           </div>
         ) : (
           <>
             {activeTab === 'programs' || activeTab === 'templates' ? (
-              <div className="grid gap-4">
+              <div className="grid gap-4" id="tab-panel-programs" role="tabpanel">
                 {filteredPrograms.length === 0 ? (
                   <div className="text-center py-12 bg-gray-800 rounded-lg">
-                    <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                    <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
                     <p className="text-gray-400">
                       {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
                     </p>
@@ -380,6 +404,10 @@ const TrainingProgramsPage: React.FC = () => {
                       key={program.id}
                       className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 cursor-pointer transition-colors"
                       onClick={() => navigate(`/training/programs/${program.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/training/programs/${program.id}`); } }}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`${program.name}${program.target_position ? ` - ${program.target_position}` : ''} - ${program.structure_type}`}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -400,24 +428,24 @@ const TrainingProgramsPage: React.FC = () => {
                           <div className="flex items-center space-x-6 text-sm text-gray-400">
                             {program.time_limit_days && (
                               <div className="flex items-center space-x-1">
-                                <Calendar className="w-4 h-4" />
+                                <Calendar className="w-4 h-4" aria-hidden="true" />
                                 <span>{program.time_limit_days} days</span>
                               </div>
                             )}
                             <div className="flex items-center space-x-1">
-                              <Users className="w-4 h-4" />
+                              <Users className="w-4 h-4" aria-hidden="true" />
                               <span>0 enrolled</span>
                             </div>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <ChevronRight className="w-5 h-5 text-gray-400" aria-hidden="true" />
                       </div>
                     </div>
                   ))
                 )}
               </div>
             ) : (
-              <>
+              <div id="tab-panel-requirements" role="tabpanel">
                 {/* Registry Import Section */}
                 <div className="bg-gray-800 rounded-lg p-6 mb-6">
                   <h3 className="text-lg font-semibold text-white mb-4">Import from Registry</h3>
@@ -429,7 +457,7 @@ const TrainingProgramsPage: React.FC = () => {
                         disabled={importingRegistry !== null}
                         className="flex items-center justify-center space-x-2 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50"
                       >
-                        <Download className="w-5 h-5" />
+                        <Download className="w-5 h-5" aria-hidden="true" />
                         <span>
                           {importingRegistry === registry ? 'Importing...' : `Import ${registry.toUpperCase()}`}
                         </span>
@@ -442,7 +470,7 @@ const TrainingProgramsPage: React.FC = () => {
                 <div className="grid gap-4">
                   {filteredRequirements.length === 0 ? (
                     <div className="text-center py-12 bg-gray-800 rounded-lg">
-                      <ListChecks className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                      <ListChecks className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
                       <p className="text-gray-400">
                         {searchTerm ? 'No requirements found' : 'No requirements yet'}
                       </p>
@@ -493,8 +521,8 @@ const TrainingProgramsPage: React.FC = () => {
                             </div>
                           </div>
                           {!req.is_editable && (
-                            <div title="Registry requirement (read-only)">
-                              <AlertCircle className="w-5 h-5 text-yellow-500" />
+                            <div aria-label="Registry requirement (read-only)">
+                              <AlertCircle className="w-5 h-5 text-yellow-500" aria-hidden="true" />
                             </div>
                           )}
                         </div>
@@ -502,7 +530,7 @@ const TrainingProgramsPage: React.FC = () => {
                     ))
                   )}
                 </div>
-              </>
+              </div>
             )}
           </>
         )}

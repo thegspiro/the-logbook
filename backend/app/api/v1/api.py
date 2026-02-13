@@ -35,6 +35,8 @@ from app.api.v1.endpoints import (
     inventory,
     external_training,
     email_templates,
+    minutes,
+    documents,
 )
 
 api_router = APIRouter()

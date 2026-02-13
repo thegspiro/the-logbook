@@ -218,7 +218,7 @@ export const EventDetailPage: React.FC = () => {
   if (error || !event) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
           <p className="text-red-800">{error || 'Event not found'}</p>
           <button
             onClick={() => navigate('/events')}
@@ -243,7 +243,7 @@ export const EventDetailPage: React.FC = () => {
           to="/events"
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4"
         >
-          <svg className="mr-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="mr-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Events
@@ -281,7 +281,7 @@ export const EventDetailPage: React.FC = () => {
                 onClick={() => navigate(`/events/${eventId}/qr`)}
                 className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50"
               >
-                <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                 </svg>
                 View QR Code
@@ -292,7 +292,7 @@ export const EventDetailPage: React.FC = () => {
                     onClick={openCheckInModal}
                     className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                   >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
                     Check In Members
@@ -301,7 +301,7 @@ export const EventDetailPage: React.FC = () => {
                     onClick={openRecordTimesModal}
                     className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                   >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Record Times
@@ -310,7 +310,7 @@ export const EventDetailPage: React.FC = () => {
                     onClick={() => navigate(`/events/${eventId}/monitoring`)}
                     className="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-700 bg-white hover:bg-green-50"
                   >
-                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                     Monitoring Dashboard
@@ -353,7 +353,7 @@ export const EventDetailPage: React.FC = () => {
 
             <div className="space-y-3">
               <div className="flex items-start">
-                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <div>
@@ -369,7 +369,7 @@ export const EventDetailPage: React.FC = () => {
 
               {event.location && (
                 <div className="flex items-start">
-                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -389,7 +389,7 @@ export const EventDetailPage: React.FC = () => {
           {event.event_type === 'training' && event.custom_fields && (
             <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-600">
               <div className="flex items-center mb-4">
-                <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
                 <h2 className="text-lg font-medium text-gray-900">Training Session Details</h2>
@@ -452,7 +452,7 @@ export const EventDetailPage: React.FC = () => {
                 {event.custom_fields.issues_certification && (
                   <div className="col-span-2">
                     <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span className="text-sm font-medium text-green-800">This training issues a certification upon completion</span>
@@ -463,7 +463,7 @@ export const EventDetailPage: React.FC = () => {
                 {event.custom_fields.auto_create_records && (
                   <div className="col-span-2">
                     <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       <span className="text-sm font-medium text-blue-800">Training records are automatically created when members check in</span>
@@ -623,7 +623,13 @@ export const EventDetailPage: React.FC = () => {
 
       {/* RSVP Modal */}
       {showRSVPModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rsvp-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRSVPModal(false); setSubmitError(null); } }}
+        >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
@@ -632,24 +638,25 @@ export const EventDetailPage: React.FC = () => {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRSVP}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">RSVP for {event.title}</h3>
+                  <h3 id="rsvp-modal-title" className="text-lg font-medium text-gray-900 mb-4">RSVP for {event.title}</h3>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3" role="alert">
                       <p className="text-sm text-red-800">{submitError}</p>
                     </div>
                   )}
 
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <fieldset>
+                      <legend className="block text-sm font-medium text-gray-700 mb-2">
                         Your Response
-                      </label>
+                      </legend>
                       <div className="space-y-2">
                         {(event.allowed_rsvp_statuses || ['going', 'not_going']).map((status) => (
                           <label key={status} className="flex items-center">
                             <input
                               type="radio"
+                              name="rsvp-response"
                               value={status}
                               checked={rsvpStatus === status}
                               onChange={(e) => setRsvpStatus(e.target.value as RSVPStatus)}
@@ -661,7 +668,7 @@ export const EventDetailPage: React.FC = () => {
                           </label>
                         ))}
                       </div>
-                    </div>
+                    </fieldset>
 
                     {event.allow_guests && rsvpStatus === 'going' && (
                       <div>
@@ -723,7 +730,13 @@ export const EventDetailPage: React.FC = () => {
 
       {/* Cancel Event Modal */}
       {showCancelModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-event-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); } }}
+        >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
@@ -732,7 +745,7 @@ export const EventDetailPage: React.FC = () => {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleCancelEvent}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cancel Event</h3>
+                  <h3 id="cancel-event-modal-title" className="text-lg font-medium text-gray-900 mb-4">Cancel Event</h3>
 
                   <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                     <p className="text-sm text-yellow-800">
@@ -741,19 +754,20 @@ export const EventDetailPage: React.FC = () => {
                   </div>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3" role="alert">
                       <p className="text-sm text-red-800">{submitError}</p>
                     </div>
                   )}
 
                   <div>
                     <label htmlFor="cancel_reason" className="block text-sm font-medium text-gray-700">
-                      Reason for Cancellation *
+                      Reason for Cancellation <span aria-hidden="true">*</span>
                     </label>
                     <textarea
                       id="cancel_reason"
                       rows={4}
                       required
+                      aria-required="true"
                       minLength={10}
                       maxLength={500}
                       value={cancelReason}
@@ -795,7 +809,13 @@ export const EventDetailPage: React.FC = () => {
 
       {/* Check In Modal */}
       {showCheckInModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="checkin-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowCheckInModal(false); }}
+        >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
@@ -804,13 +824,14 @@ export const EventDetailPage: React.FC = () => {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Check In Members</h3>
+                  <h3 id="checkin-modal-title" className="text-lg font-medium text-gray-900">Check In Members</h3>
                   <button
                     type="button"
                     onClick={() => setShowCheckInModal(false)}
                     className="text-gray-400 hover:text-gray-500"
+                    aria-label="Close dialog"
                   >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -933,7 +954,13 @@ export const EventDetailPage: React.FC = () => {
 
       {/* Record Times Modal */}
       {showRecordTimesModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-times-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRecordTimesModal(false); setSubmitError(null); } }}
+        >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
@@ -942,14 +969,14 @@ export const EventDetailPage: React.FC = () => {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRecordTimes}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Record Official Event Times</h3>
+                  <h3 id="record-times-modal-title" className="text-lg font-medium text-gray-900 mb-4">Record Official Event Times</h3>
 
                   <p className="text-sm text-gray-600 mb-4">
                     Record the actual start and end times of the event. All checked-in members will be credited for attendance based on these times.
                   </p>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3" role="alert">
                       <p className="text-sm text-red-800">{submitError}</p>
                     </div>
                   )}

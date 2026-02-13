@@ -12,6 +12,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID, uuid4
 import hashlib
+import hmac
+import os
 import secrets
 
 from app.models.election import (
@@ -30,6 +32,8 @@ from app.schemas.election import (
     VoterEligibility,
 )
 from app.services.email_service import EmailService
+from app.core.audit import log_audit_event
+from loguru import logger
 
 
 class ElectionService:
@@ -37,6 +41,29 @@ class ElectionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ------------------------------------------------------------------
+    # Audit helpers
+    # ------------------------------------------------------------------
+
+    async def _audit(
+        self,
+        event_type: str,
+        event_data: Dict,
+        severity: str = "info",
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> None:
+        """Log an election event to the tamper-proof audit log."""
+        await log_audit_event(
+            db=self.db,
+            event_type=event_type,
+            event_category="elections",
+            severity=severity,
+            event_data=event_data,
+            user_id=user_id,
+            ip_address=ip_address,
+        )
 
     async def _user_has_role_type(self, user: User, role_types: List[str]) -> bool:
         """
@@ -46,10 +73,15 @@ class ElectionService:
         - "all" - everyone is eligible
         - "operational" - users with operational roles (firefighter, driver, officer roles)
         - "administrative" - users with administrative roles (secretary, treasurer, etc.)
+        - "regular" - active members who are not probationary (regular + life)
+        - "life" - life members only
+        - "probationary" - probationary members only
         - Specific role slugs like "chief", "president", etc.
         """
         if not role_types or "all" in role_types:
             return True
+
+        from app.models.user import UserStatus
 
         user_role_slugs = [role.slug for role in user.roles]
 
@@ -70,7 +102,237 @@ class ElectionService:
             if any(slug in administrative_roles for slug in user_role_slugs):
                 return True
 
+        # Member class categories based on user status
+        # "regular" = active members who are not probationary (includes life members)
+        if "regular" in role_types:
+            if user.status == UserStatus.ACTIVE:
+                return True
+
+        # "life" = members with a "life_member" role slug
+        if "life" in role_types:
+            if "life_member" in user_role_slugs:
+                return True
+
+        # "probationary" = members with probationary status
+        if "probationary" in role_types:
+            if user.status == UserStatus.PROBATIONARY:
+                return True
+
         return False
+
+    def _is_user_attending(self, user_id: str, election: Election) -> bool:
+        """Check if a user is checked in as present at the meeting."""
+        if not election.attendees:
+            return False
+        return any(a.get("user_id") == str(user_id) for a in election.attendees)
+
+    # ------------------------------------------------------------------
+    # Meeting attendance management
+    # ------------------------------------------------------------------
+
+    async def check_in_attendee(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        user_id: UUID,
+        checked_in_by: UUID,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        Check in a member as present at the meeting for this election.
+
+        Returns: (attendee_record, error_message)
+        """
+        # Get the election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+
+        # Get the user being checked in
+        user_result = await self.db.execute(
+            select(User).where(User.id == user_id).where(User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return None, "User not found"
+
+        # Initialize attendees list
+        attendees = election.attendees or []
+
+        # Check if already checked in
+        if any(a.get("user_id") == str(user_id) for a in attendees):
+            return None, "Member is already checked in"
+
+        # Create attendee record
+        attendee_record = {
+            "user_id": str(user_id),
+            "name": user.full_name,
+            "checked_in_at": datetime.utcnow().isoformat(),
+            "checked_in_by": str(checked_in_by),
+        }
+        attendees.append(attendee_record)
+        election.attendees = attendees
+
+        await self.db.commit()
+        await self.db.refresh(election)
+
+        logger.info(f"Attendee checked in | election={election_id} user={user_id} by={checked_in_by}")
+        await self._audit("meeting_attendee_checked_in", {
+            "election_id": str(election_id),
+            "user_id": str(user_id),
+            "name": user.full_name,
+        }, user_id=str(checked_in_by))
+
+        return attendee_record, None
+
+    async def remove_attendee(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        user_id: UUID,
+        removed_by: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Remove a member from the attendance list.
+
+        Returns: (success, error_message)
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return False, "Election not found"
+
+        attendees = election.attendees or []
+        original_count = len(attendees)
+        attendees = [a for a in attendees if a.get("user_id") != str(user_id)]
+
+        if len(attendees) == original_count:
+            return False, "Member is not in the attendance list"
+
+        election.attendees = attendees
+        await self.db.commit()
+
+        logger.info(f"Attendee removed | election={election_id} user={user_id} by={removed_by}")
+        await self._audit("meeting_attendee_removed", {
+            "election_id": str(election_id),
+            "user_id": str(user_id),
+        }, user_id=str(removed_by))
+
+        return True, None
+
+    async def get_attendees(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Optional[List[Dict]]:
+        """Get the attendance list for an election."""
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None
+        return election.attendees or []
+
+    # ------------------------------------------------------------------
+    # Ballot templates
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_ballot_templates() -> List[Dict]:
+        """
+        Return the available ballot item templates.
+
+        Templates cover common fire department meeting agenda items that
+        the secretary can drop onto a ballot with one click.
+        """
+        return [
+            {
+                "id": "probationary_to_regular",
+                "name": "Probationary to Regular Member",
+                "description": "Vote to confirm the transition of a probationary member to regular membership.",
+                "type": "membership_approval",
+                "vote_type": "approval",
+                "eligible_voter_types": ["regular", "life"],
+                "require_attendance": True,
+                "title_template": "Approve {name} for Regular Membership",
+                "description_template": "Vote to approve the transition of {name} from probationary to regular member status.",
+            },
+            {
+                "id": "admin_member_acceptance",
+                "name": "Accept Administrative Member",
+                "description": "Vote to accept a new administrative (non-operational) member into the roster.",
+                "type": "membership_approval",
+                "vote_type": "approval",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "Accept {name} as Administrative Member",
+                "description_template": "Vote to accept {name} into the organization as an administrative member.",
+            },
+            {
+                "id": "officer_election",
+                "name": "Officer Election",
+                "description": "Elect an officer for a specific position. Only operational members vote for operational officers.",
+                "type": "officer_election",
+                "vote_type": "candidate_selection",
+                "eligible_voter_types": ["operational"],
+                "require_attendance": True,
+                "title_template": "Election for {name}",
+                "description_template": "Vote for the {name} position.",
+            },
+            {
+                "id": "board_election",
+                "name": "Board/Administrative Election",
+                "description": "Elect a board or administrative position. All members may vote.",
+                "type": "officer_election",
+                "vote_type": "candidate_selection",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "Election for {name}",
+                "description_template": "Vote for the {name} position.",
+            },
+            {
+                "id": "general_resolution",
+                "name": "General Resolution",
+                "description": "A general yes/no vote on any topic. All present members can vote.",
+                "type": "general_vote",
+                "vote_type": "approval",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "{name}",
+                "description_template": None,
+            },
+            {
+                "id": "bylaw_amendment",
+                "name": "Bylaw Amendment",
+                "description": "Vote on a proposed change to the organization's bylaws. Typically requires supermajority.",
+                "type": "general_vote",
+                "vote_type": "approval",
+                "eligible_voter_types": ["regular", "life"],
+                "require_attendance": True,
+                "title_template": "Bylaw Amendment: {name}",
+                "description_template": "Vote on the proposed bylaw amendment regarding {name}.",
+            },
+            {
+                "id": "budget_approval",
+                "name": "Budget Approval",
+                "description": "Vote to approve a budget or expenditure. All present members can vote.",
+                "type": "general_vote",
+                "vote_type": "approval",
+                "eligible_voter_types": ["all"],
+                "require_attendance": True,
+                "title_template": "Approve {name}",
+                "description_template": "Vote to approve the proposed budget/expenditure: {name}.",
+            },
+        ]
 
     async def check_voter_eligibility(
         self, user_id: UUID, election_id: UUID, organization_id: UUID, position: Optional[str] = None
@@ -166,12 +428,53 @@ class ElectionService:
                         reason=f"You do not have the required role type to vote for {position}",
                     )
 
+        # Check ballot item eligibility (member class + attendance)
+        if position and election.ballot_items:
+            matching_items = [
+                item for item in election.ballot_items
+                if item.get("position") == position or item.get("title") == position
+            ]
+            for item in matching_items:
+                # Check member class / role eligibility
+                eligible_types = item.get("eligible_voter_types", ["all"])
+                if not await self._user_has_role_type(user, eligible_types):
+                    return VoterEligibility(
+                        is_eligible=False,
+                        has_voted=False,
+                        positions_voted=[],
+                        positions_remaining=[],
+                        reason=f"Your member class is not eligible to vote on this item",
+                    )
+                # Check attendance requirement
+                if item.get("require_attendance", False):
+                    if not self._is_user_attending(str(user_id), election):
+                        return VoterEligibility(
+                            is_eligible=False,
+                            has_voted=False,
+                            positions_voted=[],
+                            positions_remaining=[],
+                            reason="You must be checked in as present at the meeting to vote on this item",
+                        )
+
         # Check what positions they've already voted for
-        vote_result = await self.db.execute(
-            select(Vote)
-            .where(Vote.election_id == election_id)
-            .where(Vote.voter_id == user_id)
-        )
+        # For anonymous elections, lookup by voter_hash since voter_id is NULL
+        if election.anonymous_voting:
+            voter_hash = self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            vote_result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_hash == voter_hash)
+                .where(Vote.deleted_at.is_(None))
+            )
+        else:
+            vote_result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_id == user_id)
+                .where(Vote.deleted_at.is_(None))
+            )
         existing_votes = vote_result.scalars().all()
 
         positions_voted = list(set(vote.position for vote in existing_votes if vote.position))
@@ -210,6 +513,7 @@ class ElectionService:
         organization_id: UUID,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
+        vote_rank: Optional[int] = None,
     ) -> Tuple[Optional[Vote], Optional[str]]:
         """
         Cast a vote for a candidate
@@ -259,7 +563,7 @@ class ElectionService:
 
         # Check max votes per position
         if position:
-            position_votes = [v for v in await self._get_user_votes(user_id, election_id) if v.position == position]
+            position_votes = [v for v in await self._get_user_votes(user_id, election_id, election) if v.position == position]
             if len(position_votes) >= election.max_votes_per_position:
                 return None, f"Maximum votes for {position} reached"
 
@@ -270,10 +574,14 @@ class ElectionService:
             voter_id=user_id if not election.anonymous_voting else None,
             voter_hash=self._generate_voter_hash(user_id, election_id, election.voter_anonymity_salt or "") if election.anonymous_voting else None,
             position=position,
+            vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
             voted_at=datetime.utcnow(),
         )
+
+        # Sign the vote for tampering detection
+        vote.vote_signature = self._sign_vote(vote)
 
         self.db.add(vote)
 
@@ -285,19 +593,55 @@ class ElectionService:
         except IntegrityError:
             # Caught by unique constraint - duplicate vote attempted
             await self.db.rollback()
+            logger.warning(
+                "Double-vote attempt blocked by DB constraint | "
+                f"election={election_id} position={position} anonymous={election.anonymous_voting}"
+            )
+            await self._audit("vote_double_attempt", {
+                "election_id": str(election_id),
+                "position": position,
+                "anonymous": election.anonymous_voting,
+            }, severity="warning", user_id=str(user_id), ip_address=ip_address)
             if position:
                 return None, f"Database integrity check: You have already voted for {position}"
             return None, "Database integrity check: You have already voted in this election"
 
+        # Audit & log the successful vote
+        logger.info(
+            f"Vote cast | election={election_id} position={position} "
+            f"anonymous={election.anonymous_voting} vote_id={vote.id}"
+        )
+        await self._audit("vote_cast", {
+            "election_id": str(election_id),
+            "vote_id": str(vote.id),
+            "position": position,
+            "anonymous": election.anonymous_voting,
+        }, user_id=str(user_id), ip_address=ip_address)
+
         return vote, None
 
-    async def _get_user_votes(self, user_id: UUID, election_id: UUID) -> List[Vote]:
-        """Get all votes by a user in an election"""
-        result = await self.db.execute(
-            select(Vote)
-            .where(Vote.election_id == election_id)
-            .where(Vote.voter_id == user_id)
-        )
+    async def _get_user_votes(
+        self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
+    ) -> List[Vote]:
+        """Get all active (non-deleted) votes by a user in an election (handles anonymous voting)"""
+        # For anonymous elections, lookup by voter_hash since voter_id is NULL
+        if election and election.anonymous_voting:
+            voter_hash = self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_hash == voter_hash)
+                .where(Vote.deleted_at.is_(None))
+            )
+        else:
+            result = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_id == user_id)
+                .where(Vote.deleted_at.is_(None))
+            )
         return result.scalars().all()
 
     def _generate_voter_hash(
@@ -310,13 +654,280 @@ class ElectionService:
         model and can be destroyed after the election closes to make
         de-anonymization permanently impossible.
         """
-        import hmac
         data = f"{user_id}:{election_id}"
         return hmac.new(
             key=salt.encode() if salt else b"",
             msg=data.encode(),
             digestmod=hashlib.sha256,
         ).hexdigest()
+
+    def _sign_vote(self, vote: Vote) -> str:
+        """Generate a cryptographic signature for a vote to detect tampering.
+
+        The signature covers all immutable vote fields so any modification
+        (changing candidate, deleting and re-inserting, etc.) will produce
+        a different signature.
+        """
+        signing_key = os.environ.get("VOTE_SIGNING_KEY", "default-signing-key")
+        data = f"{vote.id}:{vote.election_id}:{vote.candidate_id}:{vote.voter_hash or vote.voter_id}:{vote.position}:{vote.voted_at.isoformat()}"
+        return hmac.new(
+            key=signing_key.encode(),
+            msg=data.encode(),
+            digestmod=hashlib.sha256,
+        ).hexdigest()
+
+    async def verify_vote_integrity(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Dict:
+        """Verify the cryptographic integrity of all votes in an election.
+
+        Returns a summary with total votes checked, valid count, and any
+        tampered vote IDs.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return {"error": "Election not found"}
+
+        votes_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
+        )
+        all_votes = votes_result.scalars().all()
+
+        total = len(all_votes)
+        valid = 0
+        tampered = []
+        unsigned = 0
+
+        for vote in all_votes:
+            if not vote.vote_signature:
+                unsigned += 1
+                continue
+            expected = self._sign_vote(vote)
+            if vote.vote_signature == expected:
+                valid += 1
+            else:
+                tampered.append(str(vote.id))
+
+        integrity_status = "PASS" if len(tampered) == 0 else "FAIL"
+
+        if tampered:
+            logger.critical(
+                f"VOTE INTEGRITY FAILURE | election={election_id} "
+                f"tampered={len(tampered)} ids={tampered}"
+            )
+        else:
+            logger.info(f"Vote integrity check PASS | election={election_id} total={total}")
+
+        await self._audit("vote_integrity_check", {
+            "election_id": str(election_id),
+            "total_votes": total,
+            "valid_signatures": valid,
+            "tampered_votes": len(tampered),
+            "integrity_status": integrity_status,
+        }, severity="critical" if tampered else "info")
+
+        return {
+            "election_id": str(election_id),
+            "total_votes": total,
+            "valid_signatures": valid,
+            "unsigned_votes": unsigned,
+            "tampered_votes": len(tampered),
+            "tampered_vote_ids": tampered,
+            "integrity_status": integrity_status,
+        }
+
+    async def soft_delete_vote(
+        self, vote_id: UUID, deleted_by: UUID, reason: str
+    ) -> Optional[Vote]:
+        """Soft-delete a vote with audit trail instead of hard-deleting."""
+        result = await self.db.execute(
+            select(Vote).where(Vote.id == vote_id).where(Vote.deleted_at.is_(None))
+        )
+        vote = result.scalar_one_or_none()
+        if not vote:
+            return None
+
+        vote.deleted_at = datetime.utcnow()
+        vote.deleted_by = str(deleted_by)
+        vote.deletion_reason = reason
+        await self.db.commit()
+        await self.db.refresh(vote)
+
+        logger.warning(
+            f"Vote soft-deleted | vote={vote_id} election={vote.election_id} "
+            f"by={deleted_by} reason={reason!r}"
+        )
+        await self._audit("vote_soft_deleted", {
+            "vote_id": str(vote_id),
+            "election_id": str(vote.election_id),
+            "reason": reason,
+        }, severity="warning", user_id=str(deleted_by))
+
+        return vote
+
+    async def get_election_forensics(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Optional[Dict]:
+        """
+        Aggregate all forensic data for an election into a single report.
+
+        Pulls together:
+        - Election metadata and configuration
+        - Vote integrity check results
+        - Soft-deleted votes with reasons
+        - Rollback history
+        - Voting token access logs
+        - Audit log entries for this election
+        """
+        from app.models.audit import AuditLog
+
+        # Get election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None
+
+        # 1. Vote integrity
+        integrity = await self.verify_vote_integrity(election_id, organization_id)
+
+        # 2. Soft-deleted votes
+        deleted_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.isnot(None))
+        )
+        deleted_votes = deleted_result.scalars().all()
+
+        deleted_records = [
+            {
+                "vote_id": str(v.id),
+                "candidate_id": str(v.candidate_id),
+                "position": v.position,
+                "deleted_at": v.deleted_at.isoformat() if v.deleted_at else None,
+                "deleted_by": v.deleted_by,
+                "deletion_reason": v.deletion_reason,
+            }
+            for v in deleted_votes
+        ]
+
+        # 3. Voting token access logs
+        token_result = await self.db.execute(
+            select(VotingToken)
+            .where(VotingToken.election_id == election_id)
+        )
+        tokens = token_result.scalars().all()
+
+        token_records = [
+            {
+                "token_id": str(t.id),
+                "used": t.used,
+                "used_at": t.used_at.isoformat() if t.used_at else None,
+                "first_accessed_at": t.first_accessed_at.isoformat() if t.first_accessed_at else None,
+                "access_count": t.access_count,
+                "positions_voted": t.positions_voted,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+            }
+            for t in tokens
+        ]
+
+        # 4. Audit log entries for this election
+        audit_result = await self.db.execute(
+            select(AuditLog)
+            .where(AuditLog.event_category == "elections")
+            .where(AuditLog.event_data["election_id"].as_string() == str(election_id))
+            .order_by(AuditLog.timestamp.desc())
+            .limit(200)
+        )
+        audit_entries = audit_result.scalars().all()
+
+        audit_records = [
+            {
+                "id": entry.id,
+                "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+                "event_type": entry.event_type,
+                "severity": entry.severity.value if entry.severity else None,
+                "user_id": entry.user_id,
+                "ip_address": entry.ip_address,
+                "event_data": entry.event_data,
+            }
+            for entry in audit_entries
+        ]
+
+        # 5. Active vote statistics by IP (detect ballot stuffing patterns)
+        active_result = await self.db.execute(
+            select(Vote)
+            .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
+        )
+        active_votes = active_result.scalars().all()
+
+        ip_vote_counts: Dict[str, int] = {}
+        for v in active_votes:
+            ip = v.ip_address or "unknown"
+            ip_vote_counts[ip] = ip_vote_counts.get(ip, 0) + 1
+
+        # Flag IPs with suspiciously high vote counts (> 5 from same IP)
+        suspicious_ips = {ip: count for ip, count in ip_vote_counts.items() if count > 5 and ip != "unknown"}
+
+        # 6. Voting timeline (votes per hour)
+        voting_timeline: Dict[str, int] = {}
+        for v in active_votes:
+            hour_key = v.voted_at.strftime("%Y-%m-%d %H:00") if v.voted_at else "unknown"
+            voting_timeline[hour_key] = voting_timeline.get(hour_key, 0) + 1
+
+        logger.info(f"Forensics report generated | election={election_id}")
+        await self._audit("forensics_report_generated", {
+            "election_id": str(election_id),
+            "title": election.title,
+        })
+
+        return {
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "election_status": election.status.value,
+            "anonymous_voting": election.anonymous_voting,
+            "voting_method": election.voting_method,
+            "created_at": election.created_at.isoformat() if election.created_at else None,
+
+            "vote_integrity": integrity,
+
+            "deleted_votes": {
+                "count": len(deleted_records),
+                "records": deleted_records,
+            },
+
+            "rollback_history": election.rollback_history or [],
+
+            "voting_tokens": {
+                "total_issued": len(token_records),
+                "total_used": sum(1 for t in token_records if t["used"]),
+                "records": token_records,
+            },
+
+            "audit_log": {
+                "total_entries": len(audit_records),
+                "entries": audit_records,
+            },
+
+            "anomaly_detection": {
+                "suspicious_ips": suspicious_ips,
+                "ip_vote_distribution": ip_vote_counts,
+            },
+
+            "voting_timeline": voting_timeline,
+        }
 
     async def get_election_results(
         self, election_id: UUID, organization_id: UUID, user_id: Optional[UUID] = None
@@ -351,7 +962,7 @@ class ElectionService:
 
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
-        current_time = datetime.now()
+        current_time = datetime.utcnow()
         election_has_closed = current_time > election.end_date
 
         can_view = (
@@ -363,10 +974,11 @@ class ElectionService:
             # Before closing: use get_election_stats() for ballot counts only
             return None
 
-        # Get all votes
+        # Get all active (non-deleted) votes
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
 
@@ -435,34 +1047,44 @@ class ElectionService:
         self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
     ) -> List[CandidateResult]:
         """
-        Calculate results for a list of candidates based on configured victory conditions
+        Calculate results for a list of candidates based on configured voting method
+        and victory conditions.
 
-        Args:
-            candidates: List of candidates to calculate results for
-            votes: List of votes cast for these candidates
-            election: Election instance with victory condition configuration
-            total_eligible: Total number of eligible voters
+        Supports:
+        - simple_majority: Standard first-past-the-post counting
+        - ranked_choice: Instant-runoff voting with iterative elimination
+        - approval: Each vote counts equally; most approvals wins
+        - supermajority: Standard counting with higher threshold
 
         Returns:
             List of CandidateResult objects with winner flags set
         """
-        # Count votes per candidate
-        vote_counts = {}
+        if election.voting_method == "ranked_choice":
+            return self._calculate_ranked_choice_results(candidates, votes, election, total_eligible)
+
+        # Standard counting for simple_majority, approval, and supermajority
+        # For approval voting, every vote counts equally (no ranking)
+        vote_counts: Dict[str, int] = {}
         for vote in votes:
             vote_counts[vote.candidate_id] = vote_counts.get(vote.candidate_id, 0) + 1
 
-        total_votes = len(votes)
+        # For approval voting, total_votes = number of unique voters (not total ballots)
+        if election.voting_method == "approval":
+            if election.anonymous_voting:
+                total_votes = len(set(v.voter_hash for v in votes if v.voter_hash))
+            else:
+                total_votes = len(set(v.voter_id for v in votes if v.voter_id))
+            # If no unique voter tracking possible, fall back to total votes
+            if total_votes == 0:
+                total_votes = len(votes)
+        else:
+            total_votes = len(votes)
 
         # Build results
         results = []
         for candidate in candidates:
             vote_count = vote_counts.get(candidate.id, 0)
-
-            # Calculate percentage of votes cast
             percentage = (vote_count / total_votes * 100) if total_votes > 0 else 0
-
-            # Calculate percentage of eligible voters (for threshold calculations)
-            percentage_of_eligible = (vote_count / total_eligible * 100) if total_eligible > 0 else 0
 
             results.append(
                 CandidateResult(
@@ -471,16 +1093,14 @@ class ElectionService:
                     position=candidate.position,
                     vote_count=vote_count,
                     percentage=round(percentage, 2),
-                    is_winner=False,  # Will be set below based on victory conditions
+                    is_winner=False,
                 )
             )
 
-        # Sort by vote count (descending)
         results.sort(key=lambda x: x.vote_count, reverse=True)
 
         # Determine winners based on victory_condition
         if election.victory_condition == "most_votes":
-            # Simple plurality - candidate(s) with most votes wins (handles ties)
             if results and results[0].vote_count > 0:
                 max_votes = results[0].vote_count
                 for result in results:
@@ -488,32 +1108,123 @@ class ElectionService:
                         result.is_winner = True
 
         elif election.victory_condition == "majority":
-            # Requires >50% of total votes cast
             required_votes = (total_votes / 2) + 1
             for result in results:
                 if result.vote_count >= required_votes:
                     result.is_winner = True
 
         elif election.victory_condition == "supermajority":
-            # Requires 2/3 of total votes cast (or custom percentage from victory_percentage)
             required_percentage = election.victory_percentage or 67
             for result in results:
                 if result.percentage >= required_percentage:
                     result.is_winner = True
 
         elif election.victory_condition == "threshold":
-            # Requires specific number or percentage
             if election.victory_threshold:
-                # Numerical threshold (e.g., must receive at least 10 votes)
                 for result in results:
                     if result.vote_count >= election.victory_threshold:
                         result.is_winner = True
             elif election.victory_percentage:
-                # Percentage threshold (e.g., must receive at least 60% of votes cast)
                 for result in results:
                     if result.percentage >= election.victory_percentage:
                         result.is_winner = True
 
+        return results
+
+    def _calculate_ranked_choice_results(
+        self, candidates: List[Candidate], votes: List[Vote], election: Election, total_eligible: int
+    ) -> List[CandidateResult]:
+        """
+        Instant-runoff voting (ranked-choice) calculation.
+
+        Algorithm:
+        1. Count first-choice votes for each candidate
+        2. If a candidate has >50% of votes, they win
+        3. Otherwise, eliminate the candidate with fewest first-choice votes
+        4. Redistribute their votes to next-ranked choices
+        5. Repeat until a winner is found or only one candidate remains
+        """
+        candidate_map = {str(c.id): c for c in candidates}
+        active_candidates = set(candidate_map.keys())
+
+        # Group votes by voter (voter_hash or voter_id)
+        voter_ballots: Dict[str, List[Vote]] = {}
+        for vote in votes:
+            voter_key = vote.voter_hash or str(vote.voter_id) or vote.id
+            if voter_key not in voter_ballots:
+                voter_ballots[voter_key] = []
+            voter_ballots[voter_key].append(vote)
+
+        # Sort each voter's ballot by rank
+        for voter_key in voter_ballots:
+            voter_ballots[voter_key].sort(key=lambda v: v.vote_rank or 999)
+
+        # Track final vote counts and elimination order
+        final_counts: Dict[str, int] = {cid: 0 for cid in active_candidates}
+        total_voters = len(voter_ballots)
+        winner_id = None
+
+        # Run elimination rounds
+        max_rounds = len(candidates)
+        for _round in range(max_rounds):
+            # Count first valid choice for each voter
+            round_counts: Dict[str, int] = {cid: 0 for cid in active_candidates}
+
+            for voter_key, ballot in voter_ballots.items():
+                for vote in ballot:
+                    cid = str(vote.candidate_id)
+                    if cid in active_candidates:
+                        round_counts[cid] += 1
+                        break
+
+            final_counts = round_counts
+
+            # Check for majority winner
+            for cid, count in round_counts.items():
+                if total_voters > 0 and count > total_voters / 2:
+                    winner_id = cid
+                    break
+
+            if winner_id:
+                break
+
+            # If only one candidate remains, they win
+            if len(active_candidates) <= 1:
+                winner_id = next(iter(active_candidates)) if active_candidates else None
+                break
+
+            # Eliminate candidate with fewest votes
+            min_count = min(round_counts.values())
+            # Get all candidates tied at the bottom
+            bottom_candidates = [cid for cid, count in round_counts.items() if count == min_count]
+            # Eliminate the first one (stable tie-breaking by ID)
+            eliminated = sorted(bottom_candidates)[0]
+            active_candidates.discard(eliminated)
+
+        # If no winner after all rounds, last standing candidate wins
+        if not winner_id and active_candidates:
+            winner_id = max(active_candidates, key=lambda cid: final_counts.get(cid, 0))
+
+        # Build results
+        total_counted = sum(final_counts.values())
+        results = []
+        for candidate in candidates:
+            cid = str(candidate.id)
+            vote_count = final_counts.get(cid, 0)
+            percentage = (vote_count / total_counted * 100) if total_counted > 0 else 0
+
+            results.append(
+                CandidateResult(
+                    candidate_id=candidate.id,
+                    candidate_name=candidate.name,
+                    position=candidate.position,
+                    vote_count=vote_count,
+                    percentage=round(percentage, 2),
+                    is_winner=(cid == winner_id),
+                )
+            )
+
+        results.sort(key=lambda x: x.vote_count, reverse=True)
         return results
 
     async def get_election_stats(
@@ -543,10 +1254,11 @@ class ElectionService:
         if not election:
             return None
 
-        # Get all votes
+        # Get all active (non-deleted) votes
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election_id)
+            .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
 
@@ -633,10 +1345,11 @@ class ElectionService:
         if len(all_candidates) < 2:
             return None  # Can't have a runoff with less than 2 candidates
 
-        # Get vote counts for each candidate
+        # Get vote counts for each candidate (exclude soft-deleted)
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election.id)
+            .where(Vote.deleted_at.is_(None))
         )
         all_votes = list(votes_result.scalars().all())
 
@@ -737,13 +1450,32 @@ class ElectionService:
         if election.status == ElectionStatus.CLOSED:
             return election
 
+        # Only OPEN elections can be closed
+        if election.status != ElectionStatus.OPEN:
+            return None
+
         election.status = ElectionStatus.CLOSED
         await self.db.commit()
         await self.db.refresh(election)
 
+        logger.info(f"Election closed | election={election_id} title={election.title!r}")
+        await self._audit("election_closed", {
+            "election_id": str(election_id),
+            "title": election.title,
+        })
+
         # Check if runoffs are enabled and if we should create one
         if election.enable_runoffs and election.runoff_round < election.max_runoff_rounds:
-            await self._check_and_create_runoff(election, organization_id)
+            runoff = await self._check_and_create_runoff(election, organization_id)
+            if runoff:
+                logger.info(
+                    f"Runoff created | parent={election_id} runoff={runoff.id} round={runoff.runoff_round}"
+                )
+                await self._audit("runoff_election_created", {
+                    "parent_election_id": str(election_id),
+                    "runoff_election_id": str(runoff.id),
+                    "runoff_round": runoff.runoff_round,
+                })
 
         return election
 
@@ -778,6 +1510,13 @@ class ElectionService:
         election.status = ElectionStatus.OPEN
         await self.db.commit()
         await self.db.refresh(election)
+
+        logger.info(f"Election opened | election={election_id} title={election.title!r}")
+        await self._audit("election_opened", {
+            "election_id": str(election_id),
+            "title": election.title,
+            "candidate_count": candidate_count,
+        })
 
         return election, None
 
@@ -841,6 +1580,18 @@ class ElectionService:
 
         await self.db.commit()
         await self.db.refresh(election)
+
+        logger.warning(
+            f"Election rolled back | election={election_id} "
+            f"{from_status} -> {to_status} by={performed_by} reason={reason!r}"
+        )
+        await self._audit("election_rollback", {
+            "election_id": str(election_id),
+            "title": election.title,
+            "from_status": from_status,
+            "to_status": to_status,
+            "reason": reason,
+        }, severity="warning", user_id=str(performed_by))
 
         # Send email notifications to leadership
         notifications_sent = await self._notify_leadership_of_rollback(
@@ -912,6 +1663,13 @@ class ElectionService:
         # Initialize email service
         email_service = EmailService(organization)
 
+        # HTML-escape user-supplied data to prevent injection in emails
+        import html
+        safe_title = html.escape(election.title)
+        safe_performer = html.escape(performer_name)
+        safe_reason = html.escape(reason)
+        safe_org_name = html.escape(organization.name)
+
         # Send notifications
         sent_count = 0
         for user in leadership_users:
@@ -920,6 +1678,8 @@ class ElectionService:
                 continue
 
             subject = f"ALERT: Election Rolled Back - {election.title}"
+
+            safe_first_name = html.escape(user.first_name)
 
             html_body = f"""
 <!DOCTYPE html>
@@ -943,30 +1703,30 @@ class ElectionService:
             <div class="alert-badge">REQUIRES ATTENTION</div>
         </div>
         <div class="content">
-            <p>Dear {user.first_name},</p>
+            <p>Dear {safe_first_name},</p>
 
             <p>This is an important notification regarding an election rollback.</p>
 
             <div class="details">
                 <h3>Election Details:</h3>
                 <ul>
-                    <li><strong>Title:</strong> {election.title}</li>
+                    <li><strong>Title:</strong> {safe_title}</li>
                     <li><strong>Status Changed:</strong> {from_status.upper()} → {to_status.upper()}</li>
-                    <li><strong>Performed By:</strong> {performer_name}</li>
+                    <li><strong>Performed By:</strong> {safe_performer}</li>
                     <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
                 </ul>
             </div>
 
             <div class="reason">
                 <h3>Reason for Rollback:</h3>
-                <p>{reason}</p>
+                <p>{safe_reason}</p>
             </div>
 
             <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
 
-            <p>If you have any questions or concerns about this rollback, please contact {performer_name} or review the election at your earliest convenience.</p>
+            <p>If you have any questions or concerns about this rollback, please contact {safe_performer} or review the election at your earliest convenience.</p>
 
-            <p>Best regards,<br>{organization.name} Election System</p>
+            <p>Best regards,<br>{safe_org_name} Election System</p>
         </div>
         <div class="footer">
             <p>This is an automated notification from the election management system.</p>
@@ -1010,8 +1770,169 @@ Best regards,
                 if success_count_user > 0:
                     sent_count += 1
             except Exception as e:
-                # Log error but continue
-                print(f"Failed to send rollback notification to {user.email}: {str(e)}")
+                logger.error(f"Failed to send rollback notification to {user.email}: {e}")
+                continue
+
+        return sent_count
+
+    async def _notify_leadership_of_deletion(
+        self,
+        election: Election,
+        performed_by: UUID,
+        organization_id: UUID,
+        reason: str,
+        vote_count: int = 0,
+    ) -> int:
+        """
+        Send critical email notifications to all leadership about an election deletion.
+
+        This is triggered when a non-draft election (open or closed) is deleted,
+        which is a major red-flag event.
+
+        Returns: Number of notifications sent
+        """
+        from app.services.email_service import EmailService
+
+        leadership_roles = ["chief", "president", "vice_president", "secretary"]
+
+        users_result = await self.db.execute(
+            select(User)
+            .join(User.roles)
+            .where(User.organization_id == organization_id)
+            .where(User.is_active == True)
+            .options(selectinload(User.roles))
+        )
+        all_users = users_result.scalars().all()
+
+        leadership_users = [
+            user for user in all_users
+            if any(role.slug in leadership_roles for role in user.roles)
+        ]
+
+        if not leadership_users:
+            return 0
+
+        performer_result = await self.db.execute(
+            select(User).where(User.id == performed_by)
+        )
+        performer = performer_result.scalar_one_or_none()
+        performer_name = performer.full_name if performer else "Unknown"
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            return 0
+
+        email_service = EmailService(organization)
+
+        import html
+        safe_title = html.escape(election.title)
+        safe_performer = html.escape(performer_name)
+        safe_reason = html.escape(reason)
+        safe_org_name = html.escape(organization.name)
+        election_status = election.status.value.upper()
+
+        sent_count = 0
+        for user in leadership_users:
+            safe_first_name = html.escape(user.first_name)
+
+            subject = f"CRITICAL: Election DELETED - {election.title}"
+
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #7f1d1d; color: white; padding: 20px; text-align: center; }}
+        .critical-badge {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; font-size: 16px; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-left: 4px solid #7f1d1d; margin: 15px 0; }}
+        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
+        .warning {{ background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 15px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ELECTION DELETED</h1>
+            <div class="critical-badge">CRITICAL - REQUIRES IMMEDIATE ATTENTION</div>
+        </div>
+        <div class="content">
+            <p>Dear {safe_first_name},</p>
+
+            <div class="warning">
+                <p><strong>An election has been permanently deleted while in {election_status} status.</strong></p>
+                <p>This is a critical action that has been automatically flagged. All leadership members have been notified.</p>
+            </div>
+
+            <div class="details">
+                <h3>Election Details:</h3>
+                <ul>
+                    <li><strong>Title:</strong> {safe_title}</li>
+                    <li><strong>Status at Deletion:</strong> {election_status}</li>
+                    <li><strong>Active Votes at Deletion:</strong> {vote_count}</li>
+                    <li><strong>Deleted By:</strong> {safe_performer}</li>
+                    <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
+                </ul>
+            </div>
+
+            <div class="reason">
+                <h3>Reason Given:</h3>
+                <p>{safe_reason}</p>
+            </div>
+
+            <p>This deletion has been logged in the audit trail with <strong>CRITICAL</strong> severity. Please review this action and coordinate with your team immediately if this was not authorized.</p>
+
+            <p>Best regards,<br>{safe_org_name} Election System</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated critical notification from the election management system.</p>
+        </div>
+    </div>
+</body>
+</html>
+            """
+
+            text_body = f"""CRITICAL: Election DELETED
+
+Dear {user.first_name},
+
+An election has been permanently deleted while in {election_status} status.
+This is a critical action that has been automatically flagged. All leadership members have been notified.
+
+ELECTION DETAILS:
+- Title: {election.title}
+- Status at Deletion: {election_status}
+- Active Votes at Deletion: {vote_count}
+- Deleted By: {performer_name}
+- Date/Time: {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}
+
+REASON GIVEN:
+{reason}
+
+This deletion has been logged in the audit trail with CRITICAL severity. Please review this action and coordinate with your team immediately if this was not authorized.
+
+Best regards,
+{organization.name} Election System
+            """
+
+            try:
+                success_count_user, failure_count_user = await email_service.send_email(
+                    to_emails=[user.email],
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                )
+                if success_count_user > 0:
+                    sent_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send deletion notification to {user.email}: {e}")
                 continue
 
         return sent_count
@@ -1154,17 +2075,40 @@ Best regards,
         await self.db.commit()
         await self.db.refresh(election)
 
+        logger.info(
+            f"Ballot emails sent | election={election_id} "
+            f"success={success_count} failed={failed_count}"
+        )
+        await self._audit("ballot_emails_sent", {
+            "election_id": str(election_id),
+            "title": election.title,
+            "recipients": success_count,
+            "failed": failed_count,
+        })
+
         return success_count, failed_count
 
     async def has_user_voted(
-        self, user_id: UUID, election_id: UUID
+        self, user_id: UUID, election_id: UUID, election: Optional[Election] = None
     ) -> bool:
-        """Check if a user has voted in an election"""
-        result = await self.db.execute(
-            select(func.count(Vote.id))
-            .where(Vote.election_id == election_id)
-            .where(Vote.voter_id == user_id)
-        )
+        """Check if a user has voted in an election (handles anonymous voting)"""
+        if election and election.anonymous_voting:
+            voter_hash = self._generate_voter_hash(
+                user_id, election_id, election.voter_anonymity_salt or ""
+            )
+            result = await self.db.execute(
+                select(func.count(Vote.id))
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_hash == voter_hash)
+                .where(Vote.deleted_at.is_(None))
+            )
+        else:
+            result = await self.db.execute(
+                select(func.count(Vote.id))
+                .where(Vote.election_id == election_id)
+                .where(Vote.voter_id == user_id)
+                .where(Vote.deleted_at.is_(None))
+            )
         vote_count = result.scalar() or 0
         return vote_count > 0
 
@@ -1190,9 +2134,9 @@ Best regards,
         if datetime.utcnow() > voting_token.expires_at:
             return None, None, "Voting token has expired"
 
-        # Check if token has already been used
+        # Check if token has already been fully used
         if voting_token.used:
-            return None, None, "This ballot has already been submitted"
+            return None, None, "This ballot has already been fully submitted"
 
         # Update access tracking
         if not voting_token.first_accessed_at:
@@ -1266,6 +2210,7 @@ Best regards,
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.voter_hash == voting_token.voter_hash)
+            .where(Vote.deleted_at.is_(None))
             .where(Vote.position == position if position else True)
         )
         existing_votes = existing_votes_result.scalars().all()
@@ -1291,14 +2236,258 @@ Best regards,
             voted_at=datetime.utcnow(),
         )
 
+        # Sign the vote for tampering detection
+        vote.vote_signature = self._sign_vote(vote)
+
         self.db.add(vote)
 
-        # Mark token as used if all positions have been voted for
-        # For now, mark as used after any vote (can be enhanced for multi-position)
-        voting_token.used = True
-        voting_token.used_at = datetime.utcnow()
+        # Track which positions have been voted on via this token
+        positions_voted = voting_token.positions_voted or []
+        if position and position not in positions_voted:
+            positions_voted.append(position)
+            voting_token.positions_voted = positions_voted
 
-        await self.db.commit()
-        await self.db.refresh(vote)
+        # Mark token as fully used only when all positions are voted
+        # or if it's a single-position election
+        election_positions = election.positions or []
+        if not election_positions:
+            # Single-position election — token used after first vote
+            voting_token.used = True
+            voting_token.used_at = datetime.utcnow()
+        else:
+            # Multi-position — check if all positions are now covered
+            remaining = set(election_positions) - set(positions_voted)
+            if not remaining:
+                voting_token.used = True
+                voting_token.used_at = datetime.utcnow()
+
+        # SECURITY: Database-level constraint prevents double-voting
+        # even if race condition bypasses application-level checks
+        try:
+            await self.db.commit()
+            await self.db.refresh(vote)
+        except IntegrityError:
+            await self.db.rollback()
+            logger.warning(
+                f"Token double-vote attempt blocked | election={election.id} position={position}"
+            )
+            await self._audit("vote_double_attempt_token", {
+                "election_id": str(election.id),
+                "position": position,
+            }, severity="warning", ip_address=ip_address)
+            if position:
+                return None, f"Database integrity check: You have already voted for {position}"
+            return None, "Database integrity check: You have already voted in this election"
+
+        logger.info(
+            f"Token vote cast | election={election.id} position={position} vote_id={vote.id}"
+        )
+        await self._audit("vote_cast_token", {
+            "election_id": str(election.id),
+            "vote_id": str(vote.id),
+            "position": position,
+        }, ip_address=ip_address)
 
         return vote, None
+
+    async def submit_ballot_with_token(
+        self,
+        token: str,
+        votes: List[Dict],
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        Submit an entire ballot atomically using a voting token.
+
+        Each vote in the list corresponds to a ballot item and contains:
+        - ballot_item_id: ID of the ballot item
+        - choice: 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+        - write_in_name: Name for write-in votes (only when choice='write_in')
+
+        Returns: (result_dict, error_message)
+        """
+        # Validate token and get ballot
+        election, voting_token, error = await self.get_ballot_by_token(token)
+        if error:
+            return None, error
+
+        # Check if this token has already been used
+        if voting_token.used:
+            return None, "This ballot has already been submitted"
+
+        ballot_items = election.ballot_items or []
+        if not ballot_items:
+            return None, "This election has no ballot items configured"
+
+        # Build a lookup of ballot items by ID
+        item_map = {item.get("id"): item for item in ballot_items}
+
+        # Get all accepted candidates for this election
+        candidate_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == election.id)
+            .where(Candidate.accepted == True)
+        )
+        candidates = candidate_result.scalars().all()
+        candidate_map = {str(c.id): c for c in candidates}
+
+        # Process each vote
+        created_votes = []
+        abstentions = 0
+
+        for vote_data in votes:
+            ballot_item_id = vote_data.get("ballot_item_id")
+            choice = vote_data.get("choice", "abstain")
+            write_in_name = vote_data.get("write_in_name")
+
+            # Validate ballot item exists
+            ballot_item = item_map.get(ballot_item_id)
+            if not ballot_item:
+                continue
+
+            # Handle abstain — no vote recorded
+            if choice == "abstain":
+                abstentions += 1
+                continue
+
+            # Determine the position for this vote (use ballot item id as position)
+            position = ballot_item.get("position") or ballot_item_id
+
+            # Check if already voted for this position (prevents double-voting within the ballot)
+            existing_check = await self.db.execute(
+                select(Vote)
+                .where(Vote.election_id == election.id)
+                .where(Vote.voter_hash == voting_token.voter_hash)
+                .where(Vote.position == position)
+                .where(Vote.deleted_at.is_(None))
+            )
+            if existing_check.scalar_one_or_none():
+                return None, f"You have already voted on: {ballot_item.get('title', ballot_item_id)}"
+
+            # Determine candidate_id based on choice
+            candidate_id = None
+
+            if choice == "write_in":
+                if not write_in_name or not write_in_name.strip():
+                    return None, f"Write-in name is required for: {ballot_item.get('title', ballot_item_id)}"
+
+                # Create a write-in candidate
+                write_in_candidate = Candidate(
+                    election_id=election.id,
+                    name=write_in_name.strip(),
+                    position=position,
+                    is_write_in=True,
+                    accepted=True,
+                    display_order=999,
+                )
+                self.db.add(write_in_candidate)
+                await self.db.flush()
+                candidate_id = write_in_candidate.id
+
+            elif choice == "approve":
+                # Find or create an "Approve" candidate for this ballot item
+                approve_result = await self.db.execute(
+                    select(Candidate)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.position == position)
+                    .where(Candidate.name == "Approve")
+                    .where(Candidate.is_write_in == False)
+                )
+                approve_candidate = approve_result.scalar_one_or_none()
+
+                if not approve_candidate:
+                    approve_candidate = Candidate(
+                        election_id=election.id,
+                        name="Approve",
+                        position=position,
+                        is_write_in=False,
+                        accepted=True,
+                        display_order=0,
+                    )
+                    self.db.add(approve_candidate)
+                    await self.db.flush()
+
+                candidate_id = approve_candidate.id
+
+            elif choice == "deny":
+                # Find or create a "Deny" candidate for this ballot item
+                deny_result = await self.db.execute(
+                    select(Candidate)
+                    .where(Candidate.election_id == election.id)
+                    .where(Candidate.position == position)
+                    .where(Candidate.name == "Deny")
+                    .where(Candidate.is_write_in == False)
+                )
+                deny_candidate = deny_result.scalar_one_or_none()
+
+                if not deny_candidate:
+                    deny_candidate = Candidate(
+                        election_id=election.id,
+                        name="Deny",
+                        position=position,
+                        is_write_in=False,
+                        accepted=True,
+                        display_order=1,
+                    )
+                    self.db.add(deny_candidate)
+                    await self.db.flush()
+
+                candidate_id = deny_candidate.id
+
+            else:
+                # Choice is a candidate UUID
+                if choice not in candidate_map:
+                    return None, f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}"
+                candidate_id = UUID(choice)
+
+            # Create the vote
+            vote = Vote(
+                election_id=election.id,
+                candidate_id=candidate_id,
+                voter_id=None,
+                voter_hash=voting_token.voter_hash,
+                position=position,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                voted_at=datetime.utcnow(),
+            )
+            vote.vote_signature = self._sign_vote(vote)
+            self.db.add(vote)
+            created_votes.append(vote)
+
+        # Mark token as fully used
+        voting_token.used = True
+        voting_token.used_at = datetime.utcnow()
+        voting_token.positions_voted = [v.get("ballot_item_id") for v in votes if v.get("choice") != "abstain"]
+
+        # Commit all votes atomically
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            logger.warning(
+                f"Ballot double-submission blocked | election={election.id}"
+            )
+            await self._audit("vote_double_attempt_token", {
+                "election_id": str(election.id),
+                "type": "bulk_ballot_submission",
+            }, severity="warning", ip_address=ip_address)
+            return None, "This ballot has already been submitted"
+
+        logger.info(
+            f"Ballot submitted | election={election.id} "
+            f"votes={len(created_votes)} abstentions={abstentions}"
+        )
+        await self._audit("ballot_submitted_token", {
+            "election_id": str(election.id),
+            "votes_cast": len(created_votes),
+            "abstentions": abstentions,
+        }, ip_address=ip_address)
+
+        return {
+            "success": True,
+            "votes_cast": len(created_votes),
+            "abstentions": abstentions,
+            "message": f"Ballot submitted successfully. {len(created_votes)} vote(s) cast, {abstentions} abstention(s).",
+        }, None

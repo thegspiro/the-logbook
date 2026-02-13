@@ -13,6 +13,8 @@ import {
   Trash2,
   File,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { documentService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   documentsService,
@@ -27,11 +29,109 @@ const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
 
+  const [folders, setFolders] = useState<DocumentFolder[]>([]);
+  const [documents, setDocuments] = useState<DocumentListItem[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(true);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedFolder, setSelectedFolder] = useState<DocumentFolder | null>(null);
+
+  // Document viewer
+  const [viewingDocument, setViewingDocument] = useState<DocumentItem | null>(null);
+  const [loadingDocument, setLoadingDocument] = useState(false);
+
+  // Create folder
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [folderForm, setFolderForm] = useState({ name: '', description: '' });
+  const [creatingFolder, setCreatingFolder] = useState(false);
+
+  useEffect(() => {
+    fetchFolders();
+  }, []);
+
+  useEffect(() => {
+    if (selectedFolder) {
+      fetchDocuments(selectedFolder.id);
+    } else {
+      setDocuments([]);
+    }
+  }, [selectedFolder]);
+
+  const fetchFolders = async () => {
+    try {
+      setLoadingFolders(true);
+      const data = await documentService.listFolders();
+      setFolders(data);
+    } catch (err) {
+      console.error('Failed to load folders:', err);
+      toast.error('Failed to load document folders');
+    } finally {
+      setLoadingFolders(false);
+    }
+  };
+
+  const fetchDocuments = async (folderId: string) => {
+    try {
+      setLoadingDocuments(true);
+      const data = await documentService.listDocuments({ folder_id: folderId });
+      setDocuments(data);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+      toast.error('Failed to load documents');
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!folderForm.name.trim()) return;
+    try {
+      setCreatingFolder(true);
+      const slug = folderForm.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      await documentService.createFolder({
+        name: folderForm.name.trim(),
+        slug,
+        description: folderForm.description || undefined,
+      });
+      setShowCreateFolder(false);
+      setFolderForm({ name: '', description: '' });
+      await fetchFolders();
+      toast.success('Folder created');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to create folder');
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async (folder: DocumentFolder) => {
+    if (folder.is_system) {
+      toast.error('System folders cannot be deleted');
+      return;
+    }
+    if (!confirm(`Delete folder "${folder.name}" and all its documents?`)) return;
+    try {
+      await documentService.deleteFolder(folder.id);
+      if (selectedFolder?.id === folder.id) setSelectedFolder(null);
+      await fetchFolders();
+      toast.success('Folder deleted');
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to delete folder');
+    }
+  };
+
+  const handleViewDocument = async (doc: DocumentListItem) => {
+    try {
+      setLoadingDocument(true);
+      const full = await documentService.getDocument(doc.id);
+      setViewingDocument(full);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to load document');
+    } finally {
+      setLoadingDocument(false);
+    }
+  };
 
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
@@ -52,11 +152,11 @@ const DocumentsPage: React.FC = () => {
     file: null as File | null,
   });
 
-  // Create folder form state
-  const [folderForm, setFolderForm] = useState({
-    name: '',
-    description: '',
-  });
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric',
+    });
+  };
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -212,9 +312,13 @@ const DocumentsPage: React.FC = () => {
   // Derived state
   // -------------------------------------------------------
 
-  const currentFolder = selectedFolder
-    ? folders.find(f => f.id === selectedFolder)
-    : null;
+  const filteredDocuments = searchQuery.trim()
+    ? documents.filter(d =>
+        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : documents;
 
   const filteredDocuments = searchQuery.trim()
     ? documents.filter(
@@ -253,11 +357,11 @@ const DocumentsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-amber-600 rounded-lg p-2">
-              <FileText className="w-6 h-6 text-white" />
+              <FileText className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Documents & Files</h1>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-300 text-sm">
                 Centralized document storage for SOPs, policies, forms, and department files
               </p>
             </div>
@@ -268,7 +372,7 @@ const DocumentsPage: React.FC = () => {
                 onClick={() => setShowCreateFolder(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
               >
-                <Folder className="w-4 h-4" />
+                <Folder className="w-4 h-4" aria-hidden="true" />
                 <span>New Folder</span>
               </button>
               <button
@@ -318,13 +422,15 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Search & View Toggle */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6" role="search" aria-label="Search documents">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+              <label htmlFor="doc-search" className="sr-only">Search documents</label>
               <input
+                id="doc-search"
                 type="text"
-                placeholder="Search documents by name, type, or tag..."
+                placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -336,22 +442,26 @@ const DocumentsPage: React.FC = () => {
                   onClick={handleClearFolder}
                   className="flex items-center space-x-1 px-3 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg text-sm"
                 >
-                  <span>{currentFolder?.name}</span>
-                  <X className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                  <span>All Folders</span>
                 </button>
               )}
-              <div className="flex bg-slate-900/50 rounded-lg p-1">
+              <div className="flex bg-slate-900/50 rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`p-2 rounded ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
                 >
-                  <Grid className="w-4 h-4" />
+                  <Grid className="w-4 h-4" aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
                   className={`p-2 rounded ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
                 >
-                  <List className="w-4 h-4" />
+                  <List className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -567,38 +677,73 @@ const DocumentsPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Document Name</label>
-                      <input
-                        type="text"
-                        value={uploadForm.name}
-                        onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        placeholder="Leave blank to use filename"
-                      />
+            {loadingDocuments ? (
+              <p className="text-slate-300 text-sm py-8 text-center" role="status" aria-live="polite">Loading documents...</p>
+            ) : filteredDocuments.length === 0 ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+                <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
+                <h3 className="text-white text-xl font-bold mb-2">No Documents in This Folder</h3>
+                <p className="text-slate-300 mb-6">
+                  {selectedFolder.slug === 'meeting-minutes'
+                    ? 'Published meeting minutes will appear here. Approve and publish minutes from the Minutes module.'
+                    : 'Documents will appear here once they are added to this folder.'}
+                </p>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredDocuments.map(doc => (
+                  <div
+                    key={doc.id}
+                    className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:bg-white/15 transition-all group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="text-amber-400 mt-1">
+                        {doc.document_type === 'generated' ? <ClipboardList className="w-6 h-6" /> : <File className="w-6 h-6" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-white font-medium truncate">{doc.title}</h4>
+                        {doc.description && (
+                          <p className="text-slate-400 text-xs mt-1 line-clamp-2">{doc.description}</p>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            doc.document_type === 'generated' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-amber-500/20 text-amber-300'
+                          }`}>
+                            {doc.document_type === 'generated' ? 'Published' : 'Uploaded'}
+                          </span>
+                          {doc.source_type === 'meeting_minutes' && (
+                            <span className="text-xs text-slate-400">From Minutes</span>
+                          )}
+                        </div>
+                        <p className="text-slate-400 text-xs mt-2">{formatDate(doc.created_at)}</p>
+                        {doc.tags && doc.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {doc.tags.map((tag, i) => (
+                              <span key={i} className="text-xs px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded">{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Folder</label>
-                      <select
-                        value={uploadForm.folder}
-                        onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    <div className="flex justify-end gap-2 mt-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleViewDocument(doc)}
+                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 focus:opacity-100"
+                        aria-label={`View ${doc.title}`}
                       >
-                        {folders.map(f => (
-                          <option key={f.id} value={f.id}>{f.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                      <textarea
-                        rows={2}
-                        value={uploadForm.description}
-                        onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
+                        <Eye className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
+                        View
+                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="text-xs px-3 py-1.5 bg-red-600/80 text-white rounded hover:bg-red-700 focus:opacity-100"
+                          aria-label={`Delete ${doc.title}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -622,6 +767,29 @@ const DocumentsPage: React.FC = () => {
                     <span>Upload</span>
                   </button>
                 </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                  {loadingDocument ? (
+                    <p className="text-gray-500 text-center py-12" role="status" aria-live="polite">Loading document...</p>
+                  ) : viewingDocument?.content_html ? (
+                    <div
+                      className="prose max-w-none"
+                      dangerouslySetInnerHTML={{ __html: viewingDocument.content_html }}
+                      role="article"
+                      aria-label="Document content"
+                    />
+                  ) : viewingDocument?.file_name ? (
+                    <div className="text-center py-12">
+                      <File className="w-16 h-16 text-gray-300 mx-auto mb-4" aria-hidden="true" />
+                      <p className="text-gray-700 font-medium">{viewingDocument.file_name}</p>
+                      <p className="text-gray-500 text-sm mt-1">{formatFileSize(viewingDocument.file_size)}</p>
+                      <p className="text-gray-400 text-xs mt-4">
+                        File download not yet available. Contact your administrator.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-12">No content available for this document.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -629,20 +797,26 @@ const DocumentsPage: React.FC = () => {
 
         {/* Create Folder Modal */}
         {showCreateFolder && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-folder-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateFolder(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateFolder(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateFolder(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Create Folder</h3>
-                    <button onClick={() => setShowCreateFolder(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <h3 id="create-folder-title" className="text-lg font-medium text-white">Create Folder</h3>
+                    <button onClick={() => setShowCreateFolder(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Folder Name *</label>
+                      <label htmlFor="folder-name" className="block text-sm font-medium text-slate-300 mb-1">Folder Name <span aria-hidden="true">*</span></label>
                       <input
                         type="text"
                         required
@@ -653,8 +827,9 @@ const DocumentsPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="folder-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                       <textarea
+                        id="folder-description"
                         rows={2}
                         value={folderForm.description}
                         onChange={(e) => setFolderForm({ ...folderForm, description: e.target.value })}

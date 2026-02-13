@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-12 (includes prospective members module, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-13 (includes meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -18,8 +18,11 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
 8. [Prospective Members Module Issues](#prospective-members-module-issues)
-9. [Error Message Reference](#error-message-reference)
-10. [Getting Help](#getting-help)
+9. [Elections Module Issues](#elections-module-issues)
+10. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
+11. [Documents Module Issues](#documents-module-issues)
+12. [Error Message Reference](#error-message-reference)
+13. [Getting Help](#getting-help)
 
 ---
 
@@ -1527,7 +1530,339 @@ docker logs intranet-backend 2>&1 | grep -i "reactivat"
 
 ---
 
+### Withdraw Action Not Appearing
+
+**Symptoms**: The "Withdraw" button is missing from the applicant detail drawer or table action menu.
+
+**Causes**:
+1. Applicant is not in `active` or `on_hold` status
+2. User does not have `prospective_members.manage` permission
+
+**Solutions**:
+- Withdraw is only available for applicants with `active` or `on_hold` status
+- Rejected, converted, and inactive applicants cannot be withdrawn
+- Check that the user's role includes `prospective_members.manage`
+
+---
+
+### Withdrawn Applicant Tab Empty
+
+**Symptoms**: The "Withdrawn" tab shows no applicants even though withdrawals were performed.
+
+**Solutions**:
+1. Check that the correct pipeline is selected in the pipeline filter
+2. Refresh the page — the withdrawn tab fetches data when first selected
+3. Use the search field on the withdrawn tab to locate specific applicants
+
+---
+
+### Election Package Not Auto-Created
+
+**Symptoms**: Applicant advances to an `election_vote` stage but no election package appears in the detail drawer.
+
+**Causes**:
+1. The pipeline is not loaded in the store (no `currentPipeline`)
+2. The advance API did not return the updated applicant data
+3. The package creation API call failed silently
+
+**Solutions**:
+
+**Verify the pipeline is loaded:**
+- The election package auto-creation depends on `currentPipeline` being set in the store
+- If navigating directly to an applicant, ensure the pipeline loads first
+
+**Check backend logs:**
+```bash
+docker logs intranet-backend 2>&1 | grep -i "election-package\|election_package"
+```
+
+**Manual creation:**
+- If auto-creation failed, the package can be created manually via the API
+- The detail drawer will show "No election package has been created yet" with instructions
+
+---
+
+### Election Package Stuck in Draft
+
+**Symptoms**: The coordinator edited the election package but cannot submit it for ballot.
+
+**Causes**:
+1. The "Mark Ready for Ballot" button may be disabled due to a pending save
+2. API error when updating package status
+
+**Solutions**:
+
+**Save first, then submit:**
+1. Click "Save Draft" to persist coordinator notes and supporting statement
+2. Then click "Mark Ready for Ballot" to change status to `ready`
+
+**Check for errors:**
+- Look for error toasts or the store's `error` field
+- Check backend logs for validation failures on the election package endpoint
+
+---
+
+### Election Package Not Visible in Elections Module
+
+**Symptoms**: Package is marked as "ready" but the secretary cannot see it in the Elections module.
+
+**Solutions**:
+- The Elections module queries the `GET /api/v1/prospective-members/election-packages?status=ready` endpoint
+- Verify the package status is actually `ready` (not still `draft`)
+- Ensure the pipeline_id filter (if any) matches the correct pipeline
+
+---
+
+## Elections Module Issues
+
+### Election Cannot Be Closed
+
+**Symptoms**: Clicking "Close Election" returns an error or does nothing.
+
+**Possible Causes & Solutions**:
+
+1. **Election is not OPEN**: Only OPEN elections can be closed. If the election is still in DRAFT status, you must open it first via the "Open Election" button.
+
+2. **Election not found**: Verify the election exists and belongs to your organization.
+
+---
+
+### Double-Voting Error
+
+**Symptoms**: User receives "Database integrity check: You have already voted" error.
+
+**Explanation**: This is the database-level protection working correctly. The 4 partial unique indexes on the votes table prevent duplicate votes even if a race condition occurs.
+
+**For anonymous elections**: The system tracks votes by `voter_hash` (HMAC-SHA256 of user_id + election_id + per-election salt). Even though `voter_id` is NULL, duplicate detection works via the hash.
+
+**For non-anonymous elections**: Duplicate detection uses `voter_id` directly.
+
+---
+
+### Results Not Showing After Election Closes
+
+**Symptoms**: Election status is "closed" but results show "Results not available yet".
+
+**Possible Causes & Solutions**:
+
+1. **Time-based check**: Results require BOTH `status == CLOSED` AND `current_time > end_date`. If the election was closed early (before `end_date`), results won't show until the original end time passes.
+
+2. **Timezone issue**: All time comparisons use UTC. Ensure your election dates were set in UTC or adjusted accordingly.
+
+3. **Override option**: A manager can toggle `results_visible_immediately` on a CLOSED election to show results before the end_date passes.
+
+---
+
+### Cannot Update Election While Open
+
+**Symptoms**: Attempting to update election fields returns "Cannot update X for open election".
+
+**Explanation**: When an election is OPEN, only `end_date` can be modified (to extend voting time). This restriction prevents changing voting rules, eligibility, or other configuration during active voting.
+
+To make broader changes, use the "Rollback Election" feature to return to DRAFT status, then make changes and re-open.
+
+---
+
+### Invalid Voting Method Error
+
+**Symptoms**: Creating or updating an election returns "Invalid voting method" error.
+
+**Valid Values**:
+- `voting_method`: `simple_majority`, `ranked_choice`, `approval`, `supermajority`
+- `victory_condition`: `most_votes`, `majority`, `supermajority`, `threshold`
+- `runoff_type`: `top_two`, `eliminate_lowest`
+
+---
+
+### Candidate Position Rejected
+
+**Symptoms**: Adding a candidate returns "Position 'X' is not defined for this election".
+
+**Explanation**: If the election defines specific positions, candidates must be assigned to one of those positions. Check the election's positions list and ensure the candidate's position matches exactly.
+
+---
+
+### Results Visibility Toggle Missing for Open Elections
+
+**Symptoms**: The "Show Results to Voters" / "Hide Results from Voters" button is not visible when the election is OPEN.
+
+**Explanation**: This is intentional. Revealing live results during active voting enables strategic voting and undermines election integrity. The toggle is only available for DRAFT and CLOSED elections.
+
+---
+
+## Meeting Minutes Module Issues
+
+### Minutes Sections Not Loading
+
+**Symptoms**: Minutes detail page shows no sections or shows stale data.
+
+**Causes**:
+1. Template had no sections defined when minutes were created
+2. Sections JSON is empty or malformed in the database
+3. Frontend not parsing `sections` array from API response
+
+**Solutions**:
+
+**Check if sections exist in the database:**
+```sql
+SELECT id, title, JSON_LENGTH(sections) AS section_count
+FROM meeting_minutes
+WHERE id = 'YOUR_MINUTES_ID';
+```
+
+**If sections are empty, regenerate from template:**
+1. Note the meeting type of the minutes
+2. Delete and recreate the minutes using the correct template
+3. Or manually add sections via the "Add Section" button in the detail page
+
+---
+
+### Cannot Edit Approved Minutes
+
+**Symptoms**: All fields are read-only on an approved minutes record.
+
+**Explanation**: This is intentional. Once minutes are approved, they are locked to preserve the official record. The status must be changed back to `draft` or `review` to allow editing.
+
+**If changes are needed:**
+1. A user with `meetings.manage` permission can update the status back to `review`
+2. Make the required changes
+3. Re-approve the minutes
+
+---
+
+### Publish Button Not Appearing
+
+**Symptoms**: Minutes are approved but no "Publish to Documents" button is visible.
+
+**Possible Causes & Solutions**:
+
+1. **Minutes not in `approved` status**: Only approved minutes can be published. Check the status badge at the top of the detail page.
+
+2. **Already published**: If the minutes have already been published, the button changes to "Re-publish" and a "View in Documents" link appears.
+
+3. **Missing permission**: User must have `meetings.manage` permission to publish.
+
+---
+
+### Template Not Auto-Selected
+
+**Symptoms**: Creating new minutes doesn't auto-select a template for the chosen meeting type.
+
+**Possible Causes & Solutions**:
+
+1. **No default template for that meeting type**: Check that a template with `is_default = true` exists for the selected meeting type.
+
+2. **Templates not loaded**: Refresh the page and try again. The template list is fetched when the create modal opens.
+
+**Create a default template:**
+- Navigate to Minutes page
+- Templates are auto-created on first access for each meeting type
+- If missing, check backend logs for template creation errors
+
+---
+
+### Section Reordering Not Saving
+
+**Symptoms**: Reordering sections with up/down arrows reverts after page refresh.
+
+**Solution**: After reordering sections, click the "Save" button. Reordering changes are held in local state until explicitly saved.
+
+---
+
+### Published Minutes Missing Formatting
+
+**Symptoms**: Published document in Documents module shows plain text without formatting.
+
+**Possible Causes**:
+1. HTML content was not generated properly during publish
+2. Section content contained unescaped special characters
+
+**Check the published document:**
+```sql
+SELECT id, title, content_html IS NOT NULL AS has_html
+FROM documents
+WHERE source_type = 'generated'
+  AND source_id = 'YOUR_MINUTES_ID';
+```
+
+If `has_html` is 0, try re-publishing the minutes.
+
+---
+
+## Documents Module Issues
+
+### System Folders Not Appearing
+
+**Symptoms**: Documents page shows no folders on first load.
+
+**Explanation**: System folders are auto-created on first access. If they don't appear:
+
+1. **Refresh the page** — The first API call triggers folder initialization
+2. **Check backend logs:**
+```bash
+docker logs the-logbook-backend-1 | grep "initialize_system_folders"
+```
+3. **Check database:**
+```sql
+SELECT name, is_system FROM document_folders
+WHERE organization_id = 'YOUR_ORG_ID'
+ORDER BY sort_order;
+```
+
+Expected: 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents)
+
+---
+
+### Cannot Delete a Folder
+
+**Symptoms**: Delete button returns "Folder not found or is a system folder" error.
+
+**Explanation**: System folders (the 7 default folders) cannot be deleted. Only custom folders created by users can be deleted.
+
+**How to identify system folders**: System folders have `is_system = true` and display a lock icon in the UI.
+
+---
+
+### Document Viewer Shows Raw HTML
+
+**Symptoms**: Opening a generated document shows HTML tags instead of rendered content.
+
+**Possible Causes**:
+1. Browser security settings blocking inline HTML rendering
+2. Content Security Policy preventing `dangerouslySetInnerHTML`
+
+**Solutions**:
+- Check browser console for CSP warnings
+- Ensure the document's `content_html` field contains valid HTML
+- Try a different browser to rule out extension interference
+
+---
+
+### Document Count Doesn't Match
+
+**Symptoms**: Folder badge shows a different count than the actual documents listed.
+
+**Explanation**: The document count badge is fetched separately from the document list. This can be a brief timing issue.
+
+**Solution**: Refresh the page. Both counts are re-fetched on navigation.
+
+---
+
 ## Version History
+
+**v1.6** - 2026-02-13
+- Added meeting minutes module troubleshooting section (6 new entries)
+- Added documents module troubleshooting section (4 new entries)
+- Covers: sections, templates, publishing, folders, document viewer
+
+**v1.5** - 2026-02-12
+- Added elections module troubleshooting section (7 new entries)
+- Covers: closing, double-voting, results visibility, update restrictions, validation errors
+
+**v1.4** - 2026-02-12
+- Added withdraw/archive troubleshooting sections
+- Added election package troubleshooting sections
+- Added cross-module election package visibility guidance
 
 **v1.3** - 2026-02-12
 - Added Documents module troubleshooting (folder creation, file upload, loading errors)

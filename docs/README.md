@@ -84,6 +84,15 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Kanban board and table view modes
    - Zustand store architecture and frontend components
 
+10. **[MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md)**
+    - Meeting Minutes and Documents module documentation
+    - 8 meeting types with tailored default section templates
+    - Template system with configurable sections, header/footer
+    - Dynamic sections: reorder, add, remove with draft/review/approved lifecycle
+    - Publish approved minutes to Documents module as styled HTML
+    - 7 system document folders with custom folder support
+    - API endpoint reference and security considerations
+
 10. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
     - Public API v1.1.0 with public form endpoints
     - Form retrieval and submission without authentication
@@ -252,6 +261,8 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
 | Prospective members pipeline | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md) |
 | Inactivity timeouts / purging | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system) |
+| Meeting minutes / templates | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) |
+| Document management / folders | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
 | Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
@@ -343,6 +354,7 @@ docker-compose ps
 | ELECTION_SECURITY_AUDIT.md | 1.0 | 2026-02-10 | Current |
 | ASYNC_SQLALCHEMY_REVIEW.md | 1.0 | 2026-02-10 | Current |
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
+| MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
 | ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
 
 ---

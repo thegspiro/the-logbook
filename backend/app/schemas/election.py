@@ -4,10 +4,15 @@ Election Pydantic Schemas
 Request and response schemas for election-related endpoints.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from uuid import UUID
+
+
+VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
+VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
+VALID_RUNOFF_TYPES = {"top_two", "eliminate_lowest"}
 
 
 # Ballot Item Schemas
@@ -19,9 +24,10 @@ class BallotItem(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     position: Optional[str] = Field(None, description="Position name for officer elections")
-    eligible_voter_types: List[str] = Field(default=["all"], description="Role slugs like 'operational', 'administrative', or 'all'")
+    eligible_voter_types: List[str] = Field(default=["all"], description="Member class or role slug: 'all', 'regular', 'life', 'probationary', 'operational', 'administrative', or specific role slugs")
     vote_type: str = Field(default="approval", description="approval, candidate_selection")
     required_for_approval: Optional[int] = Field(None, description="Number of yes votes required")
+    require_attendance: bool = Field(default=False, description="If true, voter must be checked in as present at the meeting")
 
 
 class PositionEligibility(BaseModel):
@@ -41,6 +47,7 @@ class ElectionBase(BaseModel):
     ballot_items: Optional[List[BallotItem]] = Field(default=None, description="Structured ballot items with per-item eligibility")
     position_eligibility: Optional[Dict[str, PositionEligibility]] = Field(default=None, description="Eligibility rules per position")
     meeting_date: Optional[datetime] = Field(default=None, description="Meeting date for ballot")
+    attendees: Optional[List[Dict[str, Any]]] = Field(default=None, description="Meeting attendees checked in for voting")
     start_date: datetime
     end_date: datetime
     anonymous_voting: bool = Field(default=True)
@@ -60,6 +67,27 @@ class ElectionBase(BaseModel):
     runoff_type: str = Field(default="top_two", description="Runoff type: top_two (top 2 advance), eliminate_lowest (remove lowest)")
     max_runoff_rounds: int = Field(default=3, ge=1, le=10, description="Maximum number of runoff rounds")
 
+    @field_validator("voting_method")
+    @classmethod
+    def validate_voting_method(cls, v: str) -> str:
+        if v not in VALID_VOTING_METHODS:
+            raise ValueError(f"Invalid voting method '{v}'. Must be one of: {', '.join(sorted(VALID_VOTING_METHODS))}")
+        return v
+
+    @field_validator("victory_condition")
+    @classmethod
+    def validate_victory_condition(cls, v: str) -> str:
+        if v not in VALID_VICTORY_CONDITIONS:
+            raise ValueError(f"Invalid victory condition '{v}'. Must be one of: {', '.join(sorted(VALID_VICTORY_CONDITIONS))}")
+        return v
+
+    @field_validator("runoff_type")
+    @classmethod
+    def validate_runoff_type(cls, v: str) -> str:
+        if v not in VALID_RUNOFF_TYPES:
+            raise ValueError(f"Invalid runoff type '{v}'. Must be one of: {', '.join(sorted(VALID_RUNOFF_TYPES))}")
+        return v
+
 
 class ElectionCreate(ElectionBase):
     """Schema for creating a new election"""
@@ -67,7 +95,13 @@ class ElectionCreate(ElectionBase):
 
 
 class ElectionUpdate(BaseModel):
-    """Schema for updating an election"""
+    """Schema for updating an election
+
+    NOTE: status is intentionally excluded. Use the dedicated
+    /open, /close, and /rollback endpoints to change election status.
+    This prevents bypassing validation logic (candidate checks, result
+    calculation, runoff creation, audit trails).
+    """
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     election_type: Optional[str] = Field(None, max_length=50)
@@ -77,7 +111,6 @@ class ElectionUpdate(BaseModel):
     meeting_date: Optional[datetime] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    status: Optional[str] = None
     anonymous_voting: Optional[bool] = None
     allow_write_ins: Optional[bool] = None
     max_votes_per_position: Optional[int] = Field(None, ge=1)
@@ -90,6 +123,27 @@ class ElectionUpdate(BaseModel):
     enable_runoffs: Optional[bool] = None
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
+
+    @field_validator("voting_method")
+    @classmethod
+    def validate_voting_method(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_VOTING_METHODS:
+            raise ValueError(f"Invalid voting method '{v}'. Must be one of: {', '.join(sorted(VALID_VOTING_METHODS))}")
+        return v
+
+    @field_validator("victory_condition")
+    @classmethod
+    def validate_victory_condition(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_VICTORY_CONDITIONS:
+            raise ValueError(f"Invalid victory condition '{v}'. Must be one of: {', '.join(sorted(VALID_VICTORY_CONDITIONS))}")
+        return v
+
+    @field_validator("runoff_type")
+    @classmethod
+    def validate_runoff_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_RUNOFF_TYPES:
+            raise ValueError(f"Invalid runoff type '{v}'. Must be one of: {', '.join(sorted(VALID_RUNOFF_TYPES))}")
+        return v
 
 
 class ElectionResponse(ElectionBase):
@@ -191,6 +245,7 @@ class VoteCreate(BaseModel):
     election_id: UUID
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
+    vote_rank: Optional[int] = Field(None, ge=1, description="Rank for ranked-choice voting (1 = first choice)")
 
 
 class VoteResponse(BaseModel):
@@ -298,3 +353,80 @@ class ElectionRollbackResponse(BaseModel):
     election: ElectionResponse
     message: str
     notifications_sent: int
+
+
+class ElectionDelete(BaseModel):
+    """Schema for deleting an election. Reason required for non-draft elections."""
+    reason: Optional[str] = Field(None, min_length=10, max_length=500, description="Reason for deletion (required for open/closed elections)")
+
+
+class ElectionDeleteResponse(BaseModel):
+    """Response after deleting an election"""
+    success: bool
+    message: str
+    notifications_sent: int
+
+
+# Attendance Schemas
+
+class AttendeeRecord(BaseModel):
+    """Schema for a meeting attendee"""
+    user_id: str
+    name: str
+    checked_in_at: str
+    checked_in_by: str
+
+
+class AttendeeCheckIn(BaseModel):
+    """Schema for checking in an attendee"""
+    user_id: str = Field(..., description="User ID of the member to check in")
+
+
+class AttendeeCheckInResponse(BaseModel):
+    """Response after checking in an attendee"""
+    success: bool
+    attendee: AttendeeRecord
+    message: str
+    total_attendees: int
+
+
+# Ballot Template Schemas
+
+class BallotTemplate(BaseModel):
+    """Schema for a pre-configured ballot item template"""
+    id: str
+    name: str
+    description: str
+    type: str
+    vote_type: str
+    eligible_voter_types: List[str]
+    require_attendance: bool
+    title_template: str = Field(..., description="Template string for the ballot item title, may contain {name} placeholder")
+    description_template: Optional[str] = None
+
+
+class BallotTemplatesResponse(BaseModel):
+    """Response containing available ballot templates"""
+    templates: List[BallotTemplate]
+
+
+# Ballot Submission Schemas (Token-Based)
+
+class BallotItemVote(BaseModel):
+    """A single vote within a ballot submission"""
+    ballot_item_id: str = Field(..., description="ID of the ballot item being voted on")
+    choice: str = Field(..., description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID")
+    write_in_name: Optional[str] = Field(None, description="Name for write-in votes")
+
+
+class BallotSubmission(BaseModel):
+    """Full ballot submission with all votes"""
+    votes: List[BallotItemVote] = Field(..., description="List of votes, one per ballot item")
+
+
+class BallotSubmissionResponse(BaseModel):
+    """Response after submitting a ballot"""
+    success: bool
+    votes_cast: int
+    abstentions: int
+    message: str
