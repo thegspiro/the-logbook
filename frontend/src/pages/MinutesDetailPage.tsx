@@ -20,7 +20,6 @@ import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import type {
   MeetingMinutes,
-  MeetingType,
   MotionCreate,
   ActionItemCreate,
   ActionItemPriority,

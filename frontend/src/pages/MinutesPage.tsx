@@ -7,7 +7,6 @@ import {
   Search,
   Filter,
   X,
-  CheckCircle,
   Clock,
   AlertCircle,
   FileText,

@@ -378,7 +378,7 @@ export const applicantService = {
     if (file.size > FILE_UPLOAD_LIMITS.maxSizeBytes) {
       throw new Error(`File exceeds maximum size of ${FILE_UPLOAD_LIMITS.maxSizeLabel}`);
     }
-    if (file.type && !FILE_UPLOAD_LIMITS.allowedMimeTypes.includes(file.type)) {
+    if (file.type && !(FILE_UPLOAD_LIMITS.allowedMimeTypes as readonly string[]).includes(file.type)) {
       throw new Error(
         `File type "${file.type}" is not allowed. Accepted: ${FILE_UPLOAD_LIMITS.allowedExtensions.join(', ')}`
       );

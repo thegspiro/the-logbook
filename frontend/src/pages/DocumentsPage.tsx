@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   FileText,
-  Upload,
   FolderOpen,
   Search,
   Folder,
   Grid,
   List,
   X,
-  AlertCircle,
   ArrowLeft,
   Trash2,
   Eye,
