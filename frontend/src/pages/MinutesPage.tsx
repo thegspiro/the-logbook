@@ -216,7 +216,7 @@ const MinutesPage: React.FC = () => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-3">
           <div className="bg-cyan-600 rounded-lg p-2">
-            <ClipboardList className="w-6 h-6 text-white" />
+            <ClipboardList className="w-6 h-6 text-white" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Meeting Minutes</h1>
@@ -230,7 +230,7 @@ const MinutesPage: React.FC = () => {
             onClick={() => setShowCreateModal(true)}
             className="flex items-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             <span>Record Minutes</span>
           </button>
         )}
@@ -238,14 +238,14 @@ const MinutesPage: React.FC = () => {
 
       {/* Quick Stats */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8" role="region" aria-label="Minutes statistics">
           <div className="bg-white shadow rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-xs font-medium uppercase">Total Minutes</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
               </div>
-              <FileText className="w-8 h-8 text-gray-300" />
+              <FileText className="w-8 h-8 text-gray-300" aria-hidden="true" />
             </div>
           </div>
           <div className="bg-white shadow rounded-lg p-4">
@@ -254,7 +254,7 @@ const MinutesPage: React.FC = () => {
                 <p className="text-gray-500 text-xs font-medium uppercase">This Month</p>
                 <p className="text-2xl font-bold text-cyan-600 mt-1">{stats.this_month}</p>
               </div>
-              <ClipboardList className="w-8 h-8 text-cyan-200" />
+              <ClipboardList className="w-8 h-8 text-cyan-200" aria-hidden="true" />
             </div>
           </div>
           <div className="bg-white shadow rounded-lg p-4">
@@ -263,7 +263,7 @@ const MinutesPage: React.FC = () => {
                 <p className="text-gray-500 text-xs font-medium uppercase">Open Action Items</p>
                 <p className="text-2xl font-bold text-yellow-600 mt-1">{stats.open_action_items}</p>
               </div>
-              <Clock className="w-8 h-8 text-yellow-200" />
+              <Clock className="w-8 h-8 text-yellow-200" aria-hidden="true" />
             </div>
           </div>
           <div className="bg-white shadow rounded-lg p-4">
@@ -272,18 +272,20 @@ const MinutesPage: React.FC = () => {
                 <p className="text-gray-500 text-xs font-medium uppercase">Pending Approval</p>
                 <p className="text-2xl font-bold text-orange-600 mt-1">{stats.pending_approval}</p>
               </div>
-              <AlertCircle className="w-8 h-8 text-orange-200" />
+              <AlertCircle className="w-8 h-8 text-orange-200" aria-hidden="true" />
             </div>
           </div>
         </div>
       )}
 
       {/* Search & Filters */}
-      <div className="bg-white shadow rounded-lg p-4 mb-6">
+      <div className="bg-white shadow rounded-lg p-4 mb-6" role="search" aria-label="Search and filter minutes">
         <div className="flex flex-col md:flex-row items-center gap-4">
           <div className="relative flex-1 w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+            <label htmlFor="minutes-search" className="sr-only">Search minutes</label>
             <input
+              id="minutes-search"
               type="text"
               placeholder="Search minutes by title, content, or action item..."
               value={searchQuery}
@@ -292,8 +294,10 @@ const MinutesPage: React.FC = () => {
             />
           </div>
           <div className="flex items-center space-x-2">
-            <Filter className="w-5 h-5 text-gray-400" />
+            <Filter className="w-5 h-5 text-gray-400" aria-hidden="true" />
+            <label htmlFor="type-filter" className="sr-only">Filter by meeting type</label>
             <select
+              id="type-filter"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -303,7 +307,9 @@ const MinutesPage: React.FC = () => {
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+            <label htmlFor="status-filter" className="sr-only">Filter by status</label>
             <select
+              id="status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -327,6 +333,7 @@ const MinutesPage: React.FC = () => {
               <button
                 onClick={() => { setSearchQuery(''); setSearchResults(null); }}
                 className="text-xs text-gray-500 hover:text-gray-700"
+                aria-label="Clear search results"
               >
                 Clear
               </button>
@@ -363,10 +370,10 @@ const MinutesPage: React.FC = () => {
 
       {/* Minutes List */}
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading minutes...</div>
+        <div className="text-center py-12 text-gray-500" role="status" aria-live="polite">Loading minutes...</div>
       ) : minutesList.length === 0 ? (
         <div className="bg-white shadow rounded-lg p-12 text-center">
-          <FileSearch className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <FileSearch className="w-16 h-16 text-gray-300 mx-auto mb-4" aria-hidden="true" />
           <h3 className="text-xl font-bold text-gray-900 mb-2">No Meeting Minutes</h3>
           <p className="text-gray-500 mb-6">
             Start recording meeting minutes to maintain your organization's history.
@@ -383,22 +390,30 @@ const MinutesPage: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200" aria-label="Meeting minutes list">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Motions</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action Items</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Motions</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action Items</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {minutesList.map(m => {
                 const typeInfo = getMeetingTypeInfo(m.meeting_type);
                 return (
-                  <tr key={m.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/minutes/${m.id}`)}>
+                  <tr
+                    key={m.id}
+                    className="hover:bg-gray-50 cursor-pointer focus-within:bg-gray-50"
+                    onClick={() => navigate(`/minutes/${m.id}`)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/minutes/${m.id}`); } }}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`${m.title} - ${typeInfo.label} - ${m.status}`}
+                  >
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">{m.title}</div>
                       {m.location && <div className="text-xs text-gray-500">{m.location}</div>}
@@ -437,20 +452,29 @@ const MinutesPage: React.FC = () => {
 
       {/* Create Minutes Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-minutes-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
-              <h3 className="text-lg font-medium text-gray-900">Record Meeting Minutes</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
+              <h3 id="create-minutes-title" className="text-lg font-medium text-gray-900">Record Meeting Minutes</h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Title *</label>
+                <label htmlFor="meeting-title" className="block text-sm font-medium text-gray-700 mb-1">Meeting Title <span aria-hidden="true">*</span></label>
                 <input
+                  id="meeting-title"
                   type="text"
+                  required
+                  aria-required="true"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -460,8 +484,9 @@ const MinutesPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Type</label>
+                  <label htmlFor="meeting-type" className="block text-sm font-medium text-gray-700 mb-1">Meeting Type</label>
                   <select
+                    id="meeting-type"
                     value={form.meetingType}
                     onChange={(e) => setForm({ ...form, meetingType: e.target.value as MeetingType })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -472,8 +497,9 @@ const MinutesPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Called By</label>
+                  <label htmlFor="called-by" className="block text-sm font-medium text-gray-700 mb-1">Called By</label>
                   <input
+                    id="called-by"
                     type="text"
                     value={form.calledBy}
                     onChange={(e) => setForm({ ...form, calledBy: e.target.value })}
@@ -485,16 +511,17 @@ const MinutesPage: React.FC = () => {
 
               {/* Template Selector */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <LayoutTemplate className="w-4 h-4 inline mr-1" />
+                <label htmlFor="minutes-template" className="block text-sm font-medium text-gray-700 mb-1">
+                  <LayoutTemplate className="w-4 h-4 inline mr-1" aria-hidden="true" />
                   Minutes Template
                 </label>
                 {loadingTemplates ? (
-                  <p className="text-sm text-gray-400">Loading templates...</p>
+                  <p className="text-sm text-gray-400" role="status">Loading templates...</p>
                 ) : filteredTemplates.length === 0 ? (
                   <p className="text-sm text-gray-400 italic">No templates found for this meeting type.</p>
                 ) : (
                   <select
+                    id="minutes-template"
                     value={form.templateId}
                     onChange={(e) => setForm({ ...form, templateId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -507,24 +534,28 @@ const MinutesPage: React.FC = () => {
                     ))}
                   </select>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1" id="template-help">
                   Templates pre-fill sections for the meeting type. You can customize sections after creation.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                  <label htmlFor="meeting-date" className="block text-sm font-medium text-gray-700 mb-1">Date <span aria-hidden="true">*</span></label>
                   <input
+                    id="meeting-date"
                     type="date"
+                    required
+                    aria-required="true"
                     value={form.meetingDate}
                     onChange={(e) => setForm({ ...form, meetingDate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <label htmlFor="meeting-time" className="block text-sm font-medium text-gray-700 mb-1">Time</label>
                   <input
+                    id="meeting-time"
                     type="time"
                     value={form.meetingTime}
                     onChange={(e) => setForm({ ...form, meetingTime: e.target.value })}
@@ -534,8 +565,9 @@ const MinutesPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <label htmlFor="meeting-location" className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                 <input
+                  id="meeting-location"
                   type="text"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
@@ -545,8 +577,9 @@ const MinutesPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Link to Event</label>
+                <label htmlFor="link-event" className="block text-sm font-medium text-gray-700 mb-1">Link to Event</label>
                 <select
+                  id="link-event"
                   value={form.eventId}
                   onChange={(e) => {
                     const eventId = e.target.value;

@@ -397,7 +397,7 @@ export const MinutesDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="text-gray-500 text-center py-12">Loading minutes...</div>
+        <div className="text-gray-500 text-center py-12" role="status" aria-live="polite">Loading minutes...</div>
       </div>
     );
   }
@@ -405,7 +405,7 @@ export const MinutesDetailPage: React.FC = () => {
   if (error || !minutes) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
           <p className="text-sm text-red-700">{error || 'Minutes not found'}</p>
         </div>
       </div>
@@ -526,7 +526,7 @@ export const MinutesDetailPage: React.FC = () => {
                 disabled={publishing}
                 className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 inline-flex items-center gap-2"
               >
-                <BookOpen className="w-4 h-4" />
+                <BookOpen className="w-4 h-4" aria-hidden="true" />
                 {publishing ? 'Publishing...' : minutes.published_document_id ? 'Re-publish to Documents' : 'Publish to Documents'}
               </button>
             )}
@@ -535,7 +535,7 @@ export const MinutesDetailPage: React.FC = () => {
                 to="/documents"
                 className="px-4 py-2 border border-green-300 text-green-700 rounded-md hover:bg-green-50 inline-flex items-center gap-2"
               >
-                <CheckCircle className="w-4 h-4" />
+                <CheckCircle className="w-4 h-4" aria-hidden="true" />
                 View in Documents
               </Link>
             )}
@@ -612,10 +612,11 @@ export const MinutesDetailPage: React.FC = () => {
 
         {/* Add Section Form */}
         {showAddSection && (
-          <div className="bg-gray-50 border rounded-lg p-4 flex items-end gap-3">
+          <div className="bg-gray-50 border rounded-lg p-4 flex items-end gap-3" role="form" aria-label="Add new section">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Section Title</label>
+              <label htmlFor="new-section-title" className="block text-sm font-medium text-gray-700 mb-1">Section Title</label>
               <input
+                id="new-section-title"
                 type="text"
                 value={newSectionTitle}
                 onChange={(e) => setNewSectionTitle(e.target.value)}
@@ -662,22 +663,22 @@ export const MinutesDetailPage: React.FC = () => {
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center gap-2">
                       {canManage && isEditable && (
-                        <div className="flex flex-col">
+                        <div className="flex flex-col" role="group" aria-label={`Reorder ${section.title}`}>
                           <button
                             onClick={() => handleReorderSection(idx, 'up')}
                             disabled={idx === 0 || saving}
                             className="text-gray-400 hover:text-gray-600 disabled:opacity-30 p-0.5"
-                            title="Move up"
+                            aria-label={`Move ${section.title} up`}
                           >
-                            <ArrowUp className="w-3.5 h-3.5" />
+                            <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                           <button
                             onClick={() => handleReorderSection(idx, 'down')}
                             disabled={idx === minutes.sections.length - 1 || saving}
                             className="text-gray-400 hover:text-gray-600 disabled:opacity-30 p-0.5"
-                            title="Move down"
+                            aria-label={`Move ${section.title} down`}
                           >
-                            <ArrowDown className="w-3.5 h-3.5" />
+                            <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       )}
@@ -689,15 +690,16 @@ export const MinutesDetailPage: React.FC = () => {
                           <button
                             onClick={() => { setEditingSection(section.key); setSectionValue(section.content || ''); }}
                             className="text-sm text-blue-600 hover:text-blue-800"
+                            aria-label={`Edit ${section.title}`}
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteSection(section.key)}
                             className="text-gray-400 hover:text-red-600 p-1"
-                            title="Delete section"
+                            aria-label={`Delete ${section.title} section`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </>
                       )}
@@ -706,11 +708,14 @@ export const MinutesDetailPage: React.FC = () => {
 
                   {isEditing ? (
                     <div>
+                      <label htmlFor={`section-edit-${section.key}`} className="sr-only">Edit {section.title} content</label>
                       <textarea
+                        id={`section-edit-${section.key}`}
                         rows={6}
                         value={sectionValue}
                         onChange={(e) => setSectionValue(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        aria-label={`${section.title} content`}
                       />
                       <div className="mt-2 flex gap-2">
                         <button
@@ -764,65 +769,98 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showMotionForm && (
-          <div className="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3">
+          <div className="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3" role="form" aria-label="Add motion">
+            <label htmlFor="motion-text" className="sr-only">Motion text</label>
             <textarea
+              id="motion-text"
               rows={3}
               value={motionForm.motion_text}
               onChange={(e) => setMotionForm({ ...motionForm, motion_text: e.target.value })}
               placeholder="Motion text..."
+              aria-label="Motion text"
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
             <div className="grid grid-cols-3 gap-3">
-              <input
-                type="text"
-                value={motionForm.moved_by || ''}
-                onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
-                placeholder="Moved by"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="text"
-                value={motionForm.seconded_by || ''}
-                onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
-                placeholder="Seconded by"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <select
-                value={motionForm.status}
-                onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as any })}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="passed">Passed</option>
-                <option value="failed">Failed</option>
-                <option value="tabled">Tabled</option>
-                <option value="withdrawn">Withdrawn</option>
-              </select>
+              <div>
+                <label htmlFor="moved-by" className="sr-only">Moved by</label>
+                <input
+                  id="moved-by"
+                  type="text"
+                  value={motionForm.moved_by || ''}
+                  onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
+                  placeholder="Moved by"
+                  aria-label="Moved by"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="seconded-by" className="sr-only">Seconded by</label>
+                <input
+                  id="seconded-by"
+                  type="text"
+                  value={motionForm.seconded_by || ''}
+                  onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
+                  placeholder="Seconded by"
+                  aria-label="Seconded by"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="motion-status" className="sr-only">Motion status</label>
+                <select
+                  id="motion-status"
+                  value={motionForm.status}
+                  onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as any })}
+                  aria-label="Motion status"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <option value="passed">Passed</option>
+                  <option value="failed">Failed</option>
+                  <option value="tabled">Tabled</option>
+                  <option value="withdrawn">Withdrawn</option>
+                </select>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <input
-                type="number"
-                min={0}
-                value={motionForm.votes_for ?? ''}
-                onChange={(e) => setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })}
-                placeholder="Votes for"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="number"
-                min={0}
-                value={motionForm.votes_against ?? ''}
-                onChange={(e) => setMotionForm({ ...motionForm, votes_against: e.target.value ? parseInt(e.target.value) : undefined })}
-                placeholder="Votes against"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="number"
-                min={0}
-                value={motionForm.votes_abstain ?? ''}
-                onChange={(e) => setMotionForm({ ...motionForm, votes_abstain: e.target.value ? parseInt(e.target.value) : undefined })}
-                placeholder="Abstentions"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
+              <div>
+                <label htmlFor="votes-for" className="sr-only">Votes for</label>
+                <input
+                  id="votes-for"
+                  type="number"
+                  min={0}
+                  value={motionForm.votes_for ?? ''}
+                  onChange={(e) => setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })}
+                  placeholder="Votes for"
+                  aria-label="Votes for"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="votes-against" className="sr-only">Votes against</label>
+                <input
+                  id="votes-against"
+                  type="number"
+                  min={0}
+                  value={motionForm.votes_against ?? ''}
+                  onChange={(e) => setMotionForm({ ...motionForm, votes_against: e.target.value ? parseInt(e.target.value) : undefined })}
+                  placeholder="Votes against"
+                  aria-label="Votes against"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="votes-abstain" className="sr-only">Abstentions</label>
+                <input
+                  id="votes-abstain"
+                  type="number"
+                  min={0}
+                  value={motionForm.votes_abstain ?? ''}
+                  onChange={(e) => setMotionForm({ ...motionForm, votes_abstain: e.target.value ? parseInt(e.target.value) : undefined })}
+                  placeholder="Abstentions"
+                  aria-label="Abstentions"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
             </div>
             <button
               onClick={handleAddMotion}
@@ -890,38 +928,56 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showActionForm && (
-          <div className="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3">
+          <div className="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3" role="form" aria-label="Add action item">
+            <label htmlFor="action-description" className="sr-only">Action item description</label>
             <textarea
+              id="action-description"
               rows={2}
               value={actionForm.description}
               onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
               placeholder="Action item description..."
+              aria-label="Action item description"
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
             <div className="grid grid-cols-3 gap-3">
-              <input
-                type="text"
-                value={actionForm.assignee_name || ''}
-                onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
-                placeholder="Assignee name"
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="date"
-                value={actionForm.due_date || ''}
-                onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <select
-                value={actionForm.priority}
-                onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
+              <div>
+                <label htmlFor="action-assignee" className="sr-only">Assignee name</label>
+                <input
+                  id="action-assignee"
+                  type="text"
+                  value={actionForm.assignee_name || ''}
+                  onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
+                  placeholder="Assignee name"
+                  aria-label="Assignee name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="action-due-date" className="sr-only">Due date</label>
+                <input
+                  id="action-due-date"
+                  type="date"
+                  value={actionForm.due_date || ''}
+                  onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
+                  aria-label="Due date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="action-priority" className="sr-only">Priority</label>
+                <select
+                  id="action-priority"
+                  value={actionForm.priority}
+                  onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
+                  aria-label="Priority"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
             </div>
             <button
               onClick={handleAddActionItem}
@@ -964,6 +1020,7 @@ export const MinutesDetailPage: React.FC = () => {
                       <select
                         value={item.status}
                         onChange={(e) => handleUpdateActionItemStatus(item.id, e.target.value)}
+                        aria-label={`Update status for: ${item.description.substring(0, 30)}`}
                         className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       >
                         <option value="pending">Pending</option>
@@ -990,12 +1047,18 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Link Event Modal */}
       {showLinkEventModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="link-event-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkEventModal(false); }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Link to Meeting Event</h3>
-              <button onClick={() => setShowLinkEventModal(false)} className="text-gray-400 hover:text-gray-600">
-                &times;
+              <h3 id="link-event-title" className="text-lg font-medium text-gray-900">Link to Meeting Event</h3>
+              <button onClick={() => setShowLinkEventModal(false)} className="text-gray-400 hover:text-gray-600" aria-label="Close dialog">
+                <span aria-hidden="true">&times;</span>
               </button>
             </div>
             <div className="px-6 py-4 max-h-96 overflow-y-auto">
@@ -1037,17 +1100,26 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reject-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRejectModal(false); setRejectReason(''); } }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Reject Minutes</h3>
+              <h3 id="reject-title" className="text-lg font-medium text-gray-900">Reject Minutes</h3>
             </div>
             <div className="px-6 py-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason for Rejection * <span className="text-xs text-gray-500">(min 10 characters)</span>
+              <label htmlFor="reject-reason" className="block text-sm font-medium text-gray-700 mb-1">
+                Reason for Rejection <span aria-hidden="true">*</span> <span className="text-xs text-gray-500">(min 10 characters)</span>
               </label>
               <textarea
+                id="reject-reason"
                 rows={4}
+                required
+                aria-required="true"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Describe what needs to be corrected..."

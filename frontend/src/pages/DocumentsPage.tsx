@@ -181,11 +181,11 @@ const DocumentsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-amber-600 rounded-lg p-2">
-              <FileText className="w-6 h-6 text-white" />
+              <FileText className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-white text-2xl font-bold">Documents & Files</h1>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-300 text-sm">
                 Centralized document storage for SOPs, policies, forms, and department files
               </p>
             </div>
@@ -196,7 +196,7 @@ const DocumentsPage: React.FC = () => {
                 onClick={() => setShowCreateFolder(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
               >
-                <Folder className="w-4 h-4" />
+                <Folder className="w-4 h-4" aria-hidden="true" />
                 <span>New Folder</span>
               </button>
             </div>
@@ -204,11 +204,13 @@ const DocumentsPage: React.FC = () => {
         </div>
 
         {/* Search & View Toggle */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6" role="search" aria-label="Search documents">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+              <label htmlFor="doc-search" className="sr-only">Search documents</label>
               <input
+                id="doc-search"
                 type="text"
                 placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}
                 value={searchQuery}
@@ -222,22 +224,26 @@ const DocumentsPage: React.FC = () => {
                   onClick={() => setSelectedFolder(null)}
                   className="flex items-center space-x-1 px-3 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg text-sm"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                   <span>All Folders</span>
                 </button>
               )}
-              <div className="flex bg-slate-900/50 rounded-lg p-1">
+              <div className="flex bg-slate-900/50 rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`p-2 rounded ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
                 >
-                  <Grid className="w-4 h-4" />
+                  <Grid className="w-4 h-4" aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
                   className={`p-2 rounded ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
                 >
-                  <List className="w-4 h-4" />
+                  <List className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -249,39 +255,44 @@ const DocumentsPage: React.FC = () => {
           <div className="mb-8">
             <h2 className="text-white text-lg font-semibold mb-4">Folders</h2>
             {loadingFolders ? (
-              <p className="text-slate-400 text-sm">Loading folders...</p>
+              <p className="text-slate-300 text-sm" role="status" aria-live="polite">Loading folders...</p>
             ) : folders.length === 0 ? (
-              <p className="text-slate-400 text-sm">No folders yet.</p>
+              <p className="text-slate-300 text-sm">No folders yet.</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Document folders">
                 {folders
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((folder) => (
-                    <button
-                      key={folder.id}
-                      onClick={() => setSelectedFolder(folder)}
-                      className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 text-left hover:bg-white/15 hover:border-amber-500/30 transition-all group relative"
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className={`${folder.color || 'text-slate-400'} group-hover:scale-110 transition-transform`}>
-                          {ICON_MAP[folder.icon || 'folder'] || <FolderOpen className="w-8 h-8" />}
+                    <div key={folder.id} role="listitem">
+                      <button
+                        onClick={() => setSelectedFolder(folder)}
+                        className="w-full bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 text-left hover:bg-white/15 hover:border-amber-500/30 transition-all group relative"
+                        aria-label={`${folder.name} folder, ${folder.document_count} documents`}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className={`${folder.color || 'text-slate-400'} group-hover:scale-110 transition-transform`} aria-hidden="true">
+                            {ICON_MAP[folder.icon || 'folder'] || <FolderOpen className="w-8 h-8" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-white font-semibold truncate">{folder.name}</h3>
+                            <p className="text-slate-300 text-sm mt-1">{folder.description}</p>
+                            <p className="text-slate-400 text-xs mt-2">{folder.document_count} documents</p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-semibold truncate">{folder.name}</h3>
-                          <p className="text-slate-400 text-sm mt-1">{folder.description}</p>
-                          <p className="text-slate-500 text-xs mt-2">{folder.document_count} documents</p>
-                        </div>
-                      </div>
-                      {canManage && !folder.is_system && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder); }}
-                          className="absolute top-3 right-3 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete folder"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </button>
+                        {canManage && !folder.is_system && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); handleDeleteFolder(folder); } }}
+                            className="absolute top-3 right-3 text-slate-400 hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                            aria-label={`Delete ${folder.name} folder`}
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   ))}
               </div>
             )}
@@ -304,10 +315,10 @@ const DocumentsPage: React.FC = () => {
             </div>
 
             {loadingDocuments ? (
-              <p className="text-slate-400 text-sm py-8 text-center">Loading documents...</p>
+              <p className="text-slate-300 text-sm py-8 text-center" role="status" aria-live="polite">Loading documents...</p>
             ) : filteredDocuments.length === 0 ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-white text-xl font-bold mb-2">No Documents in This Folder</h3>
                 <p className="text-slate-300 mb-6">
                   {selectedFolder.slug === 'meeting-minutes'
@@ -338,10 +349,10 @@ const DocumentsPage: React.FC = () => {
                             {doc.document_type === 'generated' ? 'Published' : 'Uploaded'}
                           </span>
                           {doc.source_type === 'meeting_minutes' && (
-                            <span className="text-xs text-slate-500">From Minutes</span>
+                            <span className="text-xs text-slate-400">From Minutes</span>
                           )}
                         </div>
-                        <p className="text-slate-500 text-xs mt-2">{formatDate(doc.created_at)}</p>
+                        <p className="text-slate-400 text-xs mt-2">{formatDate(doc.created_at)}</p>
                         {doc.tags && doc.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {doc.tags.map((tag, i) => (
@@ -351,20 +362,22 @@ const DocumentsPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-2 mt-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleViewDocument(doc)}
-                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700"
+                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 focus:opacity-100"
+                        aria-label={`View ${doc.title}`}
                       >
-                        <Eye className="w-3.5 h-3.5 inline mr-1" />
+                        <Eye className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
                         View
                       </button>
                       {canManage && (
                         <button
                           onClick={() => handleDeleteDocument(doc.id)}
-                          className="text-xs px-3 py-1.5 bg-red-600/80 text-white rounded hover:bg-red-700"
+                          className="text-xs px-3 py-1.5 bg-red-600/80 text-white rounded hover:bg-red-700 focus:opacity-100"
+                          aria-label={`Delete ${doc.title}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5 inline mr-1" />
+                          <Trash2 className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
                           Delete
                         </button>
                       )}
@@ -374,14 +387,14 @@ const DocumentsPage: React.FC = () => {
               </div>
             ) : (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
-                <table className="min-w-full divide-y divide-white/10">
+                <table className="min-w-full divide-y divide-white/10" aria-label="Documents list">
                   <thead className="bg-white/5">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Title</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Type</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Size</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase">Actions</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase">Title</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase">Type</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase">Date</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase">Size</th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-300 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
@@ -389,12 +402,12 @@ const DocumentsPage: React.FC = () => {
                       <tr key={doc.id} className="hover:bg-white/5">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <div className="text-amber-400">
+                            <div className="text-amber-400" aria-hidden="true">
                               {doc.document_type === 'generated' ? <ClipboardList className="w-4 h-4" /> : <File className="w-4 h-4" />}
                             </div>
                             <div>
                               <div className="text-sm text-white font-medium">{doc.title}</div>
-                              {doc.description && <div className="text-xs text-slate-400 truncate max-w-xs">{doc.description}</div>}
+                              {doc.description && <div className="text-xs text-slate-300 truncate max-w-xs">{doc.description}</div>}
                             </div>
                           </div>
                         </td>
@@ -405,13 +418,14 @@ const DocumentsPage: React.FC = () => {
                             {doc.document_type === 'generated' ? 'Published' : 'Uploaded'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-400">{formatDate(doc.created_at)}</td>
-                        <td className="px-6 py-4 text-sm text-slate-400">{formatFileSize(doc.file_size)}</td>
+                        <td className="px-6 py-4 text-sm text-slate-300">{formatDate(doc.created_at)}</td>
+                        <td className="px-6 py-4 text-sm text-slate-300">{formatFileSize(doc.file_size)}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
                             <button
                               onClick={() => handleViewDocument(doc)}
                               className="text-xs text-amber-400 hover:text-amber-300"
+                              aria-label={`View ${doc.title}`}
                             >
                               View
                             </button>
@@ -419,6 +433,7 @@ const DocumentsPage: React.FC = () => {
                               <button
                                 onClick={() => handleDeleteDocument(doc.id)}
                                 className="text-xs text-red-400 hover:text-red-300"
+                                aria-label={`Delete ${doc.title}`}
                               >
                                 Delete
                               </button>
@@ -436,13 +451,19 @@ const DocumentsPage: React.FC = () => {
 
         {/* Document Viewer Modal */}
         {(viewingDocument || loadingDocument) && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="doc-viewer-title"
+            onKeyDown={(e) => { if (e.key === 'Escape' && !loadingDocument) setViewingDocument(null); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4 py-8">
-              <div className="fixed inset-0 bg-black/60" onClick={() => { if (!loadingDocument) setViewingDocument(null); }} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => { if (!loadingDocument) setViewingDocument(null); }} aria-hidden="true" />
               <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">
+                    <h3 id="doc-viewer-title" className="text-lg font-medium text-gray-900">
                       {loadingDocument ? 'Loading...' : viewingDocument?.title}
                     </h3>
                     {viewingDocument && (
@@ -452,21 +473,23 @@ const DocumentsPage: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <button onClick={() => setViewingDocument(null)} className="text-gray-400 hover:text-gray-600">
-                    <X className="w-5 h-5" />
+                  <button onClick={() => setViewingDocument(null)} className="text-gray-400 hover:text-gray-600" aria-label="Close document viewer">
+                    <X className="w-5 h-5" aria-hidden="true" />
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6">
                   {loadingDocument ? (
-                    <p className="text-gray-500 text-center py-12">Loading document...</p>
+                    <p className="text-gray-500 text-center py-12" role="status" aria-live="polite">Loading document...</p>
                   ) : viewingDocument?.content_html ? (
                     <div
                       className="prose max-w-none"
                       dangerouslySetInnerHTML={{ __html: viewingDocument.content_html }}
+                      role="article"
+                      aria-label="Document content"
                     />
                   ) : viewingDocument?.file_name ? (
                     <div className="text-center py-12">
-                      <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <File className="w-16 h-16 text-gray-300 mx-auto mb-4" aria-hidden="true" />
                       <p className="text-gray-700 font-medium">{viewingDocument.file_name}</p>
                       <p className="text-gray-500 text-sm mt-1">{formatFileSize(viewingDocument.file_size)}</p>
                       <p className="text-gray-400 text-xs mt-4">
@@ -484,22 +507,31 @@ const DocumentsPage: React.FC = () => {
 
         {/* Create Folder Modal */}
         {showCreateFolder && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-folder-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateFolder(false); }}
+          >
             <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateFolder(false)} />
+              <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateFolder(false)} aria-hidden="true" />
               <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Create Folder</h3>
-                    <button onClick={() => setShowCreateFolder(false)} className="text-slate-400 hover:text-white">
-                      <X className="w-5 h-5" />
+                    <h3 id="create-folder-title" className="text-lg font-medium text-white">Create Folder</h3>
+                    <button onClick={() => setShowCreateFolder(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                      <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Folder Name *</label>
+                      <label htmlFor="folder-name" className="block text-sm font-medium text-slate-300 mb-1">Folder Name <span aria-hidden="true">*</span></label>
                       <input
+                        id="folder-name"
                         type="text"
+                        required
+                        aria-required="true"
                         value={folderForm.name}
                         onChange={(e) => setFolderForm({ ...folderForm, name: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -507,8 +539,9 @@ const DocumentsPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="folder-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                       <textarea
+                        id="folder-description"
                         rows={2}
                         value={folderForm.description}
                         onChange={(e) => setFolderForm({ ...folderForm, description: e.target.value })}
