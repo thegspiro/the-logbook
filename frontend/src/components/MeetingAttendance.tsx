@@ -41,7 +41,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
         userService.getUsers(),
       ]);
       setAttendees(attendeeData.attendees);
-      setMembers(memberData.filter((m) => m.status === 'active' || m.status === 'probationary'));
+      setMembers(memberData.filter((m: User) => m.status === 'active' || m.status === 'probationary'));
     } catch (err) {
       console.error('Error loading attendance data:', err);
       toast.error('Failed to load attendance data');
