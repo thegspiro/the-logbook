@@ -58,17 +58,17 @@ class DocumentService:
         return folders
 
     async def list_folders(
-        self, organization_id: UUID, parent_folder_id: Optional[str] = None
+        self, organization_id: UUID, parent_id: Optional[str] = None
     ) -> List[DocumentFolder]:
         """List folders for an organization"""
         query = (
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
         )
-        if parent_folder_id:
-            query = query.where(DocumentFolder.parent_folder_id == parent_folder_id)
+        if parent_id:
+            query = query.where(DocumentFolder.parent_id == parent_id)
         else:
-            query = query.where(DocumentFolder.parent_folder_id.is_(None))
+            query = query.where(DocumentFolder.parent_id.is_(None))
 
         query = query.order_by(DocumentFolder.sort_order, DocumentFolder.name)
         result = await self.db.execute(query)
@@ -104,7 +104,13 @@ class DocumentService:
             organization_id=str(organization_id),
             created_by=str(created_by),
             is_system=False,
-            **data.model_dump(),
+            name=data.name,
+            slug=data.slug,
+            description=data.description,
+            parent_id=data.parent_folder_id,
+            sort_order=data.sort_order,
+            icon=data.icon,
+            color=data.color,
         )
         self.db.add(folder)
         await self.db.commit()
@@ -180,7 +186,7 @@ class DocumentService:
             query = query.where(Document.document_type == document_type)
         if search:
             safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            query = query.where(Document.title.ilike(f"%{safe_search}%"))
+            query = query.where(Document.name.ilike(f"%{safe_search}%"))
 
         query = query.order_by(Document.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
@@ -198,22 +204,29 @@ class DocumentService:
         return result.scalar_one_or_none()
 
     async def create_document(
-        self, data: DocumentCreate, organization_id: UUID, created_by: UUID,
+        self, data: DocumentCreate, organization_id: UUID, uploaded_by: UUID,
         document_type: str = "uploaded", source_type: Optional[str] = None,
         source_id: Optional[str] = None, content_html: Optional[str] = None,
     ) -> Document:
         """Create a document record"""
-        doc_dict = data.model_dump()
         doc = Document(
-            **doc_dict,
+            folder_id=data.folder_id,
+            name=data.title,
+            description=data.description,
+            file_name=data.file_name or "",
+            file_path=data.file_path or "",
+            file_size=data.file_size or 0,
+            file_type=data.mime_type,
             organization_id=str(organization_id),
-            created_by=str(created_by),
+            uploaded_by=str(uploaded_by),
             document_type=DocumentType(document_type),
             source_type=source_type,
             source_id=source_id,
         )
         if content_html:
             doc.content_html = content_html
+        if data.tags:
+            doc.tags = ",".join(data.tags)
         self.db.add(doc)
         await self.db.commit()
         await self.db.refresh(doc)
@@ -228,6 +241,12 @@ class DocumentService:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
+        # Map schema field 'title' to model field 'name'
+        if "title" in update_data:
+            update_data["name"] = update_data.pop("title")
+        # Convert tags list to comma-separated string
+        if "tags" in update_data and isinstance(update_data["tags"], list):
+            update_data["tags"] = ",".join(update_data["tags"])
         for field, value in update_data.items():
             setattr(doc, field, value)
 
@@ -276,7 +295,7 @@ class DocumentService:
             existing = await self.get_document(minutes.published_document_id, organization_id)
             if existing:
                 existing.content_html = html
-                existing.title = minutes.title
+                existing.name = minutes.title
                 existing.updated_at = datetime.utcnow()
                 await self.db.commit()
                 await self.db.refresh(existing)
@@ -284,18 +303,19 @@ class DocumentService:
 
         # Create the document
         meeting_date = minutes.meeting_date.strftime("%Y-%m-%d") if minutes.meeting_date else "unknown"
+        mt_value = minutes.meeting_type if isinstance(minutes.meeting_type, str) else minutes.meeting_type.value
         doc = Document(
             organization_id=str(organization_id),
             folder_id=folder.id,
-            title=minutes.title,
+            name=minutes.title,
             description=f"Meeting minutes from {meeting_date}",
             document_type=DocumentType.GENERATED,
             content_html=html,
-            mime_type="text/html",
+            file_type="text/html",
             source_type="meeting_minutes",
             source_id=minutes.id,
-            tags=["meeting-minutes", minutes.meeting_type if isinstance(minutes.meeting_type, str) else minutes.meeting_type.value],
-            created_by=str(published_by),
+            tags=",".join(["meeting-minutes", mt_value]),
+            uploaded_by=str(published_by),
         )
         self.db.add(doc)
         await self.db.flush()

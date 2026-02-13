@@ -57,6 +57,8 @@ from app.models.document import (
     Document,
     DocumentFolder,
     DocumentStatus,
+    DocumentType,
+    SYSTEM_FOLDERS,
 )
 
 from app.models.meeting import (
@@ -113,6 +115,92 @@ from app.models.apparatus import (
     MaintenanceIntervalUnit,
 )
 
+from app.models.minute import (
+    MeetingMinutes,
+    MinutesTemplate,
+    Motion,
+    ActionItem,
+    MinutesMeetingType,
+    MinutesStatus,
+    MotionStatus,
+    MinutesActionItemStatus,
+    ActionItemPriority,
+)
+
+from app.models.election import (
+    Election,
+    Candidate,
+    VotingToken,
+    Vote,
+    ElectionStatus,
+)
+
+from app.models.event import (
+    Event,
+    EventRSVP,
+    EventType,
+    RSVPStatus,
+    CheckInWindowType,
+)
+
+from app.models.training import (
+    TrainingCategory,
+    TrainingCourse,
+    TrainingRecord,
+    TrainingRequirement,
+    TrainingSession,
+    TrainingApproval,
+    TrainingProgram,
+    ProgramPhase,
+    ProgramRequirement,
+    ProgramMilestone,
+    ProgramEnrollment,
+    RequirementProgress,
+    SkillEvaluation,
+    SkillCheckoff,
+    ExternalTrainingProvider,
+    ExternalCategoryMapping,
+    ExternalUserMapping,
+    ExternalTrainingSyncLog,
+    ExternalTrainingImport,
+    Shift,
+    ShiftAttendance,
+    ShiftCall,
+)
+
+from app.models.inventory import (
+    InventoryCategory,
+    InventoryItem,
+    ItemAssignment,
+    CheckOutRecord,
+    MaintenanceRecord as InventoryMaintenanceRecord,
+    ItemType,
+    ItemCondition,
+    ItemStatus,
+    AssignmentType,
+)
+
+from app.models.membership_pipeline import (
+    MembershipPipeline,
+    MembershipPipelineStep,
+    ProspectiveMember,
+    ProspectStepProgress,
+    ProspectActivityLog,
+    PipelineStepType,
+    ActionType,
+    ProspectStatus,
+    StepProgressStatus,
+)
+
+from app.models.ip_security import (
+    IPException,
+    BlockedAccessAttempt,
+    CountryBlockRule,
+    IPExceptionAuditLog,
+    IPExceptionType,
+    IPExceptionApprovalStatus,
+)
+
 __all__ = [
     # User models
     "Organization",
@@ -153,6 +241,8 @@ __all__ = [
     "Document",
     "DocumentFolder",
     "DocumentStatus",
+    "DocumentType",
+    "SYSTEM_FOLDERS",
     # Meeting models
     "Meeting",
     "MeetingAttendee",
@@ -196,4 +286,76 @@ __all__ = [
     "CustomFieldType",
     "MaintenanceCategory",
     "MaintenanceIntervalUnit",
+    # Minutes models
+    "MeetingMinutes",
+    "MinutesTemplate",
+    "Motion",
+    "ActionItem",
+    "MinutesMeetingType",
+    "MinutesStatus",
+    "MotionStatus",
+    "MinutesActionItemStatus",
+    "ActionItemPriority",
+    # Election models
+    "Election",
+    "Candidate",
+    "VotingToken",
+    "Vote",
+    "ElectionStatus",
+    # Event models
+    "Event",
+    "EventRSVP",
+    "EventType",
+    "RSVPStatus",
+    "CheckInWindowType",
+    # Training models
+    "TrainingCategory",
+    "TrainingCourse",
+    "TrainingRecord",
+    "TrainingRequirement",
+    "TrainingSession",
+    "TrainingApproval",
+    "TrainingProgram",
+    "ProgramPhase",
+    "ProgramRequirement",
+    "ProgramMilestone",
+    "ProgramEnrollment",
+    "RequirementProgress",
+    "SkillEvaluation",
+    "SkillCheckoff",
+    "ExternalTrainingProvider",
+    "ExternalCategoryMapping",
+    "ExternalUserMapping",
+    "ExternalTrainingSyncLog",
+    "ExternalTrainingImport",
+    "Shift",
+    "ShiftAttendance",
+    "ShiftCall",
+    # Inventory models
+    "InventoryCategory",
+    "InventoryItem",
+    "ItemAssignment",
+    "CheckOutRecord",
+    "InventoryMaintenanceRecord",
+    "ItemType",
+    "ItemCondition",
+    "ItemStatus",
+    "AssignmentType",
+    # Membership pipeline models
+    "MembershipPipeline",
+    "MembershipPipelineStep",
+    "ProspectiveMember",
+    "ProspectStepProgress",
+    "ProspectActivityLog",
+    "PipelineStepType",
+    "ActionType",
+    "ProspectStatus",
+    "StepProgressStatus",
+    # IP Security models
+    "IPException",
+    "BlockedAccessAttempt",
+    "CountryBlockRule",
+    "IPExceptionAuditLog",
+    "IPExceptionType",
+    "IPExceptionApprovalStatus",
 ]

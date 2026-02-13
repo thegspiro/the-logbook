@@ -36,7 +36,6 @@ from app.api.v1.endpoints import (
     external_training,
     email_templates,
     minutes,
-    documents,
 )
 
 api_router = APIRouter()
@@ -63,6 +62,7 @@ api_router.include_router(email_templates.router, prefix="/email-templates", tag
 api_router.include_router(membership_pipeline.router, prefix="/membership-pipeline", tags=["membership-pipeline"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
+api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
@@ -100,6 +100,7 @@ async def api_root():
             "forms": "/api/v1/forms",
             "documents": "/api/v1/documents",
             "meetings": "/api/v1/meetings",
+            "minutes": "/api/v1/minutes-records",
             "scheduling": "/api/v1/scheduling",
             "reports": "/api/v1/reports",
             "notifications": "/api/v1/notifications",

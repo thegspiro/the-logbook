@@ -1,7 +1,9 @@
 """
 Document Pydantic Schemas
 
-Request and response schemas for document management endpoints.
+Request and response schemas for the document service used by
+the minutes publishing flow. For the main documents endpoint,
+see schemas/documents.py.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -34,11 +36,11 @@ class FolderResponse(BaseModel):
     id: str
     organization_id: str
     name: str
-    slug: str
+    slug: Optional[str] = None
     description: Optional[str] = None
-    parent_folder_id: Optional[str] = None
-    sort_order: int
-    is_system: bool
+    parent_id: Optional[str] = None
+    sort_order: int = 0
+    is_system: bool = False
     icon: Optional[str] = None
     color: Optional[str] = None
     document_count: int = 0
@@ -49,7 +51,7 @@ class FolderResponse(BaseModel):
 
 
 class DocumentCreate(BaseModel):
-    """Schema for creating a document"""
+    """Schema for creating a document via the document service"""
     folder_id: str
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
@@ -70,10 +72,10 @@ class DocumentUpdate(BaseModel):
 
 
 class DocumentResponse(BaseModel):
-    """Document response schema"""
+    """Document response schema for the minutes publishing flow"""
     id: str
     organization_id: str
-    folder_id: str
+    folder_id: Optional[str] = None
     title: str
     description: Optional[str] = None
     document_type: str
@@ -89,13 +91,11 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
 
 class DocumentListItem(BaseModel):
     """Compact document listing"""
     id: str
-    folder_id: str
+    folder_id: Optional[str] = None
     title: str
     description: Optional[str] = None
     document_type: str
@@ -106,5 +106,3 @@ class DocumentListItem(BaseModel):
     tags: Optional[List[str]] = None
     created_by: Optional[str] = None
     created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)

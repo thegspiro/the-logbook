@@ -17,14 +17,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
-import uuid
+from app.core.utils import generate_uuid
 
 from app.core.database import Base
-
-
-def generate_uuid():
-    """Generate UUID as string for MySQL compatibility"""
-    return str(uuid.uuid4())
 
 
 class Location(Base):

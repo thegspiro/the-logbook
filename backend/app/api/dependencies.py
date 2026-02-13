@@ -35,7 +35,7 @@ class PermissionChecker:
 
     async def __call__(
         self,
-        current_user: User = Depends(lambda: get_current_user()),
+        current_user: User = Depends(get_current_user),
     ) -> User:
         """Check if user has any of the required permissions (OR logic)"""
         user_permissions = set()
@@ -75,7 +75,7 @@ class AllPermissionChecker:
 
     async def __call__(
         self,
-        current_user: User = Depends(lambda: get_current_user()),
+        current_user: User = Depends(get_current_user),
     ) -> User:
         """Check if user has all of the required permissions (AND logic)"""
         user_permissions = set()

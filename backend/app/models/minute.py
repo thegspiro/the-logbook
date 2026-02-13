@@ -19,17 +19,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from enum import Enum
-import uuid
+from app.core.utils import generate_uuid
 
 from app.core.database import Base
 
 
-def generate_uuid() -> str:
-    """Generate a UUID string for MySQL compatibility"""
-    return str(uuid.uuid4())
-
-
-class MeetingType(str, Enum):
+class MinutesMeetingType(str, Enum):
     """Meeting type enumeration"""
     BUSINESS = "business"
     SPECIAL = "special"
@@ -57,7 +52,7 @@ class MotionStatus(str, Enum):
     WITHDRAWN = "withdrawn"
 
 
-class ActionItemStatus(str, Enum):
+class MinutesActionItemStatus(str, Enum):
     """Action item progress status"""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -165,7 +160,7 @@ class MinutesTemplate(Base):
 
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    meeting_type = Column(SQLEnum(MeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MeetingType.BUSINESS)
+    meeting_type = Column(SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesMeetingType.BUSINESS)
     is_default = Column(Boolean, nullable=False, default=False)
 
     # Sections definition: JSON array of {order, key, title, default_content, required}
@@ -201,7 +196,7 @@ class MeetingMinutes(Base):
 
     # Meeting details
     title = Column(String(300), nullable=False)
-    meeting_type = Column(SQLEnum(MeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MeetingType.BUSINESS)
+    meeting_type = Column(SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesMeetingType.BUSINESS)
     meeting_date = Column(DateTime, nullable=False)
     location = Column(String(300), nullable=True)
     called_by = Column(String(200), nullable=True)
@@ -352,7 +347,7 @@ class ActionItem(Base):
     Tracks tasks assigned during a meeting with assignee, due date,
     and completion tracking.
     """
-    __tablename__ = "meeting_action_items"
+    __tablename__ = "minutes_action_items"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     minutes_id = Column(String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False)
@@ -365,7 +360,7 @@ class ActionItem(Base):
     priority = Column(SQLEnum(ActionItemPriority, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ActionItemPriority.MEDIUM)
 
     # Status tracking
-    status = Column(SQLEnum(ActionItemStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ActionItemStatus.PENDING)
+    status = Column(SQLEnum(MinutesActionItemStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=MinutesActionItemStatus.PENDING)
     completed_at = Column(DateTime, nullable=True)
     completion_notes = Column(Text, nullable=True)
 
@@ -377,8 +372,8 @@ class ActionItem(Base):
     minutes = relationship("MeetingMinutes", back_populates="action_items")
 
     __table_args__ = (
-        Index("ix_meeting_action_items_minutes_id", "minutes_id"),
-        Index("ix_meeting_action_items_assignee_id", "assignee_id"),
-        Index("ix_meeting_action_items_status", "status"),
-        Index("ix_meeting_action_items_due_date", "due_date"),
+        Index("ix_minutes_action_items_minutes_id", "minutes_id"),
+        Index("ix_minutes_action_items_assignee_id", "assignee_id"),
+        Index("ix_minutes_action_items_status", "status"),
+        Index("ix_minutes_action_items_due_date", "due_date"),
     )

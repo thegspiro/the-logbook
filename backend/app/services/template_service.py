@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.models.minute import (
-    MinutesTemplate, MeetingType,
+    MinutesTemplate, MinutesMeetingType,
     DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
     DEFAULT_TRUSTEE_SECTIONS, DEFAULT_EXECUTIVE_SECTIONS, DEFAULT_ANNUAL_SECTIONS,
 )
@@ -39,7 +39,7 @@ class TemplateService:
             {
                 "name": "Standard Business Meeting",
                 "description": "Default template for regular business meetings with all standard sections.",
-                "meeting_type": MeetingType.BUSINESS,
+                "meeting_type": MinutesMeetingType.BUSINESS,
                 "is_default": True,
                 "sections": DEFAULT_BUSINESS_SECTIONS,
                 "header_config": {
@@ -60,7 +60,7 @@ class TemplateService:
             {
                 "name": "Special Meeting",
                 "description": "Streamlined template for special-purpose meetings.",
-                "meeting_type": MeetingType.SPECIAL,
+                "meeting_type": MinutesMeetingType.SPECIAL,
                 "is_default": True,
                 "sections": DEFAULT_SPECIAL_SECTIONS,
                 "header_config": {
@@ -77,7 +77,7 @@ class TemplateService:
             {
                 "name": "Committee Meeting",
                 "description": "Template for committee meetings with recommendation tracking.",
-                "meeting_type": MeetingType.COMMITTEE,
+                "meeting_type": MinutesMeetingType.COMMITTEE,
                 "is_default": True,
                 "sections": DEFAULT_COMMITTEE_SECTIONS,
                 "header_config": {
@@ -94,7 +94,7 @@ class TemplateService:
             {
                 "name": "Trustee Meeting",
                 "description": "Template for Board of Trustees meetings with financial and fiduciary sections.",
-                "meeting_type": MeetingType.TRUSTEE,
+                "meeting_type": MinutesMeetingType.TRUSTEE,
                 "is_default": True,
                 "sections": DEFAULT_TRUSTEE_SECTIONS,
                 "header_config": {
@@ -115,7 +115,7 @@ class TemplateService:
             {
                 "name": "Executive Meeting",
                 "description": "Template for executive/officer meetings with strategic planning and personnel sections.",
-                "meeting_type": MeetingType.EXECUTIVE,
+                "meeting_type": MinutesMeetingType.EXECUTIVE,
                 "is_default": True,
                 "sections": DEFAULT_EXECUTIVE_SECTIONS,
                 "header_config": {
@@ -136,7 +136,7 @@ class TemplateService:
             {
                 "name": "Annual Meeting",
                 "description": "Template for annual general meetings with year-end reports, elections, and awards.",
-                "meeting_type": MeetingType.ANNUAL,
+                "meeting_type": MinutesMeetingType.ANNUAL,
                 "is_default": True,
                 "sections": DEFAULT_ANNUAL_SECTIONS,
                 "header_config": {
