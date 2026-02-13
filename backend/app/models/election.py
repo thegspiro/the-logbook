@@ -19,14 +19,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from enum import Enum
-import uuid
+from app.core.utils import generate_uuid
 
 from app.core.database import Base
-
-
-def generate_uuid() -> str:
-    """Generate a UUID string for MySQL compatibility"""
-    return str(uuid.uuid4())
 
 
 class ElectionStatus(str, Enum):

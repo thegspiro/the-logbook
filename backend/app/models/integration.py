@@ -14,13 +14,10 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.sql import func
-import uuid
+
+from app.core.utils import generate_uuid
 
 from app.core.database import Base
-
-
-def generate_uuid() -> str:
-    return str(uuid.uuid4())
 
 
 class Integration(Base):

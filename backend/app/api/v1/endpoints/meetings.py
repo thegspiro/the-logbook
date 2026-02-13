@@ -43,7 +43,7 @@ async def list_meetings(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.view")),
+    current_user: User = Depends(require_permission("meetings.view")),
 ):
     """List all meetings for the organization"""
     service = MeetingsService(db)
@@ -68,7 +68,7 @@ async def list_meetings(
 async def create_meeting(
     meeting: MeetingCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Create a new meeting with optional attendees and action items"""
     service = MeetingsService(db)
@@ -85,7 +85,7 @@ async def create_meeting(
 async def get_meeting(
     meeting_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.view")),
+    current_user: User = Depends(require_permission("meetings.view")),
 ):
     """Get a meeting by ID with attendees and action items"""
     service = MeetingsService(db)
@@ -100,7 +100,7 @@ async def update_meeting(
     meeting_id: UUID,
     meeting: MeetingUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Update a meeting"""
     service = MeetingsService(db)
@@ -117,7 +117,7 @@ async def update_meeting(
 async def delete_meeting(
     meeting_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Delete a meeting and all its attendees/action items"""
     service = MeetingsService(db)
@@ -130,7 +130,7 @@ async def delete_meeting(
 async def approve_meeting(
     meeting_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Approve meeting minutes"""
     service = MeetingsService(db)
@@ -151,7 +151,7 @@ async def add_attendee(
     meeting_id: UUID,
     attendee: MeetingAttendeeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Add an attendee to a meeting"""
     service = MeetingsService(db)
@@ -168,7 +168,7 @@ async def remove_attendee(
     meeting_id: UUID,
     attendee_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Remove an attendee from a meeting"""
     service = MeetingsService(db)
@@ -186,7 +186,7 @@ async def create_action_item(
     meeting_id: UUID,
     item: ActionItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Create an action item for a meeting"""
     service = MeetingsService(db)
@@ -203,7 +203,7 @@ async def update_action_item(
     item_id: UUID,
     item: ActionItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Update an action item"""
     service = MeetingsService(db)
@@ -219,7 +219,7 @@ async def update_action_item(
 async def delete_action_item(
     item_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.manage")),
+    current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """Delete an action item"""
     service = MeetingsService(db)
@@ -232,7 +232,7 @@ async def delete_action_item(
 async def get_open_action_items(
     assigned_to: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.view")),
+    current_user: User = Depends(require_permission("meetings.view")),
 ):
     """Get all open action items"""
     service = MeetingsService(db)
@@ -248,7 +248,7 @@ async def get_open_action_items(
 @router.get("/stats/summary", response_model=MeetingsSummary)
 async def get_meetings_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.view")),
+    current_user: User = Depends(require_permission("meetings.view")),
 ):
     """Get meetings module summary statistics"""
     service = MeetingsService(db)

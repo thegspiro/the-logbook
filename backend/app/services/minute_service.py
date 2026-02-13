@@ -14,8 +14,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models.minute import (
     MeetingMinutes, MinutesTemplate, Motion, ActionItem,
-    MeetingType, MinutesStatus, MotionStatus,
-    ActionItemStatus, ActionItemPriority,
+    MinutesMeetingType, MinutesStatus, MotionStatus,
+    MinutesActionItemStatus, ActionItemPriority,
     DEFAULT_BUSINESS_SECTIONS, DEFAULT_SPECIAL_SECTIONS, DEFAULT_COMMITTEE_SECTIONS,
     DEFAULT_TRUSTEE_SECTIONS, DEFAULT_EXECUTIVE_SECTIONS, DEFAULT_ANNUAL_SECTIONS,
 )
@@ -131,7 +131,7 @@ class MinuteService:
                     assignee_name=item_data.assignee_name,
                     due_date=item_data.due_date,
                     priority=ActionItemPriority(item_data.priority),
-                    status=ActionItemStatus.PENDING,
+                    status=MinutesActionItemStatus.PENDING,
                 )
                 self.db.add(item)
 
@@ -445,7 +445,7 @@ class MinuteService:
             assignee_name=data.assignee_name,
             due_date=data.due_date,
             priority=ActionItemPriority(data.priority),
-            status=ActionItemStatus.PENDING,
+            status=MinutesActionItemStatus.PENDING,
         )
         self.db.add(item)
         await self.db.commit()
@@ -477,8 +477,8 @@ class MinuteService:
             update_data = {k: v for k, v in update_data.items() if k in allowed}
 
         if "status" in update_data:
-            update_data["status"] = ActionItemStatus(update_data["status"])
-            if update_data["status"] == ActionItemStatus.COMPLETED:
+            update_data["status"] = MinutesActionItemStatus(update_data["status"])
+            if update_data["status"] == MinutesActionItemStatus.COMPLETED:
                 update_data["completed_at"] = datetime.utcnow()
 
         if "priority" in update_data:
@@ -542,9 +542,9 @@ class MinuteService:
             .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
             .where(MeetingMinutes.organization_id == str(organization_id))
             .where(ActionItem.status.in_([
-                ActionItemStatus.PENDING.value,
-                ActionItemStatus.IN_PROGRESS.value,
-                ActionItemStatus.OVERDUE.value,
+                MinutesActionItemStatus.PENDING.value,
+                MinutesActionItemStatus.IN_PROGRESS.value,
+                MinutesActionItemStatus.OVERDUE.value,
             ]))
         )
         open_items = open_items_result.scalar() or 0

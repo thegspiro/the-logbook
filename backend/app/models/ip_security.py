@@ -27,14 +27,10 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
 import enum
-import uuid
+
+from app.core.utils import generate_uuid
 
 from app.core.database import Base
-
-
-def generate_uuid() -> str:
-    """Generate UUID as string for MySQL compatibility"""
-    return str(uuid.uuid4())
 
 
 class IPExceptionType(str, enum.Enum):

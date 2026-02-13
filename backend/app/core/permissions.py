@@ -10,6 +10,7 @@ from enum import Enum
 
 class PermissionCategory(str, Enum):
     """Categories of permissions"""
+    ADMIN = "admin"
     USERS = "users"
     ROLES = "roles"
     ORGANIZATION = "organization"
@@ -20,12 +21,19 @@ class PermissionCategory(str, Enum):
     SCHEDULING = "scheduling"
     INVENTORY = "inventory"
     MEETINGS = "meetings"
+    MINUTES = "minutes"
     ELECTIONS = "elections"
     FUNDRAISING = "fundraising"
     AUDIT = "audit"
     EVENTS = "events"
     LOCATIONS = "locations"
     FORMS = "forms"
+    DOCUMENTS = "documents"
+    APPARATUS = "apparatus"
+    ANALYTICS = "analytics"
+    INTEGRATIONS = "integrations"
+    NOTIFICATIONS = "notifications"
+    REPORTS = "reports"
 
 
 class Permission:
@@ -131,6 +139,39 @@ LOCATIONS_MANAGE = Permission("locations.manage", "Manage all locations", Permis
 FORMS_VIEW = Permission("forms.view", "View forms and submissions", PermissionCategory.FORMS)
 FORMS_MANAGE = Permission("forms.manage", "Create, edit, and manage forms", PermissionCategory.FORMS)
 
+# Admin
+ADMIN_ACCESS = Permission("admin.access", "Full administrative access", PermissionCategory.ADMIN)
+
+# Minutes
+MINUTES_VIEW = Permission("minutes.view", "View meeting minutes", PermissionCategory.MINUTES)
+MINUTES_MANAGE = Permission("minutes.manage", "Create, edit, and manage meeting minutes", PermissionCategory.MINUTES)
+
+# Documents
+DOCUMENTS_VIEW = Permission("documents.view", "View documents", PermissionCategory.DOCUMENTS)
+DOCUMENTS_MANAGE = Permission("documents.manage", "Manage documents and folders", PermissionCategory.DOCUMENTS)
+
+# Apparatus
+APPARATUS_MANAGE = Permission("apparatus.manage", "Manage apparatus and fleet", PermissionCategory.APPARATUS)
+
+# Analytics
+ANALYTICS_VIEW = Permission("analytics.view", "View analytics and dashboards", PermissionCategory.ANALYTICS)
+
+# Integrations
+INTEGRATIONS_MANAGE = Permission("integrations.manage", "Manage third-party integrations", PermissionCategory.INTEGRATIONS)
+
+# Notifications
+NOTIFICATIONS_VIEW = Permission("notifications.view", "View notifications", PermissionCategory.NOTIFICATIONS)
+NOTIFICATIONS_MANAGE = Permission("notifications.manage", "Manage notification rules", PermissionCategory.NOTIFICATIONS)
+
+# Reports
+REPORTS_VIEW = Permission("reports.view", "View and generate reports", PermissionCategory.REPORTS)
+
+# Members (additional)
+MEMBERS_CREATE = Permission("members.create", "Create new members", PermissionCategory.MEMBERS)
+
+# Training (additional)
+TRAINING_VIEW_ALL = Permission("training.view_all", "View all training records across organization", PermissionCategory.TRAINING)
+
 
 # ============================================
 # All Permissions Registry
@@ -199,6 +240,39 @@ ALL_PERMISSIONS: List[Permission] = [
     # Forms
     FORMS_VIEW,
     FORMS_MANAGE,
+
+    # Admin
+    ADMIN_ACCESS,
+
+    # Minutes
+    MINUTES_VIEW,
+    MINUTES_MANAGE,
+
+    # Documents
+    DOCUMENTS_VIEW,
+    DOCUMENTS_MANAGE,
+
+    # Apparatus
+    APPARATUS_MANAGE,
+
+    # Analytics
+    ANALYTICS_VIEW,
+
+    # Integrations
+    INTEGRATIONS_MANAGE,
+
+    # Notifications
+    NOTIFICATIONS_VIEW,
+    NOTIFICATIONS_MANAGE,
+
+    # Reports
+    REPORTS_VIEW,
+
+    # Members (additional)
+    MEMBERS_CREATE,
+
+    # Training (additional)
+    TRAINING_VIEW_ALL,
 ]
 
 
@@ -294,6 +368,18 @@ DEFAULT_ROLES = {
             LOCATIONS_MANAGE.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            APPARATUS_MANAGE.name,
+            ANALYTICS_VIEW.name,
+            INTEGRATIONS_MANAGE.name,
+            NOTIFICATIONS_VIEW.name,
+            NOTIFICATIONS_MANAGE.name,
+            REPORTS_VIEW.name,
+            MEMBERS_CREATE.name,
+            TRAINING_VIEW_ALL.name,
         ],
     },
     "assistant_chief": {
@@ -334,6 +420,16 @@ DEFAULT_ROLES = {
             LOCATIONS_MANAGE.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            APPARATUS_MANAGE.name,
+            ANALYTICS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+            NOTIFICATIONS_MANAGE.name,
+            REPORTS_VIEW.name,
+            TRAINING_VIEW_ALL.name,
         ],
     },
     "president": {
@@ -387,6 +483,18 @@ DEFAULT_ROLES = {
             LOCATIONS_MANAGE.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            APPARATUS_MANAGE.name,
+            ANALYTICS_VIEW.name,
+            INTEGRATIONS_MANAGE.name,
+            NOTIFICATIONS_VIEW.name,
+            NOTIFICATIONS_MANAGE.name,
+            REPORTS_VIEW.name,
+            MEMBERS_CREATE.name,
+            TRAINING_VIEW_ALL.name,
         ],
     },
     "vice_president": {
@@ -407,6 +515,11 @@ DEFAULT_ROLES = {
             MEETINGS_MANAGE.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
+            REPORTS_VIEW.name,
         ],
     },
     "quartermaster": {
@@ -456,6 +569,13 @@ DEFAULT_ROLES = {
             LOCATIONS_VIEW.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            DOCUMENTS_MANAGE.name,
+            NOTIFICATIONS_VIEW.name,
+            REPORTS_VIEW.name,
+            MEMBERS_CREATE.name,
         ],
     },
     "assistant_secretary": {
@@ -475,6 +595,10 @@ DEFAULT_ROLES = {
             MEETINGS_MANAGE.name,
             COMPLIANCE_VIEW.name,
             TRAINING_VIEW.name,
+            MINUTES_VIEW.name,
+            MINUTES_MANAGE.name,
+            DOCUMENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
         ],
     },
     "member": {
@@ -492,6 +616,9 @@ DEFAULT_ROLES = {
             MEETINGS_VIEW.name,
             EVENTS_VIEW.name,
             FORMS_VIEW.name,
+            MINUTES_VIEW.name,
+            DOCUMENTS_VIEW.name,
+            NOTIFICATIONS_VIEW.name,
         ],
     },
     "training_officer": {

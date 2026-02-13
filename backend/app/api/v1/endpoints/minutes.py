@@ -59,7 +59,7 @@ async def list_minutes(
     skip: int = 0,
     limit: int = 50,  # max 100 enforced below
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("minutes.view")),
 ):
     """
     List meeting minutes with optional filtering
@@ -101,7 +101,7 @@ async def list_minutes(
 @router.get("/stats")
 async def get_minutes_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("minutes.view")),
 ):
     """
     Get aggregate stats for the minutes dashboard
@@ -118,7 +118,7 @@ async def search_minutes(
     q: str,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("minutes.view")),
 ):
     """
     Full-text search across meeting minutes
@@ -144,7 +144,7 @@ async def search_minutes(
 async def get_minutes(
     minutes_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("minutes.view")),
 ):
     """
     Get a single meeting minutes record with motions and action items
@@ -168,7 +168,7 @@ async def get_minutes(
 async def create_minutes(
     data: MinutesCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
     Create new meeting minutes
@@ -201,7 +201,7 @@ async def update_minutes(
     minutes_id: str,
     data: MinutesUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
     Update meeting minutes (only draft or rejected)
@@ -239,7 +239,7 @@ async def update_minutes(
 async def delete_minutes(
     minutes_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
     Delete meeting minutes (only drafts)
@@ -279,7 +279,7 @@ async def delete_minutes(
 async def submit_minutes(
     minutes_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
     Submit meeting minutes for approval
@@ -319,7 +319,7 @@ async def submit_minutes(
 async def approve_minutes(
     minutes_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
     Approve submitted meeting minutes
@@ -360,7 +360,7 @@ async def reject_minutes(
     minutes_id: str,
     data: MinutesReject,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
     Reject submitted meeting minutes with a reason
@@ -405,7 +405,7 @@ async def add_motion(
     minutes_id: str,
     data: MotionCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Add a motion to meeting minutes"""
     service = MinuteService(db)
@@ -427,7 +427,7 @@ async def update_motion(
     motion_id: str,
     data: MotionUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Update a motion"""
     service = MinuteService(db)
@@ -448,7 +448,7 @@ async def delete_motion(
     minutes_id: str,
     motion_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Delete a motion"""
     service = MinuteService(db)
@@ -471,7 +471,7 @@ async def add_action_item(
     minutes_id: str,
     data: ActionItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Add an action item to meeting minutes"""
     service = MinuteService(db)
@@ -493,7 +493,7 @@ async def update_action_item(
     item_id: str,
     data: ActionItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Update an action item (status can be updated even on approved minutes)"""
     service = MinuteService(db)
@@ -514,7 +514,7 @@ async def delete_action_item(
     minutes_id: str,
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Delete an action item"""
     service = MinuteService(db)
@@ -536,7 +536,7 @@ async def delete_action_item(
 async def publish_minutes(
     minutes_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Publish approved minutes as a formatted document in the Meeting Minutes folder."""
     minute_service = MinuteService(db)
@@ -559,18 +559,21 @@ async def publish_minutes(
         user_id=str(current_user.id),
     )
 
+    dt = doc.document_type
+    tags_list = doc.tags.split(",") if doc.tags else None
     return DocumentResponse(
         id=doc.id,
         organization_id=doc.organization_id,
         folder_id=doc.folder_id,
-        title=doc.title,
+        title=doc.name,
         description=doc.description,
-        document_type=doc.document_type if isinstance(doc.document_type, str) else doc.document_type.value,
+        document_type=dt if isinstance(dt, str) else dt.value,
         content_html=doc.content_html,
+        mime_type=doc.file_type,
         source_type=doc.source_type,
         source_id=doc.source_id,
-        tags=doc.tags,
-        created_by=doc.created_by,
+        tags=tags_list,
+        created_by=doc.uploaded_by,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
     )
@@ -584,7 +587,7 @@ async def publish_minutes(
 async def list_templates(
     meeting_type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("minutes.view")),
 ):
     """List available minutes templates"""
     service = TemplateService(db)
@@ -609,7 +612,7 @@ async def list_templates(
 async def get_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("minutes.view")),
 ):
     """Get a template by ID"""
     service = TemplateService(db)
@@ -623,7 +626,7 @@ async def get_template(
 async def create_template(
     data: TemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Create a new minutes template"""
     service = TemplateService(db)
@@ -641,7 +644,7 @@ async def update_template(
     template_id: str,
     data: TemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Update a minutes template"""
     service = TemplateService(db)
@@ -660,7 +663,7 @@ async def update_template(
 async def delete_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.manage")),
+    current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """Delete a minutes template"""
     service = TemplateService(db)
