@@ -258,6 +258,73 @@ class EventService:
 
         return event
 
+    async def duplicate_event(
+        self, event_id: UUID, organization_id: UUID, created_by: UUID
+    ) -> Optional[Event]:
+        """
+        Duplicate an event, copying all configuration but not RSVPs or attendance data.
+
+        The duplicated event gets a new title with "Copy of " prefix and
+        resets all RSVP/attendance/cancellation state.
+        """
+        # Get the source event
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
+        )
+        source_event = result.scalar_one_or_none()
+
+        if not source_event:
+            return None
+
+        # Fields to copy from the source event
+        new_event = Event(
+            organization_id=organization_id,
+            created_by=created_by,
+            title=f"Copy of {source_event.title}",
+            description=source_event.description,
+            event_type=source_event.event_type,
+            location_id=source_event.location_id,
+            location=source_event.location,
+            location_details=source_event.location_details,
+            start_datetime=source_event.start_datetime,
+            end_datetime=source_event.end_datetime,
+            requires_rsvp=source_event.requires_rsvp,
+            rsvp_deadline=source_event.rsvp_deadline,
+            max_attendees=source_event.max_attendees,
+            allowed_rsvp_statuses=source_event.allowed_rsvp_statuses,
+            is_mandatory=source_event.is_mandatory,
+            eligible_roles=source_event.eligible_roles,
+            allow_guests=source_event.allow_guests,
+            send_reminders=source_event.send_reminders,
+            reminder_hours_before=source_event.reminder_hours_before,
+            check_in_window_type=source_event.check_in_window_type,
+            check_in_minutes_before=source_event.check_in_minutes_before,
+            check_in_minutes_after=source_event.check_in_minutes_after,
+            require_checkout=source_event.require_checkout,
+            custom_fields=source_event.custom_fields,
+            attachments=source_event.attachments,
+            template_id=source_event.template_id,
+            # Explicitly NOT copying: RSVPs, cancellation state, actual times, recurrence
+        )
+
+        self.db.add(new_event)
+        await self.db.commit()
+        await self.db.refresh(new_event)
+
+        # Eagerly load location relationship for the response
+        if new_event.location_id:
+            result = await self.db.execute(
+                select(Event)
+                .where(Event.id == new_event.id)
+                .options(selectinload(Event.location_obj))
+            )
+            new_event = result.scalar_one()
+
+        return new_event
+
     async def delete_event(
         self, event_id: UUID, organization_id: UUID
     ) -> bool:

@@ -24,6 +24,7 @@ vi.mock('../services/api', () => ({
     createOrUpdateRSVP: vi.fn(),
     cancelEvent: vi.fn(),
     deleteEvent: vi.fn(),
+    duplicateEvent: vi.fn(),
     checkInAttendee: vi.fn(),
     recordActualTimes: vi.fn(),
   },
@@ -338,6 +339,7 @@ describe('EventDetailPage', () => {
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /check in members/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /record times/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
@@ -591,6 +593,85 @@ describe('EventDetailPage', () => {
     });
   });
 
+  describe('Duplicate Event', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
+        checkPermission: mockCheckPermission,
+        user: { id: 'admin-1', permissions: ['events.manage'] },
+      } as any);
+    });
+
+    it('should duplicate event and navigate to edit page', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.duplicateEvent).mockResolvedValue({
+        ...mockEvent,
+        id: 'evt-copy-1',
+        title: 'Copy of Monthly Business Meeting',
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+
+      const duplicateButton = screen.getByRole('button', { name: /duplicate/i });
+      await user.click(duplicateButton);
+
+      await waitFor(() => {
+        expect(eventService.duplicateEvent).toHaveBeenCalledWith('evt-1');
+        expect(mockNavigate).toHaveBeenCalledWith('/events/evt-copy-1/edit');
+      });
+    });
+
+    it('should show error toast when duplication fails', async () => {
+      const toastModule = await import('react-hot-toast');
+
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.duplicateEvent).mockRejectedValue(
+        makeApiError('Event not found', 404)
+      );
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+
+      const duplicateButton = screen.getByRole('button', { name: /duplicate/i });
+      await user.click(duplicateButton);
+
+      await waitFor(() => {
+        expect(toastModule.default.error).toHaveBeenCalledWith('Event not found');
+      });
+    });
+
+    it('should not show duplicate button for non-managers', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      vi.mocked(authStoreModule.useAuthStore).mockReturnValue({
+        checkPermission: mockCheckPermission,
+        user: null,
+      } as any);
+
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByRole('button', { name: /duplicate/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Event Information Sidebar', () => {
     it('should show RSVP required info', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
@@ -642,6 +723,7 @@ describe('EventDetailPage', () => {
       });
 
       expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /duplicate/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /check in members/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /cancel event/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();

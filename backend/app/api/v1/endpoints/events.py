@@ -284,6 +284,51 @@ async def update_event(
         )
 
 
+@router.post("/{event_id}/duplicate", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_event(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Duplicate an event
+
+    Creates a copy of the event with all settings but without RSVPs or attendance data.
+    The new event title is prefixed with "Copy of ".
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    new_event = await service.duplicate_event(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if not new_event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found"
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="event_duplicated",
+        event_category="events",
+        severity="info",
+        event_data={
+            "source_event_id": str(event_id),
+            "new_event_id": str(new_event.id),
+            "title": new_event.title,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_event_response(new_event)
+
+
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(
     event_id: UUID,

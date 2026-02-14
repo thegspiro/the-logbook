@@ -1371,6 +1371,14 @@ export const eventService = {
   },
 
   /**
+   * Duplicate an event (copies all settings, no RSVPs)
+   */
+  async duplicateEvent(eventId: string): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/duplicate`);
+    return response.data;
+  },
+
+  /**
    * Cancel an event
    */
   async cancelEvent(eventId: string, cancelData: EventCancel): Promise<Event> {

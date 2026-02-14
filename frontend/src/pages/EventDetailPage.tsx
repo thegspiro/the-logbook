@@ -182,6 +182,22 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
+  const handleDuplicateEvent = async () => {
+    if (!eventId) return;
+
+    try {
+      setSubmitting(true);
+      const newEvent = await eventService.duplicateEvent(eventId);
+      toast.success('Event duplicated successfully');
+      navigate(`/events/${newEvent.id}/edit`);
+    } catch (err) {
+      console.error('Error duplicating event:', err);
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to duplicate event');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleDeleteEvent = async () => {
     if (!eventId) return;
 
@@ -320,6 +336,16 @@ export const EventDetailPage: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     Edit
+                  </button>
+                  <button
+                    onClick={handleDuplicateEvent}
+                    disabled={submitting}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Duplicate
                   </button>
                   <button
                     onClick={openCheckInModal}
