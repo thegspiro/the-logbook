@@ -101,6 +101,9 @@ COMPLIANCE_MANAGE = Permission("compliance.manage", "Manage compliance records",
 # Scheduling
 SCHEDULING_VIEW = Permission("scheduling.view", "View schedules", PermissionCategory.SCHEDULING)
 SCHEDULING_MANAGE = Permission("scheduling.manage", "Manage schedules", PermissionCategory.SCHEDULING)
+SCHEDULING_ASSIGN = Permission("scheduling.assign", "Assign members to shifts", PermissionCategory.SCHEDULING)
+SCHEDULING_SWAP = Permission("scheduling.swap", "Request and manage shift swaps", PermissionCategory.SCHEDULING)
+SCHEDULING_REPORT = Permission("scheduling.report", "View shift reports and analytics", PermissionCategory.SCHEDULING)
 
 # Inventory
 INVENTORY_VIEW = Permission("inventory.view", "View inventory", PermissionCategory.INVENTORY)
@@ -226,6 +229,9 @@ ALL_PERMISSIONS: List[Permission] = [
     COMPLIANCE_MANAGE,
     SCHEDULING_VIEW,
     SCHEDULING_MANAGE,
+    SCHEDULING_ASSIGN,
+    SCHEDULING_SWAP,
+    SCHEDULING_REPORT,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
     MEETINGS_VIEW,
@@ -375,6 +381,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -443,6 +452,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -512,6 +524,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -679,6 +694,7 @@ DEFAULT_ROLES = {
             TRAINING_VIEW.name,
             COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
+            SCHEDULING_SWAP.name,
             MEETINGS_VIEW.name,
             EVENTS_VIEW.name,
             FORMS_VIEW.name,
@@ -777,6 +793,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -870,6 +889,25 @@ DEFAULT_ROLES = {
             FACILITIES_CREATE.name,
             FACILITIES_EDIT.name,
             FACILITIES_MAINTENANCE.name,
+        ],
+    },
+    "scheduling_officer": {
+        "name": "Scheduling Officer",
+        "slug": "scheduling_officer",
+        "description": "Manages shift schedules, duty rosters, and staffing assignments",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SCHEDULING_VIEW.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
         ],
     },
 }
