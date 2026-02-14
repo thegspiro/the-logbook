@@ -54,7 +54,7 @@ class Location(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    # events = relationship("Event", back_populates="location")  # Will be added when Event model is updated
+    events = relationship("Event", back_populates="location_obj")
 
     __table_args__ = (
         Index("ix_locations_organization_id", "organization_id"),

@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
-from app.models.event import Event, EventRSVP, EventType, RSVPStatus, CheckInWindowType
+from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
 from app.models.user import User, Role, user_roles
 from app.models.location import Location
+from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
 from app.schemas.event import (
     EventCreate,
     EventUpdate,
@@ -21,7 +22,11 @@ from app.schemas.event import (
     EventStats,
     EventResponse,
     RSVPResponse,
+    RSVPOverride,
 )
+from app.services.location_service import LocationService
+from app.services.notifications_service import NotificationsService
+from app.models.notification import NotificationChannel, NotificationCategory
 
 
 class EventService:
@@ -42,6 +47,22 @@ class EventService:
             if event_data.rsvp_deadline >= event_data.start_datetime:
                 raise ValueError("RSVP deadline must be before event start")
 
+        # Check for location double-booking
+        if event_data.location_id:
+            location_service = LocationService(self.db)
+            overlapping = await location_service.check_overlapping_events(
+                location_id=event_data.location_id,
+                organization_id=str(organization_id),
+                start_datetime=event_data.start_datetime,
+                end_datetime=event_data.end_datetime,
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                raise ValueError(
+                    f"Location is already booked during this time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
         # Prepare event data
         event_dict = event_data.model_dump()
 
@@ -60,6 +81,15 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(event)
 
+        # Eagerly load location relationship for the response
+        if event.location_id:
+            result = await self.db.execute(
+                select(Event)
+                .where(Event.id == event.id)
+                .options(selectinload(Event.location_obj))
+            )
+            event = result.scalar_one()
+
         return event
 
     async def get_event(
@@ -74,7 +104,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
-            .options(selectinload(Event.rsvps))
+            .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
 
@@ -104,7 +134,11 @@ class EventService:
         limit: int = 100,
     ) -> List[Event]:
         """List events with filtering"""
-        query = select(Event).where(Event.organization_id == organization_id)
+        query = (
+            select(Event)
+            .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
+        )
 
         if event_type:
             query = query.where(Event.event_type == event_type)
@@ -131,6 +165,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
 
@@ -151,6 +186,24 @@ class EventService:
         if end_dt <= start_dt:
             raise ValueError("End date must be after start date")
 
+        # Check for location double-booking if location or times are changing
+        check_location_id = update_data.get("location_id", event.location_id)
+        if check_location_id:
+            location_service = LocationService(self.db)
+            overlapping = await location_service.check_overlapping_events(
+                location_id=check_location_id,
+                organization_id=str(organization_id),
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                exclude_event_id=event_id,
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                raise ValueError(
+                    f"Location is already booked during this time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
         for field, value in update_data.items():
             setattr(event, field, value)
 
@@ -162,13 +215,15 @@ class EventService:
         return event
 
     async def cancel_event(
-        self, event_id: UUID, organization_id: UUID, reason: str
+        self, event_id: UUID, organization_id: UUID, reason: str,
+        send_notifications: bool = False,
     ) -> Optional[Event]:
-        """Cancel an event"""
+        """Cancel an event and optionally notify RSVPs"""
         result = await self.db.execute(
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
         )
         event = result.scalar_one_or_none()
 
@@ -186,9 +241,89 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(event)
 
-        # TODO: Send cancellation notifications to RSVPs
+        # Send cancellation notifications if requested
+        if send_notifications and event.rsvps:
+            notifications_service = NotificationsService(self.db)
+            for rsvp in event.rsvps:
+                if rsvp.status == RSVPStatus.GOING or rsvp.status == RSVPStatus.MAYBE:
+                    await notifications_service.log_notification(
+                        organization_id=organization_id,
+                        log_data={
+                            "channel": NotificationChannel.IN_APP,
+                            "recipient_id": str(rsvp.user_id),
+                            "subject": f"Event Cancelled: {event.title}",
+                            "message": f"The event \"{event.title}\" has been cancelled. Reason: {reason}",
+                        },
+                    )
 
         return event
+
+    async def duplicate_event(
+        self, event_id: UUID, organization_id: UUID, created_by: UUID
+    ) -> Optional[Event]:
+        """
+        Duplicate an event, copying all configuration but not RSVPs or attendance data.
+
+        The duplicated event gets a new title with "Copy of " prefix and
+        resets all RSVP/attendance/cancellation state.
+        """
+        # Get the source event
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
+        )
+        source_event = result.scalar_one_or_none()
+
+        if not source_event:
+            return None
+
+        # Fields to copy from the source event
+        new_event = Event(
+            organization_id=organization_id,
+            created_by=created_by,
+            title=f"Copy of {source_event.title}",
+            description=source_event.description,
+            event_type=source_event.event_type,
+            location_id=source_event.location_id,
+            location=source_event.location,
+            location_details=source_event.location_details,
+            start_datetime=source_event.start_datetime,
+            end_datetime=source_event.end_datetime,
+            requires_rsvp=source_event.requires_rsvp,
+            rsvp_deadline=source_event.rsvp_deadline,
+            max_attendees=source_event.max_attendees,
+            allowed_rsvp_statuses=source_event.allowed_rsvp_statuses,
+            is_mandatory=source_event.is_mandatory,
+            eligible_roles=source_event.eligible_roles,
+            allow_guests=source_event.allow_guests,
+            send_reminders=source_event.send_reminders,
+            reminder_hours_before=source_event.reminder_hours_before,
+            check_in_window_type=source_event.check_in_window_type,
+            check_in_minutes_before=source_event.check_in_minutes_before,
+            check_in_minutes_after=source_event.check_in_minutes_after,
+            require_checkout=source_event.require_checkout,
+            custom_fields=source_event.custom_fields,
+            attachments=source_event.attachments,
+            template_id=source_event.template_id,
+            # Explicitly NOT copying: RSVPs, cancellation state, actual times, recurrence
+        )
+
+        self.db.add(new_event)
+        await self.db.commit()
+        await self.db.refresh(new_event)
+
+        # Eagerly load location relationship for the response
+        if new_event.location_id:
+            result = await self.db.execute(
+                select(Event)
+                .where(Event.id == new_event.id)
+                .options(selectinload(Event.location_obj))
+            )
+            new_event = result.scalar_one()
+
+        return new_event
 
     async def delete_event(
         self, event_id: UUID, organization_id: UUID
@@ -266,13 +401,16 @@ class EventService:
 
         # Check capacity if user is going
         if rsvp_data.status == "going" and event.max_attendees:
-            # Count current "going" RSVPs
-            going_count_result = await self.db.execute(
+            # Count current "going" RSVPs, excluding this user's RSVP if updating
+            capacity_query = (
                 select(func.count(EventRSVP.id))
                 .where(EventRSVP.event_id == event_id)
                 .where(EventRSVP.status == RSVPStatus.GOING)
-                .where(EventRSVP.id != (rsvp.id if existing_rsvp else None))
             )
+            if existing_rsvp:
+                capacity_query = capacity_query.where(EventRSVP.id != existing_rsvp.id)
+
+            going_count_result = await self.db.execute(capacity_query)
             going_count = going_count_result.scalar() or 0
 
             if going_count >= event.max_attendees:
@@ -317,14 +455,170 @@ class EventService:
         result = await self.db.execute(query.order_by(EventRSVP.responded_at.desc()))
         return list(result.scalars().all())
 
+    async def manager_add_attendee(
+        self,
+        event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        manager_id: UUID,
+        status: str = "going",
+        checked_in: bool = False,
+        notes: Optional[str] = None,
+    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+        """
+        Manager adds an attendee to an event and optionally marks them checked in.
+
+        This allows managers to add someone who had trouble logging in, or
+        to retroactively give credit for attendance.
+        """
+        # Verify event exists and belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        if event.is_cancelled:
+            return None, "Cannot add attendees to a cancelled event"
+
+        # Verify target user belongs to organization
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .where(User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return None, "User not found in organization"
+
+        # Check if RSVP already exists
+        existing_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.user_id == user_id)
+        )
+        existing_rsvp = existing_result.scalar_one_or_none()
+
+        now = datetime.utcnow()
+
+        if existing_rsvp:
+            # Update existing RSVP
+            existing_rsvp.status = RSVPStatus(status)
+            if notes is not None:
+                existing_rsvp.notes = notes
+            existing_rsvp.updated_at = now
+
+            if checked_in and not existing_rsvp.checked_in:
+                existing_rsvp.checked_in = True
+                existing_rsvp.checked_in_at = now
+                existing_rsvp.overridden_by = manager_id
+                existing_rsvp.overridden_at = now
+
+            rsvp = existing_rsvp
+        else:
+            # Create new RSVP
+            rsvp = EventRSVP(
+                event_id=event_id,
+                user_id=user_id,
+                status=RSVPStatus(status),
+                guest_count=0,
+                notes=notes,
+                responded_at=now,
+                checked_in=checked_in,
+                checked_in_at=now if checked_in else None,
+                overridden_by=manager_id if checked_in else None,
+                overridden_at=now if checked_in else None,
+            )
+            self.db.add(rsvp)
+
+        await self.db.commit()
+        await self.db.refresh(rsvp)
+
+        return rsvp, None
+
+    async def override_rsvp_attendance(
+        self,
+        event_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        manager_id: UUID,
+        override_data: RSVPOverride,
+    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+        """
+        Override attendance details for an RSVP (manager action).
+
+        Allows managers to fix check-in/check-out times and credit hours
+        for attendees who had issues scanning in/out.
+        """
+        # Verify event exists and belongs to organization
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == event_id)
+            .where(Event.organization_id == organization_id)
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, "Event not found"
+
+        # Get the RSVP
+        rsvp_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.user_id == user_id)
+        )
+        rsvp = rsvp_result.scalar_one_or_none()
+
+        if not rsvp:
+            return None, "RSVP not found for this user"
+
+        now = datetime.utcnow()
+        override_fields = override_data.model_dump(exclude_unset=True)
+
+        # Validate override times if both provided
+        check_in = override_fields.get("override_check_in_at", rsvp.override_check_in_at)
+        check_out = override_fields.get("override_check_out_at", rsvp.override_check_out_at)
+        if check_in and check_out and check_out <= check_in:
+            return None, "Override check-out time must be after check-in time"
+
+        for field, value in override_fields.items():
+            setattr(rsvp, field, value)
+
+        # If overriding check-in time, also mark as checked in
+        if override_fields.get("override_check_in_at"):
+            rsvp.checked_in = True
+            if not rsvp.checked_in_at:
+                rsvp.checked_in_at = override_fields["override_check_in_at"]
+
+        # Auto-calculate duration if both override times are set and no explicit duration override
+        if (rsvp.override_check_in_at and rsvp.override_check_out_at
+                and "override_duration_minutes" not in override_fields):
+            duration = (rsvp.override_check_out_at - rsvp.override_check_in_at).total_seconds() / 60
+            rsvp.override_duration_minutes = int(duration)
+
+        rsvp.overridden_by = manager_id
+        rsvp.overridden_at = now
+        rsvp.updated_at = now
+
+        await self.db.commit()
+        await self.db.refresh(rsvp)
+
+        return rsvp, None
+
     async def check_in_attendee(
         self, event_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """
-        Check in an attendee
+        Check in an attendee (manager action)
 
         If RSVP doesn't exist, creates one automatically with status 'going'.
         This allows check-in to work for events that don't require RSVP.
+        Validates the check-in window to prevent check-ins outside allowed times.
         """
         # Verify event belongs to organization
         event_result = await self.db.execute(
@@ -336,6 +630,15 @@ class EventService:
 
         if not event:
             return None, "Event not found"
+
+        if event.is_cancelled:
+            return None, "Event has been cancelled"
+
+        # Validate check-in window
+        now = datetime.utcnow()
+        is_valid, error_msg = self._validate_check_in_window(event, now)
+        if not is_valid:
+            return None, error_msg
 
         # Verify user belongs to organization
         user_result = await self.db.execute(
@@ -451,13 +754,12 @@ class EventService:
             if status == RSVPStatus.GOING:
                 going_count = count
                 total_guests = guests or 0
+                # Only count checked-in attendees who are still GOING
+                checked_in_count = checked_in or 0
             elif status == RSVPStatus.NOT_GOING:
                 not_going_count = count
             elif status == RSVPStatus.MAYBE:
                 maybe_count = count
-
-            if checked_in:
-                checked_in_count += checked_in
 
         total_rsvps = going_count + not_going_count + maybe_count
 
@@ -494,6 +796,7 @@ class EventService:
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = event_result.scalar_one_or_none()
 
@@ -529,11 +832,12 @@ class EventService:
 
         Returns: (data_dict, error_message)
         """
-        # Get event
+        # Get event with location
         event_result = await self.db.execute(
             select(Event)
             .where(Event.id == event_id)
             .where(Event.organization_id == organization_id)
+            .options(selectinload(Event.location_obj))
         )
         event = event_result.scalar_one_or_none()
 
@@ -552,10 +856,15 @@ class EventService:
 
         is_valid = check_in_start <= now <= check_in_end
 
+        location_name = None
+        if event.location_obj:
+            location_name = event.location_obj.name
+
         return {
             "event_id": str(event.id),
             "event_name": event.title,
             "event_type": event.event_type.value if event.event_type else None,
+            "event_description": event.description,
             "start_datetime": event.start_datetime.isoformat(),
             "end_datetime": event.end_datetime.isoformat(),
             "actual_end_time": event.actual_end_time.isoformat() if event.actual_end_time else None,
@@ -563,6 +872,9 @@ class EventService:
             "check_in_end": check_in_end.isoformat(),
             "is_valid": is_valid,
             "location": event.location,
+            "location_id": str(event.location_id) if event.location_id else None,
+            "location_name": location_name,
+            "require_checkout": event.require_checkout or False,
         }, None
 
     def _validate_check_in_window(self, event: Event, now: datetime) -> Tuple[bool, Optional[str]]:
@@ -574,8 +886,9 @@ class EventService:
         check_in_window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
 
         if check_in_window_type == CheckInWindowType.FLEXIBLE:
-            # Allow check-in anytime before event ends
-            check_in_start = event.start_datetime - timedelta(hours=24)  # Allow up to 24 hours before
+            # Allow check-in within configurable window before event starts, until event ends
+            minutes_before = event.check_in_minutes_before or 30  # Default 30 minutes before
+            check_in_start = event.start_datetime - timedelta(minutes=minutes_before)
             check_in_end = event.actual_end_time if event.actual_end_time else event.end_datetime
 
         elif check_in_window_type == CheckInWindowType.STRICT:
@@ -843,7 +1156,7 @@ class EventService:
 
         stats = {
             "event_id": str(event.id),
-            "event_name": event.name,
+            "event_name": event.title,
             "event_type": event.event_type.value,
             "start_datetime": event.start_datetime,
             "end_datetime": event.end_datetime,
@@ -860,3 +1173,200 @@ class EventService:
         }
 
         return stats, None
+
+    # ============================================================
+    # Event Templates
+    # ============================================================
+
+    async def create_template(
+        self, template_data: Dict[str, Any], organization_id: UUID, created_by: UUID
+    ) -> EventTemplate:
+        """Create a new event template"""
+        template = EventTemplate(
+            organization_id=str(organization_id),
+            created_by=str(created_by),
+            **template_data,
+        )
+        self.db.add(template)
+        await self.db.commit()
+        await self.db.refresh(template)
+        return template
+
+    async def list_templates(
+        self, organization_id: UUID, include_inactive: bool = False
+    ) -> List[EventTemplate]:
+        """List all event templates for an organization"""
+        query = (
+            select(EventTemplate)
+            .where(EventTemplate.organization_id == str(organization_id))
+        )
+        if not include_inactive:
+            query = query.where(EventTemplate.is_active == True)
+        query = query.order_by(EventTemplate.name)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_template(
+        self, template_id: UUID, organization_id: UUID
+    ) -> Optional[EventTemplate]:
+        """Get a specific event template"""
+        result = await self.db.execute(
+            select(EventTemplate)
+            .where(EventTemplate.id == str(template_id))
+            .where(EventTemplate.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def update_template(
+        self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+    ) -> Optional[EventTemplate]:
+        """Update an event template"""
+        template = await self.get_template(template_id, organization_id)
+        if not template:
+            return None
+
+        for field, value in update_data.items():
+            setattr(template, field, value)
+
+        template.updated_at = datetime.utcnow()
+        await self.db.commit()
+        await self.db.refresh(template)
+        return template
+
+    async def delete_template(
+        self, template_id: UUID, organization_id: UUID
+    ) -> bool:
+        """Soft-delete a template by deactivating it"""
+        template = await self.get_template(template_id, organization_id)
+        if not template:
+            return False
+
+        template.is_active = False
+        template.updated_at = datetime.utcnow()
+        await self.db.commit()
+        return True
+
+    # ============================================================
+    # Recurring Events
+    # ============================================================
+
+    def _generate_recurrence_dates(
+        self,
+        start_datetime: datetime,
+        end_datetime: datetime,
+        pattern: str,
+        recurrence_end_date: datetime,
+        custom_days: Optional[List[int]] = None,
+    ) -> List[Tuple[datetime, datetime]]:
+        """
+        Generate all occurrence dates for a recurring event.
+
+        Returns list of (start, end) datetime tuples.
+        """
+        duration = end_datetime - start_datetime
+        occurrences = []
+        current = start_datetime
+
+        while current <= recurrence_end_date:
+            occurrences.append((current, current + duration))
+
+            if pattern == RecurrencePattern.DAILY.value:
+                current += timedelta(days=1)
+            elif pattern == RecurrencePattern.WEEKLY.value:
+                current += timedelta(weeks=1)
+            elif pattern == RecurrencePattern.BIWEEKLY.value:
+                current += timedelta(weeks=2)
+            elif pattern == RecurrencePattern.MONTHLY.value:
+                # Move to same day next month
+                month = current.month + 1
+                year = current.year
+                if month > 12:
+                    month = 1
+                    year += 1
+                try:
+                    current = current.replace(year=year, month=month)
+                except ValueError:
+                    # Handle months with fewer days (e.g., Jan 31 -> Feb 28)
+                    import calendar
+                    last_day = calendar.monthrange(year, month)[1]
+                    current = current.replace(year=year, month=month, day=min(current.day, last_day))
+            elif pattern == RecurrencePattern.CUSTOM.value and custom_days:
+                # Find next matching weekday
+                found = False
+                for i in range(1, 8):
+                    next_date = current + timedelta(days=i)
+                    if next_date.weekday() in custom_days:
+                        current = next_date
+                        found = True
+                        break
+                if not found:
+                    break
+            else:
+                break
+
+        return occurrences
+
+    async def create_recurring_event(
+        self,
+        event_data: Dict[str, Any],
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[List[Event], Optional[str]]:
+        """
+        Create a series of recurring events.
+
+        Creates a parent event and individual occurrences.
+        """
+        recurrence_pattern = event_data.pop("recurrence_pattern")
+        recurrence_end_date = event_data.pop("recurrence_end_date")
+        recurrence_custom_days = event_data.pop("recurrence_custom_days", None)
+
+        # Generate occurrence dates
+        occurrences = self._generate_recurrence_dates(
+            start_datetime=event_data["start_datetime"],
+            end_datetime=event_data["end_datetime"],
+            pattern=recurrence_pattern,
+            recurrence_end_date=recurrence_end_date,
+            custom_days=recurrence_custom_days,
+        )
+
+        if len(occurrences) == 0:
+            return [], "No valid occurrences generated for the given recurrence pattern"
+
+        if len(occurrences) > 365:
+            return [], "Too many occurrences (max 365). Please narrow the date range."
+
+        # Create parent event (first occurrence)
+        parent_event = Event(
+            organization_id=str(organization_id),
+            created_by=str(created_by),
+            is_recurring=True,
+            recurrence_pattern=RecurrencePattern(recurrence_pattern),
+            recurrence_end_date=recurrence_end_date,
+            recurrence_custom_days=recurrence_custom_days,
+            start_datetime=occurrences[0][0],
+            end_datetime=occurrences[0][1],
+            **{k: v for k, v in event_data.items() if k not in ("start_datetime", "end_datetime")},
+        )
+        self.db.add(parent_event)
+        await self.db.flush()  # Get the parent ID
+
+        created_events = [parent_event]
+
+        # Create child events for subsequent occurrences
+        for start, end in occurrences[1:]:
+            child_event = Event(
+                organization_id=str(organization_id),
+                created_by=str(created_by),
+                is_recurring=True,
+                recurrence_parent_id=parent_event.id,
+                recurrence_pattern=RecurrencePattern(recurrence_pattern),
+                start_datetime=start,
+                end_datetime=end,
+                **{k: v for k, v in event_data.items() if k not in ("start_datetime", "end_datetime")},
+            )
+            self.db.add(child_event)
+            created_events.append(child_event)
+
+        await self.db.commit()
+        return created_events, None

@@ -85,6 +85,7 @@ import type {
   RSVPCreate,
   CheckInRequest,
   EventStats,
+  CheckInMonitoringStats,
 } from '../types/event';
 
 const API_BASE_URL = '/api/v1';
@@ -1370,6 +1371,14 @@ export const eventService = {
   },
 
   /**
+   * Duplicate an event (copies all settings, no RSVPs)
+   */
+  async duplicateEvent(eventId: string): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/duplicate`);
+    return response.data;
+  },
+
+  /**
    * Cancel an event
    */
   async cancelEvent(eventId: string, cancelData: EventCancel): Promise<Event> {
@@ -1448,8 +1457,56 @@ export const eventService = {
   /**
    * Get real-time check-in monitoring statistics
    */
-  async getCheckInMonitoring(eventId: string): Promise<any> {
+  async getCheckInMonitoring(eventId: string): Promise<CheckInMonitoringStats> {
     const response = await api.get(`/events/${eventId}/check-in-monitoring`);
+    return response.data;
+  },
+
+  /**
+   * Add an attendee to an event (manager action)
+   */
+  async addAttendee(eventId: string, data: import('../types/event').ManagerAddAttendee): Promise<import('../types/event').RSVP> {
+    const response = await api.post<import('../types/event').RSVP>(`/events/${eventId}/add-attendee`, data);
+    return response.data;
+  },
+
+  /**
+   * Override attendance details for an RSVP (manager action)
+   */
+  async overrideAttendance(eventId: string, userId: string, data: import('../types/event').RSVPOverride): Promise<import('../types/event').RSVP> {
+    const response = await api.patch<import('../types/event').RSVP>(`/events/${eventId}/rsvps/${userId}/override`, data);
+    return response.data;
+  },
+
+  // Event Templates
+  async getTemplates(includeInactive?: boolean): Promise<import('../types/event').EventTemplate[]> {
+    const params = includeInactive ? { include_inactive: true } : undefined;
+    const response = await api.get<import('../types/event').EventTemplate[]>('/events/templates', { params });
+    return response.data;
+  },
+
+  async createTemplate(data: import('../types/event').EventTemplateCreate): Promise<import('../types/event').EventTemplate> {
+    const response = await api.post<import('../types/event').EventTemplate>('/events/templates', data);
+    return response.data;
+  },
+
+  async getTemplate(templateId: string): Promise<import('../types/event').EventTemplate> {
+    const response = await api.get<import('../types/event').EventTemplate>(`/events/templates/${templateId}`);
+    return response.data;
+  },
+
+  async updateTemplate(templateId: string, data: Partial<import('../types/event').EventTemplateCreate>): Promise<import('../types/event').EventTemplate> {
+    const response = await api.patch<import('../types/event').EventTemplate>(`/events/templates/${templateId}`, data);
+    return response.data;
+  },
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await api.delete(`/events/templates/${templateId}`);
+  },
+
+  // Recurring Events
+  async createRecurringEvent(data: import('../types/event').RecurringEventCreate): Promise<import('../types/event').Event[]> {
+    const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
     return response.data;
   },
 };

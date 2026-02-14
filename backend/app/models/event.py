@@ -49,6 +49,15 @@ class CheckInWindowType(str, Enum):
     WINDOW = "window"  # Configurable window (X minutes before/after)
 
 
+class RecurrencePattern(str, Enum):
+    """Recurrence pattern for recurring events"""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    BIWEEKLY = "biweekly"
+    MONTHLY = "monthly"
+    CUSTOM = "custom"  # Uses recurrence_custom_days
+
+
 class Event(Base):
     """
     Event model for managing department events
@@ -94,9 +103,17 @@ class Event(Base):
 
     # Check-in window settings
     check_in_window_type = Column(SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=CheckInWindowType.FLEXIBLE)
-    check_in_minutes_before = Column(Integer, nullable=True, default=15)  # For WINDOW type
-    check_in_minutes_after = Column(Integer, nullable=True, default=15)  # For WINDOW type
+    check_in_minutes_before = Column(Integer, nullable=True, default=30)  # Minutes before start to allow check-in
+    check_in_minutes_after = Column(Integer, nullable=True, default=15)  # For WINDOW type: minutes after start
     require_checkout = Column(Boolean, nullable=False, default=False)  # Require manual check-out
+
+    # Recurrence
+    is_recurring = Column(Boolean, nullable=False, default=False)
+    recurrence_pattern = Column(SQLEnum(RecurrencePattern, values_callable=lambda x: [e.value for e in x]), nullable=True)
+    recurrence_end_date = Column(DateTime, nullable=True)  # When the recurring series ends
+    recurrence_custom_days = Column(JSON, nullable=True)  # For CUSTOM: list of weekday numbers (0=Mon, 6=Sun)
+    recurrence_parent_id = Column(String(36), ForeignKey("events.id"), nullable=True)  # Links instances to their parent
+    template_id = Column(String(36), ForeignKey("event_templates.id"), nullable=True)  # Created from a template
 
     # Custom fields
     custom_fields = Column(JSON, nullable=True)  # Flexible storage for event-specific data
@@ -115,12 +132,16 @@ class Event(Base):
     # Relationships
     rsvps = relationship("EventRSVP", back_populates="event", cascade="all, delete-orphan")
     location_obj = relationship("Location", foreign_keys=[location_id])
+    recurrence_children = relationship("Event", foreign_keys=[recurrence_parent_id], back_populates="recurrence_parent")
+    recurrence_parent = relationship("Event", foreign_keys=[recurrence_parent_id], remote_side=[id])
+    template = relationship("EventTemplate", foreign_keys=[template_id])
 
     __table_args__ = (
         Index("ix_events_organization_id", "organization_id"),
         Index("ix_events_start_datetime", "start_datetime"),
         Index("ix_events_event_type", "event_type"),
         Index("ix_events_location_id", "location_id"),
+        Index("ix_events_recurrence_parent_id", "recurrence_parent_id"),
     )
 
 
@@ -160,10 +181,68 @@ class EventRSVP(Base):
 
     # Relationships
     event = relationship("Event", back_populates="rsvps")
+    user = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index("ix_event_rsvps_event_id", "event_id"),
         Index("ix_event_rsvps_user_id", "user_id"),
         # Unique constraint: one RSVP per user per event
         Index("ix_event_rsvps_event_user", "event_id", "user_id", unique=True),
+    )
+
+
+class EventTemplate(Base):
+    """
+    Event Template model for reusable event configurations
+
+    Allows departments to create templates for events they run regularly
+    (e.g., weekly meetings, annual holiday events, recurring trainings).
+    Templates store the event structure without specific dates.
+    """
+    __tablename__ = "event_templates"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    # Template identification
+    name = Column(String(200), nullable=False)  # Template name (e.g., "Weekly Business Meeting")
+    description = Column(Text, nullable=True)
+
+    # Event defaults (copied when creating an event from this template)
+    event_type = Column(SQLEnum(EventType, values_callable=lambda x: [e.value for e in x]), nullable=False, default=EventType.OTHER)
+    default_title = Column(String(200), nullable=True)  # Default title for events created from template
+    default_description = Column(Text, nullable=True)
+    default_location_id = Column(String(36), ForeignKey("locations.id"), nullable=True)
+    default_location = Column(String(300), nullable=True)
+    default_location_details = Column(Text, nullable=True)
+    default_duration_minutes = Column(Integer, nullable=True)  # Default event duration
+
+    # RSVP defaults
+    requires_rsvp = Column(Boolean, nullable=False, default=False)
+    max_attendees = Column(Integer, nullable=True)
+    is_mandatory = Column(Boolean, nullable=False, default=False)
+    eligible_roles = Column(JSON, nullable=True)  # List of role IDs that should attend
+    allow_guests = Column(Boolean, nullable=False, default=False)
+
+    # Check-in defaults
+    check_in_window_type = Column(SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]), nullable=True)
+    check_in_minutes_before = Column(Integer, nullable=True, default=30)
+    check_in_minutes_after = Column(Integer, nullable=True, default=15)
+    require_checkout = Column(Boolean, nullable=False, default=False)
+
+    # Notification defaults
+    send_reminders = Column(Boolean, nullable=False, default=True)
+    reminder_hours_before = Column(Integer, nullable=False, default=24)
+
+    # Custom fields template (structure for custom data fields)
+    custom_fields_template = Column(JSON, nullable=True)
+
+    # Metadata
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_event_templates_organization_id", "organization_id"),
     )

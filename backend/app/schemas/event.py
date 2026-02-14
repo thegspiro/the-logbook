@@ -32,7 +32,7 @@ class EventBase(BaseModel):
     send_reminders: bool = Field(default=True)
     reminder_hours_before: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
     check_in_window_type: Optional[str] = Field(default="flexible", description="Check-in window type: flexible, strict, window")
-    check_in_minutes_before: Optional[int] = Field(default=15, description="For 'window' type: minutes before event start")
+    check_in_minutes_before: Optional[int] = Field(default=30, description="Minutes before event start to allow check-in")
     check_in_minutes_after: Optional[int] = Field(default=15, description="For 'window' type: minutes after event start")
     require_checkout: bool = Field(default=False, description="Require manual check-out")
     custom_fields: Optional[Dict[str, Any]] = None
@@ -74,6 +74,7 @@ class EventUpdate(BaseModel):
 class EventCancel(BaseModel):
     """Schema for cancelling an event"""
     cancellation_reason: str = Field(..., min_length=10, max_length=500)
+    send_notifications: bool = Field(default=False, description="Send cancellation notifications to RSVPs")
 
 
 class EventResponse(EventBase):
@@ -169,6 +170,21 @@ class SelfCheckInRequest(BaseModel):
     is_checkout: bool = Field(default=False, description="Set to true for check-out")
 
 
+class ManagerAddAttendee(BaseModel):
+    """Schema for a manager adding someone to an event"""
+    user_id: UUID
+    status: str = Field(default="going", description="RSVP status: going, not_going, maybe")
+    checked_in: bool = Field(default=False, description="Mark as checked in immediately")
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class RSVPOverride(BaseModel):
+    """Schema for manager overriding attendance details"""
+    override_check_in_at: Optional[datetime] = Field(None, description="Override check-in time")
+    override_check_out_at: Optional[datetime] = Field(None, description="Override check-out time")
+    override_duration_minutes: Optional[int] = Field(None, ge=0, description="Override total attendance duration in minutes")
+
+
 class RecordActualTimes(BaseModel):
     """Schema for recording actual event start/end times"""
     actual_start_time: Optional[datetime] = Field(None, description="When the event actually started")
@@ -190,6 +206,7 @@ class QRCheckInData(BaseModel):
     location: Optional[str] = None
     location_id: Optional[str] = None
     location_name: Optional[str] = None
+    require_checkout: bool = Field(default=False, description="Whether this event requires checkout")
 
 
 class EventStats(BaseModel):
@@ -237,3 +254,127 @@ class CheckInMonitoringStats(BaseModel):
     # Time-based stats
     avg_check_in_time_minutes: Optional[float] = None  # Average time before event start
     last_check_in_at: Optional[datetime] = None
+
+
+# ============================================================
+# Event Templates
+# ============================================================
+
+class EventTemplateCreate(BaseModel):
+    """Schema for creating an event template"""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    event_type: str = Field(default="other")
+    default_title: Optional[str] = Field(None, max_length=200)
+    default_description: Optional[str] = None
+    default_location_id: Optional[UUID] = None
+    default_location: Optional[str] = Field(None, max_length=300)
+    default_location_details: Optional[str] = None
+    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    requires_rsvp: bool = False
+    max_attendees: Optional[int] = Field(None, ge=1)
+    is_mandatory: bool = False
+    eligible_roles: Optional[List[str]] = None
+    allow_guests: bool = False
+    check_in_window_type: Optional[str] = None
+    check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
+    check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
+    require_checkout: bool = False
+    send_reminders: bool = True
+    reminder_hours_before: int = Field(default=24, ge=1)
+    custom_fields_template: Optional[Dict[str, Any]] = None
+
+
+class EventTemplateUpdate(BaseModel):
+    """Schema for updating an event template"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    event_type: Optional[str] = None
+    default_title: Optional[str] = Field(None, max_length=200)
+    default_description: Optional[str] = None
+    default_location_id: Optional[UUID] = None
+    default_location: Optional[str] = Field(None, max_length=300)
+    default_location_details: Optional[str] = None
+    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    requires_rsvp: Optional[bool] = None
+    max_attendees: Optional[int] = Field(None, ge=1)
+    is_mandatory: Optional[bool] = None
+    eligible_roles: Optional[List[str]] = None
+    allow_guests: Optional[bool] = None
+    check_in_window_type: Optional[str] = None
+    check_in_minutes_before: Optional[int] = Field(None, ge=0)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0)
+    require_checkout: Optional[bool] = None
+    send_reminders: Optional[bool] = None
+    reminder_hours_before: Optional[int] = Field(None, ge=1)
+    custom_fields_template: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+
+
+class EventTemplateResponse(BaseModel):
+    """Schema for event template response"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    description: Optional[str] = None
+    event_type: str
+    default_title: Optional[str] = None
+    default_description: Optional[str] = None
+    default_location_id: Optional[UUID] = None
+    default_location: Optional[str] = None
+    default_location_details: Optional[str] = None
+    default_duration_minutes: Optional[int] = None
+    requires_rsvp: bool
+    max_attendees: Optional[int] = None
+    is_mandatory: bool
+    eligible_roles: Optional[List[str]] = None
+    allow_guests: bool
+    check_in_window_type: Optional[str] = None
+    check_in_minutes_before: Optional[int] = None
+    check_in_minutes_after: Optional[int] = None
+    require_checkout: bool
+    send_reminders: bool
+    reminder_hours_before: int
+    custom_fields_template: Optional[Dict[str, Any]] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+# ============================================================
+# Recurring Events
+# ============================================================
+
+class RecurringEventCreate(BaseModel):
+    """Schema for creating a recurring event series"""
+    # Base event data
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    event_type: str = Field(default="other")
+    location_id: Optional[UUID] = None
+    location: Optional[str] = Field(None, max_length=300)
+    location_details: Optional[str] = None
+
+    # Schedule
+    start_datetime: datetime  # Start of first occurrence
+    end_datetime: datetime  # End of first occurrence (defines duration)
+    recurrence_pattern: str = Field(..., description="daily, weekly, biweekly, monthly, custom")
+    recurrence_end_date: datetime  # When the series ends
+    recurrence_custom_days: Optional[List[int]] = Field(None, description="For custom: weekday numbers (0=Mon, 6=Sun)")
+
+    # Event settings (same as EventCreate)
+    requires_rsvp: bool = False
+    rsvp_deadline: Optional[datetime] = None
+    max_attendees: Optional[int] = Field(None, ge=1)
+    is_mandatory: bool = False
+    eligible_roles: Optional[List[str]] = None
+    allow_guests: bool = False
+    send_reminders: bool = True
+    reminder_hours_before: int = Field(default=24, ge=1)
+    check_in_window_type: Optional[str] = Field(default="flexible")
+    check_in_minutes_before: Optional[int] = Field(default=30, ge=0)
+    check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
+    require_checkout: bool = False
+    template_id: Optional[UUID] = None  # Created from a template
