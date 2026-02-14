@@ -77,15 +77,42 @@ docker compose exec backend ./run_onboarding_tests.sh -v
 
 ## Test Coverage
 
-Current onboarding test coverage:
+### Onboarding Tests (Backend)
 
 | Test | Purpose | Status |
 |------|---------|--------|
-| `test_admin_user_creation_with_role_assignment` | MissingGreenlet fix validation ⭐ | ✅ |
+| `test_admin_user_creation_with_role_assignment` | MissingGreenlet fix validation | ✅ |
 | `test_create_organization` | Organization creation | ✅ |
 | `test_default_roles_creation` | Super Admin role creation | ✅ |
 | `test_duplicate_admin_user_prevention` | Duplicate user protection | ✅ |
 | `test_onboarding_status_tracking` | Status tracking | ✅ |
+
+### Event Component Tests (Frontend - Added 2026-02-14)
+
+Comprehensive frontend test coverage for the events module:
+
+| Test File | Purpose | Lines |
+|-----------|---------|-------|
+| `EventForm.test.tsx` | Form validation, field interactions, submit handling | 460 |
+| `EventCreatePage.test.tsx` | Event creation flow, API integration, navigation | 137 |
+| `EventDetailPage.test.tsx` | Detail view, RSVP, duplication, delete | 694+82 |
+| `EventEditPage.test.tsx` | Edit form pre-population, update submission | 243 |
+| `EventsPage.test.tsx` | List view, filtering, search, pagination | 331 |
+
+**Running event tests:**
+
+```bash
+# Run all event tests
+cd frontend && npx vitest run src/pages/Event*.test.tsx src/components/EventForm.test.tsx
+
+# Run a specific test file
+cd frontend && npx vitest run src/pages/EventDetailPage.test.tsx
+
+# Run with coverage
+cd frontend && npx vitest run --coverage src/pages/Event*.test.tsx
+```
+
+**Total**: 1,865+ lines of test code covering all event components.
 
 ## Understanding Test Results
 

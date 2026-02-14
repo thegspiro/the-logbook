@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Events Module Enhancements (2026-02-14)
+
+#### Recurring Events & Templates
+- **Recurrence Patterns**: Support for daily, weekly, monthly, and yearly recurrence with configurable intervals, end dates, and occurrence limits
+- **Event Templates**: Create and apply reusable event templates for common event configurations
+- **Recurrence Pattern Models**: `EventRecurrence` and `EventTemplate` database models with full schema support
+- **Frontend Types**: Complete TypeScript types for recurrence patterns, templates, and event duplication
+
+#### Event Creation & Editing
+- **Dedicated EventCreatePage**: Full-featured event creation page with `EventForm` component (extracted from EventsPage for better code organization)
+- **Event Edit/Delete UI**: `EventEditPage` with pre-populated form, delete confirmation, and cancel notifications
+- **Event Duplication**: Duplicate existing events from the detail page with all settings carried over
+- **EventForm Component**: Reusable form component with all event fields, validation, and type safety
+
+#### Event Attachments
+- **Upload Endpoint**: `POST /events/{id}/attachments` for file uploads with metadata
+- **Download Endpoint**: `GET /events/{id}/attachments/{attachment_id}` for file retrieval
+- **Delete Endpoint**: `DELETE /events/{id}/attachments/{attachment_id}` for file removal
+
+#### Event Operations
+- **Booking Prevention**: Prevent double-booking of locations for overlapping event times
+- **RSVP Overrides**: Admin override for RSVP limits and deadline enforcement
+- **Event Notifications**: Cancel notifications sent when events are deleted
+- **Organization Timezone**: Timezone support added to auth flow and date formatting utilities
+
+#### Test Coverage
+- **5 Test Files**: Comprehensive test coverage for `EventForm`, `EventCreatePage`, `EventDetailPage`, `EventEditPage`, and `EventsPage`
+- **1,865+ Test Lines**: Full component testing with mock API responses, form interactions, and edge cases
+
+### Fixed - TypeScript & Backend Quality (2026-02-14)
+
+#### TypeScript Build Fixes
+- **All Build Errors Resolved**: Fixed all TypeScript compilation errors across the entire frontend codebase
+- **17 'as any' Assertions Removed**: Replaced all unsafe `as any` type assertions with proper typing across 7 files (apparatus API, AddMember, EventDetailPage, EventQRCodePage tests, MinutesDetailPage, test setup, errorHandling utility)
+- **Broken JSX Fixed**: Repaired broken JSX in `DocumentsPage` and `MinutesPage` caused by merged duplicate code blocks
+- **Duplicate Type Identifier Fixed**: Resolved duplicate `User` type export in membership types
+
+#### Backend Quality Fixes
+- **Python Backend Incongruities**: Fixed broken dependency injection, duplicate models, and missing permissions across 29 files
+  - Fixed `models/__init__.py` with unified model registry
+  - Added `core/permissions.py` with comprehensive permission definitions
+  - Fixed meetings and minutes endpoints with correct DI patterns
+  - Fixed document service and schemas
+- **Mutable Default Arguments**: Fixed mutable default values (`[]`, `{}`) across all backend models (analytics, apparatus, email_template, error_log, integration, membership_pipeline, user) using `default_factory`
+- **Documents Schema**: Made `file_name` optional and added missing folder fields in document schemas
+
+#### Startup & Runtime Fixes
+- **Polling Loop Fix**: Fixed infinite polling loop in onboarding check page
+- **Type Safety**: Fixed type safety issues in onboarding hooks (`useApiRequest`) and `OnboardingCheck` page
+- **API Client**: Fixed onboarding API client service method signatures
+
+#### Events Module Bug Fixes
+- **Runtime Crashes**: Fixed critical events module bugs causing runtime crashes and missing data
+- **Event Endpoints**: Simplified and fixed event API endpoints (reduced broken logic)
+- **Location Model**: Fixed location model relationship definitions
+- **Event Service**: Fixed event service with proper error handling and data loading
+
+#### Code Cleanup
+- **Events Module Deduplication**: Removed duplicate code in `EventCheckInMonitoringPage` and `EventsPage`, extracted shared types to `event.ts`
+- **Minute Model**: Added missing relationship for event linking
+
 ### Added - Meeting Minutes & Documents Module (2026-02-13)
 
 #### Meeting Minutes Backend

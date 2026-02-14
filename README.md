@@ -50,7 +50,7 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 - Fundraising & Donations
 - Vehicle/Apparatus Management
 - Budget & Finance Tracking
-- **Event Management** - Event creation with type filtering, RSVP settings, reminders, QR code check-in, self-check-in pages, check-out, analytics
+- **Event Management** - Event creation/editing/duplication, type filtering, RSVP with admin overrides, recurring events (daily/weekly/monthly/yearly), event templates, file attachments, location booking prevention, cancel notifications, organization timezone support, QR code check-in, self-check-in pages, check-out, analytics
 - **Reports** - Reports catalog with member, training, event, and compliance report categories
 - **Documents** - Folder-based document management with 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents), custom folders, grid/list views, document viewer
 - **Custom Forms** ([Documentation](docs/FORMS_MODULE.md))
@@ -249,9 +249,14 @@ The wiki includes:
 - [Election Security Audit](ELECTION_SECURITY_AUDIT.md) - Voting system security review
 - [Async SQLAlchemy Review](ASYNC_SQLALCHEMY_REVIEW.md) - Codebase async safety audit
 
+### Development & Quality
+- [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) - Multi-layer TypeScript build protection, `as any` elimination
+- [Testing Guide](TESTING.md) - Test suites for onboarding and event components
+
 ### Security & Troubleshooting
 - [Security Guide](SECURITY.md) - Security policy and compliance
-- [Troubleshooting Guide](docs/troubleshooting/README.md) - Common issues and fixes
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Comprehensive troubleshooting for all modules
+- [Deployment Troubleshooting](docs/troubleshooting/README.md) - Docker and deployment issues
 
 ## 🛠️ Technology Stack
 

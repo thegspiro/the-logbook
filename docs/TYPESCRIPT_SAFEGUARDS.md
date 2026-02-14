@@ -4,7 +4,7 @@
 
 This document describes the multi-layer safeguards implemented to prevent TypeScript build errors from reaching production. These safeguards catch common issues (unused imports, type mismatches, etc.) during development and before commits.
 
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-02-14
 
 ---
 
@@ -562,6 +562,49 @@ git commit -m "Fix type errors"
 
 ---
 
+## Recent Improvements (2026-02-14)
+
+### Full Build Error Resolution
+
+All TypeScript build errors across the entire frontend codebase were fixed in a single pass (commit `e97be90`). Changes spanned 11 files including:
+
+- Fixed property access errors in `MeetingAttendance`, `SideNavigation`, `PipelineTable`, `ProspectiveMembersPage`, `ProspectDetailPage`
+- Added 140+ lines of missing API function signatures to `services/api.ts`
+- Added missing type exports in `types/election.ts` and `modules/membership/types/index.ts`
+- Updated `tsconfig.json` compiler options for stricter type checking
+
+### Unsafe `as any` Type Assertions Eliminated
+
+All 17 `as any` type assertions were removed across the frontend (commit `ef938f7`). Each was replaced with a proper type:
+
+| File | Before | After |
+|------|--------|-------|
+| `apparatus/services/api.ts` | `as any` on response data | Proper generic response types |
+| `pages/AddMember.tsx` | `as any` on form data | Typed form state interface |
+| `pages/EventDetailPage.tsx` | `as any` on event fields | `Event` type with optional fields |
+| `pages/EventQRCodePage.test.tsx` | `as any` on mock data | `Partial<Event>` test helpers |
+| `pages/MinutesDetailPage.tsx` | `as any` on section data | `MinutesSection` interface |
+| `test/setup.ts` | `as any` on mock implementations | Properly typed mock functions |
+| `utils/errorHandling.ts` | `as any` on caught errors | `unknown` type with type guards |
+
+**Why This Matters**: `as any` bypasses TypeScript's type system entirely, hiding potential runtime errors. Removing these assertions ensures the compiler catches type mismatches at build time rather than production.
+
+### Mutable Default Bug Fix
+
+Fixed mutable default arguments (`[]`, `{}`) across 9 backend Python models. Mutable defaults are shared across all instances, which can cause data leaks between objects:
+
+```python
+# Before (BUG):
+class Event(Base):
+    tags: list = []  # Shared across ALL Event instances
+
+# After (FIXED):
+class Event(Base):
+    tags: list = field(default_factory=list)  # Each instance gets its own list
+```
+
+---
+
 ## Maintenance
 
 ### Monthly
@@ -578,7 +621,7 @@ git commit -m "Fix type errors"
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-02-07
+**Document Version**: 1.1
+**Last Updated**: 2026-02-14
 **Maintained By**: Development Team
 **Related**: ERROR_MESSAGES_COMPLETE.md, TROUBLESHOOTING.md

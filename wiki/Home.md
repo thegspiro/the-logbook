@@ -116,6 +116,22 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### February 2026 - Events Module, TypeScript Quality & Backend Fixes
+- Events module enhanced: recurring events, templates, duplication, attachments, booking prevention, RSVP overrides
+- Dedicated EventCreatePage and EventEditPage with reusable EventForm component
+- All TypeScript build errors resolved across entire frontend codebase
+- 17 unsafe `as any` type assertions replaced with proper typing
+- Backend quality fixes: dependency injection, duplicate models, missing permissions (29 files)
+- Mutable default arguments fixed across 9 backend models
+- Startup fixes: polling loop, type safety, API client signatures
+- Comprehensive event test coverage (5 files, 1,865+ lines)
+- Meeting Minutes and Documents module with 8 meeting types, template system, publish workflow
+- Custom Forms module with public forms, QR codes, cross-module integrations
+- Prospective Members pipeline with inactivity timeouts and election package integration
+- Elections module with ranked-choice voting, audit logging, ballot forensics
+- 16 system roles with unified role initialization
+- Security hardening: session timeouts, DOMPurify sanitization, password requirements
+
 ### January 2026 - Package Updates
 - ✅ Updated to Vite 6.0.5 (fixed from invalid 7.3.1)
 - ✅ React 18.3.1 with security updates
