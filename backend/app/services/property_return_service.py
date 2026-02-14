@@ -42,6 +42,7 @@ class PropertyReturnService:
         performed_by: str,
         return_deadline_days: int = 14,
         custom_instructions: Optional[str] = None,
+        reason: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], str]:
         """
         Generate a property-return report for a dropped member.
@@ -53,6 +54,7 @@ class PropertyReturnService:
             performed_by: User ID of the officer performing the drop.
             return_deadline_days: Days the member has to return property.
             custom_instructions: Optional extra paragraph added to the letter.
+            reason: Reason for the status change (included in the notification).
 
         Returns:
             Tuple of (report_data dict, html_content string).
@@ -153,6 +155,7 @@ class PropertyReturnService:
             "organization_address": self._format_org_address(org) if org else "",
             "drop_type": drop_type,
             "drop_type_display": "Voluntary Separation" if drop_type == "dropped_voluntary" else "Involuntary Separation",
+            "reason": reason,
             "effective_date": today.strftime("%B %d, %Y"),
             "return_deadline": return_deadline.strftime("%B %d, %Y"),
             "return_deadline_days": return_deadline_days,
@@ -164,7 +167,7 @@ class PropertyReturnService:
             "generated_at": datetime.utcnow().isoformat(),
         }
 
-        html = self._render_html(report_data, custom_instructions)
+        html = self._render_html(report_data, custom_instructions, reason=reason)
         return report_data, html
 
     async def save_as_document(
@@ -241,6 +244,7 @@ class PropertyReturnService:
         self,
         data: Dict[str, Any],
         custom_instructions: Optional[str] = None,
+        reason: Optional[str] = None,
     ) -> str:
         """Render a printable, mailable HTML property return letter."""
 
@@ -355,6 +359,8 @@ class PropertyReturnService:
         <strong>{escape(data['drop_type_display'])}</strong> effective
         <strong>{escape(data['effective_date'])}</strong>.
     </p>
+
+    {f'<p style="margin:0 0 16px 0;"><strong>Reason:</strong> {escape(reason)}</p>' if reason else ''}
 
     <p style="margin:0 0 16px 0;">
         In accordance with department policy, all department-issued property must be

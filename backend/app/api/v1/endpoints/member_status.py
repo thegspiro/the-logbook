@@ -138,6 +138,7 @@ async def change_member_status(
             performed_by=str(current_user.id),
             return_deadline_days=request.return_deadline_days,
             custom_instructions=request.custom_instructions,
+            reason=request.reason,
         )
 
         response.property_return_report = {
@@ -171,6 +172,9 @@ async def change_member_status(
                     email_svc = EmailService(organization)
                     org_name = organization.name if organization else "Department"
                     subject = f"Notice of Department Property Return — {org_name}"
+                    reason_line = ""
+                    if report_data.get("reason"):
+                        reason_line = f"Reason: {report_data['reason']}\n\n"
                     await email_svc.send_email(
                         to_emails=[member.email],
                         subject=subject,
@@ -180,6 +184,7 @@ async def change_member_status(
                             f"Dear {member.full_name},\n\n"
                             f"Your membership status with {org_name} has been changed to "
                             f"{report_data['drop_type_display']} effective {report_data['effective_date']}.\n\n"
+                            f"{reason_line}"
                             f"You have {report_data['item_count']} department item(s) "
                             f"valued at ${report_data['total_value']:,.2f} that must be returned "
                             f"by {report_data['return_deadline']}.\n\n"

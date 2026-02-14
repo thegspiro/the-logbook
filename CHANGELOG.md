@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Member Drop Statuses
 - **New UserStatus values**: `dropped_voluntary` and `dropped_involuntary` added to the UserStatus enum
 - **Status change endpoint**: `PATCH /api/v1/users/{user_id}/status` with `members.manage` permission
+- **Drop reason in notification**: The `reason` field provided by leadership is now included in the property return letter sent to the dropped member (both HTML and plain text versions)
 - **Audit logging**: All status changes logged with severity `warning` for drops
 - **Migration**: `20260214_0500` adds new enum values to users, email_templates, and notification_rules tables
 
