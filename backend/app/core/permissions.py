@@ -30,6 +30,7 @@ class PermissionCategory(str, Enum):
     FORMS = "forms"
     DOCUMENTS = "documents"
     APPARATUS = "apparatus"
+    FACILITIES = "facilities"
     ANALYTICS = "analytics"
     INTEGRATIONS = "integrations"
     NOTIFICATIONS = "notifications"
@@ -158,6 +159,14 @@ APPARATUS_DELETE = Permission("apparatus.delete", "Delete apparatus records", Pe
 APPARATUS_MAINTENANCE = Permission("apparatus.maintenance", "Log and manage maintenance records", PermissionCategory.APPARATUS)
 APPARATUS_MANAGE = Permission("apparatus.manage", "Full apparatus and fleet management", PermissionCategory.APPARATUS)
 
+# Facilities
+FACILITIES_VIEW = Permission("facilities.view", "View facilities and buildings", PermissionCategory.FACILITIES)
+FACILITIES_CREATE = Permission("facilities.create", "Create new facility records", PermissionCategory.FACILITIES)
+FACILITIES_EDIT = Permission("facilities.edit", "Edit facility records", PermissionCategory.FACILITIES)
+FACILITIES_DELETE = Permission("facilities.delete", "Delete facility records", PermissionCategory.FACILITIES)
+FACILITIES_MAINTENANCE = Permission("facilities.maintenance", "Log and manage facility maintenance", PermissionCategory.FACILITIES)
+FACILITIES_MANAGE = Permission("facilities.manage", "Full facility management", PermissionCategory.FACILITIES)
+
 # Analytics
 ANALYTICS_VIEW = Permission("analytics.view", "View analytics and dashboards", PermissionCategory.ANALYTICS)
 
@@ -264,6 +273,14 @@ ALL_PERMISSIONS: List[Permission] = [
     APPARATUS_DELETE,
     APPARATUS_MAINTENANCE,
     APPARATUS_MANAGE,
+
+    # Facilities
+    FACILITIES_VIEW,
+    FACILITIES_CREATE,
+    FACILITIES_EDIT,
+    FACILITIES_DELETE,
+    FACILITIES_MAINTENANCE,
+    FACILITIES_MANAGE,
 
     # Analytics
     ANALYTICS_VIEW,
@@ -388,6 +405,12 @@ DEFAULT_ROLES = {
             APPARATUS_DELETE.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
             ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_VIEW.name,
@@ -445,6 +468,12 @@ DEFAULT_ROLES = {
             APPARATUS_DELETE.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
             ANALYTICS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
@@ -513,6 +542,12 @@ DEFAULT_ROLES = {
             APPARATUS_DELETE.name,
             APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
             ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_VIEW.name,
@@ -544,6 +579,7 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
         ],
@@ -565,6 +601,7 @@ DEFAULT_ROLES = {
             INVENTORY_MANAGE.name,
             COMPLIANCE_VIEW.name,  # To see equipment certifications
             APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
         ],
     },
     "secretary": {
@@ -601,6 +638,7 @@ DEFAULT_ROLES = {
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
             APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
             MEMBERS_CREATE.name,
@@ -647,6 +685,7 @@ DEFAULT_ROLES = {
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -666,6 +705,7 @@ DEFAULT_ROLES = {
             TRAINING_MANAGE.name,
             COMPLIANCE_VIEW.name,
             APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
@@ -748,6 +788,7 @@ DEFAULT_ROLES = {
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
             APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
         ],
     },
     "apparatus_manager": {
@@ -808,6 +849,27 @@ DEFAULT_ROLES = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
+        ],
+    },
+    "facilities_manager": {
+        "name": "Facilities Manager",
+        "slug": "facilities_manager",
+        "description": "Day-to-day building management, maintenance logging, and inspections",
+        "is_system": True,
+        "priority": 50,
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            INVENTORY_VIEW.name,
+            INVENTORY_MANAGE.name,
+            COMPLIANCE_VIEW.name,
+            LOCATIONS_VIEW.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_MAINTENANCE.name,
         ],
     },
 }

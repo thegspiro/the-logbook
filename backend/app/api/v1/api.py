@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     users,
     organizations,
     apparatus,
+    facilities,
     security_monitoring,
     training,
     training_programs,
@@ -53,6 +54,7 @@ api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(organizations.router, prefix="/organization", tags=["organization"])
 api_router.include_router(apparatus.router, prefix="/apparatus", tags=["apparatus"])
+api_router.include_router(facilities.router, prefix="/facilities", tags=["facilities"])
 api_router.include_router(security_monitoring.router, prefix="/security", tags=["security"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
@@ -105,6 +107,7 @@ async def api_root():
             "elections": "/api/v1/elections",
             "inventory": "/api/v1/inventory",
             "apparatus": "/api/v1/apparatus",
+            "facilities": "/api/v1/facilities",
             "security": "/api/v1/security",
             "email_templates": "/api/v1/email-templates",
             "forms": "/api/v1/forms",
