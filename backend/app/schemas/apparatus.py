@@ -1073,3 +1073,166 @@ class ApparatusMaintenanceDue(BaseModel):
     is_overdue: bool
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+# =============================================================================
+# NFPA Compliance Schemas
+# =============================================================================
+
+class ComplianceStatusEnum(str, Enum):
+    COMPLIANT = "compliant"
+    NON_COMPLIANT = "non_compliant"
+    PENDING = "pending"
+    EXEMPT = "exempt"
+
+
+class ApparatusNFPAComplianceBase(BaseModel):
+    """Base NFPA compliance schema"""
+    apparatus_id: str = Field(..., description="Apparatus ID")
+    standard_code: str = Field(..., min_length=1, max_length=50, description="NFPA standard code (e.g., 'NFPA 1911')")
+    section_reference: str = Field(..., min_length=1, max_length=100, description="Section reference (e.g., 'Section 5.2.1')")
+    requirement_description: str = Field(..., min_length=1, description="Description of the requirement")
+    is_compliant: bool = Field(default=False)
+    compliance_status: ComplianceStatusEnum = Field(default=ComplianceStatusEnum.PENDING)
+    last_checked_date: Optional[date] = None
+    next_due_date: Optional[date] = None
+    notes: Optional[str] = None
+    exemption_reason: Optional[str] = None
+
+
+class ApparatusNFPAComplianceCreate(ApparatusNFPAComplianceBase):
+    """Schema for creating NFPA compliance record"""
+    pass
+
+
+class ApparatusNFPAComplianceUpdate(BaseModel):
+    """Schema for updating NFPA compliance record"""
+    standard_code: Optional[str] = Field(None, min_length=1, max_length=50)
+    section_reference: Optional[str] = Field(None, min_length=1, max_length=100)
+    requirement_description: Optional[str] = None
+    is_compliant: Optional[bool] = None
+    compliance_status: Optional[ComplianceStatusEnum] = None
+    last_checked_date: Optional[date] = None
+    next_due_date: Optional[date] = None
+    notes: Optional[str] = None
+    exemption_reason: Optional[str] = None
+
+
+class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
+    """Schema for NFPA compliance response"""
+    id: str
+    organization_id: str
+    last_checked_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Report Config Schemas
+# =============================================================================
+
+class ScheduleFrequencyEnum(str, Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
+class ReportTypeEnum(str, Enum):
+    FLEET_STATUS = "fleet_status"
+    MAINTENANCE = "maintenance"
+    COST_ANALYSIS = "cost_analysis"
+    CUSTOM = "custom"
+
+
+class OutputFormatEnum(str, Enum):
+    PDF = "pdf"
+    CSV = "csv"
+    EXCEL = "excel"
+
+
+class ApparatusReportConfigBase(BaseModel):
+    """Base report config schema"""
+    name: str = Field(..., min_length=1, max_length=200, description="Report name")
+    description: Optional[str] = None
+    report_type: ReportTypeEnum = Field(..., description="Report type")
+
+    # Schedule
+    is_scheduled: bool = Field(default=False)
+    schedule_frequency: Optional[ScheduleFrequencyEnum] = None
+    schedule_day: Optional[int] = Field(None, ge=1, le=31)
+
+    # Data Range
+    data_range_type: Optional[str] = Field(None, max_length=50)
+    data_range_days: Optional[int] = Field(None, ge=1)
+
+    # Filters
+    include_apparatus_ids: Optional[List[str]] = None
+    include_type_ids: Optional[List[str]] = None
+    include_status_ids: Optional[List[str]] = None
+    include_archived: bool = Field(default=False)
+
+    # Report Fields
+    fields_to_include: Optional[List[str]] = None
+    group_by: Optional[str] = Field(None, max_length=100)
+    sort_by: Optional[str] = Field(None, max_length=100)
+    sort_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
+
+    # Output
+    output_format: OutputFormatEnum = Field(default=OutputFormatEnum.PDF)
+
+    # Recipients
+    email_recipients: Optional[List[str]] = None
+
+    is_active: bool = Field(default=True)
+
+
+class ApparatusReportConfigCreate(ApparatusReportConfigBase):
+    """Schema for creating report config"""
+    pass
+
+
+class ApparatusReportConfigUpdate(BaseModel):
+    """Schema for updating report config"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    report_type: Optional[ReportTypeEnum] = None
+
+    is_scheduled: Optional[bool] = None
+    schedule_frequency: Optional[ScheduleFrequencyEnum] = None
+    schedule_day: Optional[int] = Field(None, ge=1, le=31)
+
+    data_range_type: Optional[str] = Field(None, max_length=50)
+    data_range_days: Optional[int] = Field(None, ge=1)
+
+    include_apparatus_ids: Optional[List[str]] = None
+    include_type_ids: Optional[List[str]] = None
+    include_status_ids: Optional[List[str]] = None
+    include_archived: Optional[bool] = None
+
+    fields_to_include: Optional[List[str]] = None
+    group_by: Optional[str] = Field(None, max_length=100)
+    sort_by: Optional[str] = Field(None, max_length=100)
+    sort_direction: Optional[str] = Field(None, pattern="^(asc|desc)$")
+
+    output_format: Optional[OutputFormatEnum] = None
+
+    email_recipients: Optional[List[str]] = None
+
+    is_active: Optional[bool] = None
+
+
+class ApparatusReportConfigResponse(ApparatusReportConfigBase):
+    """Schema for report config response"""
+    id: str
+    organization_id: str
+    next_run_date: Optional[datetime] = None
+    last_run_date: Optional[datetime] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config

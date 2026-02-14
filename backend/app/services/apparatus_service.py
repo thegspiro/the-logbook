@@ -1654,3 +1654,166 @@ class ApparatusService:
             "inspections_expiring_soon": insp_expiring,
             "insurance_expiring_soon": ins_expiring,
         }
+
+    # ========================================================================
+    # NFPA Compliance
+    # ========================================================================
+
+    async def list_nfpa_compliance(
+        self,
+        organization_id: UUID,
+        apparatus_id: Optional[str] = None,
+        compliance_status: Optional[str] = None,
+    ) -> List[ApparatusNFPACompliance]:
+        """List NFPA compliance records"""
+        query = select(ApparatusNFPACompliance).where(
+            ApparatusNFPACompliance.organization_id == organization_id
+        )
+        if apparatus_id:
+            query = query.where(ApparatusNFPACompliance.apparatus_id == apparatus_id)
+        if compliance_status:
+            query = query.where(ApparatusNFPACompliance.compliance_status == compliance_status)
+
+        query = query.order_by(ApparatusNFPACompliance.next_due_date.asc().nullslast())
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_nfpa_compliance(
+        self, compliance_id: str, organization_id: UUID
+    ) -> Optional[ApparatusNFPACompliance]:
+        """Get a specific NFPA compliance record"""
+        result = await self.db.execute(
+            select(ApparatusNFPACompliance)
+            .where(ApparatusNFPACompliance.id == compliance_id)
+            .where(ApparatusNFPACompliance.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_nfpa_compliance(
+        self, compliance_data, organization_id: UUID, checked_by: UUID = None,
+    ) -> ApparatusNFPACompliance:
+        """Create an NFPA compliance record"""
+        # Verify apparatus exists and belongs to org
+        apparatus = await self.get_apparatus(
+            apparatus_id=compliance_data.apparatus_id,
+            organization_id=organization_id,
+        )
+        if not apparatus:
+            raise ValueError("Apparatus not found")
+
+        record = ApparatusNFPACompliance(
+            organization_id=organization_id,
+            last_checked_by=checked_by,
+            **compliance_data.model_dump(),
+        )
+        self.db.add(record)
+        await self.db.commit()
+        await self.db.refresh(record)
+        return record
+
+    async def update_nfpa_compliance(
+        self, compliance_id: str, compliance_data, organization_id: UUID, checked_by: UUID = None,
+    ) -> Optional[ApparatusNFPACompliance]:
+        """Update an NFPA compliance record"""
+        record = await self.get_nfpa_compliance(compliance_id, organization_id)
+        if not record:
+            return None
+
+        update_data = compliance_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(record, field, value)
+
+        if checked_by:
+            record.last_checked_by = checked_by
+
+        await self.db.commit()
+        await self.db.refresh(record)
+        return record
+
+    async def delete_nfpa_compliance(
+        self, compliance_id: str, organization_id: UUID
+    ) -> bool:
+        """Delete an NFPA compliance record"""
+        record = await self.get_nfpa_compliance(compliance_id, organization_id)
+        if not record:
+            return False
+
+        await self.db.delete(record)
+        await self.db.commit()
+        return True
+
+    # ========================================================================
+    # Report Configs
+    # ========================================================================
+
+    async def list_report_configs(
+        self,
+        organization_id: UUID,
+        is_active: Optional[bool] = None,
+        report_type: Optional[str] = None,
+    ) -> List[ApparatusReportConfig]:
+        """List report configurations"""
+        query = select(ApparatusReportConfig).where(
+            ApparatusReportConfig.organization_id == organization_id
+        )
+        if is_active is not None:
+            query = query.where(ApparatusReportConfig.is_active == is_active)
+        if report_type:
+            query = query.where(ApparatusReportConfig.report_type == report_type)
+
+        query = query.order_by(ApparatusReportConfig.name)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_report_config(
+        self, config_id: str, organization_id: UUID
+    ) -> Optional[ApparatusReportConfig]:
+        """Get a specific report config"""
+        result = await self.db.execute(
+            select(ApparatusReportConfig)
+            .where(ApparatusReportConfig.id == config_id)
+            .where(ApparatusReportConfig.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_report_config(
+        self, config_data, organization_id: UUID, created_by: UUID = None,
+    ) -> ApparatusReportConfig:
+        """Create a report config"""
+        config = ApparatusReportConfig(
+            organization_id=organization_id,
+            created_by=created_by,
+            **config_data.model_dump(),
+        )
+        self.db.add(config)
+        await self.db.commit()
+        await self.db.refresh(config)
+        return config
+
+    async def update_report_config(
+        self, config_id: str, config_data, organization_id: UUID,
+    ) -> Optional[ApparatusReportConfig]:
+        """Update a report config"""
+        config = await self.get_report_config(config_id, organization_id)
+        if not config:
+            return None
+
+        update_data = config_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(config, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(config)
+        return config
+
+    async def delete_report_config(
+        self, config_id: str, organization_id: UUID
+    ) -> bool:
+        """Delete a report config"""
+        config = await self.get_report_config(config_id, organization_id)
+        if not config:
+            return False
+
+        await self.db.delete(config)
+        await self.db.commit()
+        return True

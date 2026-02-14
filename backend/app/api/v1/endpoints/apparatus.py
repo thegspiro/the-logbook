@@ -64,9 +64,17 @@ from app.schemas.apparatus import (
     ApparatusDocumentCreate,
     ApparatusDocumentUpdate,
     ApparatusDocumentResponse,
+    # NFPA Compliance
+    ApparatusNFPAComplianceCreate,
+    ApparatusNFPAComplianceUpdate,
+    ApparatusNFPAComplianceResponse,
+    # Report Configs
+    ApparatusReportConfigCreate,
+    ApparatusReportConfigUpdate,
+    ApparatusReportConfigResponse,
 )
 from app.services.apparatus_service import ApparatusService
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import require_permission
 
 router = APIRouter()
 
@@ -80,12 +88,13 @@ async def list_apparatus_types(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List all apparatus types
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     types = await service.list_apparatus_types(
@@ -125,12 +134,13 @@ async def create_apparatus_type(
 async def get_apparatus_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     Get a specific apparatus type by ID
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     apparatus_type = await service.get_apparatus_type(
@@ -220,12 +230,13 @@ async def list_apparatus_statuses(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined statuses"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List all apparatus statuses
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     statuses = await service.list_apparatus_statuses(
@@ -265,12 +276,13 @@ async def create_apparatus_status(
 async def get_apparatus_status(
     status_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     Get a specific apparatus status by ID
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     apparatus_status = await service.get_apparatus_status(
@@ -368,12 +380,13 @@ async def list_apparatus(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List apparatus with filtering and pagination
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
 
@@ -442,12 +455,13 @@ async def create_apparatus(
 @router.get("/summary", response_model=ApparatusFleetSummary, tags=["Apparatus"])
 async def get_fleet_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     Get fleet summary for dashboard
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     summary = await service.get_fleet_summary(
@@ -461,12 +475,13 @@ async def list_archived_apparatus(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List archived (previously owned) apparatus
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
 
@@ -495,12 +510,13 @@ async def list_archived_apparatus(
 async def get_apparatus(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     Get a specific apparatus by ID
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     apparatus = await service.get_apparatus(
@@ -669,12 +685,13 @@ async def list_custom_fields(
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     apparatus_type_id: Optional[str] = Query(None, description="Filter by applicable apparatus type"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List custom field definitions
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     fields = await service.list_custom_fields(
@@ -779,12 +796,13 @@ async def list_maintenance_types(
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List maintenance type definitions
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     types = await service.list_maintenance_types(
@@ -895,12 +913,13 @@ async def list_maintenance_records(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List maintenance records
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     records = await service.list_maintenance_records(
@@ -920,12 +939,13 @@ async def get_maintenance_due(
     days_ahead: int = Query(30, ge=1, le=365, description="Days ahead to check"),
     include_overdue: bool = Query(True, description="Include overdue maintenance"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     Get maintenance due within specified days
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     due = await service.get_maintenance_due(
@@ -940,13 +960,13 @@ async def get_maintenance_due(
 async def create_maintenance_record(
     maintenance_data: ApparatusMaintenanceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
 ):
     """
     Create a maintenance record
 
     **Authentication required**
-    **Permissions required:** apparatus.edit or apparatus.manage
+    **Permissions required:** apparatus.maintenance, apparatus.edit, or apparatus.manage
     """
     service = ApparatusService(db)
 
@@ -966,12 +986,13 @@ async def create_maintenance_record(
 async def get_maintenance_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     Get a specific maintenance record
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     record = await service.get_maintenance_record(
@@ -993,13 +1014,13 @@ async def update_maintenance_record(
     record_id: str,
     maintenance_data: ApparatusMaintenanceUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
 ):
     """
     Update a maintenance record
 
     **Authentication required**
-    **Permissions required:** apparatus.edit or apparatus.manage
+    **Permissions required:** apparatus.maintenance, apparatus.edit, or apparatus.manage
     """
     service = ApparatusService(db)
 
@@ -1060,12 +1081,13 @@ async def list_fuel_logs(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List fuel log entries
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     logs = await service.list_fuel_logs(
@@ -1083,13 +1105,13 @@ async def list_fuel_logs(
 async def create_fuel_log(
     fuel_data: ApparatusFuelLogCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
 ):
     """
     Create a fuel log entry
 
     **Authentication required**
-    **Permissions required:** apparatus.edit or apparatus.manage
+    **Permissions required:** apparatus.maintenance, apparatus.edit, or apparatus.manage
     """
     service = ApparatusService(db)
 
@@ -1115,12 +1137,13 @@ async def list_operators(
     user_id: Optional[str] = Query(None, description="Filter by user"),
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List apparatus operators
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     operators = await service.list_operators(
@@ -1223,12 +1246,13 @@ async def list_equipment(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     is_present: Optional[bool] = Query(None, description="Filter by presence on apparatus"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List apparatus equipment
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     equipment = await service.list_equipment(
@@ -1326,12 +1350,13 @@ async def delete_equipment(
 async def list_apparatus_photos(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List photos for an apparatus
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     photos = await service.list_photos(
@@ -1406,12 +1431,13 @@ async def delete_apparatus_photo(
 async def list_apparatus_documents(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
     List documents for an apparatus
 
     **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
     """
     service = ApparatusService(db)
     documents = await service.list_documents(
@@ -1475,4 +1501,272 @@ async def delete_apparatus_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
+        )
+
+
+# ============================================================================
+# NFPA Compliance Endpoints
+# ============================================================================
+
+@router.get("/nfpa-compliance", response_model=List[ApparatusNFPAComplianceResponse], tags=["NFPA Compliance"])
+async def list_nfpa_compliance(
+    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
+    compliance_status: Optional[str] = Query(None, description="Filter by status (compliant, non_compliant, pending, exempt)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    List NFPA compliance records
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    records = await service.list_nfpa_compliance(
+        organization_id=current_user.organization_id,
+        apparatus_id=apparatus_id,
+        compliance_status=compliance_status,
+    )
+    return records
+
+
+@router.get("/nfpa-compliance/{compliance_id}", response_model=ApparatusNFPAComplianceResponse, tags=["NFPA Compliance"])
+async def get_nfpa_compliance(
+    compliance_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Get a specific NFPA compliance record
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    record = await service.get_nfpa_compliance(
+        compliance_id=compliance_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="NFPA compliance record not found"
+        )
+
+    return record
+
+
+@router.post("/nfpa-compliance", response_model=ApparatusNFPAComplianceResponse, status_code=status.HTTP_201_CREATED, tags=["NFPA Compliance"])
+async def create_nfpa_compliance(
+    compliance_data: ApparatusNFPAComplianceCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+):
+    """
+    Create an NFPA compliance record
+
+    **Authentication required**
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    try:
+        record = await service.create_nfpa_compliance(
+            compliance_data=compliance_data,
+            organization_id=current_user.organization_id,
+            checked_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return record
+
+
+@router.patch("/nfpa-compliance/{compliance_id}", response_model=ApparatusNFPAComplianceResponse, tags=["NFPA Compliance"])
+async def update_nfpa_compliance(
+    compliance_id: str,
+    compliance_data: ApparatusNFPAComplianceUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+):
+    """
+    Update an NFPA compliance record
+
+    **Authentication required**
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    record = await service.update_nfpa_compliance(
+        compliance_id=compliance_id,
+        compliance_data=compliance_data,
+        organization_id=current_user.organization_id,
+        checked_by=current_user.id,
+    )
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="NFPA compliance record not found"
+        )
+
+    return record
+
+
+@router.delete("/nfpa-compliance/{compliance_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["NFPA Compliance"])
+async def delete_nfpa_compliance(
+    compliance_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete an NFPA compliance record
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    deleted = await service.delete_nfpa_compliance(
+        compliance_id=compliance_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="NFPA compliance record not found"
+        )
+
+
+# ============================================================================
+# Report Config Endpoints
+# ============================================================================
+
+@router.get("/report-configs", response_model=List[ApparatusReportConfigResponse], tags=["Report Configs"])
+async def list_report_configs(
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    report_type: Optional[str] = Query(None, description="Filter by report type"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    List report configurations
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    configs = await service.list_report_configs(
+        organization_id=current_user.organization_id,
+        is_active=is_active,
+        report_type=report_type,
+    )
+    return configs
+
+
+@router.get("/report-configs/{config_id}", response_model=ApparatusReportConfigResponse, tags=["Report Configs"])
+async def get_report_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Get a specific report config
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    config = await service.get_report_config(
+        config_id=config_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report config not found"
+        )
+
+    return config
+
+
+@router.post("/report-configs", response_model=ApparatusReportConfigResponse, status_code=status.HTTP_201_CREATED, tags=["Report Configs"])
+async def create_report_config(
+    config_data: ApparatusReportConfigCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Create a report configuration
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    config = await service.create_report_config(
+        config_data=config_data,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    return config
+
+
+@router.patch("/report-configs/{config_id}", response_model=ApparatusReportConfigResponse, tags=["Report Configs"])
+async def update_report_config(
+    config_id: str,
+    config_data: ApparatusReportConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Update a report configuration
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    config = await service.update_report_config(
+        config_id=config_id,
+        config_data=config_data,
+        organization_id=current_user.organization_id,
+    )
+
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report config not found"
+        )
+
+    return config
+
+
+@router.delete("/report-configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Report Configs"])
+async def delete_report_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete a report configuration
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    deleted = await service.delete_report_config(
+        config_id=config_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report config not found"
         )

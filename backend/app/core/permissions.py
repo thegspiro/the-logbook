@@ -151,7 +151,12 @@ DOCUMENTS_VIEW = Permission("documents.view", "View documents", PermissionCatego
 DOCUMENTS_MANAGE = Permission("documents.manage", "Manage documents and folders", PermissionCategory.DOCUMENTS)
 
 # Apparatus
-APPARATUS_MANAGE = Permission("apparatus.manage", "Manage apparatus and fleet", PermissionCategory.APPARATUS)
+APPARATUS_VIEW = Permission("apparatus.view", "View apparatus and fleet information", PermissionCategory.APPARATUS)
+APPARATUS_CREATE = Permission("apparatus.create", "Create new apparatus records", PermissionCategory.APPARATUS)
+APPARATUS_EDIT = Permission("apparatus.edit", "Edit apparatus records", PermissionCategory.APPARATUS)
+APPARATUS_DELETE = Permission("apparatus.delete", "Delete apparatus records", PermissionCategory.APPARATUS)
+APPARATUS_MAINTENANCE = Permission("apparatus.maintenance", "Log and manage maintenance records", PermissionCategory.APPARATUS)
+APPARATUS_MANAGE = Permission("apparatus.manage", "Full apparatus and fleet management", PermissionCategory.APPARATUS)
 
 # Analytics
 ANALYTICS_VIEW = Permission("analytics.view", "View analytics and dashboards", PermissionCategory.ANALYTICS)
@@ -253,6 +258,11 @@ ALL_PERMISSIONS: List[Permission] = [
     DOCUMENTS_MANAGE,
 
     # Apparatus
+    APPARATUS_VIEW,
+    APPARATUS_CREATE,
+    APPARATUS_EDIT,
+    APPARATUS_DELETE,
+    APPARATUS_MAINTENANCE,
     APPARATUS_MANAGE,
 
     # Analytics
@@ -372,6 +382,11 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
             ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
@@ -424,6 +439,11 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
             ANALYTICS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
@@ -487,6 +507,11 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
             ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
@@ -518,6 +543,7 @@ DEFAULT_ROLES = {
             MINUTES_VIEW.name,
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
+            APPARATUS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
         ],
@@ -538,6 +564,7 @@ DEFAULT_ROLES = {
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             COMPLIANCE_VIEW.name,  # To see equipment certifications
+            APPARATUS_VIEW.name,
         ],
     },
     "secretary": {
@@ -573,6 +600,7 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
             MEMBERS_CREATE.name,
@@ -618,6 +646,7 @@ DEFAULT_ROLES = {
             FORMS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
+            APPARATUS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -717,6 +746,7 @@ DEFAULT_ROLES = {
             LOCATIONS_VIEW.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
+            APPARATUS_VIEW.name,
         ],
     },
     "apparatus_manager": {
@@ -734,6 +764,10 @@ DEFAULT_ROLES = {
             INVENTORY_MANAGE.name,
             COMPLIANCE_VIEW.name,
             LOCATIONS_VIEW.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_MAINTENANCE.name,
         ],
     },
     "membership_coordinator": {
