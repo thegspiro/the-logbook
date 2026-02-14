@@ -127,6 +127,7 @@ export type {
   BulkEnrollmentResponse,
 
   // External providers
+  ExternalProviderConfig,
   ExternalTrainingProvider,
   ExternalTrainingProviderCreate,
   ExternalTrainingProviderUpdate,

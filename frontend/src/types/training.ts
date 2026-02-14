@@ -687,9 +687,21 @@ export type ImportStatus =
   | 'duplicate';
 
 export interface ExternalProviderConfig {
-  records_endpoint?: string;
-  users_endpoint?: string;
-  categories_endpoint?: string;
+  // Vector Solutions / TargetSolutions specific
+  site_id?: string;              // Required for Vector Solutions - the TS site identifier
+  page_size?: number;            // Max records per page (Vector Solutions max: 1000)
+  date_filter_param?: string;    // Custom date filter parameter name
+
+  // General endpoint overrides
+  records_endpoint?: string;     // Override the default records endpoint path
+  users_endpoint?: string;       // Override the default users endpoint path
+  categories_endpoint?: string;  // Override the default categories endpoint path
+  test_endpoint?: string;        // Override the default connection test endpoint
+
+  // Custom API support
+  param_mapping?: Record<string, string>;   // Map standard param names to provider-specific names
+  field_mapping?: Record<string, string>;   // Map standard field names to provider-specific names
+  records_path?: string;                     // JSON path to records array in response (e.g. "data.records")
   additional_headers?: Record<string, string>;
   date_format?: string;
 }

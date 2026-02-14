@@ -324,9 +324,21 @@ class ImportStatus(str, Enum):
 
 class ExternalProviderConfig(BaseModel):
     """Provider-specific configuration"""
-    records_endpoint: Optional[str] = None  # Endpoint for fetching records
-    users_endpoint: Optional[str] = None  # Endpoint for fetching users
-    categories_endpoint: Optional[str] = None  # Endpoint for fetching categories
+    # Vector Solutions / TargetSolutions specific
+    site_id: Optional[str] = None  # Required for Vector Solutions - the TS site identifier
+    page_size: Optional[int] = Field(None, ge=1, le=1000)  # Max records per page (VS max: 1000)
+    date_filter_param: Optional[str] = None  # Custom date filter parameter name
+
+    # General endpoint overrides
+    records_endpoint: Optional[str] = None  # Override default records endpoint path
+    users_endpoint: Optional[str] = None  # Override default users endpoint path
+    categories_endpoint: Optional[str] = None  # Override default categories endpoint path
+    test_endpoint: Optional[str] = None  # Override default connection test endpoint
+
+    # Custom API support
+    param_mapping: Optional[dict] = None  # Map standard param names to provider-specific names
+    field_mapping: Optional[dict] = None  # Map standard field names to provider-specific names
+    records_path: Optional[str] = None  # JSON path to records array in response (e.g. "data.records")
     additional_headers: Optional[dict] = None
     date_format: Optional[str] = None  # Date format used by the API
 

@@ -175,31 +175,38 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 value={formData.api_base_url}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
-                placeholder="https://api.vectorsolutions.com"
+                placeholder={formData.provider_type === 'vector_solutions' ? 'https://app.targetsolutions.com/v1' : 'https://api.example.com'}
                 required
                 aria-required="true"
               />
+              {formData.provider_type === 'vector_solutions' && (
+                <p className="mt-1 text-xs text-gray-400">
+                  For Vector Solutions / TargetSolutions, use your organization's API base URL (e.g., https://app.targetsolutions.com/v1)
+                </p>
+              )}
             </div>
 
-            <div>
-              <label htmlFor="provider-auth-type" className="block text-sm font-medium text-gray-300 mb-2">
-                Authentication Type
-              </label>
-              <select
-                id="provider-auth-type"
-                value={formData.auth_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
-              >
-                <option value="api_key">API Key</option>
-                <option value="basic">Basic Auth</option>
-                <option value="oauth2">OAuth 2.0</option>
-              </select>
-            </div>
+            {formData.provider_type !== 'vector_solutions' && (
+              <div>
+                <label htmlFor="provider-auth-type" className="block text-sm font-medium text-gray-300 mb-2">
+                  Authentication Type
+                </label>
+                <select
+                  id="provider-auth-type"
+                  value={formData.auth_type}
+                  onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))}
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="api_key">API Key</option>
+                  <option value="basic">Basic Auth</option>
+                  <option value="oauth2">OAuth 2.0</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label htmlFor="provider-api-key" className="block text-sm font-medium text-gray-300 mb-2">
-                API Key <span aria-hidden="true">*</span>
+                {formData.provider_type === 'vector_solutions' ? 'AccessToken' : 'API Key'} <span aria-hidden="true">*</span>
               </label>
               <input
                 id="provider-api-key"
@@ -207,11 +214,38 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 value={formData.api_key}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
-                placeholder="Enter your API key"
+                placeholder={formData.provider_type === 'vector_solutions' ? 'Enter your TargetSolutions AccessToken' : 'Enter your API key'}
                 required
                 aria-required="true"
               />
+              {formData.provider_type === 'vector_solutions' && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Your AccessToken is provided by your Vector Solutions account manager. Each token has specific access levels.
+                </p>
+              )}
             </div>
+
+            {formData.provider_type === 'vector_solutions' && (
+              <div>
+                <label htmlFor="provider-site-id" className="block text-sm font-medium text-gray-300 mb-2">
+                  Site ID
+                </label>
+                <input
+                  id="provider-site-id"
+                  type="text"
+                  value={formData.config?.site_id || ''}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    config: { ...prev.config, site_id: e.target.value || undefined }
+                  }))}
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+                  placeholder="Enter your TargetSolutions Site ID"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Run a connection test to discover available Site IDs. Required for syncing training records.
+                </p>
+              </div>
+            )}
 
             {formData.auth_type === 'basic' && (
               <div>

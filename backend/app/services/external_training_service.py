@@ -79,23 +79,45 @@ class ExternalTrainingSyncService:
     async def _test_vector_solutions_connection(
         self, provider: ExternalTrainingProvider
     ) -> Tuple[bool, str]:
-        """Test Vector Solutions API connection"""
+        """
+        Test Vector Solutions (TargetSolutions) API connection.
+
+        Vector Solutions API uses:
+        - Base URL: e.g. https://app.targetsolutions.com/v1
+        - Auth: AccessToken header with customer-specific token
+        - Site-scoped endpoints: /v1/sites (list sites to verify access)
+        - config.site_id: required for data endpoints
+        """
         if not provider.api_base_url or not provider.api_key:
-            return False, "API base URL and API key are required"
+            return False, "API base URL and AccessToken are required"
 
         headers = self._get_auth_headers(provider)
+        config = provider.config or {}
 
-        # Try to access the API health or info endpoint
-        test_url = f"{provider.api_base_url.rstrip('/')}/api/v1/ping"
+        # GET /sites is the simplest authenticated endpoint to verify the token
+        test_url = f"{provider.api_base_url.rstrip('/')}/sites"
 
         response = await self.http_client.get(test_url, headers=headers)
 
         if response.status_code == 200:
-            return True, "Connection successful"
+            data = response.json()
+            sites = data if isinstance(data, list) else data.get("sites", data.get("data", []))
+            site_id = config.get("site_id")
+
+            if site_id:
+                # Verify the configured site_id is accessible
+                site_ids = [str(s.get("id", s.get("siteId", ""))) for s in sites] if isinstance(sites, list) else []
+                if site_ids and site_id not in site_ids:
+                    return False, f"Connection successful but site_id '{site_id}' not found in accessible sites: {', '.join(site_ids)}"
+                return True, f"Connection successful - site '{site_id}' verified"
+            else:
+                # No site_id configured yet - report available sites
+                site_count = len(sites) if isinstance(sites, list) else 0
+                return True, f"Connection successful - {site_count} site(s) accessible. Configure site_id in provider settings to enable sync."
         elif response.status_code == 401:
-            return False, "Authentication failed - check API key"
+            return False, "Authentication failed - check your AccessToken"
         elif response.status_code == 403:
-            return False, "Access denied - check API permissions"
+            return False, "Access denied - your token may not have sufficient permissions"
         else:
             return False, f"Unexpected response: {response.status_code}"
 
@@ -179,15 +201,18 @@ class ExternalTrainingSyncService:
             return False, f"Unexpected response: {response.status_code}"
 
     def _get_auth_headers(self, provider: ExternalTrainingProvider) -> Dict[str, str]:
-        """Get authentication headers based on provider auth type"""
+        """Get authentication headers based on provider type and auth type"""
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
 
-        if provider.auth_type == "api_key":
+        # Vector Solutions / TargetSolutions uses a custom AccessToken header
+        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
             if provider.api_key:
-                # Common API key header patterns
+                headers["AccessToken"] = provider.api_key
+        elif provider.auth_type == "api_key":
+            if provider.api_key:
                 headers["X-API-Key"] = provider.api_key
                 headers["Authorization"] = f"Bearer {provider.api_key}"
         elif provider.auth_type == "basic":
@@ -331,69 +356,120 @@ class ExternalTrainingSyncService:
         else:
             raise ValueError(f"Unsupported provider type: {provider.provider_type}")
 
+    def _get_vector_site_id(self, provider: ExternalTrainingProvider) -> str:
+        """Get the Vector Solutions site_id from provider config"""
+        config = provider.config or {}
+        site_id = config.get("site_id")
+        if not site_id:
+            raise ValueError(
+                "Vector Solutions site_id is required. "
+                "Run a connection test to discover available sites, "
+                "then set site_id in the provider config."
+            )
+        return site_id
+
     async def _fetch_vector_solutions_records(
         self,
         provider: ExternalTrainingProvider,
         from_date: date,
         to_date: date,
     ) -> List[Dict[str, Any]]:
-        """Fetch records from Vector Solutions API"""
+        """
+        Fetch training records from Vector Solutions (TargetSolutions) API.
+
+        API details:
+        - Auth: AccessToken header
+        - Endpoints are site-scoped: /sites/{siteId}/...
+        - Pagination: startrow & limit params (max 1000 per page)
+        - Date filtering via query params
+        - Response is JSON
+        """
         headers = self._get_auth_headers(provider)
         config = provider.config or {}
+        site_id = self._get_vector_site_id(provider)
 
-        # Use configured endpoint or default
-        records_endpoint = config.get("records_endpoint", "/api/v1/completions")
+        # Use configured endpoint or default to credentials (training completions)
+        records_endpoint = config.get(
+            "records_endpoint",
+            f"/sites/{site_id}/credentials"
+        )
+        # If the endpoint doesn't already include the site_id, prepend it
+        if "{siteId}" in records_endpoint:
+            records_endpoint = records_endpoint.replace("{siteId}", site_id)
+        elif not records_endpoint.startswith(f"/sites/{site_id}"):
+            records_endpoint = f"/sites/{site_id}/{records_endpoint.lstrip('/')}"
+
         url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
 
-        params = {
-            "start_date": from_date.isoformat(),
-            "end_date": to_date.isoformat(),
-            "page_size": 100,
+        # Vector Solutions uses startrow/limit pagination (max 1000)
+        page_size = min(int(config.get("page_size", 1000)), 1000)
+
+        params: Dict[str, Any] = {
+            "limit": page_size,
         }
 
+        # Add date filtering if the API supports it
+        date_filter = config.get("date_filter_param")
+        if date_filter:
+            params[date_filter] = from_date.isoformat()
+        else:
+            # Use search query for date filtering
+            params["q"] = f'{{"completionDate":"{from_date.isoformat()}..{to_date.isoformat()}"}}'
+
         all_records = []
-        page = 1
+        startrow = 0
 
         while True:
-            params["page"] = page
+            params["startrow"] = startrow
             response = await self.http_client.get(url, headers=headers, params=params)
             response.raise_for_status()
 
             data = response.json()
-            records = data.get("data", data.get("records", data.get("completions", [])))
+            records = data if isinstance(data, list) else data.get("data", data.get("credentials", data.get("records", [])))
 
             if not records:
                 break
 
-            # Normalize record format
             for record in records:
                 all_records.append(self._normalize_vector_solutions_record(record))
 
-            # Check for more pages
-            if len(records) < params["page_size"]:
+            # Vector Solutions returns fewer than limit when no more pages
+            if len(records) < page_size:
                 break
-            page += 1
+            startrow += page_size
 
         return all_records
 
     def _normalize_vector_solutions_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize Vector Solutions record to standard format"""
+        """
+        Normalize a Vector Solutions / TargetSolutions record to our standard format.
+
+        Field names come from the TargetSolutions API response. We try multiple
+        possible field names to handle variations across API versions.
+        """
+        # Build full name from components if not provided as a single field
+        first = record.get("firstName", record.get("first_name", ""))
+        last = record.get("lastName", record.get("last_name", ""))
+        full_name = record.get("fullName", record.get("displayName", ""))
+        if not full_name and (first or last):
+            full_name = f"{first} {last}".strip()
+
         return {
-            "external_record_id": str(record.get("id", record.get("completion_id", ""))),
-            "external_user_id": str(record.get("user_id", record.get("employee_id", ""))),
-            "external_course_id": str(record.get("course_id", "")),
-            "external_category_id": str(record.get("category_id", "")),
-            "course_title": record.get("course_name", record.get("title", "")),
-            "course_code": record.get("course_code", ""),
-            "description": record.get("description", ""),
-            "duration_minutes": record.get("duration", record.get("duration_minutes", 0)),
-            "completion_date": record.get("completion_date", record.get("completed_at")),
-            "score": record.get("score", record.get("final_score")),
-            "passed": record.get("passed", record.get("status") == "passed"),
-            "external_category_name": record.get("category_name", record.get("category", "")),
-            "external_username": record.get("username", record.get("email", "")),
-            "external_email": record.get("email", ""),
-            "external_name": record.get("full_name", f"{record.get('first_name', '')} {record.get('last_name', '')}".strip()),
+            "external_record_id": str(record.get("id", record.get("credentialId", record.get("completionId", "")))),
+            "external_user_id": str(record.get("userId", record.get("employeeId", record.get("user_id", "")))),
+            "external_course_id": str(record.get("courseId", record.get("course_id", ""))),
+            "external_category_id": str(record.get("categoryId", record.get("category_id", ""))),
+            "course_title": record.get("courseName", record.get("courseTitle", record.get("name", ""))),
+            "course_code": record.get("courseCode", record.get("code", "")),
+            "description": record.get("description", record.get("courseDescription", "")),
+            "duration_minutes": record.get("durationMinutes", record.get("duration", record.get("creditMinutes", 0))),
+            "completion_date": record.get("completionDate", record.get("completedDate", record.get("dateCompleted"))),
+            "score": record.get("score", record.get("percentScore", record.get("finalScore"))),
+            "passed": record.get("passed", record.get("isPassed", record.get("status", "").lower() in ("passed", "completed", "complete"))),
+            "external_category_name": record.get("categoryName", record.get("category", "")),
+            "external_username": record.get("username", record.get("loginName", "")),
+            "external_email": record.get("email", record.get("userEmail", "")),
+            "external_name": full_name,
             "raw_data": record,
         }
 
