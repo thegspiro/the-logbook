@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ClipboardCheck,
   FileText as FileTextIcon,
+  ClipboardList,
 } from 'lucide-react';
 import { trainingService, userService, trainingSubmissionService } from '../services/api';
 import type { TrainingRequirement } from '../types/training';
@@ -380,6 +381,13 @@ const TrainingOfficerDashboard: React.FC = () => {
             title="Reports & Analytics"
             description="Generate compliance reports and training analytics"
             onClick={() => navigate('/training/reports')}
+            color="orange"
+          />
+          <NavigationCard
+            icon={ClipboardList}
+            title="Shift Reports"
+            description="File and review shift completion reports for trainees"
+            onClick={() => navigate('/training/shift-reports')}
             color="orange"
           />
           <NavigationCard

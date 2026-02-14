@@ -2872,6 +2872,57 @@ export const trainingSubmissionService = {
 };
 
 // ============================================
+// Shift Completion Reports Service
+// ============================================
+
+export const shiftCompletionService = {
+  async createReport(data: import('../types/training').ShiftCompletionReportCreate): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post('/training/shift-reports', data);
+    return response.data;
+  },
+
+  async getMyReports(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/my-reports', { params });
+    return response.data;
+  },
+
+  async getMyStats(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
+    const response = await api.get('/training/shift-reports/my-stats', { params });
+    return response.data;
+  },
+
+  async getReportsByOfficer(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/by-officer');
+    return response.data;
+  },
+
+  async getReportsForTrainee(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get(`/training/shift-reports/trainee/${traineeId}`, { params });
+    return response.data;
+  },
+
+  async getTraineeStats(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
+    const response = await api.get(`/training/shift-reports/trainee/${traineeId}/stats`, { params });
+    return response.data;
+  },
+
+  async getAllReports(params?: { trainee_id?: string; officer_id?: string; start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/all', { params });
+    return response.data;
+  },
+
+  async getReport(reportId: string): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.get(`/training/shift-reports/${reportId}`);
+    return response.data;
+  },
+
+  async acknowledgeReport(reportId: string, comments?: string): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
+    return response.data;
+  },
+};
+
+// ============================================
 // Integrations Service
 // ============================================
 

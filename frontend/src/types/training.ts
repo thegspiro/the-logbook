@@ -1013,3 +1013,64 @@ export interface SubmissionReviewRequest {
   override_credit_hours?: number;
   override_training_type?: TrainingType;
 }
+
+// ==================== Shift Completion Reports ====================
+
+export interface SkillObservation {
+  skill_name: string;
+  demonstrated: boolean;
+  notes?: string;
+}
+
+export interface TaskPerformed {
+  task: string;
+  description?: string;
+}
+
+export interface ShiftCompletionReportCreate {
+  shift_id?: string;
+  shift_date: string;
+  trainee_id: string;
+  hours_on_shift: number;
+  calls_responded?: number;
+  call_types?: string[];
+  performance_rating?: number;
+  areas_of_strength?: string;
+  areas_for_improvement?: string;
+  officer_narrative?: string;
+  skills_observed?: SkillObservation[];
+  tasks_performed?: TaskPerformed[];
+  enrollment_id?: string;
+}
+
+export interface ShiftCompletionReport {
+  id: string;
+  organization_id: string;
+  shift_id?: string;
+  shift_date: string;
+  trainee_id: string;
+  officer_id: string;
+  hours_on_shift: number;
+  calls_responded: number;
+  call_types?: string[];
+  performance_rating?: number;
+  areas_of_strength?: string;
+  areas_for_improvement?: string;
+  officer_narrative?: string;
+  skills_observed?: SkillObservation[];
+  tasks_performed?: TaskPerformed[];
+  enrollment_id?: string;
+  requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
+  trainee_acknowledged: boolean;
+  trainee_acknowledged_at?: string;
+  trainee_comments?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TraineeShiftStats {
+  total_reports: number;
+  total_hours: number;
+  total_calls: number;
+  avg_rating: number | null;
+}

@@ -836,6 +836,71 @@ class SkillCheckoff(Base):
 
 
 # ============================================
+# Shift Completion Reports
+# ============================================
+
+
+class ShiftCompletionReport(Base):
+    """
+    Shift Completion Report model
+
+    Allows shift officers to report on a trainee's experience during a shift.
+    Feeds into pipeline requirement progress for shift-based and call-based requirements.
+    """
+
+    __tablename__ = "shift_completion_reports"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Shift context
+    shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True)
+    shift_date = Column(Date, nullable=False)
+
+    # People
+    trainee_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    officer_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Shift details
+    hours_on_shift = Column(Float, nullable=False)
+    calls_responded = Column(Integer, default=0)
+    call_types = Column(JSON)  # Array of incident types responded to
+
+    # Performance observations
+    performance_rating = Column(Integer)  # 1-5 scale
+    areas_of_strength = Column(Text)
+    areas_for_improvement = Column(Text)
+    officer_narrative = Column(Text)  # Free-form description of the shift experience
+
+    # Skills observed
+    skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
+    tasks_performed = Column(JSON)  # Array of { task, description }
+
+    # Pipeline linkage
+    enrollment_id = Column(String(36), ForeignKey("program_enrollments.id", ondelete="SET NULL"), nullable=True)
+    requirements_progressed = Column(JSON)  # Array of { requirement_progress_id, value_added }
+
+    # Trainee acknowledgment
+    trainee_acknowledged = Column(Boolean, default=False)
+    trainee_acknowledged_at = Column(DateTime(timezone=True))
+    trainee_comments = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_shift_report_trainee', 'trainee_id', 'shift_date'),
+        Index('idx_shift_report_officer', 'officer_id'),
+        Index('idx_shift_report_enrollment', 'enrollment_id'),
+        Index('idx_shift_report_org_date', 'organization_id', 'shift_date'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftCompletionReport(trainee={self.trainee_id}, date={self.shift_date}, officer={self.officer_id})>"
+
+
+# ============================================
 # Self-Reported Training
 # ============================================
 

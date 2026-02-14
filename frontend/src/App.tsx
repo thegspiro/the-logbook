@@ -58,6 +58,7 @@ const CourseLibraryPage = lazy(() => import('./pages/CourseLibraryPage'));
 const ExternalTrainingPage = lazy(() => import('./pages/ExternalTrainingPage'));
 const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
 const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
+const ShiftReportPage = lazy(() => import('./pages/ShiftReportPage'));
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
@@ -169,6 +170,7 @@ function App() {
               <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
               <Route path="/training/submit" element={<SubmitTrainingPage />} />
               <Route path="/training/submissions" element={<ProtectedRoute requiredPermission="training.manage"><ReviewSubmissionsPage /></ProtectedRoute>} />
+              <Route path="/training/shift-reports" element={<ShiftReportPage />} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
 
               {/* Inventory Module */}
