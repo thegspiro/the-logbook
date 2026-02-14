@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Profile preservation**: Archived members' full profile, training history, and inventory records remain accessible
 - **Migration**: `20260214_0700` adds `archived` enum value and `archived_at` column
 
+#### Duplicate Member Prevention
+- **Prospect creation check**: Creating a prospect with an email matching an archived member returns 409 with reactivation guidance
+- **Prospect transfer check**: Transferring a prospect to membership is blocked if email matches any existing user (archived or active), with clear messaging about reactivation
+- **Admin user creation check**: Creating a member via admin endpoint returns 409 with match details and reactivation URL if email matches an archived member
+- **Pre-submission lookup**: `POST /api/v1/membership-pipeline/prospects/check-existing` — checks email and name against all existing members before prospect entry
+- **Match types**: Cross-references by email (exact) and by first+last name (case-insensitive)
+
 ### Added - Property Return Report & Member Drop Statuses (2026-02-14)
 
 #### Member Drop Statuses

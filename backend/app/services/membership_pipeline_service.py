@@ -25,7 +25,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
     PipelineStepType,
 )
-from app.models.user import User, generate_uuid
+from app.models.user import User, UserStatus, generate_uuid
 
 
 class MembershipPipelineService:
@@ -343,6 +343,55 @@ class MembershipPipelineService:
         result = await self.db.execute(query)
         return result.scalars().first()
 
+    async def check_existing_members(
+        self,
+        organization_id: str,
+        email: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Check if an email or name matches any existing users in the organization,
+        including archived members. Returns a list of matches with their status
+        so leadership can decide whether to reactivate instead of creating new.
+        """
+        from sqlalchemy import or_
+
+        conditions = [
+            User.organization_id == organization_id,
+            User.deleted_at.is_(None),
+        ]
+
+        # Match by email or by first+last name
+        match_conditions = [func.lower(User.email) == email.lower()]
+        if first_name and last_name:
+            match_conditions.append(
+                and_(
+                    func.lower(User.first_name) == first_name.lower(),
+                    func.lower(User.last_name) == last_name.lower(),
+                )
+            )
+
+        conditions.append(or_(*match_conditions))
+
+        result = await self.db.execute(
+            select(User).where(*conditions)
+        )
+        matches = result.scalars().all()
+
+        return [
+            {
+                "user_id": str(m.id),
+                "name": m.full_name,
+                "email": m.email,
+                "status": m.status.value if hasattr(m.status, 'value') else str(m.status),
+                "badge_number": m.badge_number,
+                "archived_at": m.archived_at.isoformat() if m.archived_at else None,
+                "match_type": "email" if m.email and m.email.lower() == email.lower() else "name",
+            }
+            for m in matches
+        ]
+
     async def create_prospect(
         self,
         organization_id: str,
@@ -602,6 +651,44 @@ class MembershipPipelineService:
         role_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
+
+        # Check for existing users with the same email (prevents duplicates)
+        existing_matches = await self.check_existing_members(
+            organization_id=prospect.organization_id,
+            email=prospect.email,
+            first_name=prospect.first_name,
+            last_name=prospect.last_name,
+        )
+        if existing_matches:
+            archived = [m for m in existing_matches if m["status"] == "archived"]
+            active_or_other = [m for m in existing_matches if m["status"] != "archived"]
+
+            if archived:
+                # Archived member found — recommend reactivation
+                match = archived[0]
+                return {
+                    "success": False,
+                    "existing_member_match": match,
+                    "message": (
+                        f"A previously archived member matches this prospect: "
+                        f"{match['name']} ({match['email']}). "
+                        f"Use POST /api/v1/users/{match['user_id']}/reactivate "
+                        f"to restore their account instead of creating a duplicate."
+                    ),
+                }
+            elif active_or_other:
+                # Active or other status — block duplicate
+                match = active_or_other[0]
+                return {
+                    "success": False,
+                    "existing_member_match": match,
+                    "message": (
+                        f"A member with this email already exists: "
+                        f"{match['name']} (status: {match['status']}). "
+                        f"Cannot create a duplicate user record."
+                    ),
+                }
+
         if not username:
             username = self._generate_username(prospect.first_name, prospect.last_name)
 

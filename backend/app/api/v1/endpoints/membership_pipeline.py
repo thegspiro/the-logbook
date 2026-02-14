@@ -386,6 +386,38 @@ async def list_prospects(
     return result
 
 
+@router.post("/prospects/check-existing")
+async def check_existing_members_for_prospect(
+    email: str = Query(..., description="Email to check against existing members"),
+    first_name: Optional[str] = Query(None, description="First name for name matching"),
+    last_name: Optional[str] = Query(None, description="Last name for name matching"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.create")),
+):
+    """
+    Check if a prospective member matches any existing users in the organization.
+
+    Call this before creating a prospect or transferring them to membership.
+    Returns any matches (active, archived, dropped, etc.) so leadership can
+    decide whether to reactivate an archived member instead of creating a
+    duplicate entry.
+
+    **Requires permission: members.create**
+    """
+    service = MembershipPipelineService(db)
+    matches = await service.check_existing_members(
+        organization_id=current_user.organization_id,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+    )
+    return {
+        "has_matches": len(matches) > 0,
+        "match_count": len(matches),
+        "matches": matches,
+    }
+
+
 @router.post("/prospects", response_model=ProspectResponse, status_code=status.HTTP_201_CREATED)
 async def create_prospect(
     data: ProspectCreate,
@@ -395,9 +427,37 @@ async def create_prospect(
     """
     Add a new prospective member manually.
 
+    Before creating, the system checks for existing members with the same
+    email. If an archived member is found, a 409 Conflict is returned with
+    the match details and a recommendation to reactivate instead.
+
     **Requires permission: members.create**
     """
     service = MembershipPipelineService(db)
+
+    # Check for existing members (especially archived) before creating
+    matches = await service.check_existing_members(
+        organization_id=current_user.organization_id,
+        email=data.email,
+        first_name=data.first_name,
+        last_name=data.last_name,
+    )
+    archived_matches = [m for m in matches if m["status"] == "archived"]
+    if archived_matches:
+        match = archived_matches[0]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": (
+                    f"A previously archived member matches this prospect: "
+                    f"{match['name']} ({match['email']}). "
+                    f"Consider reactivating their account instead of creating a new prospect."
+                ),
+                "existing_member_match": match,
+                "reactivate_url": f"/api/v1/users/{match['user_id']}/reactivate",
+            },
+        )
+
     prospect_data = data.model_dump(by_alias=True)
     # Rename 'metadata' key to 'metadata_' for the model
     if "metadata" in prospect_data:

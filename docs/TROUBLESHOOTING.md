@@ -1321,6 +1321,18 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 - Verify all checkouts are returned: check active checkouts for the user
 - Manually archive the member: `POST /api/v1/users/{user_id}/archive`
 
+#### Prospect Creation or Transfer Blocked by Archived Member Match
+
+**Symptoms**: Creating a prospect or transferring to membership returns 409 Conflict
+
+**Causes**:
+1. The prospect's email matches an archived (or active) member in the system
+
+**Solutions**:
+- If the person is a returning member: use `POST /api/v1/users/{user_id}/reactivate` to restore their archived profile
+- If it's a genuinely different person who happens to share the email: update the archived member's email first, then retry
+- Use `POST /api/v1/membership-pipeline/prospects/check-existing?email=...` to preview matches before creating
+
 #### Cannot Reactivate Member
 
 **Symptoms**: Reactivation endpoint returns an error
