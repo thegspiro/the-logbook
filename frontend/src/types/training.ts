@@ -1074,3 +1074,115 @@ export interface TraineeShiftStats {
   total_calls: number;
   avg_rating: number | null;
 }
+
+
+// ============================================
+// Training Module Configuration (Visibility)
+// ============================================
+
+export interface TrainingModuleConfig {
+  id: string;
+  organization_id: string;
+  show_training_history: boolean;
+  show_training_hours: boolean;
+  show_certification_status: boolean;
+  show_pipeline_progress: boolean;
+  show_requirement_details: boolean;
+  show_shift_reports: boolean;
+  show_shift_stats: boolean;
+  show_officer_narrative: boolean;
+  show_performance_rating: boolean;
+  show_areas_of_strength: boolean;
+  show_areas_for_improvement: boolean;
+  show_skills_observed: boolean;
+  show_submission_history: boolean;
+  allow_member_report_export: boolean;
+}
+
+export interface MemberVisibility {
+  show_training_history: boolean;
+  show_training_hours: boolean;
+  show_certification_status: boolean;
+  show_pipeline_progress: boolean;
+  show_requirement_details: boolean;
+  show_shift_reports: boolean;
+  show_shift_stats: boolean;
+  show_officer_narrative: boolean;
+  show_performance_rating: boolean;
+  show_areas_of_strength: boolean;
+  show_areas_for_improvement: boolean;
+  show_skills_observed: boolean;
+  show_submission_history: boolean;
+  allow_member_report_export: boolean;
+}
+
+export interface MyTrainingSummary {
+  visibility: MemberVisibility;
+  training_records?: Array<{
+    id: string;
+    course_name: string;
+    course_code?: string;
+    training_type: string;
+    status: string;
+    completion_date: string | null;
+    hours_completed: number;
+    expiration_date: string | null;
+    instructor?: string;
+  }>;
+  hours_summary?: { total_records: number; total_hours: number };
+  certifications?: Array<{
+    id: string;
+    course_name: string;
+    certification_number?: string;
+    expiration_date: string | null;
+    is_expired: boolean;
+    days_until_expiry: number | null;
+  }>;
+  enrollments?: Array<{
+    id: string;
+    program_id: string;
+    status: string;
+    progress_percentage: number;
+    enrolled_at: string | null;
+    target_completion_date: string | null;
+    completed_at: string | null;
+    requirements?: Array<{
+      id: string;
+      requirement_id: string;
+      status: string;
+      progress_value: number;
+      progress_percentage: number;
+      completed_at: string | null;
+    }>;
+  }>;
+  shift_reports?: Array<{
+    id: string;
+    shift_date: string;
+    hours_on_shift: number;
+    calls_responded: number;
+    call_types?: string[];
+    tasks_performed?: unknown[];
+    trainee_acknowledged: boolean;
+    performance_rating?: number;
+    areas_of_strength?: string;
+    areas_for_improvement?: string;
+    officer_narrative?: string;
+    skills_observed?: unknown[];
+  }>;
+  shift_stats?: {
+    total_shifts: number;
+    total_hours: number;
+    total_calls: number;
+    avg_rating: number | null;
+  };
+  submissions?: Array<{
+    id: string;
+    course_name: string;
+    training_type: string;
+    completion_date: string | null;
+    hours_completed: number;
+    status: string;
+    submitted_at: string | null;
+    reviewed_at: string | null;
+  }>;
+}

@@ -901,6 +901,82 @@ class ShiftCompletionReport(Base):
 
 
 # ============================================
+# Training Module Configuration (Member Visibility)
+# ============================================
+
+
+class TrainingModuleConfig(Base):
+    """
+    Training Module Configuration model
+
+    Organization-level configuration controlling what training data members
+    can see about themselves. Each field group can be toggled on/off.
+    Training officers and chiefs always see everything regardless of settings.
+    """
+
+    __tablename__ = "training_module_configs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"),
+                             nullable=False, unique=True, index=True)
+
+    # -- Member visibility: what members see on their own training page --
+
+    # Training records & history
+    show_training_history = Column(Boolean, default=True)
+    show_training_hours = Column(Boolean, default=True)
+    show_certification_status = Column(Boolean, default=True)
+
+    # Pipeline / program progress
+    show_pipeline_progress = Column(Boolean, default=True)
+    show_requirement_details = Column(Boolean, default=True)
+
+    # Shift completion reports
+    show_shift_reports = Column(Boolean, default=True)
+    show_shift_stats = Column(Boolean, default=True)
+
+    # Officer-written content visibility to members
+    show_officer_narrative = Column(Boolean, default=False)  # Officer narrative on shift reports
+    show_performance_rating = Column(Boolean, default=True)  # 1-5 star ratings
+    show_areas_of_strength = Column(Boolean, default=True)
+    show_areas_for_improvement = Column(Boolean, default=True)
+    show_skills_observed = Column(Boolean, default=True)
+
+    # Self-reported submissions
+    show_submission_history = Column(Boolean, default=True)
+
+    # Reports access
+    allow_member_report_export = Column(Boolean, default=False)  # Can members download their own data
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(String(36), ForeignKey("users.id"))
+
+    def __repr__(self):
+        return f"<TrainingModuleConfig(org_id={self.organization_id})>"
+
+    def to_visibility_dict(self):
+        """Return a dictionary of all visibility settings for frontend consumption."""
+        return {
+            "show_training_history": self.show_training_history,
+            "show_training_hours": self.show_training_hours,
+            "show_certification_status": self.show_certification_status,
+            "show_pipeline_progress": self.show_pipeline_progress,
+            "show_requirement_details": self.show_requirement_details,
+            "show_shift_reports": self.show_shift_reports,
+            "show_shift_stats": self.show_shift_stats,
+            "show_officer_narrative": self.show_officer_narrative,
+            "show_performance_rating": self.show_performance_rating,
+            "show_areas_of_strength": self.show_areas_of_strength,
+            "show_areas_for_improvement": self.show_areas_for_improvement,
+            "show_skills_observed": self.show_skills_observed,
+            "show_submission_history": self.show_submission_history,
+            "allow_member_report_export": self.allow_member_report_export,
+        }
+
+
+# ============================================
 # Self-Reported Training
 # ============================================
 

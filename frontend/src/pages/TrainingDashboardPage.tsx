@@ -107,11 +107,11 @@ export default function TrainingDashboardPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm font-medium text-gray-600">Quick Actions</div>
           <div className="mt-2 space-y-2">
+            <button onClick={() => navigate('/training/my-training')} className="text-sm text-blue-600 hover:text-blue-800 block">
+              My Training
+            </button>
             <button onClick={() => navigate('/training/submit')} className="text-sm text-blue-600 hover:text-blue-800 block">
               Submit External Training
-            </button>
-            <button className="text-sm text-blue-600 hover:text-blue-800 block">
-              Generate Report
             </button>
           </div>
         </div>

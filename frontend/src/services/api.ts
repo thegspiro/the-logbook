@@ -2923,6 +2923,32 @@ export const shiftCompletionService = {
 };
 
 // ============================================
+// Training Module Config Service
+// ============================================
+
+export const trainingModuleConfigService = {
+  async getConfig(): Promise<import('../types/training').TrainingModuleConfig> {
+    const response = await api.get('/training/module-config/config');
+    return response.data;
+  },
+
+  async updateConfig(updates: Partial<import('../types/training').TrainingModuleConfig>): Promise<import('../types/training').TrainingModuleConfig> {
+    const response = await api.put('/training/module-config/config', updates);
+    return response.data;
+  },
+
+  async getVisibility(): Promise<import('../types/training').MemberVisibility> {
+    const response = await api.get('/training/module-config/visibility');
+    return response.data;
+  },
+
+  async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
+    const response = await api.get('/training/module-config/my-training');
+    return response.data;
+  },
+};
+
+// ============================================
 // Integrations Service
 // ============================================
 

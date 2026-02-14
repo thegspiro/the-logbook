@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Training Module Expansion (2026-02-14)
+
+#### Self-Reported Training
+- **Member Submission Page**: Members can submit external training for officer review at `/training/submit`
+- **Officer Review Page**: Training officers review, approve, reject, or request revisions at `/training/submissions`
+- **Configurable Approval Workflow**: Auto-approve under X hours, require manual approval, set review deadlines
+- **Customizable Form Fields**: Per-field visibility, required flags, and custom labels (14 configurable fields)
+- **Notification Settings**: Configurable notifications for submission and decision events
+- **TrainingRecord Auto-Creation**: Approved submissions automatically create official training records
+- **Database**: `self_report_configs` and `training_submissions` tables with migration `20260214_0200`
+
+#### Shift Completion Reports
+- **Shift Report Form**: Officers file detailed reports on trainee shift experiences at `/training/shift-reports`
+- **Performance Tracking**: 1-5 star rating, areas of strength, areas for improvement, officer narrative
+- **Skills Observed**: Track specific skills with demonstrated/not-demonstrated status
+- **Auto-Pipeline Progress**: Reports linked to enrollments automatically update requirement progress for SHIFTS, CALLS, and HOURS requirement types
+- **Trainee Acknowledgment**: Trainees can review and acknowledge reports with comments
+- **Three-Tab Interface**: New Report, Filed Reports (by officer), My Reports (received as trainee)
+- **Database**: `shift_completion_reports` table with migration `20260214_0300`
+- **API**: 9 endpoints under `/api/v1/training/shift-reports/`
+
+#### Training Reports
+- **Training Progress Report**: Pipeline enrollment progress, requirement completion rates, member advancement status
+- **Annual Training Report**: Comprehensive annual breakdown of training hours, shift hours, courses, calls, performance ratings, training by type
+- **Date Range Picker**: Customizable reporting periods with preset buttons (This Year, Last Year, Last 90 Days, Custom) and date inputs
+- **Report Period Display**: Selected period shown in report results modal header
+
+#### Member Training Page ("My Training")
+- **Personal Training Page** at `/training/my-training`: Aggregated view of all training data for each member
+- **Collapsible Sections**: Training hours summary, certifications, pipeline progress, shift reports, training history, submissions
+- **Stat Cards**: Total hours, records, shifts, average rating at a glance
+- **Certification Alerts**: Expired and expiring-soon badges with days-until-expiry
+- **Navigation**: Quick action links from Training Dashboard and member profile
+
+#### Member Visibility Configuration
+- **TrainingModuleConfig Model**: 14 boolean visibility toggles per organization controlling what members see
+- **Officer Settings Tab**: Officers can toggle each data category on/off from the My Training page
+- **Granular Control**: Independently control training history, hours, certifications, pipeline progress, requirement details, shift reports, shift stats, performance ratings, strengths, improvement areas, skills observed, officer narrative, submission history, and report export
+- **Default-Off Fields**: Officer narrative and report export are hidden from members by default
+- **Officer Override**: Officers and administrators always see the full dataset regardless of settings
+- **Database**: `training_module_configs` table with migration `20260214_0400`
+- **API**: 4 endpoints under `/api/v1/training/module-config/`
+
+#### Documentation Updates
+- **TRAINING_PROGRAMS.md**: Added sections for self-reported training, shift completion reports, member training page, member visibility configuration, training reports, and new database schemas
+- **TROUBLESHOOTING.md**: Added Training Module section with 7 troubleshooting scenarios covering self-reported training, shift reports, my training page, visibility settings, and training reports
+- **CHANGELOG.md**: Comprehensive changelog entry for all training module features
+
 ### Added - Events Module Enhancements (2026-02-14)
 
 #### Recurring Events & Templates

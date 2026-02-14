@@ -1189,6 +1189,130 @@ The Reports module generates data reports including member roster, training summ
 | `member_roster` | List of all active members with roles | Users table |
 | `training_summary` | Training completion and certification status | Training records |
 | `event_attendance` | Event participation rates | Events and attendees |
+| `training_progress` | Pipeline enrollment progress and requirement completion | Program enrollments |
+| `annual_training` | Comprehensive annual training and shift breakdown | Training records + shift reports |
+
+#### Date Range Not Applied to Report
+
+**Symptoms**: Report generates but ignores the selected date range
+
+**Causes**:
+1. Report type does not support date ranges (e.g., member_roster, training_progress)
+2. Date format is incorrect
+
+**Solutions**:
+- Only reports marked with `usesDateRange: true` use the date range picker (training_summary, event_attendance, annual_training)
+- Verify dates are in `YYYY-MM-DD` format
+- Check that start date is before end date
+
+---
+
+## Training Module
+
+### Overview
+
+The Training module manages courses, requirements, programs (pipelines), shift completion reports, self-reported training, and member visibility settings. Training data is accessible to individual members via their "My Training" page with configurable visibility settings per department.
+
+**API Endpoints**: `/api/v1/training/`, `/api/v1/training/programs/`, `/api/v1/training/shift-reports/`, `/api/v1/training/submissions/`, `/api/v1/training/module-config/`
+
+### Common Issues
+
+#### Self-Reported Training: Submission Not Appearing for Review
+
+**Symptoms**: Member submits training but officer doesn't see it in Review Submissions
+
+**Causes**:
+1. Submission is still in "draft" status
+2. Officer doesn't have `training.manage` permission
+3. Different organization context
+
+**Solutions**:
+- Confirm the member clicked "Submit" (not just "Save Draft")
+- Verify the officer has `training.manage` permission assigned
+- Ensure both the member and officer are in the same organization
+- Refresh the Review Submissions page
+
+#### Self-Reported Training: Auto-Approve Not Working
+
+**Symptoms**: Submissions under the configured hour threshold are not auto-approved
+
+**Causes**:
+1. `auto_approve_under_hours` is set to null (disabled)
+2. The submitted hours exceed the threshold
+3. `require_approval` is set to true and overrides auto-approve
+
+**Solutions**:
+- Navigate to Review Submissions → Settings and verify auto-approve is configured
+- Check the hour threshold value
+- Ensure the submission's hours are strictly below the threshold
+
+#### Shift Report: Pipeline Progress Not Updating
+
+**Symptoms**: Filing a shift report doesn't update the trainee's requirement progress
+
+**Causes**:
+1. No enrollment_id was linked to the shift report
+2. The trainee has no active enrollments
+3. The enrollment's requirements don't include SHIFTS, CALLS, or HOURS types
+
+**Solutions**:
+- When creating a shift report, select the trainee's program enrollment from the dropdown
+- Verify the trainee has an active program enrollment
+- Check that the program's requirements include shift-based, call-based, or hour-based requirement types
+- Look at the enrollment's requirement progress to confirm the types match
+
+#### Shift Report: Trainee Can't See Report
+
+**Symptoms**: Trainee doesn't see shift reports on their My Training page
+
+**Causes**:
+1. The `show_shift_reports` visibility setting is turned off
+2. The report was filed for a different trainee
+
+**Solutions**:
+- Officers: Go to My Training → Member Visibility Settings and enable "Shift Reports"
+- Verify the correct trainee was selected when filing the report
+
+#### My Training Page: Missing Data Sections
+
+**Symptoms**: Member's training page is missing sections (e.g., no shift stats, no certifications)
+
+**Causes**:
+1. Visibility settings have been turned off for those sections
+2. No data exists for those sections yet
+
+**Solutions**:
+- Officers: Navigate to My Training → Member Visibility Settings to check which sections are enabled
+- Data sections only appear when there is data to show — an empty certification list won't show the Certifications section
+- Check that training records, shift reports, or enrollments exist for the member
+
+#### Member Visibility Settings: Changes Not Taking Effect
+
+**Symptoms**: After toggling visibility settings, members still see/don't see certain data
+
+**Causes**:
+1. Settings weren't saved (the Save button was not clicked)
+2. Browser cache showing stale data
+
+**Solutions**:
+- Ensure the "Save Changes" button is clicked after toggling settings
+- Ask the member to refresh their browser
+- Verify the settings took effect by checking GET `/api/v1/training/module-config/visibility`
+
+#### Training Reports: Annual Report Shows No Data
+
+**Symptoms**: Annual Training Report generates but all values are zero
+
+**Causes**:
+1. Date range doesn't match any training records or shift reports
+2. No completed training records exist in the period
+3. Members don't have training records linked to the organization
+
+**Solutions**:
+- Check the reporting period — default is current year (Jan 1 - Dec 31)
+- Try "Last Year" if training was recorded in the prior year
+- Verify training records exist with `completed_date` within the selected range
+- For shift data, verify shift completion reports exist with `shift_date` in range
 
 ---
 

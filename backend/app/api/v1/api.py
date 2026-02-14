@@ -33,6 +33,7 @@ from app.api.v1.endpoints import (
     training_sessions,
     training_submissions,
     shift_completion,
+    training_module_config,
     elections,
     inventory,
     external_training,
@@ -62,6 +63,7 @@ api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(training_submissions.router, prefix="/training/submissions", tags=["training-submissions"])
 api_router.include_router(shift_completion.router, prefix="/training/shift-reports", tags=["shift-completion"])
 api_router.include_router(external_training.router, prefix="/training/external", tags=["external-training"])
+api_router.include_router(training_module_config.router, prefix="/training/module-config", tags=["training-module-config"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
 api_router.include_router(membership_pipeline.router, prefix="/membership-pipeline", tags=["membership-pipeline"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
