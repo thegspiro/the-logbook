@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plain text fallback**: Text version included for email clients that don't render HTML
 - **Preview endpoint**: `GET /api/v1/users/{user_id}/property-return-report` to preview before dropping a member
 
+#### Property Return Reminders (30-Day / 90-Day)
+- **Automatic reminders**: 30-day and 90-day reminders sent to dropped members who still have outstanding items
+- **Dual notification**: Reminder emailed to the member AND a summary sent to admin/quartermaster/chief users
+- **Duplicate prevention**: Each reminder type (30-day, 90-day) sent only once per member via `property_return_reminders` tracking table
+- **Escalation language**: 90-day reminder includes a "FINAL NOTICE" with recovery action warning
+- **Process endpoint**: `POST /api/v1/users/property-return-reminders/process` — designed for daily cron/scheduler or manual trigger
+- **Overdue dashboard**: `GET /api/v1/users/property-return-reminders/overdue` — lists all dropped members with outstanding items, days since drop, item details, and which reminders have been sent
+- **Status tracking**: `status_changed_at` and `status_change_reason` columns added to users table for accurate drop-date tracking
+- **Migration**: `20260214_0600` adds user columns and `property_return_reminders` table
+
 #### Notification & Email Template Support
 - **MEMBER_DROPPED trigger**: Added to NotificationTrigger enum for notification rules
 - **MEMBER_DROPPED template type**: Added to EmailTemplateType for admin-customizable templates

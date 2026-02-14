@@ -1277,6 +1277,35 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
 
+#### Property Return Reminders: 30-Day or 90-Day Not Sending
+
+**Symptoms**: A member was dropped more than 30 days ago but no reminder was sent
+
+**Causes**:
+1. The process endpoint hasn't been called (reminders require a trigger)
+2. The member has no outstanding items (all were returned)
+3. The reminder was already sent previously (duplicate prevention)
+4. The member was dropped before `status_changed_at` was tracked (legacy drops)
+
+**Solutions**:
+- Call `POST /api/v1/users/property-return-reminders/process` manually or set up a daily scheduler
+- Check the overdue list: `GET /api/v1/users/property-return-reminders/overdue`
+- Verify the member still has active assignments/checkouts in the inventory system
+- For legacy drops: update the member's `status_changed_at` to their actual drop date
+
+#### Property Return Reminders: Overdue List Shows Returned Items
+
+**Symptoms**: Items appear on the overdue list but the member already returned them
+
+**Causes**:
+1. Items were physically returned but not checked in / unassigned in the system
+2. Officer forgot to process the return in the inventory module
+
+**Solutions**:
+- Unassign items: `POST /api/v1/inventory/items/{item_id}/unassign`
+- Check in items: `POST /api/v1/inventory/checkout/{checkout_id}/checkin`
+- Once all items are returned in the system, the member will no longer appear on the overdue list and no further reminders will be sent
+
 ---
 
 ## Training Module

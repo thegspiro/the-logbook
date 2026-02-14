@@ -379,3 +379,34 @@ class MaintenanceRecord(Base):
         Index("idx_maintenance_records_org_next_due", "organization_id", "next_due_date"),
         Index("idx_maintenance_records_org_completed", "organization_id", "is_completed"),
     )
+
+
+class PropertyReturnReminder(Base):
+    """
+    Tracks which property-return reminder notices have been sent to
+    dropped members so we don't send duplicates.
+    """
+
+    __tablename__ = "property_return_reminders"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    reminder_type = Column(String(20), nullable=False)  # "30_day" or "90_day"
+    items_outstanding = Column(Integer, nullable=False, default=0)
+    total_value_outstanding = Column(Numeric(10, 2), nullable=False, default=0)
+    sent_to_member = Column(Boolean, nullable=False, default=True)
+    sent_to_admin = Column(Boolean, nullable=False, default=True)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        Index("idx_prop_reminder_org_user", "organization_id", "user_id"),
+        Index("idx_prop_reminder_type", "user_id", "reminder_type"),
+    )
+
+    def __repr__(self):
+        return f"<PropertyReturnReminder(user_id={self.user_id}, type={self.reminder_type})>"

@@ -193,6 +193,8 @@ class User(Base):
 
     # Status
     status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
+    status_changed_at = Column(DateTime(timezone=True))  # When status last changed (used for drop-date tracking)
+    status_change_reason = Column(Text)  # Reason for the last status change
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 

@@ -95,8 +95,11 @@ async def change_member_status(
             detail=f"Member is already {new_status.value}",
         )
 
-    # Update the status
+    # Update the status and record when it changed
+    from datetime import datetime as dt
     member.status = new_status
+    member.status_changed_at = dt.utcnow()
+    member.status_change_reason = request.reason
     await db.commit()
     await db.refresh(member)
 
@@ -237,4 +240,61 @@ async def get_property_return_preview(
         "total_value": report_data["total_value"],
         "items": report_data["items"],
         "html": html_content,
+    }
+
+
+# ==================== Property Return Reminders ====================
+
+
+@router.post("/property-return-reminders/process")
+async def process_property_return_reminders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Process property-return reminders for the organization.
+
+    Scans all dropped members and sends 30-day and 90-day reminder emails
+    to members who still have outstanding inventory items. Each reminder
+    type is sent only once per member. Admin/quartermaster users also
+    receive a notification for each reminder sent.
+
+    This endpoint is designed to be called daily (via cron, scheduler,
+    or manual trigger). Duplicate reminders are prevented automatically.
+
+    Requires `members.manage` permission.
+    """
+    from app.services.property_return_reminder_service import PropertyReturnReminderService
+
+    service = PropertyReturnReminderService(db)
+    result = await service.process_reminders(
+        organization_id=str(current_user.organization_id),
+    )
+    return result
+
+
+@router.get("/property-return-reminders/overdue")
+async def get_overdue_property_returns(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Get a list of all dropped members who still have outstanding
+    inventory items, sorted by oldest drop date first.
+
+    Each entry includes: member name, drop date, days since drop,
+    items outstanding with values, and which reminders have been sent.
+
+    Requires `members.manage` permission.
+    """
+    from app.services.property_return_reminder_service import PropertyReturnReminderService
+
+    service = PropertyReturnReminderService(db)
+    overdue_list = await service.get_overdue_returns(
+        organization_id=str(current_user.organization_id),
+    )
+    return {
+        "organization_id": str(current_user.organization_id),
+        "overdue_count": len(overdue_list),
+        "members": overdue_list,
     }
