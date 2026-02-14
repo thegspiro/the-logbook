@@ -117,6 +117,7 @@ class CurrentUser(BaseModel):
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     organization_id: UUID
+    timezone: str = Field(default="America/New_York", description="Organization timezone")
     roles: list[str] = []  # List of role names
     permissions: list[str] = []  # List of permission names
     is_active: bool

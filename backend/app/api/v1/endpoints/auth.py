@@ -5,6 +5,7 @@ Endpoints for user authentication, registration, and session management.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
@@ -259,6 +260,7 @@ async def logout(
 @router.get("/me", response_model=CurrentUser)
 async def get_current_user_info(
     current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get current user information
@@ -282,6 +284,14 @@ async def get_current_user_info(
         age = (datetime.utcnow() - current_user.password_changed_at).days
         password_expired = age >= max_age_days
 
+    # Get organization timezone
+    from app.models.user import Organization
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+    timezone = org.timezone if org else "America/New_York"
+
     return CurrentUser(
         id=current_user.id,
         username=current_user.username,
@@ -290,6 +300,7 @@ async def get_current_user_info(
         last_name=current_user.last_name,
         full_name=current_user.full_name,
         organization_id=current_user.organization_id,
+        timezone=timezone,
         roles=role_names,
         permissions=list(all_permissions),
         is_active=current_user.is_active,

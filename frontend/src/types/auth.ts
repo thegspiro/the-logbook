@@ -31,6 +31,7 @@ export interface CurrentUser {
   last_name?: string;
   full_name?: string;
   organization_id: string;
+  timezone: string;
   roles: string[];
   permissions: string[];
   is_active: boolean;
