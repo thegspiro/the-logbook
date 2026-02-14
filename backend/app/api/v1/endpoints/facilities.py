@@ -51,6 +51,57 @@ from app.schemas.facilities import (
     FacilityInspectionUpdate,
     FacilityInspectionResponse,
     InspectionTypeEnum,
+    # Utility Accounts
+    UtilityTypeEnum,
+    BillingCycleEnum,
+    FacilityUtilityAccountCreate,
+    FacilityUtilityAccountUpdate,
+    FacilityUtilityAccountResponse,
+    FacilityUtilityReadingCreate,
+    FacilityUtilityReadingResponse,
+    # Access Keys
+    KeyTypeEnum,
+    FacilityAccessKeyCreate,
+    FacilityAccessKeyUpdate,
+    FacilityAccessKeyResponse,
+    # Rooms
+    RoomTypeEnum,
+    FacilityRoomCreate,
+    FacilityRoomUpdate,
+    FacilityRoomResponse,
+    # Emergency Contacts
+    EmergencyContactTypeEnum,
+    FacilityEmergencyContactCreate,
+    FacilityEmergencyContactUpdate,
+    FacilityEmergencyContactResponse,
+    # Shutoff Locations
+    ShutoffTypeEnum,
+    FacilityShutoffLocationCreate,
+    FacilityShutoffLocationUpdate,
+    FacilityShutoffLocationResponse,
+    # Capital Projects
+    CapitalProjectTypeEnum,
+    CapitalProjectStatusEnum,
+    FacilityCapitalProjectCreate,
+    FacilityCapitalProjectUpdate,
+    FacilityCapitalProjectResponse,
+    # Insurance Policies
+    InsurancePolicyTypeEnum,
+    FacilityInsurancePolicyCreate,
+    FacilityInsurancePolicyUpdate,
+    FacilityInsurancePolicyResponse,
+    # Occupants
+    FacilityOccupantCreate,
+    FacilityOccupantUpdate,
+    FacilityOccupantResponse,
+    # Compliance Checklists
+    ComplianceTypeEnum,
+    FacilityComplianceChecklistCreate,
+    FacilityComplianceChecklistUpdate,
+    FacilityComplianceChecklistResponse,
+    FacilityComplianceItemCreate,
+    FacilityComplianceItemUpdate,
+    FacilityComplianceItemResponse,
 )
 from app.services.facilities_service import FacilitiesService
 from app.api.dependencies import require_permission
@@ -1201,4 +1252,1501 @@ async def delete_facility_inspection(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Inspection not found"
+        )
+
+
+# ============================================================================
+# Utility Account Endpoints
+# ============================================================================
+
+@router.get("/utility-accounts", response_model=List[FacilityUtilityAccountResponse], tags=["Facility Utilities"])
+async def list_facility_utility_accounts(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    utility_type: Optional[UtilityTypeEnum] = Query(None, description="Filter by utility type"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility utility accounts
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    accounts = await service.list_utility_accounts(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        utility_type=utility_type,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+    return accounts
+
+
+@router.post("/utility-accounts", response_model=FacilityUtilityAccountResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Utilities"])
+async def create_facility_utility_account(
+    account_data: FacilityUtilityAccountCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility utility account
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        account = await service.create_utility_account(
+            account_data=account_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return account
+
+
+@router.get("/utility-accounts/{account_id}", response_model=FacilityUtilityAccountResponse, tags=["Facility Utilities"])
+async def get_facility_utility_account(
+    account_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility utility account
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    account = await service.get_utility_account(
+        account_id=account_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utility account not found"
+        )
+
+    return account
+
+
+@router.patch("/utility-accounts/{account_id}", response_model=FacilityUtilityAccountResponse, tags=["Facility Utilities"])
+async def update_facility_utility_account(
+    account_id: str,
+    account_data: FacilityUtilityAccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility utility account
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        account = await service.update_utility_account(
+            account_id=account_id,
+            account_data=account_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utility account not found"
+        )
+
+    return account
+
+
+@router.delete("/utility-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Utilities"])
+async def delete_facility_utility_account(
+    account_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility utility account
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_utility_account(
+        account_id=account_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utility account not found"
+        )
+
+
+# ============================================================================
+# Utility Reading Endpoints
+# ============================================================================
+
+@router.get("/utility-accounts/{account_id}/readings", response_model=List[FacilityUtilityReadingResponse], tags=["Facility Utilities"])
+async def list_facility_utility_readings(
+    account_id: str,
+    reading_after: Optional[date] = Query(None, description="Filter readings on or after this date"),
+    reading_before: Optional[date] = Query(None, description="Filter readings on or before this date"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List utility readings for a specific account
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    readings = await service.list_utility_readings(
+        account_id=account_id,
+        organization_id=current_user.organization_id,
+        reading_after=reading_after,
+        reading_before=reading_before,
+        skip=skip,
+        limit=limit,
+    )
+    return readings
+
+
+@router.post("/utility-accounts/{account_id}/readings", response_model=FacilityUtilityReadingResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Utilities"])
+async def create_facility_utility_reading(
+    account_id: str,
+    reading_data: FacilityUtilityReadingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a utility reading for an account
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        reading = await service.create_utility_reading(
+            account_id=account_id,
+            reading_data=reading_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return reading
+
+
+@router.delete("/utility-readings/{reading_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Utilities"])
+async def delete_facility_utility_reading(
+    reading_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a utility reading
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_utility_reading(
+        reading_id=reading_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utility reading not found"
+        )
+
+
+# ============================================================================
+# Access Key Endpoints
+# ============================================================================
+
+@router.get("/access-keys", response_model=List[FacilityAccessKeyResponse], tags=["Facility Access"])
+async def list_facility_access_keys(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    key_type: Optional[KeyTypeEnum] = Query(None, description="Filter by key type"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    assigned_to_user_id: Optional[str] = Query(None, description="Filter by assigned user"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility access keys
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    keys = await service.list_access_keys(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        key_type=key_type,
+        is_active=is_active,
+        assigned_to_user_id=assigned_to_user_id,
+        skip=skip,
+        limit=limit,
+    )
+    return keys
+
+
+@router.post("/access-keys", response_model=FacilityAccessKeyResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Access"])
+async def create_facility_access_key(
+    key_data: FacilityAccessKeyCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility access key
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        key = await service.create_access_key(
+            key_data=key_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return key
+
+
+@router.get("/access-keys/{key_id}", response_model=FacilityAccessKeyResponse, tags=["Facility Access"])
+async def get_facility_access_key(
+    key_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility access key
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    key = await service.get_access_key(
+        key_id=key_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Access key not found"
+        )
+
+    return key
+
+
+@router.patch("/access-keys/{key_id}", response_model=FacilityAccessKeyResponse, tags=["Facility Access"])
+async def update_facility_access_key(
+    key_id: str,
+    key_data: FacilityAccessKeyUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility access key
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        key = await service.update_access_key(
+            key_id=key_id,
+            key_data=key_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Access key not found"
+        )
+
+    return key
+
+
+@router.delete("/access-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Access"])
+async def delete_facility_access_key(
+    key_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility access key
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_access_key(
+        key_id=key_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Access key not found"
+        )
+
+
+# ============================================================================
+# Room Endpoints
+# ============================================================================
+
+@router.get("/rooms", response_model=List[FacilityRoomResponse], tags=["Facility Rooms"])
+async def list_facility_rooms(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    room_type: Optional[RoomTypeEnum] = Query(None, description="Filter by room type"),
+    floor: Optional[int] = Query(None, description="Filter by floor number"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility rooms
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    rooms = await service.list_rooms(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        room_type=room_type,
+        floor=floor,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+    return rooms
+
+
+@router.post("/rooms", response_model=FacilityRoomResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Rooms"])
+async def create_facility_room(
+    room_data: FacilityRoomCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility room
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        room = await service.create_room(
+            room_data=room_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return room
+
+
+@router.get("/rooms/{room_id}", response_model=FacilityRoomResponse, tags=["Facility Rooms"])
+async def get_facility_room(
+    room_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility room
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    room = await service.get_room(
+        room_id=room_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found"
+        )
+
+    return room
+
+
+@router.patch("/rooms/{room_id}", response_model=FacilityRoomResponse, tags=["Facility Rooms"])
+async def update_facility_room(
+    room_id: str,
+    room_data: FacilityRoomUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility room
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        room = await service.update_room(
+            room_id=room_id,
+            room_data=room_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found"
+        )
+
+    return room
+
+
+@router.delete("/rooms/{room_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Rooms"])
+async def delete_facility_room(
+    room_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility room
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_room(
+        room_id=room_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found"
+        )
+
+
+# ============================================================================
+# Emergency Contact Endpoints
+# ============================================================================
+
+@router.get("/emergency-contacts", response_model=List[FacilityEmergencyContactResponse], tags=["Facility Emergency"])
+async def list_facility_emergency_contacts(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    contact_type: Optional[EmergencyContactTypeEnum] = Query(None, description="Filter by contact type"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility emergency contacts
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    contacts = await service.list_emergency_contacts(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        contact_type=contact_type,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+    return contacts
+
+
+@router.post("/emergency-contacts", response_model=FacilityEmergencyContactResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Emergency"])
+async def create_facility_emergency_contact(
+    contact_data: FacilityEmergencyContactCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility emergency contact
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        contact = await service.create_emergency_contact(
+            contact_data=contact_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return contact
+
+
+@router.get("/emergency-contacts/{contact_id}", response_model=FacilityEmergencyContactResponse, tags=["Facility Emergency"])
+async def get_facility_emergency_contact(
+    contact_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility emergency contact
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    contact = await service.get_emergency_contact(
+        contact_id=contact_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not contact:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Emergency contact not found"
+        )
+
+    return contact
+
+
+@router.patch("/emergency-contacts/{contact_id}", response_model=FacilityEmergencyContactResponse, tags=["Facility Emergency"])
+async def update_facility_emergency_contact(
+    contact_id: str,
+    contact_data: FacilityEmergencyContactUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility emergency contact
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        contact = await service.update_emergency_contact(
+            contact_id=contact_id,
+            contact_data=contact_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not contact:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Emergency contact not found"
+        )
+
+    return contact
+
+
+@router.delete("/emergency-contacts/{contact_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Emergency"])
+async def delete_facility_emergency_contact(
+    contact_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility emergency contact
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_emergency_contact(
+        contact_id=contact_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Emergency contact not found"
+        )
+
+
+# ============================================================================
+# Shutoff Location Endpoints
+# ============================================================================
+
+@router.get("/shutoff-locations", response_model=List[FacilityShutoffLocationResponse], tags=["Facility Emergency"])
+async def list_facility_shutoff_locations(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    shutoff_type: Optional[ShutoffTypeEnum] = Query(None, description="Filter by shutoff type"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility shutoff locations
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    locations = await service.list_shutoff_locations(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        shutoff_type=shutoff_type,
+        skip=skip,
+        limit=limit,
+    )
+    return locations
+
+
+@router.post("/shutoff-locations", response_model=FacilityShutoffLocationResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Emergency"])
+async def create_facility_shutoff_location(
+    location_data: FacilityShutoffLocationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility shutoff location
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        location = await service.create_shutoff_location(
+            location_data=location_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return location
+
+
+@router.get("/shutoff-locations/{location_id}", response_model=FacilityShutoffLocationResponse, tags=["Facility Emergency"])
+async def get_facility_shutoff_location(
+    location_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility shutoff location
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    location = await service.get_shutoff_location(
+        location_id=location_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not location:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shutoff location not found"
+        )
+
+    return location
+
+
+@router.patch("/shutoff-locations/{location_id}", response_model=FacilityShutoffLocationResponse, tags=["Facility Emergency"])
+async def update_facility_shutoff_location(
+    location_id: str,
+    location_data: FacilityShutoffLocationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility shutoff location
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        location = await service.update_shutoff_location(
+            location_id=location_id,
+            location_data=location_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not location:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shutoff location not found"
+        )
+
+    return location
+
+
+@router.delete("/shutoff-locations/{location_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Emergency"])
+async def delete_facility_shutoff_location(
+    location_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility shutoff location
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_shutoff_location(
+        location_id=location_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shutoff location not found"
+        )
+
+
+# ============================================================================
+# Capital Project Endpoints
+# ============================================================================
+
+@router.get("/capital-projects", response_model=List[FacilityCapitalProjectResponse], tags=["Facility Capital Projects"])
+async def list_facility_capital_projects(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    project_type: Optional[CapitalProjectTypeEnum] = Query(None, description="Filter by project type"),
+    project_status: Optional[CapitalProjectStatusEnum] = Query(None, description="Filter by project status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility capital projects
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    projects = await service.list_capital_projects(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        project_type=project_type,
+        project_status=project_status,
+        skip=skip,
+        limit=limit,
+    )
+    return projects
+
+
+@router.post("/capital-projects", response_model=FacilityCapitalProjectResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Capital Projects"])
+async def create_facility_capital_project(
+    project_data: FacilityCapitalProjectCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility capital project
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        project = await service.create_capital_project(
+            project_data=project_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return project
+
+
+@router.get("/capital-projects/{project_id}", response_model=FacilityCapitalProjectResponse, tags=["Facility Capital Projects"])
+async def get_facility_capital_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility capital project
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    project = await service.get_capital_project(
+        project_id=project_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capital project not found"
+        )
+
+    return project
+
+
+@router.patch("/capital-projects/{project_id}", response_model=FacilityCapitalProjectResponse, tags=["Facility Capital Projects"])
+async def update_facility_capital_project(
+    project_id: str,
+    project_data: FacilityCapitalProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility capital project
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        project = await service.update_capital_project(
+            project_id=project_id,
+            project_data=project_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capital project not found"
+        )
+
+    return project
+
+
+@router.delete("/capital-projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Capital Projects"])
+async def delete_facility_capital_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility capital project
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_capital_project(
+        project_id=project_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Capital project not found"
+        )
+
+
+# ============================================================================
+# Insurance Policy Endpoints
+# ============================================================================
+
+@router.get("/insurance-policies", response_model=List[FacilityInsurancePolicyResponse], tags=["Facility Insurance"])
+async def list_facility_insurance_policies(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    policy_type: Optional[InsurancePolicyTypeEnum] = Query(None, description="Filter by policy type"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility insurance policies
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    policies = await service.list_insurance_policies(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        policy_type=policy_type,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+    return policies
+
+
+@router.post("/insurance-policies", response_model=FacilityInsurancePolicyResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Insurance"])
+async def create_facility_insurance_policy(
+    policy_data: FacilityInsurancePolicyCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility insurance policy
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        policy = await service.create_insurance_policy(
+            policy_data=policy_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return policy
+
+
+@router.get("/insurance-policies/{policy_id}", response_model=FacilityInsurancePolicyResponse, tags=["Facility Insurance"])
+async def get_facility_insurance_policy(
+    policy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility insurance policy
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    policy = await service.get_insurance_policy(
+        policy_id=policy_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Insurance policy not found"
+        )
+
+    return policy
+
+
+@router.patch("/insurance-policies/{policy_id}", response_model=FacilityInsurancePolicyResponse, tags=["Facility Insurance"])
+async def update_facility_insurance_policy(
+    policy_id: str,
+    policy_data: FacilityInsurancePolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility insurance policy
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        policy = await service.update_insurance_policy(
+            policy_id=policy_id,
+            policy_data=policy_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Insurance policy not found"
+        )
+
+    return policy
+
+
+@router.delete("/insurance-policies/{policy_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Insurance"])
+async def delete_facility_insurance_policy(
+    policy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility insurance policy
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_insurance_policy(
+        policy_id=policy_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Insurance policy not found"
+        )
+
+
+# ============================================================================
+# Occupant Endpoints
+# ============================================================================
+
+@router.get("/occupants", response_model=List[FacilityOccupantResponse], tags=["Facility Occupants"])
+async def list_facility_occupants(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility occupants
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    occupants = await service.list_occupants(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+    return occupants
+
+
+@router.post("/occupants", response_model=FacilityOccupantResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Occupants"])
+async def create_facility_occupant(
+    occupant_data: FacilityOccupantCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility occupant
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        occupant = await service.create_occupant(
+            occupant_data=occupant_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return occupant
+
+
+@router.get("/occupants/{occupant_id}", response_model=FacilityOccupantResponse, tags=["Facility Occupants"])
+async def get_facility_occupant(
+    occupant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility occupant
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    occupant = await service.get_occupant(
+        occupant_id=occupant_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not occupant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Occupant not found"
+        )
+
+    return occupant
+
+
+@router.patch("/occupants/{occupant_id}", response_model=FacilityOccupantResponse, tags=["Facility Occupants"])
+async def update_facility_occupant(
+    occupant_id: str,
+    occupant_data: FacilityOccupantUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility occupant
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        occupant = await service.update_occupant(
+            occupant_id=occupant_id,
+            occupant_data=occupant_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not occupant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Occupant not found"
+        )
+
+    return occupant
+
+
+@router.delete("/occupants/{occupant_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Occupants"])
+async def delete_facility_occupant(
+    occupant_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility occupant
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_occupant(
+        occupant_id=occupant_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Occupant not found"
+        )
+
+
+# ============================================================================
+# Compliance Checklist Endpoints
+# ============================================================================
+
+@router.get("/compliance-checklists", response_model=List[FacilityComplianceChecklistResponse], tags=["Facility Compliance"])
+async def list_facility_compliance_checklists(
+    facility_id: Optional[str] = Query(None, description="Filter by facility"),
+    compliance_type: Optional[ComplianceTypeEnum] = Query(None, description="Filter by compliance type"),
+    is_completed: Optional[bool] = Query(None, description="Filter by completion status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List facility compliance checklists
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    checklists = await service.list_compliance_checklists(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        compliance_type=compliance_type,
+        is_completed=is_completed,
+        skip=skip,
+        limit=limit,
+    )
+    return checklists
+
+
+@router.post("/compliance-checklists", response_model=FacilityComplianceChecklistResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Compliance"])
+async def create_facility_compliance_checklist(
+    checklist_data: FacilityComplianceChecklistCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a facility compliance checklist
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        checklist = await service.create_compliance_checklist(
+            checklist_data=checklist_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return checklist
+
+
+@router.get("/compliance-checklists/{checklist_id}", response_model=FacilityComplianceChecklistResponse, tags=["Facility Compliance"])
+async def get_facility_compliance_checklist(
+    checklist_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get a specific facility compliance checklist
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    checklist = await service.get_compliance_checklist(
+        checklist_id=checklist_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not checklist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance checklist not found"
+        )
+
+    return checklist
+
+
+@router.patch("/compliance-checklists/{checklist_id}", response_model=FacilityComplianceChecklistResponse, tags=["Facility Compliance"])
+async def update_facility_compliance_checklist(
+    checklist_id: str,
+    checklist_data: FacilityComplianceChecklistUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a facility compliance checklist
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        checklist = await service.update_compliance_checklist(
+            checklist_id=checklist_id,
+            checklist_data=checklist_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not checklist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance checklist not found"
+        )
+
+    return checklist
+
+
+@router.delete("/compliance-checklists/{checklist_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Compliance"])
+async def delete_facility_compliance_checklist(
+    checklist_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a facility compliance checklist
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_compliance_checklist(
+        checklist_id=checklist_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance checklist not found"
+        )
+
+
+# ============================================================================
+# Compliance Item Endpoints
+# ============================================================================
+
+@router.get("/compliance-checklists/{checklist_id}/items", response_model=List[FacilityComplianceItemResponse], tags=["Facility Compliance"])
+async def list_facility_compliance_items(
+    checklist_id: str,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    List compliance items for a specific checklist
+
+    **Authentication required**
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    service = FacilitiesService(db)
+    items = await service.list_compliance_items(
+        checklist_id=checklist_id,
+        organization_id=current_user.organization_id,
+        skip=skip,
+        limit=limit,
+    )
+    return items
+
+
+@router.post("/compliance-checklists/{checklist_id}/items", response_model=FacilityComplianceItemResponse, status_code=status.HTTP_201_CREATED, tags=["Facility Compliance"])
+async def create_facility_compliance_item(
+    checklist_id: str,
+    item_data: FacilityComplianceItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.create", "facilities.edit", "facilities.manage")),
+):
+    """
+    Create a compliance item for a checklist
+
+    **Authentication required**
+    **Permissions required:** facilities.create, facilities.edit, or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        item = await service.create_compliance_item(
+            checklist_id=checklist_id,
+            item_data=item_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return item
+
+
+@router.patch("/compliance-items/{item_id}", response_model=FacilityComplianceItemResponse, tags=["Facility Compliance"])
+async def update_facility_compliance_item(
+    item_id: str,
+    item_data: FacilityComplianceItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.edit", "facilities.manage")),
+):
+    """
+    Update a compliance item
+
+    **Authentication required**
+    **Permissions required:** facilities.edit or facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    try:
+        item = await service.update_compliance_item(
+            item_id=item_id,
+            item_data=item_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance item not found"
+        )
+
+    return item
+
+
+@router.delete("/compliance-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Facility Compliance"])
+async def delete_facility_compliance_item(
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.manage")),
+):
+    """
+    Delete a compliance item
+
+    **Authentication required**
+    **Permissions required:** facilities.manage
+    """
+    service = FacilitiesService(db)
+
+    deleted = await service.delete_compliance_item(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Compliance item not found"
         )

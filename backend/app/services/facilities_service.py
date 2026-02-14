@@ -20,6 +20,17 @@ from app.models.facilities import (
     FacilityMaintenance,
     FacilitySystem,
     FacilityInspection,
+    FacilityUtilityAccount,
+    FacilityUtilityReading,
+    FacilityAccessKey,
+    FacilityRoom,
+    FacilityEmergencyContact,
+    FacilityShutoffLocation,
+    FacilityCapitalProject,
+    FacilityInsurancePolicy,
+    FacilityOccupant,
+    FacilityComplianceChecklist,
+    FacilityComplianceItem,
 )
 from app.schemas.facilities import (
     FacilityCreate,
@@ -38,6 +49,27 @@ from app.schemas.facilities import (
     FacilitySystemUpdate,
     FacilityInspectionCreate,
     FacilityInspectionUpdate,
+    FacilityUtilityAccountCreate,
+    FacilityUtilityAccountUpdate,
+    FacilityUtilityReadingCreate,
+    FacilityAccessKeyCreate,
+    FacilityAccessKeyUpdate,
+    FacilityRoomCreate,
+    FacilityRoomUpdate,
+    FacilityEmergencyContactCreate,
+    FacilityEmergencyContactUpdate,
+    FacilityShutoffLocationCreate,
+    FacilityShutoffLocationUpdate,
+    FacilityCapitalProjectCreate,
+    FacilityCapitalProjectUpdate,
+    FacilityInsurancePolicyCreate,
+    FacilityInsurancePolicyUpdate,
+    FacilityOccupantCreate,
+    FacilityOccupantUpdate,
+    FacilityComplianceChecklistCreate,
+    FacilityComplianceChecklistUpdate,
+    FacilityComplianceItemCreate,
+    FacilityComplianceItemUpdate,
 )
 
 
@@ -1252,6 +1284,1183 @@ class FacilitiesService:
             return False
 
         await self.db.delete(inspection)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Utility Account Methods
+    # =========================================================================
+
+    async def list_utility_accounts(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        utility_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityUtilityAccount]:
+        """List utility accounts"""
+        conditions = [FacilityUtilityAccount.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityUtilityAccount.facility_id == facility_id)
+        if utility_type:
+            conditions.append(FacilityUtilityAccount.utility_type == utility_type)
+        if is_active is not None:
+            conditions.append(FacilityUtilityAccount.is_active == is_active)
+
+        query = (
+            select(FacilityUtilityAccount)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityUtilityAccount.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_utility_account(
+        self, account_id: str, organization_id: str
+    ) -> Optional[FacilityUtilityAccount]:
+        """Get utility account by ID"""
+        result = await self.db.execute(
+            select(FacilityUtilityAccount)
+            .where(FacilityUtilityAccount.id == account_id)
+            .where(FacilityUtilityAccount.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_utility_account(
+        self,
+        account_data: FacilityUtilityAccountCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityUtilityAccount:
+        """Create a utility account"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            account_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        account = FacilityUtilityAccount(
+            organization_id=organization_id,
+            created_by=created_by,
+            **account_data.model_dump(),
+        )
+
+        self.db.add(account)
+        await self.db.commit()
+        await self.db.refresh(account)
+
+        return account
+
+    async def update_utility_account(
+        self,
+        account_id: str,
+        account_data: FacilityUtilityAccountUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityUtilityAccount]:
+        """Update utility account"""
+        account = await self.get_utility_account(account_id, organization_id)
+        if not account:
+            return None
+
+        update_data = account_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(account, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(account)
+
+        return account
+
+    async def delete_utility_account(
+        self, account_id: str, organization_id: str
+    ) -> bool:
+        """Delete utility account"""
+        account = await self.get_utility_account(account_id, organization_id)
+        if not account:
+            return False
+
+        await self.db.delete(account)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Utility Reading Methods
+    # =========================================================================
+
+    async def list_utility_readings(
+        self,
+        organization_id: str,
+        utility_account_id: Optional[str] = None,
+        after_date: Optional[date] = None,
+        before_date: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityUtilityReading]:
+        """List utility readings"""
+        conditions = [FacilityUtilityReading.organization_id == organization_id]
+
+        if utility_account_id:
+            conditions.append(
+                FacilityUtilityReading.utility_account_id == utility_account_id
+            )
+        if after_date:
+            conditions.append(FacilityUtilityReading.reading_date >= after_date)
+        if before_date:
+            conditions.append(FacilityUtilityReading.reading_date <= before_date)
+
+        query = (
+            select(FacilityUtilityReading)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityUtilityReading.reading_date))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_utility_reading(
+        self, reading_id: str, organization_id: str
+    ) -> Optional[FacilityUtilityReading]:
+        """Get utility reading by ID"""
+        result = await self.db.execute(
+            select(FacilityUtilityReading)
+            .where(FacilityUtilityReading.id == reading_id)
+            .where(FacilityUtilityReading.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_utility_reading(
+        self,
+        reading_data: FacilityUtilityReadingCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityUtilityReading:
+        """Create a utility reading"""
+        # Verify utility account exists and belongs to org
+        account = await self.get_utility_account(
+            reading_data.utility_account_id, organization_id
+        )
+        if not account:
+            raise ValueError("Invalid utility account")
+
+        reading = FacilityUtilityReading(
+            organization_id=organization_id,
+            created_by=created_by,
+            **reading_data.model_dump(),
+        )
+
+        self.db.add(reading)
+        await self.db.commit()
+        await self.db.refresh(reading)
+
+        return reading
+
+    async def delete_utility_reading(
+        self, reading_id: str, organization_id: str
+    ) -> bool:
+        """Delete utility reading"""
+        reading = await self.get_utility_reading(reading_id, organization_id)
+        if not reading:
+            return False
+
+        await self.db.delete(reading)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Access Key Methods
+    # =========================================================================
+
+    async def list_access_keys(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        key_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        assigned_to_user_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityAccessKey]:
+        """List facility access keys"""
+        conditions = [FacilityAccessKey.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityAccessKey.facility_id == facility_id)
+        if key_type:
+            conditions.append(FacilityAccessKey.key_type == key_type)
+        if is_active is not None:
+            conditions.append(FacilityAccessKey.is_active == is_active)
+        if assigned_to_user_id:
+            conditions.append(
+                FacilityAccessKey.assigned_to_user_id == assigned_to_user_id
+            )
+
+        query = (
+            select(FacilityAccessKey)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityAccessKey.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_access_key(
+        self, key_id: str, organization_id: str
+    ) -> Optional[FacilityAccessKey]:
+        """Get access key by ID"""
+        result = await self.db.execute(
+            select(FacilityAccessKey)
+            .where(FacilityAccessKey.id == key_id)
+            .where(FacilityAccessKey.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_access_key(
+        self,
+        key_data: FacilityAccessKeyCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityAccessKey:
+        """Create an access key"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            key_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        key = FacilityAccessKey(
+            organization_id=organization_id,
+            created_by=created_by,
+            **key_data.model_dump(),
+        )
+
+        self.db.add(key)
+        await self.db.commit()
+        await self.db.refresh(key)
+
+        return key
+
+    async def update_access_key(
+        self,
+        key_id: str,
+        key_data: FacilityAccessKeyUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityAccessKey]:
+        """Update access key"""
+        key = await self.get_access_key(key_id, organization_id)
+        if not key:
+            return None
+
+        update_data = key_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(key, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(key)
+
+        return key
+
+    async def delete_access_key(
+        self, key_id: str, organization_id: str
+    ) -> bool:
+        """Delete access key"""
+        key = await self.get_access_key(key_id, organization_id)
+        if not key:
+            return False
+
+        await self.db.delete(key)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Room Methods
+    # =========================================================================
+
+    async def list_rooms(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        room_type: Optional[str] = None,
+        floor: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityRoom]:
+        """List facility rooms"""
+        conditions = [FacilityRoom.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityRoom.facility_id == facility_id)
+        if room_type:
+            conditions.append(FacilityRoom.room_type == room_type)
+        if floor:
+            conditions.append(FacilityRoom.floor == floor)
+        if is_active is not None:
+            conditions.append(FacilityRoom.is_active == is_active)
+
+        query = (
+            select(FacilityRoom)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityRoom.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_room(
+        self, room_id: str, organization_id: str
+    ) -> Optional[FacilityRoom]:
+        """Get room by ID"""
+        result = await self.db.execute(
+            select(FacilityRoom)
+            .where(FacilityRoom.id == room_id)
+            .where(FacilityRoom.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_room(
+        self,
+        room_data: FacilityRoomCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityRoom:
+        """Create a facility room"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            room_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        room = FacilityRoom(
+            organization_id=organization_id,
+            created_by=created_by,
+            **room_data.model_dump(),
+        )
+
+        self.db.add(room)
+        await self.db.commit()
+        await self.db.refresh(room)
+
+        return room
+
+    async def update_room(
+        self,
+        room_id: str,
+        room_data: FacilityRoomUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityRoom]:
+        """Update room"""
+        room = await self.get_room(room_id, organization_id)
+        if not room:
+            return None
+
+        update_data = room_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(room, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(room)
+
+        return room
+
+    async def delete_room(
+        self, room_id: str, organization_id: str
+    ) -> bool:
+        """Delete room"""
+        room = await self.get_room(room_id, organization_id)
+        if not room:
+            return False
+
+        await self.db.delete(room)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Emergency Contact Methods
+    # =========================================================================
+
+    async def list_emergency_contacts(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        contact_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityEmergencyContact]:
+        """List facility emergency contacts"""
+        conditions = [FacilityEmergencyContact.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityEmergencyContact.facility_id == facility_id)
+        if contact_type:
+            conditions.append(
+                FacilityEmergencyContact.contact_type == contact_type
+            )
+        if is_active is not None:
+            conditions.append(FacilityEmergencyContact.is_active == is_active)
+
+        query = (
+            select(FacilityEmergencyContact)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityEmergencyContact.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_emergency_contact(
+        self, contact_id: str, organization_id: str
+    ) -> Optional[FacilityEmergencyContact]:
+        """Get emergency contact by ID"""
+        result = await self.db.execute(
+            select(FacilityEmergencyContact)
+            .where(FacilityEmergencyContact.id == contact_id)
+            .where(FacilityEmergencyContact.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_emergency_contact(
+        self,
+        contact_data: FacilityEmergencyContactCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityEmergencyContact:
+        """Create an emergency contact"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            contact_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        contact = FacilityEmergencyContact(
+            organization_id=organization_id,
+            created_by=created_by,
+            **contact_data.model_dump(),
+        )
+
+        self.db.add(contact)
+        await self.db.commit()
+        await self.db.refresh(contact)
+
+        return contact
+
+    async def update_emergency_contact(
+        self,
+        contact_id: str,
+        contact_data: FacilityEmergencyContactUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityEmergencyContact]:
+        """Update emergency contact"""
+        contact = await self.get_emergency_contact(contact_id, organization_id)
+        if not contact:
+            return None
+
+        update_data = contact_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(contact, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(contact)
+
+        return contact
+
+    async def delete_emergency_contact(
+        self, contact_id: str, organization_id: str
+    ) -> bool:
+        """Delete emergency contact"""
+        contact = await self.get_emergency_contact(contact_id, organization_id)
+        if not contact:
+            return False
+
+        await self.db.delete(contact)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Shutoff Location Methods
+    # =========================================================================
+
+    async def list_shutoff_locations(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        shutoff_type: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityShutoffLocation]:
+        """List facility shutoff locations"""
+        conditions = [FacilityShutoffLocation.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityShutoffLocation.facility_id == facility_id)
+        if shutoff_type:
+            conditions.append(
+                FacilityShutoffLocation.shutoff_type == shutoff_type
+            )
+
+        query = (
+            select(FacilityShutoffLocation)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityShutoffLocation.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_shutoff_location(
+        self, location_id: str, organization_id: str
+    ) -> Optional[FacilityShutoffLocation]:
+        """Get shutoff location by ID"""
+        result = await self.db.execute(
+            select(FacilityShutoffLocation)
+            .where(FacilityShutoffLocation.id == location_id)
+            .where(FacilityShutoffLocation.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_shutoff_location(
+        self,
+        location_data: FacilityShutoffLocationCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityShutoffLocation:
+        """Create a shutoff location"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            location_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        location = FacilityShutoffLocation(
+            organization_id=organization_id,
+            created_by=created_by,
+            **location_data.model_dump(),
+        )
+
+        self.db.add(location)
+        await self.db.commit()
+        await self.db.refresh(location)
+
+        return location
+
+    async def update_shutoff_location(
+        self,
+        location_id: str,
+        location_data: FacilityShutoffLocationUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityShutoffLocation]:
+        """Update shutoff location"""
+        location = await self.get_shutoff_location(location_id, organization_id)
+        if not location:
+            return None
+
+        update_data = location_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(location, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(location)
+
+        return location
+
+    async def delete_shutoff_location(
+        self, location_id: str, organization_id: str
+    ) -> bool:
+        """Delete shutoff location"""
+        location = await self.get_shutoff_location(location_id, organization_id)
+        if not location:
+            return False
+
+        await self.db.delete(location)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Capital Project Methods
+    # =========================================================================
+
+    async def list_capital_projects(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        project_type: Optional[str] = None,
+        project_status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityCapitalProject]:
+        """List capital projects"""
+        conditions = [FacilityCapitalProject.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityCapitalProject.facility_id == facility_id)
+        if project_type:
+            conditions.append(
+                FacilityCapitalProject.project_type == project_type
+            )
+        if project_status:
+            conditions.append(
+                FacilityCapitalProject.project_status == project_status
+            )
+
+        query = (
+            select(FacilityCapitalProject)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityCapitalProject.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_capital_project(
+        self, project_id: str, organization_id: str
+    ) -> Optional[FacilityCapitalProject]:
+        """Get capital project by ID"""
+        result = await self.db.execute(
+            select(FacilityCapitalProject)
+            .where(FacilityCapitalProject.id == project_id)
+            .where(FacilityCapitalProject.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_capital_project(
+        self,
+        project_data: FacilityCapitalProjectCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityCapitalProject:
+        """Create a capital project"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            project_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        dump = project_data.model_dump()
+        # Convert attachment models to dicts for JSON storage
+        if dump.get("attachments"):
+            dump["attachments"] = [
+                a if isinstance(a, dict) else a for a in dump["attachments"]
+            ]
+
+        project = FacilityCapitalProject(
+            organization_id=organization_id,
+            created_by=created_by,
+            **dump,
+        )
+
+        self.db.add(project)
+        await self.db.commit()
+        await self.db.refresh(project)
+
+        return project
+
+    async def update_capital_project(
+        self,
+        project_id: str,
+        project_data: FacilityCapitalProjectUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityCapitalProject]:
+        """Update capital project"""
+        project = await self.get_capital_project(project_id, organization_id)
+        if not project:
+            return None
+
+        update_data = project_data.model_dump(exclude_unset=True)
+
+        # Convert attachment models to dicts for JSON storage
+        if "attachments" in update_data and update_data["attachments"]:
+            update_data["attachments"] = [
+                a if isinstance(a, dict) else a for a in update_data["attachments"]
+            ]
+
+        for field, value in update_data.items():
+            setattr(project, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(project)
+
+        return project
+
+    async def delete_capital_project(
+        self, project_id: str, organization_id: str
+    ) -> bool:
+        """Delete capital project"""
+        project = await self.get_capital_project(project_id, organization_id)
+        if not project:
+            return False
+
+        await self.db.delete(project)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Insurance Policy Methods
+    # =========================================================================
+
+    async def list_insurance_policies(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        policy_type: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityInsurancePolicy]:
+        """List insurance policies"""
+        conditions = [FacilityInsurancePolicy.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityInsurancePolicy.facility_id == facility_id)
+        if policy_type:
+            conditions.append(
+                FacilityInsurancePolicy.policy_type == policy_type
+            )
+        if is_active is not None:
+            conditions.append(FacilityInsurancePolicy.is_active == is_active)
+
+        query = (
+            select(FacilityInsurancePolicy)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityInsurancePolicy.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_insurance_policy(
+        self, policy_id: str, organization_id: str
+    ) -> Optional[FacilityInsurancePolicy]:
+        """Get insurance policy by ID"""
+        result = await self.db.execute(
+            select(FacilityInsurancePolicy)
+            .where(FacilityInsurancePolicy.id == policy_id)
+            .where(FacilityInsurancePolicy.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_insurance_policy(
+        self,
+        policy_data: FacilityInsurancePolicyCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityInsurancePolicy:
+        """Create an insurance policy"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            policy_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        dump = policy_data.model_dump()
+        # Convert attachment models to dicts for JSON storage
+        if dump.get("attachments"):
+            dump["attachments"] = [
+                a if isinstance(a, dict) else a for a in dump["attachments"]
+            ]
+
+        policy = FacilityInsurancePolicy(
+            organization_id=organization_id,
+            created_by=created_by,
+            **dump,
+        )
+
+        self.db.add(policy)
+        await self.db.commit()
+        await self.db.refresh(policy)
+
+        return policy
+
+    async def update_insurance_policy(
+        self,
+        policy_id: str,
+        policy_data: FacilityInsurancePolicyUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityInsurancePolicy]:
+        """Update insurance policy"""
+        policy = await self.get_insurance_policy(policy_id, organization_id)
+        if not policy:
+            return None
+
+        update_data = policy_data.model_dump(exclude_unset=True)
+
+        # Convert attachment models to dicts for JSON storage
+        if "attachments" in update_data and update_data["attachments"]:
+            update_data["attachments"] = [
+                a if isinstance(a, dict) else a for a in update_data["attachments"]
+            ]
+
+        for field, value in update_data.items():
+            setattr(policy, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(policy)
+
+        return policy
+
+    async def delete_insurance_policy(
+        self, policy_id: str, organization_id: str
+    ) -> bool:
+        """Delete insurance policy"""
+        policy = await self.get_insurance_policy(policy_id, organization_id)
+        if not policy:
+            return False
+
+        await self.db.delete(policy)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Occupant Methods
+    # =========================================================================
+
+    async def list_occupants(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityOccupant]:
+        """List facility occupants"""
+        conditions = [FacilityOccupant.organization_id == organization_id]
+
+        if facility_id:
+            conditions.append(FacilityOccupant.facility_id == facility_id)
+        if is_active is not None:
+            conditions.append(FacilityOccupant.is_active == is_active)
+
+        query = (
+            select(FacilityOccupant)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityOccupant.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_occupant(
+        self, occupant_id: str, organization_id: str
+    ) -> Optional[FacilityOccupant]:
+        """Get occupant by ID"""
+        result = await self.db.execute(
+            select(FacilityOccupant)
+            .where(FacilityOccupant.id == occupant_id)
+            .where(FacilityOccupant.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_occupant(
+        self,
+        occupant_data: FacilityOccupantCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityOccupant:
+        """Create an occupant"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            occupant_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        occupant = FacilityOccupant(
+            organization_id=organization_id,
+            created_by=created_by,
+            **occupant_data.model_dump(),
+        )
+
+        self.db.add(occupant)
+        await self.db.commit()
+        await self.db.refresh(occupant)
+
+        return occupant
+
+    async def update_occupant(
+        self,
+        occupant_id: str,
+        occupant_data: FacilityOccupantUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityOccupant]:
+        """Update occupant"""
+        occupant = await self.get_occupant(occupant_id, organization_id)
+        if not occupant:
+            return None
+
+        update_data = occupant_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(occupant, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(occupant)
+
+        return occupant
+
+    async def delete_occupant(
+        self, occupant_id: str, organization_id: str
+    ) -> bool:
+        """Delete occupant"""
+        occupant = await self.get_occupant(occupant_id, organization_id)
+        if not occupant:
+            return False
+
+        await self.db.delete(occupant)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Compliance Checklist Methods
+    # =========================================================================
+
+    async def list_compliance_checklists(
+        self,
+        organization_id: str,
+        facility_id: Optional[str] = None,
+        compliance_type: Optional[str] = None,
+        is_completed: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityComplianceChecklist]:
+        """List compliance checklists"""
+        conditions = [
+            FacilityComplianceChecklist.organization_id == organization_id
+        ]
+
+        if facility_id:
+            conditions.append(
+                FacilityComplianceChecklist.facility_id == facility_id
+            )
+        if compliance_type:
+            conditions.append(
+                FacilityComplianceChecklist.compliance_type == compliance_type
+            )
+        if is_completed is not None:
+            conditions.append(
+                FacilityComplianceChecklist.is_completed == is_completed
+            )
+
+        query = (
+            select(FacilityComplianceChecklist)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityComplianceChecklist.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_compliance_checklist(
+        self, checklist_id: str, organization_id: str
+    ) -> Optional[FacilityComplianceChecklist]:
+        """Get compliance checklist by ID with items"""
+        result = await self.db.execute(
+            select(FacilityComplianceChecklist)
+            .where(FacilityComplianceChecklist.id == checklist_id)
+            .where(
+                FacilityComplianceChecklist.organization_id == organization_id
+            )
+            .options(selectinload(FacilityComplianceChecklist.items))
+        )
+        return result.scalar_one_or_none()
+
+    async def create_compliance_checklist(
+        self,
+        checklist_data: FacilityComplianceChecklistCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityComplianceChecklist:
+        """Create a compliance checklist"""
+        # Verify facility exists
+        facility = await self.get_facility(
+            checklist_data.facility_id, organization_id, include_relations=False
+        )
+        if not facility:
+            raise ValueError("Invalid facility")
+
+        checklist = FacilityComplianceChecklist(
+            organization_id=organization_id,
+            created_by=created_by,
+            **checklist_data.model_dump(),
+        )
+
+        self.db.add(checklist)
+        await self.db.commit()
+        await self.db.refresh(checklist)
+
+        return checklist
+
+    async def update_compliance_checklist(
+        self,
+        checklist_id: str,
+        checklist_data: FacilityComplianceChecklistUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityComplianceChecklist]:
+        """Update compliance checklist"""
+        checklist = await self.get_compliance_checklist(
+            checklist_id, organization_id
+        )
+        if not checklist:
+            return None
+
+        update_data = checklist_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(checklist, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(checklist)
+
+        return checklist
+
+    async def delete_compliance_checklist(
+        self, checklist_id: str, organization_id: str
+    ) -> bool:
+        """Delete compliance checklist"""
+        checklist = await self.get_compliance_checklist(
+            checklist_id, organization_id
+        )
+        if not checklist:
+            return False
+
+        await self.db.delete(checklist)
+        await self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # Compliance Item Methods
+    # =========================================================================
+
+    async def list_compliance_items(
+        self,
+        organization_id: str,
+        checklist_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[FacilityComplianceItem]:
+        """List compliance items"""
+        conditions = [FacilityComplianceItem.organization_id == organization_id]
+
+        if checklist_id:
+            conditions.append(
+                FacilityComplianceItem.checklist_id == checklist_id
+            )
+
+        query = (
+            select(FacilityComplianceItem)
+            .where(and_(*conditions))
+            .order_by(desc(FacilityComplianceItem.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_compliance_item(
+        self, item_id: str, organization_id: str
+    ) -> Optional[FacilityComplianceItem]:
+        """Get compliance item by ID"""
+        result = await self.db.execute(
+            select(FacilityComplianceItem)
+            .where(FacilityComplianceItem.id == item_id)
+            .where(FacilityComplianceItem.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_compliance_item(
+        self,
+        item_data: FacilityComplianceItemCreate,
+        organization_id: str,
+        created_by: str,
+    ) -> FacilityComplianceItem:
+        """Create a compliance item"""
+        # Verify checklist exists and belongs to org
+        checklist = await self.get_compliance_checklist(
+            item_data.checklist_id, organization_id
+        )
+        if not checklist:
+            raise ValueError("Invalid compliance checklist")
+
+        item = FacilityComplianceItem(
+            organization_id=organization_id,
+            created_by=created_by,
+            **item_data.model_dump(),
+        )
+
+        self.db.add(item)
+        await self.db.commit()
+        await self.db.refresh(item)
+
+        return item
+
+    async def update_compliance_item(
+        self,
+        item_id: str,
+        item_data: FacilityComplianceItemUpdate,
+        organization_id: str,
+    ) -> Optional[FacilityComplianceItem]:
+        """Update compliance item"""
+        item = await self.get_compliance_item(item_id, organization_id)
+        if not item:
+            return None
+
+        update_data = item_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(item, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(item)
+
+        return item
+
+    async def delete_compliance_item(
+        self, item_id: str, organization_id: str
+    ) -> bool:
+        """Delete compliance item"""
+        item = await self.get_compliance_item(item_id, organization_id)
+        if not item:
+            return False
+
+        await self.db.delete(item)
         await self.db.commit()
 
         return True

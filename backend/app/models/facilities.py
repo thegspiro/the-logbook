@@ -283,6 +283,15 @@ class Facility(Base):
     maintenance_records = relationship("FacilityMaintenance", back_populates="facility", cascade="all, delete-orphan")
     systems = relationship("FacilitySystem", back_populates="facility", cascade="all, delete-orphan")
     inspections = relationship("FacilityInspection", back_populates="facility", cascade="all, delete-orphan")
+    utility_accounts = relationship("FacilityUtilityAccount", back_populates="facility", cascade="all, delete-orphan")
+    access_keys = relationship("FacilityAccessKey", back_populates="facility", cascade="all, delete-orphan")
+    rooms = relationship("FacilityRoom", back_populates="facility", cascade="all, delete-orphan")
+    emergency_contacts = relationship("FacilityEmergencyContact", back_populates="facility", cascade="all, delete-orphan")
+    shutoff_locations = relationship("FacilityShutoffLocation", back_populates="facility", cascade="all, delete-orphan")
+    capital_projects = relationship("FacilityCapitalProject", back_populates="facility", cascade="all, delete-orphan")
+    insurance_policies = relationship("FacilityInsurancePolicy", back_populates="facility", cascade="all, delete-orphan")
+    occupants = relationship("FacilityOccupant", back_populates="facility", cascade="all, delete-orphan")
+    compliance_checklists = relationship("FacilityComplianceChecklist", back_populates="facility", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_facilities_org", "organization_id"),
@@ -626,3 +635,620 @@ class FacilityInspection(Base):
 
     def __repr__(self):
         return f"<FacilityInspection(facility_id={self.facility_id}, type={self.inspection_type})>"
+
+
+# =============================================================================
+# Utility Type Enum
+# =============================================================================
+
+class UtilityType(str, enum.Enum):
+    """Types of utilities tracked for facilities"""
+    ELECTRIC = "electric"
+    GAS = "gas"
+    WATER = "water"
+    SEWER = "sewer"
+    INTERNET = "internet"
+    PHONE = "phone"
+    TRASH = "trash"
+    OTHER = "other"
+
+
+class BillingCycle(str, enum.Enum):
+    """Billing cycle frequencies"""
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    ANNUAL = "annual"
+    OTHER = "other"
+
+
+class KeyType(str, enum.Enum):
+    """Types of access keys/credentials"""
+    PHYSICAL_KEY = "physical_key"
+    FOB = "fob"
+    ACCESS_CODE = "access_code"
+    KEY_CARD = "key_card"
+    BIOMETRIC = "biometric"
+    COMBINATION = "combination"
+    OTHER = "other"
+
+
+class RoomType(str, enum.Enum):
+    """Types of rooms/spaces in a facility"""
+    APPARATUS_BAY = "apparatus_bay"
+    BUNK_ROOM = "bunk_room"
+    KITCHEN = "kitchen"
+    BATHROOM = "bathroom"
+    OFFICE = "office"
+    TRAINING_ROOM = "training_room"
+    STORAGE = "storage"
+    MECHANICAL = "mechanical"
+    LOBBY = "lobby"
+    COMMON_AREA = "common_area"
+    LAUNDRY = "laundry"
+    GYM = "gym"
+    DECONTAMINATION = "decontamination"
+    DISPATCH = "dispatch"
+    OTHER = "other"
+
+
+class EmergencyContactType(str, enum.Enum):
+    """Types of emergency/vendor contacts"""
+    UTILITY_PROVIDER = "utility_provider"
+    ALARM_COMPANY = "alarm_company"
+    ELEVATOR_SERVICE = "elevator_service"
+    PLUMBER = "plumber"
+    ELECTRICIAN = "electrician"
+    HVAC_SERVICE = "hvac_service"
+    LOCKSMITH = "locksmith"
+    GENERAL_CONTRACTOR = "general_contractor"
+    FIRE_PROTECTION = "fire_protection"
+    PEST_CONTROL = "pest_control"
+    ROOFING = "roofing"
+    JANITORIAL = "janitorial"
+    OTHER = "other"
+
+
+class ShutoffType(str, enum.Enum):
+    """Types of utility shutoffs in a facility"""
+    WATER_MAIN = "water_main"
+    GAS_MAIN = "gas_main"
+    ELECTRICAL_MAIN = "electrical_main"
+    FIRE_SUPPRESSION = "fire_suppression"
+    HVAC = "hvac"
+    IRRIGATION = "irrigation"
+    OTHER = "other"
+
+
+class CapitalProjectType(str, enum.Enum):
+    """Types of capital improvement projects"""
+    RENOVATION = "renovation"
+    NEW_CONSTRUCTION = "new_construction"
+    REPAIR = "repair"
+    UPGRADE = "upgrade"
+    EXPANSION = "expansion"
+    DEMOLITION = "demolition"
+    ENVIRONMENTAL = "environmental"
+    ADA_COMPLIANCE = "ada_compliance"
+    OTHER = "other"
+
+
+class CapitalProjectStatus(str, enum.Enum):
+    """Status of a capital improvement project"""
+    PLANNING = "planning"
+    APPROVED = "approved"
+    BIDDING = "bidding"
+    IN_PROGRESS = "in_progress"
+    ON_HOLD = "on_hold"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class InsurancePolicyType(str, enum.Enum):
+    """Types of insurance policies"""
+    PROPERTY = "property"
+    LIABILITY = "liability"
+    FLOOD = "flood"
+    EARTHQUAKE = "earthquake"
+    WORKERS_COMP = "workers_comp"
+    UMBRELLA = "umbrella"
+    EQUIPMENT = "equipment"
+    OTHER = "other"
+
+
+class ComplianceType(str, enum.Enum):
+    """Types of compliance/regulatory domains"""
+    ADA = "ada"
+    FIRE_CODE = "fire_code"
+    BUILDING_CODE = "building_code"
+    HEALTH = "health"
+    ENVIRONMENTAL = "environmental"
+    OSHA = "osha"
+    NFPA = "nfpa"
+    OTHER = "other"
+
+
+# =============================================================================
+# Facility Utility Account
+# =============================================================================
+
+class FacilityUtilityAccount(Base):
+    """Utility accounts (electric, gas, water, etc.) for a facility"""
+    __tablename__ = "facility_utility_accounts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    utility_type = Column(
+        Enum(UtilityType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    provider_name = Column(String(200), nullable=False)
+    account_number = Column(String(100), nullable=True)
+    meter_number = Column(String(100), nullable=True)
+
+    contact_phone = Column(String(50), nullable=True)
+    contact_email = Column(String(200), nullable=True)
+    emergency_phone = Column(String(50), nullable=True)
+
+    billing_cycle = Column(
+        Enum(BillingCycle, values_callable=lambda x: [e.value for e in x]),
+        default=BillingCycle.MONTHLY,
+    )
+
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="utility_accounts")
+    readings = relationship("FacilityUtilityReading", back_populates="utility_account", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_facility_utility_facility", "facility_id"),
+        Index("idx_facility_utility_type", "facility_id", "utility_type"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityUtilityAccount(facility_id={self.facility_id}, type={self.utility_type})>"
+
+
+# =============================================================================
+# Facility Utility Reading (monthly cost/usage records)
+# =============================================================================
+
+class FacilityUtilityReading(Base):
+    """Monthly/periodic utility cost and usage readings"""
+    __tablename__ = "facility_utility_readings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    utility_account_id = Column(String(36), ForeignKey("facility_utility_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    reading_date = Column(Date, nullable=False)
+    period_start = Column(Date, nullable=True)
+    period_end = Column(Date, nullable=True)
+
+    amount = Column(Numeric(10, 2), nullable=True)  # Cost in dollars
+    usage_quantity = Column(Numeric(12, 3), nullable=True)  # kWh, gallons, therms, etc.
+    usage_unit = Column(String(50), nullable=True)  # kWh, gallons, therms, ccf, etc.
+
+    notes = Column(Text, nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    utility_account = relationship("FacilityUtilityAccount", back_populates="readings")
+
+    __table_args__ = (
+        Index("idx_facility_utility_readings_account", "utility_account_id"),
+        Index("idx_facility_utility_readings_date", "reading_date"),
+    )
+
+
+# =============================================================================
+# Facility Access Key / Credential
+# =============================================================================
+
+class FacilityAccessKey(Base):
+    """Keys, fobs, codes, and access credentials for a facility"""
+    __tablename__ = "facility_access_keys"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    key_type = Column(
+        Enum(KeyType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    key_identifier = Column(String(100), nullable=True)  # Key number, code, fob ID
+    description = Column(String(300), nullable=True)
+
+    # Assignment
+    assigned_to_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assigned_to_name = Column(String(200), nullable=True)  # For external people
+    issued_date = Column(Date, nullable=True)
+    returned_date = Column(Date, nullable=True)
+
+    is_active = Column(Boolean, default=True, nullable=False)
+    notes = Column(Text, nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="access_keys")
+
+    __table_args__ = (
+        Index("idx_facility_access_keys_facility", "facility_id"),
+        Index("idx_facility_access_keys_user", "assigned_to_user_id"),
+        Index("idx_facility_access_keys_type", "key_type"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityAccessKey(facility_id={self.facility_id}, type={self.key_type})>"
+
+
+# =============================================================================
+# Facility Room / Space
+# =============================================================================
+
+class FacilityRoom(Base):
+    """Individual rooms and spaces within a facility"""
+    __tablename__ = "facility_rooms"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    name = Column(String(200), nullable=False)
+    room_number = Column(String(50), nullable=True)
+    floor = Column(Integer, nullable=True)
+
+    room_type = Column(
+        Enum(RoomType, values_callable=lambda x: [e.value for e in x]),
+        default=RoomType.OTHER,
+        nullable=False,
+    )
+
+    square_footage = Column(Integer, nullable=True)
+    capacity = Column(Integer, nullable=True)
+    description = Column(Text, nullable=True)
+    equipment = Column(Text, nullable=True)  # Notable equipment in this room
+
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="rooms")
+
+    __table_args__ = (
+        Index("idx_facility_rooms_facility", "facility_id"),
+        Index("idx_facility_rooms_type", "room_type"),
+        Index("idx_facility_rooms_floor", "facility_id", "floor"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityRoom(facility_id={self.facility_id}, name={self.name})>"
+
+
+# =============================================================================
+# Facility Emergency Contact
+# =============================================================================
+
+class FacilityEmergencyContact(Base):
+    """Emergency/vendor contacts for a facility (alarm company, plumber, etc.)"""
+    __tablename__ = "facility_emergency_contacts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    contact_type = Column(
+        Enum(EmergencyContactType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    company_name = Column(String(200), nullable=False)
+    contact_name = Column(String(200), nullable=True)
+    phone = Column(String(50), nullable=True)
+    alt_phone = Column(String(50), nullable=True)
+    email = Column(String(200), nullable=True)
+    service_contract_number = Column(String(100), nullable=True)
+
+    priority = Column(Integer, default=1, nullable=False)  # 1 = primary, 2 = secondary
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="emergency_contacts")
+
+    __table_args__ = (
+        Index("idx_facility_emerg_contacts_facility", "facility_id"),
+        Index("idx_facility_emerg_contacts_type", "contact_type"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityEmergencyContact(facility_id={self.facility_id}, type={self.contact_type})>"
+
+
+# =============================================================================
+# Facility Shutoff Location
+# =============================================================================
+
+class FacilityShutoffLocation(Base):
+    """Utility shutoff locations within a facility (water main, gas main, etc.)"""
+    __tablename__ = "facility_shutoff_locations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    shutoff_type = Column(
+        Enum(ShutoffType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    location_description = Column(Text, nullable=False)
+    floor = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    photo_path = Column(String(500), nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="shutoff_locations")
+
+    __table_args__ = (
+        Index("idx_facility_shutoffs_facility", "facility_id"),
+        Index("idx_facility_shutoffs_type", "shutoff_type"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityShutoffLocation(facility_id={self.facility_id}, type={self.shutoff_type})>"
+
+
+# =============================================================================
+# Facility Capital Improvement Project
+# =============================================================================
+
+class FacilityCapitalProject(Base):
+    """Capital improvement and renovation projects for a facility"""
+    __tablename__ = "facility_capital_projects"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    project_name = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+
+    project_type = Column(
+        Enum(CapitalProjectType, values_callable=lambda x: [e.value for e in x]),
+        default=CapitalProjectType.OTHER,
+        nullable=False,
+    )
+    project_status = Column(
+        Enum(CapitalProjectStatus, values_callable=lambda x: [e.value for e in x]),
+        default=CapitalProjectStatus.PLANNING,
+        nullable=False,
+    )
+
+    # Budget
+    estimated_cost = Column(Numeric(12, 2), nullable=True)
+    actual_cost = Column(Numeric(12, 2), nullable=True)
+    budget_source = Column(String(300), nullable=True)
+
+    # Timeline
+    start_date = Column(Date, nullable=True)
+    estimated_completion = Column(Date, nullable=True)
+    actual_completion = Column(Date, nullable=True)
+
+    # Contractor
+    contractor_name = Column(String(200), nullable=True)
+    contractor_phone = Column(String(50), nullable=True)
+    contractor_email = Column(String(200), nullable=True)
+    project_manager = Column(String(200), nullable=True)
+
+    # Administrative
+    permit_numbers = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    attachments = Column(JSON, nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="capital_projects")
+
+    __table_args__ = (
+        Index("idx_facility_capital_facility", "facility_id"),
+        Index("idx_facility_capital_status", "project_status"),
+        Index("idx_facility_capital_type", "project_type"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityCapitalProject(facility_id={self.facility_id}, name={self.project_name})>"
+
+
+# =============================================================================
+# Facility Insurance Policy
+# =============================================================================
+
+class FacilityInsurancePolicy(Base):
+    """Insurance policies covering a facility"""
+    __tablename__ = "facility_insurance_policies"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    policy_type = Column(
+        Enum(InsurancePolicyType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    policy_number = Column(String(100), nullable=True)
+    carrier_name = Column(String(200), nullable=False)
+
+    agent_name = Column(String(200), nullable=True)
+    agent_phone = Column(String(50), nullable=True)
+    agent_email = Column(String(200), nullable=True)
+
+    coverage_amount = Column(Numeric(14, 2), nullable=True)
+    deductible = Column(Numeric(10, 2), nullable=True)
+    annual_premium = Column(Numeric(10, 2), nullable=True)
+
+    effective_date = Column(Date, nullable=True)
+    expiration_date = Column(Date, nullable=True)
+
+    notes = Column(Text, nullable=True)
+    attachments = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="insurance_policies")
+
+    __table_args__ = (
+        Index("idx_facility_insurance_facility", "facility_id"),
+        Index("idx_facility_insurance_type", "policy_type"),
+        Index("idx_facility_insurance_expiration", "expiration_date"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityInsurancePolicy(facility_id={self.facility_id}, type={self.policy_type})>"
+
+
+# =============================================================================
+# Facility Occupant / Unit Assignment
+# =============================================================================
+
+class FacilityOccupant(Base):
+    """Units, crews, or teams assigned to a facility"""
+    __tablename__ = "facility_occupants"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    unit_name = Column(String(200), nullable=False)  # e.g., "Engine Co. 1", "Rescue Squad 2"
+    description = Column(Text, nullable=True)
+    contact_name = Column(String(200), nullable=True)
+    contact_phone = Column(String(50), nullable=True)
+
+    effective_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    notes = Column(Text, nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="occupants")
+
+    __table_args__ = (
+        Index("idx_facility_occupants_facility", "facility_id"),
+        Index("idx_facility_occupants_active", "is_active"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityOccupant(facility_id={self.facility_id}, unit={self.unit_name})>"
+
+
+# =============================================================================
+# Facility Compliance Checklist
+# =============================================================================
+
+class FacilityComplianceChecklist(Base):
+    """Regulatory/compliance checklists for a facility"""
+    __tablename__ = "facility_compliance_checklists"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    checklist_name = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+
+    compliance_type = Column(
+        Enum(ComplianceType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    due_date = Column(Date, nullable=True)
+    completed_date = Column(Date, nullable=True)
+    completed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    is_completed = Column(Boolean, default=False, nullable=False)
+
+    notes = Column(Text, nullable=True)
+
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    facility = relationship("Facility", back_populates="compliance_checklists")
+    items = relationship("FacilityComplianceItem", back_populates="checklist", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_facility_compliance_facility", "facility_id"),
+        Index("idx_facility_compliance_type", "compliance_type"),
+        Index("idx_facility_compliance_due", "due_date"),
+        Index("idx_facility_compliance_completed", "is_completed"),
+    )
+
+    def __repr__(self):
+        return f"<FacilityComplianceChecklist(facility_id={self.facility_id}, name={self.checklist_name})>"
+
+
+# =============================================================================
+# Facility Compliance Item (individual checklist line items)
+# =============================================================================
+
+class FacilityComplianceItem(Base):
+    """Individual items within a compliance checklist"""
+    __tablename__ = "facility_compliance_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    checklist_id = Column(String(36), ForeignKey("facility_compliance_checklists.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    item_number = Column(Integer, nullable=True)
+    description = Column(Text, nullable=False)
+
+    is_compliant = Column(Boolean, nullable=True)  # null = not yet checked
+    findings = Column(Text, nullable=True)
+    corrective_action = Column(Text, nullable=True)
+    corrective_action_deadline = Column(Date, nullable=True)
+    corrective_action_completed = Column(Boolean, default=False, nullable=False)
+
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    checklist = relationship("FacilityComplianceChecklist", back_populates="items")
+
+    __table_args__ = (
+        Index("idx_facility_compliance_items_checklist", "checklist_id"),
+    )
