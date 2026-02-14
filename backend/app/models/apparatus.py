@@ -124,6 +124,65 @@ class MaintenanceIntervalUnit(str, enum.Enum):
     HOURS = "hours"
 
 
+class ComponentType(str, enum.Enum):
+    """Standard component areas of an apparatus"""
+    ENGINE = "engine"
+    PUMP = "pump"
+    AERIAL = "aerial"
+    CHASSIS = "chassis"
+    DRIVETRAIN = "drivetrain"
+    BRAKES = "brakes"
+    ELECTRICAL = "electrical"
+    HYDRAULIC = "hydraulic"
+    BODY = "body"
+    CAB = "cab"
+    TANK = "tank"
+    FOAM_SYSTEM = "foam_system"
+    COOLING = "cooling"
+    EXHAUST = "exhaust"
+    LIGHTING = "lighting"
+    COMMUNICATIONS = "communications"
+    SAFETY_EQUIPMENT = "safety_equipment"
+    HVAC = "hvac"
+    TIRES_WHEELS = "tires_wheels"
+    OTHER = "other"
+
+
+class ComponentCondition(str, enum.Enum):
+    """Condition rating for components"""
+    EXCELLENT = "excellent"
+    GOOD = "good"
+    FAIR = "fair"
+    POOR = "poor"
+    CRITICAL = "critical"
+
+
+class NoteType(str, enum.Enum):
+    """Types of component notes"""
+    OBSERVATION = "observation"
+    REPAIR = "repair"
+    ISSUE = "issue"
+    INSPECTION = "inspection"
+    UPDATE = "update"
+
+
+class NoteSeverity(str, enum.Enum):
+    """Severity levels for notes"""
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class NoteStatus(str, enum.Enum):
+    """Status of a component note/issue"""
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    DEFERRED = "deferred"
+
+
 # =============================================================================
 # Apparatus Type Model (Custom + System Types)
 # =============================================================================
@@ -409,6 +468,8 @@ class Apparatus(Base):
     equipment = relationship("ApparatusEquipment", back_populates="apparatus", cascade="all, delete-orphan")
     location_history = relationship("ApparatusLocationHistory", back_populates="apparatus", cascade="all, delete-orphan")
     status_history = relationship("ApparatusStatusHistory", back_populates="apparatus", cascade="all, delete-orphan")
+    components = relationship("ApparatusComponent", back_populates="apparatus", cascade="all, delete-orphan")
+    component_notes = relationship("ApparatusComponentNote", back_populates="apparatus", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_apparatus_org_unit", "organization_id", "unit_number", unique=True),
@@ -677,6 +738,8 @@ class ApparatusMaintenance(Base):
     organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     apparatus_id = Column(String(36), ForeignKey("apparatus.id", ondelete="CASCADE"), nullable=False, index=True)
     maintenance_type_id = Column(String(36), ForeignKey("apparatus_maintenance_types.id"), nullable=False, index=True)
+    component_id = Column(String(36), ForeignKey("apparatus_components.id", ondelete="SET NULL"), nullable=True, index=True)
+    service_provider_id = Column(String(36), ForeignKey("apparatus_service_providers.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Scheduling
     scheduled_date = Column(Date, nullable=True)
@@ -721,10 +784,14 @@ class ApparatusMaintenance(Base):
     # Relationships
     apparatus = relationship("Apparatus", back_populates="maintenance_records")
     maintenance_type = relationship("ApparatusMaintenanceType", back_populates="maintenance_records")
+    component = relationship("ApparatusComponent", back_populates="maintenance_records")
+    service_provider = relationship("ApparatusServiceProvider", back_populates="maintenance_records")
 
     __table_args__ = (
         Index("idx_apparatus_maint_apparatus", "apparatus_id"),
         Index("idx_apparatus_maint_type", "maintenance_type_id"),
+        Index("idx_apparatus_maint_component", "component_id"),
+        Index("idx_apparatus_maint_provider", "service_provider_id"),
         Index("idx_apparatus_maint_due_date", "due_date"),
         Index("idx_apparatus_maint_completed", "is_completed"),
         Index("idx_apparatus_maint_overdue", "is_overdue"),
@@ -1094,3 +1161,217 @@ class ApparatusReportConfig(Base):
 
     def __repr__(self):
         return f"<ApparatusReportConfig(name={self.name}, type={self.report_type})>"
+
+
+# =============================================================================
+# Service Provider
+# =============================================================================
+
+class ApparatusServiceProvider(Base):
+    """
+    Service providers (companies or individuals) who perform maintenance,
+    repairs, and inspections on apparatus.
+    """
+    __tablename__ = "apparatus_service_providers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Provider Identity
+    name = Column(String(200), nullable=False)  # Business or person name
+    company_name = Column(String(200), nullable=True)  # If name is a contact person
+    contact_name = Column(String(200), nullable=True)
+
+    # Contact Information
+    phone = Column(String(50), nullable=True)
+    email = Column(String(200), nullable=True)
+    address = Column(Text, nullable=True)
+    city = Column(String(100), nullable=True)
+    state = Column(String(50), nullable=True)
+    zip_code = Column(String(20), nullable=True)
+    website = Column(String(300), nullable=True)
+
+    # Capabilities
+    specialties = Column(JSON, nullable=True)  # List of ComponentType values they service
+    certifications = Column(JSON, nullable=True)  # List of certifications held
+    is_emergency_service = Column(Boolean, default=False, nullable=False)  # Available for emergency repairs
+
+    # Business Details
+    license_number = Column(String(100), nullable=True)
+    insurance_info = Column(Text, nullable=True)
+    tax_id = Column(String(50), nullable=True)
+
+    # Preference
+    is_preferred = Column(Boolean, default=False, nullable=False)
+    rating = Column(Integer, nullable=True)  # 1-5 star rating
+
+    # Notes
+    notes = Column(Text, nullable=True)
+    contract_info = Column(Text, nullable=True)  # Contract terms, SLAs, etc.
+
+    # Status
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    maintenance_records = relationship("ApparatusMaintenance", back_populates="service_provider")
+    component_notes = relationship("ApparatusComponentNote", back_populates="service_provider")
+
+    __table_args__ = (
+        Index("idx_service_providers_org", "organization_id"),
+        Index("idx_service_providers_org_name", "organization_id", "name"),
+        Index("idx_service_providers_preferred", "organization_id", "is_preferred"),
+    )
+
+    def __repr__(self):
+        return f"<ApparatusServiceProvider(name={self.name})>"
+
+
+# =============================================================================
+# Apparatus Component (Vehicle Sub-System Segmentation)
+# =============================================================================
+
+class ApparatusComponent(Base):
+    """
+    Segments an apparatus into logical components (engine, pump, aerial, etc.)
+    for targeted maintenance tracking and service notes.
+
+    Each apparatus can have system-default components plus custom ones.
+    """
+    __tablename__ = "apparatus_components"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    apparatus_id = Column(String(36), ForeignKey("apparatus.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Component Identity
+    name = Column(String(200), nullable=False)  # e.g., "Main Engine", "Pump Assembly"
+    component_type = Column(
+        Enum(ComponentType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ComponentType.OTHER,
+    )
+    description = Column(Text, nullable=True)
+
+    # Manufacturer Details
+    manufacturer = Column(String(200), nullable=True)
+    model_number = Column(String(100), nullable=True)
+    serial_number = Column(String(100), nullable=True)
+
+    # Lifecycle
+    install_date = Column(Date, nullable=True)
+    warranty_expiration = Column(Date, nullable=True)
+    expected_life_years = Column(Integer, nullable=True)
+
+    # Condition
+    condition = Column(
+        Enum(ComponentCondition, values_callable=lambda x: [e.value for e in x]),
+        default=ComponentCondition.GOOD,
+        nullable=False,
+    )
+    last_serviced_date = Column(Date, nullable=True)
+    last_inspected_date = Column(Date, nullable=True)
+
+    # Notes
+    notes = Column(Text, nullable=True)
+
+    # Display
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    apparatus = relationship("Apparatus", back_populates="components")
+    component_notes = relationship("ApparatusComponentNote", back_populates="component", cascade="all, delete-orphan")
+    maintenance_records = relationship("ApparatusMaintenance", back_populates="component")
+
+    __table_args__ = (
+        Index("idx_apparatus_components_apparatus", "apparatus_id"),
+        Index("idx_apparatus_components_type", "apparatus_id", "component_type"),
+        Index("idx_apparatus_components_condition", "condition"),
+    )
+
+    def __repr__(self):
+        return f"<ApparatusComponent(apparatus_id={self.apparatus_id}, name={self.name})>"
+
+
+# =============================================================================
+# Component Note (Per-Component Service Notes / Issues)
+# =============================================================================
+
+class ApparatusComponentNote(Base):
+    """
+    Notes, observations, issues, and repair records tied to a specific
+    apparatus component. Provides the apparatus coordinator with a
+    detailed service history per component area.
+    """
+    __tablename__ = "apparatus_component_notes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    apparatus_id = Column(String(36), ForeignKey("apparatus.id", ondelete="CASCADE"), nullable=False, index=True)
+    component_id = Column(String(36), ForeignKey("apparatus_components.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Note Details
+    title = Column(String(300), nullable=False)
+    description = Column(Text, nullable=False)
+    note_type = Column(
+        Enum(NoteType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=NoteType.OBSERVATION,
+    )
+    severity = Column(
+        Enum(NoteSeverity, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=NoteSeverity.INFO,
+    )
+    status = Column(
+        Enum(NoteStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=NoteStatus.OPEN,
+    )
+
+    # Service Provider (who did or will do the work)
+    service_provider_id = Column(String(36), ForeignKey("apparatus_service_providers.id", ondelete="SET NULL"), nullable=True)
+
+    # Cost tracking
+    estimated_cost = Column(Numeric(10, 2), nullable=True)
+    actual_cost = Column(Numeric(10, 2), nullable=True)
+
+    # Resolution
+    reported_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+
+    # Attachments (file references stored as JSON array)
+    attachments = Column(JSON, nullable=True)  # [{file_path, file_name, mime_type}]
+
+    # Tags for categorization
+    tags = Column(JSON, nullable=True)  # ["warranty_claim", "recurring", "safety"]
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    component = relationship("ApparatusComponent", back_populates="component_notes")
+    apparatus = relationship("Apparatus", back_populates="component_notes")
+    service_provider = relationship("ApparatusServiceProvider", back_populates="component_notes")
+
+    __table_args__ = (
+        Index("idx_component_notes_apparatus", "apparatus_id"),
+        Index("idx_component_notes_component", "component_id"),
+        Index("idx_component_notes_status", "status"),
+        Index("idx_component_notes_severity", "severity"),
+        Index("idx_component_notes_type", "note_type"),
+        Index("idx_component_notes_provider", "service_provider_id"),
+    )

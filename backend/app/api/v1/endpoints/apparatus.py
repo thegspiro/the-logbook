@@ -72,6 +72,20 @@ from app.schemas.apparatus import (
     ApparatusReportConfigCreate,
     ApparatusReportConfigUpdate,
     ApparatusReportConfigResponse,
+    # Service Providers
+    ApparatusServiceProviderCreate,
+    ApparatusServiceProviderUpdate,
+    ApparatusServiceProviderResponse,
+    # Components
+    ApparatusComponentCreate,
+    ApparatusComponentUpdate,
+    ApparatusComponentResponse,
+    # Component Notes
+    ApparatusComponentNoteCreate,
+    ApparatusComponentNoteUpdate,
+    ApparatusComponentNoteResponse,
+    # Service Report
+    ApparatusServiceReport,
 )
 from app.services.apparatus_service import ApparatusService
 from app.api.dependencies import require_permission
@@ -1770,3 +1784,352 @@ async def delete_report_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report config not found"
         )
+
+
+# ============================================================================
+# Service Provider Endpoints
+# ============================================================================
+
+@router.get("/service-providers", response_model=List[ApparatusServiceProviderResponse], tags=["Service Providers"])
+async def list_service_providers(
+    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    is_preferred: Optional[bool] = Query(None, description="Filter preferred providers"),
+    specialty: Optional[str] = Query(None, description="Filter by component specialty"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    List service providers
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    return await service.list_service_providers(
+        organization_id=current_user.organization_id,
+        is_active=is_active,
+        specialty=specialty,
+        is_preferred=is_preferred,
+    )
+
+
+@router.get("/service-providers/{provider_id}", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+async def get_service_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Get a specific service provider
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    provider = await service.get_service_provider(provider_id, current_user.organization_id)
+    if not provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+    return provider
+
+
+@router.post("/service-providers", response_model=ApparatusServiceProviderResponse, status_code=status.HTTP_201_CREATED, tags=["Service Providers"])
+async def create_service_provider(
+    provider_data: ApparatusServiceProviderCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+):
+    """
+    Create a service provider
+
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+    return await service.create_service_provider(
+        provider_data=provider_data,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+
+@router.patch("/service-providers/{provider_id}", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+async def update_service_provider(
+    provider_id: str,
+    provider_data: ApparatusServiceProviderUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+):
+    """
+    Update a service provider
+
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+    provider = await service.update_service_provider(provider_id, provider_data, current_user.organization_id)
+    if not provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+    return provider
+
+
+@router.delete("/service-providers/{provider_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Service Providers"])
+async def delete_service_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete a service provider
+
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+    if not await service.delete_service_provider(provider_id, current_user.organization_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+
+
+# ============================================================================
+# Component Endpoints
+# ============================================================================
+
+@router.get("/components", response_model=List[ApparatusComponentResponse], tags=["Components"])
+async def list_components(
+    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
+    component_type: Optional[str] = Query(None, description="Filter by component type"),
+    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    List apparatus components
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    return await service.list_components(
+        organization_id=current_user.organization_id,
+        apparatus_id=apparatus_id,
+        component_type=component_type,
+        is_active=is_active,
+    )
+
+
+@router.get("/components/{component_id}", response_model=ApparatusComponentResponse, tags=["Components"])
+async def get_component(
+    component_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Get a specific component
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    component = await service.get_component(component_id, current_user.organization_id)
+    if not component:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
+    return component
+
+
+@router.post("/components", response_model=ApparatusComponentResponse, status_code=status.HTTP_201_CREATED, tags=["Components"])
+async def create_component(
+    component_data: ApparatusComponentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+):
+    """
+    Create a component on an apparatus
+
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+    try:
+        return await service.create_component(
+            component_data=component_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/components/{component_id}", response_model=ApparatusComponentResponse, tags=["Components"])
+async def update_component(
+    component_id: str,
+    component_data: ApparatusComponentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.edit", "apparatus.manage")),
+):
+    """
+    Update a component
+
+    **Permissions required:** apparatus.edit or apparatus.manage
+    """
+    service = ApparatusService(db)
+    component = await service.update_component(component_id, component_data, current_user.organization_id)
+    if not component:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
+    return component
+
+
+@router.delete("/components/{component_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Components"])
+async def delete_component(
+    component_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete a component and its notes
+
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+    if not await service.delete_component(component_id, current_user.organization_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
+
+
+# ============================================================================
+# Component Note Endpoints
+# ============================================================================
+
+@router.get("/component-notes", response_model=List[ApparatusComponentNoteResponse], tags=["Component Notes"])
+async def list_component_notes(
+    apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
+    component_id: Optional[str] = Query(None, description="Filter by component"),
+    note_status: Optional[str] = Query(None, description="Filter by status (open, in_progress, resolved, deferred)"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    note_type: Optional[str] = Query(None, description="Filter by note type"),
+    service_provider_id: Optional[str] = Query(None, description="Filter by service provider"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    List component notes with filtering
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    return await service.list_component_notes(
+        organization_id=current_user.organization_id,
+        apparatus_id=apparatus_id,
+        component_id=component_id,
+        note_status=note_status,
+        severity=severity,
+        note_type=note_type,
+        service_provider_id=service_provider_id,
+    )
+
+
+@router.get("/component-notes/{note_id}", response_model=ApparatusComponentNoteResponse, tags=["Component Notes"])
+async def get_component_note(
+    note_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Get a specific component note
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+    note = await service.get_component_note(note_id, current_user.organization_id)
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
+    return note
+
+
+@router.post("/component-notes", response_model=ApparatusComponentNoteResponse, status_code=status.HTTP_201_CREATED, tags=["Component Notes"])
+async def create_component_note(
+    note_data: ApparatusComponentNoteCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+):
+    """
+    Create a component note (observation, issue, repair record, etc.)
+
+    **Permissions required:** apparatus.maintenance, apparatus.edit, or apparatus.manage
+    """
+    service = ApparatusService(db)
+    try:
+        return await service.create_component_note(
+            note_data=note_data,
+            organization_id=current_user.organization_id,
+            reported_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/component-notes/{note_id}", response_model=ApparatusComponentNoteResponse, tags=["Component Notes"])
+async def update_component_note(
+    note_id: str,
+    note_data: ApparatusComponentNoteUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.maintenance", "apparatus.edit", "apparatus.manage")),
+):
+    """
+    Update a component note
+
+    **Permissions required:** apparatus.maintenance, apparatus.edit, or apparatus.manage
+    """
+    service = ApparatusService(db)
+    note = await service.update_component_note(
+        note_id=note_id,
+        note_data=note_data,
+        organization_id=current_user.organization_id,
+        resolved_by=current_user.id,
+    )
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
+    return note
+
+
+@router.delete("/component-notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Component Notes"])
+async def delete_component_note(
+    note_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete a component note
+
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+    if not await service.delete_component_note(note_id, current_user.organization_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
+
+
+# ============================================================================
+# Service Report Generation
+# ============================================================================
+
+@router.get("/{apparatus_id}/service-report", response_model=ApparatusServiceReport, tags=["Service Reports"])
+async def generate_service_report(
+    apparatus_id: str,
+    component_ids: Optional[str] = Query(None, description="Comma-separated component IDs to scope the report"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Generate a service report for an apparatus.
+
+    Returns a compiled document with the apparatus details, component breakdown,
+    open issues, recent maintenance history, and relevant service providers.
+
+    Optionally scope to specific components (e.g., just the pump area)
+    by passing comma-separated component IDs.
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = ApparatusService(db)
+
+    parsed_ids = None
+    if component_ids:
+        parsed_ids = [cid.strip() for cid in component_ids.split(",") if cid.strip()]
+
+    try:
+        return await service.generate_service_report(
+            apparatus_id=apparatus_id,
+            organization_id=current_user.organization_id,
+            component_ids=parsed_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
