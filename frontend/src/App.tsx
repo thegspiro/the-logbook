@@ -56,6 +56,8 @@ const CreatePipelinePage = lazy(() => import('./pages/CreatePipelinePage'));
 const PipelineDetailPage = lazy(() => import('./pages/PipelineDetailPage'));
 const CourseLibraryPage = lazy(() => import('./pages/CourseLibraryPage'));
 const ExternalTrainingPage = lazy(() => import('./pages/ExternalTrainingPage'));
+const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
+const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
@@ -165,6 +167,8 @@ function App() {
               <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
               <Route path="/training/courses" element={<CourseLibraryPage />} />
               <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
+              <Route path="/training/submit" element={<SubmitTrainingPage />} />
+              <Route path="/training/submissions" element={<ProtectedRoute requiredPermission="training.manage"><ReviewSubmissionsPage /></ProtectedRoute>} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
 
               {/* Inventory Module */}

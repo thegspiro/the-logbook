@@ -2798,6 +2798,80 @@ export const trainingSessionService = {
 };
 
 // ============================================
+// Training Submissions Service
+// ============================================
+
+import type {
+  SelfReportConfig,
+  SelfReportConfigUpdate,
+  TrainingSubmission,
+  TrainingSubmissionCreate,
+  TrainingSubmissionUpdate,
+  SubmissionReviewRequest,
+} from '../types/training';
+
+export const trainingSubmissionService = {
+  // Config
+  async getConfig(): Promise<SelfReportConfig> {
+    const response = await api.get<SelfReportConfig>('/training/submissions/config');
+    return response.data;
+  },
+
+  async updateConfig(updates: SelfReportConfigUpdate): Promise<SelfReportConfig> {
+    const response = await api.put<SelfReportConfig>('/training/submissions/config', updates);
+    return response.data;
+  },
+
+  // Member submissions
+  async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    const response = await api.post<TrainingSubmission>('/training/submissions', data);
+    return response.data;
+  },
+
+  async getMySubmissions(status?: string): Promise<TrainingSubmission[]> {
+    const response = await api.get<TrainingSubmission[]>('/training/submissions/my', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  async getSubmission(submissionId: string): Promise<TrainingSubmission> {
+    const response = await api.get<TrainingSubmission>(`/training/submissions/${submissionId}`);
+    return response.data;
+  },
+
+  async updateSubmission(submissionId: string, updates: TrainingSubmissionUpdate): Promise<TrainingSubmission> {
+    const response = await api.patch<TrainingSubmission>(`/training/submissions/${submissionId}`, updates);
+    return response.data;
+  },
+
+  async deleteSubmission(submissionId: string): Promise<void> {
+    await api.delete(`/training/submissions/${submissionId}`);
+  },
+
+  // Officer review
+  async getPendingSubmissions(): Promise<TrainingSubmission[]> {
+    const response = await api.get<TrainingSubmission[]>('/training/submissions/pending');
+    return response.data;
+  },
+
+  async getPendingCount(): Promise<{ pending_count: number }> {
+    const response = await api.get<{ pending_count: number }>('/training/submissions/pending/count');
+    return response.data;
+  },
+
+  async getAllSubmissions(params?: { status?: string; user_id?: string; limit?: number; offset?: number }): Promise<TrainingSubmission[]> {
+    const response = await api.get<TrainingSubmission[]>('/training/submissions/all', { params });
+    return response.data;
+  },
+
+  async reviewSubmission(submissionId: string, review: SubmissionReviewRequest): Promise<TrainingSubmission> {
+    const response = await api.post<TrainingSubmission>(`/training/submissions/${submissionId}/review`, review);
+    return response.data;
+  },
+};
+
+// ============================================
 // Integrations Service
 // ============================================
 

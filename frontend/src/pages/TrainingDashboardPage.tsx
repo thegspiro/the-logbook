@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { trainingService } from '../services/api';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -19,6 +19,7 @@ import type {
 } from '../types/training';
 
 export default function TrainingDashboardPage() {
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [expiringCerts, setExpiringCerts] = useState<TrainingRecord[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
@@ -106,8 +107,8 @@ export default function TrainingDashboardPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm font-medium text-gray-600">Quick Actions</div>
           <div className="mt-2 space-y-2">
-            <button className="text-sm text-blue-600 hover:text-blue-800 block">
-              New Record
+            <button onClick={() => navigate('/training/submit')} className="text-sm text-blue-600 hover:text-blue-800 block">
+              Submit External Training
             </button>
             <button className="text-sm text-blue-600 hover:text-blue-800 block">
               Generate Report

@@ -13,8 +13,10 @@ import {
   Calendar,
   Award,
   RefreshCw,
+  ClipboardCheck,
+  FileText as FileTextIcon,
 } from 'lucide-react';
-import { trainingService, userService } from '../services/api';
+import { trainingService, userService, trainingSubmissionService } from '../services/api';
 import type { TrainingRequirement } from '../types/training';
 
 interface DashboardStats {
@@ -75,6 +77,7 @@ const TrainingOfficerDashboard: React.FC = () => {
   const [expiringCertifications, setExpiringCertifications] = useState<ExpirationItem[]>([]);
   const [recentCompletions, setRecentCompletions] = useState<CompletionItem[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
+  const [pendingSubmissionCount, setPendingSubmissionCount] = useState(0);
   const [_memberMap, setMemberMap] = useState<Map<string, MemberSummary>>(new Map());
 
   // Widget visibility preferences
@@ -97,12 +100,14 @@ const TrainingOfficerDashboard: React.FC = () => {
       setError(null);
 
       // Fetch all data in parallel
-      const [members, expiring, allRecords, reqs] = await Promise.all([
+      const [members, expiring, allRecords, reqs, pendingCount] = await Promise.all([
         userService.getUsers(),
         trainingService.getExpiringCertifications(90),
         trainingService.getRecords(),
         trainingService.getRequirements({ active_only: true }),
+        trainingSubmissionService.getPendingCount().catch(() => ({ pending_count: 0 })),
       ]);
+      setPendingSubmissionCount(pendingCount.pending_count);
 
       // Build member map for lookups
       const memberMapData = new Map<string, MemberSummary>();
@@ -376,6 +381,20 @@ const TrainingOfficerDashboard: React.FC = () => {
             description="Generate compliance reports and training analytics"
             onClick={() => navigate('/training/reports')}
             color="orange"
+          />
+          <NavigationCard
+            icon={ClipboardCheck}
+            title="Review Submissions"
+            description={pendingSubmissionCount > 0 ? `${pendingSubmissionCount} pending submissions to review` : 'Review member self-reported training'}
+            onClick={() => navigate('/training/submissions')}
+            color="yellow"
+          />
+          <NavigationCard
+            icon={FileTextIcon}
+            title="Submit Training"
+            description="Submit external training for yourself"
+            onClick={() => navigate('/training/submit')}
+            color="cyan"
           />
           <NavigationCard
             icon={Settings}

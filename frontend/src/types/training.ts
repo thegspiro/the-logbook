@@ -901,3 +901,115 @@ export interface BulkImportResponse {
   failed: number;
   errors: string[];
 }
+
+// ==================== Self-Reported Training Types ====================
+
+export type SubmissionStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+  | 'revision_requested';
+
+export interface FieldConfig {
+  visible: boolean;
+  required: boolean;
+  label: string;
+}
+
+export interface SelfReportConfig {
+  id: string;
+  organization_id: string;
+  require_approval: boolean;
+  auto_approve_under_hours?: number;
+  approval_deadline_days: number;
+  notify_officer_on_submit: boolean;
+  notify_member_on_decision: boolean;
+  field_config: Record<string, FieldConfig>;
+  allowed_training_types?: string[];
+  max_hours_per_submission?: number;
+  member_instructions?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SelfReportConfigUpdate {
+  require_approval?: boolean;
+  auto_approve_under_hours?: number | null;
+  approval_deadline_days?: number;
+  notify_officer_on_submit?: boolean;
+  notify_member_on_decision?: boolean;
+  field_config?: Record<string, FieldConfig>;
+  allowed_training_types?: string[] | null;
+  max_hours_per_submission?: number | null;
+  member_instructions?: string | null;
+}
+
+export interface TrainingSubmission {
+  id: string;
+  organization_id: string;
+  submitted_by: string;
+  course_name: string;
+  course_code?: string;
+  training_type: TrainingType;
+  description?: string;
+  completion_date: string;
+  hours_completed: number;
+  credit_hours?: number;
+  instructor?: string;
+  location?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  expiration_date?: string;
+  category_id?: string;
+  attachments?: string[];
+  status: SubmissionStatus;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  reviewer_notes?: string;
+  training_record_id?: string;
+  submitted_at: string;
+  updated_at: string;
+}
+
+export interface TrainingSubmissionCreate {
+  course_name: string;
+  course_code?: string;
+  training_type: TrainingType;
+  description?: string;
+  completion_date: string;
+  hours_completed: number;
+  credit_hours?: number;
+  instructor?: string;
+  location?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  expiration_date?: string;
+  category_id?: string;
+  attachments?: string[];
+}
+
+export interface TrainingSubmissionUpdate {
+  course_name?: string;
+  course_code?: string;
+  training_type?: TrainingType;
+  description?: string;
+  completion_date?: string;
+  hours_completed?: number;
+  credit_hours?: number;
+  instructor?: string;
+  location?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  expiration_date?: string;
+  category_id?: string;
+  attachments?: string[];
+}
+
+export interface SubmissionReviewRequest {
+  action: 'approve' | 'reject' | 'revision_requested';
+  reviewer_notes?: string;
+  override_hours?: number;
+  override_credit_hours?: number;
+  override_training_type?: TrainingType;
+}
