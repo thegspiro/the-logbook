@@ -39,10 +39,12 @@ from app.schemas.scheduling import (
     ShiftSwapRequestCreate,
     ShiftSwapReview,
     ShiftSwapRequestResponse,
+    SwapRequestStatus,
     ShiftTimeOffCreate,
     ShiftTimeOffUpdate,
     ShiftTimeOffReview,
     ShiftTimeOffResponse,
+    TimeOffStatus,
 )
 from app.services.scheduling_service import SchedulingService
 from app.api.dependencies import get_current_user, require_permission
@@ -66,8 +68,11 @@ async def list_shifts(
     """List shifts with optional date filtering"""
     service = SchedulingService(db)
 
-    start = date.fromisoformat(start_date) if start_date else None
-    end = date.fromisoformat(end_date) if end_date else None
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
     shifts, total = await service.get_shifts(
         current_user.organization_id,
@@ -196,7 +201,7 @@ async def update_attendance(
     """Update an attendance record"""
     service = SchedulingService(db)
     result, error = await service.update_attendance(
-        attendance_id, attendance.model_dump(exclude_none=True)
+        attendance_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to update attendance. {error}")
@@ -211,7 +216,7 @@ async def remove_attendance(
 ):
     """Remove an attendance record"""
     service = SchedulingService(db)
-    success, error = await service.remove_attendance(attendance_id)
+    success, error = await service.remove_attendance(attendance_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Unable to remove attendance. {error}")
 
@@ -228,7 +233,10 @@ async def get_week_calendar(
 ):
     """Get shifts for a specific week"""
     service = SchedulingService(db)
-    start = date.fromisoformat(week_start) if week_start else (date.today() - timedelta(days=date.today().weekday()))
+    try:
+        start = date.fromisoformat(week_start) if week_start else (date.today() - timedelta(days=date.today().weekday()))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     shifts = await service.get_week_shifts(current_user.organization_id, start)
     return shifts
 
@@ -236,7 +244,7 @@ async def get_week_calendar(
 @router.get("/calendar/month", response_model=list[ShiftResponse])
 async def get_month_calendar(
     year: Optional[int] = None,
-    month: Optional[int] = None,
+    month: Optional[int] = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.view")),
 ):
@@ -277,9 +285,9 @@ async def create_call(
     """Create a call record for a shift"""
     service = SchedulingService(db)
     call_data = call.model_dump(exclude_none=True)
-    call_data["shift_id"] = str(shift_id)
-    result, error = await service.create_call(
-        current_user.organization_id, call_data, current_user.id
+    call_data.pop("shift_id", None)
+    result, error = await service.create_shift_call(
+        current_user.organization_id, shift_id, call_data
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to create call. {error}")
@@ -306,7 +314,7 @@ async def get_call(
 ):
     """Get a specific call by ID"""
     service = SchedulingService(db)
-    call = await service.get_call_by_id(call_id, current_user.organization_id)
+    call = await service.get_shift_call_by_id(call_id, current_user.organization_id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     return call
@@ -322,7 +330,7 @@ async def update_call(
     """Update a call record"""
     service = SchedulingService(db)
     update_data = call.model_dump(exclude_none=True)
-    result, error = await service.update_call(
+    result, error = await service.update_shift_call(
         call_id, current_user.organization_id, update_data
     )
     if error:
@@ -338,7 +346,7 @@ async def delete_call(
 ):
     """Delete a call record"""
     service = SchedulingService(db)
-    success, error = await service.delete_call(call_id, current_user.organization_id)
+    success, error = await service.delete_shift_call(call_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Unable to delete call. {error}")
 
@@ -512,7 +520,7 @@ async def generate_shifts_from_pattern(
 ):
     """Generate shifts from a pattern for a date range"""
     service = SchedulingService(db)
-    result, error = await service.generate_shifts(
+    result, error = await service.generate_shifts_from_pattern(
         pattern_id,
         current_user.organization_id,
         request.start_date,
@@ -551,7 +559,7 @@ async def create_assignment(
     service = SchedulingService(db)
     assignment_data = assignment.model_dump(exclude_none=True)
     result, error = await service.create_assignment(
-        shift_id, current_user.organization_id, assignment_data, current_user.id
+        current_user.organization_id, shift_id, assignment_data, current_user.id
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to create assignment. {error}")
@@ -598,7 +606,7 @@ async def confirm_assignment(
     """Confirm own shift assignment"""
     service = SchedulingService(db)
     result, error = await service.confirm_assignment(
-        assignment_id, current_user.organization_id, current_user.id
+        assignment_id, current_user.id
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to confirm assignment. {error}")
@@ -619,9 +627,15 @@ async def list_swap_requests(
 ):
     """List shift swap requests"""
     service = SchedulingService(db)
-    requests = await service.get_swap_requests(
+    swap_status = None
+    if status_filter:
+        try:
+            swap_status = SwapRequestStatus(status_filter)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+    requests, total = await service.get_swap_requests(
         current_user.organization_id,
-        status=status_filter,
+        status=swap_status,
         skip=skip,
         limit=limit,
     )
@@ -638,7 +652,7 @@ async def create_swap_request(
     service = SchedulingService(db)
     request_data = swap_request.model_dump(exclude_none=True)
     result, error = await service.create_swap_request(
-        current_user.organization_id, request_data, current_user.id
+        current_user.organization_id, current_user.id, request_data
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to create swap request. {error}")
@@ -668,9 +682,9 @@ async def review_swap_request(
 ):
     """Review (approve/deny) a shift swap request"""
     service = SchedulingService(db)
-    review_data = review.model_dump(exclude_none=True)
     result, error = await service.review_swap_request(
-        request_id, current_user.organization_id, review_data, current_user.id
+        request_id, current_user.organization_id, current_user.id,
+        review.status, review.reviewer_notes
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to review swap request. {error}")
@@ -708,9 +722,15 @@ async def list_time_off_requests(
 ):
     """List time-off requests"""
     service = SchedulingService(db)
-    requests = await service.get_time_off_requests(
+    time_off_status = None
+    if status_filter:
+        try:
+            time_off_status = TimeOffStatus(status_filter)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+    requests, total = await service.get_time_off_requests(
         current_user.organization_id,
-        status=status_filter,
+        status=time_off_status,
         user_id=user_id,
         skip=skip,
         limit=limit,
@@ -727,8 +747,8 @@ async def create_time_off_request(
     """Create a time-off request"""
     service = SchedulingService(db)
     time_off_data = time_off.model_dump(exclude_none=True)
-    result, error = await service.create_time_off_request(
-        current_user.organization_id, time_off_data, current_user.id
+    result, error = await service.create_time_off(
+        current_user.organization_id, current_user.id, time_off_data
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to create time-off request. {error}")
@@ -758,9 +778,9 @@ async def review_time_off_request(
 ):
     """Review (approve/deny) a time-off request"""
     service = SchedulingService(db)
-    review_data = review.model_dump(exclude_none=True)
-    result, error = await service.review_time_off_request(
-        time_off_id, current_user.organization_id, review_data, current_user.id
+    result, error = await service.review_time_off(
+        time_off_id, current_user.organization_id, current_user.id,
+        review.status, review.reviewer_notes
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to review time-off request. {error}")
@@ -775,7 +795,7 @@ async def cancel_time_off_request(
 ):
     """Cancel own time-off request"""
     service = SchedulingService(db)
-    result, error = await service.cancel_time_off_request(
+    result, error = await service.cancel_time_off(
         time_off_id, current_user.organization_id, current_user.id
     )
     if error:
@@ -792,9 +812,12 @@ async def get_member_availability(
 ):
     """Get member availability for a date range"""
     service = SchedulingService(db)
-    start = date.fromisoformat(start_date)
-    end = date.fromisoformat(end_date)
-    availability = await service.get_member_availability(
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    availability = await service.get_availability(
         current_user.organization_id, start, end
     )
     return availability
@@ -804,7 +827,7 @@ async def get_member_availability(
 # Personal Shift Endpoints
 # ============================================
 
-@router.get("/my-shifts", response_model=list[ShiftResponse])
+@router.get("/my-shifts")
 async def get_my_shifts(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -815,17 +838,20 @@ async def get_my_shifts(
 ):
     """Get current user's shifts"""
     service = SchedulingService(db)
-    start = date.fromisoformat(start_date) if start_date else None
-    end = date.fromisoformat(end_date) if end_date else None
-    shifts = await service.get_user_shifts(
-        current_user.organization_id,
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    shifts, total = await service.get_my_shifts(
         current_user.id,
+        current_user.organization_id,
         start_date=start,
         end_date=end,
         skip=skip,
         limit=limit,
     )
-    return shifts
+    return {"shifts": shifts, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
@@ -837,11 +863,14 @@ async def get_my_assignments(
 ):
     """Get current user's shift assignments"""
     service = SchedulingService(db)
-    start = date.fromisoformat(start_date) if start_date else None
-    end = date.fromisoformat(end_date) if end_date else None
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     assignments = await service.get_user_assignments(
-        current_user.organization_id,
         current_user.id,
+        current_user.organization_id,
         start_date=start,
         end_date=end,
     )
@@ -861,8 +890,11 @@ async def get_member_hours_report(
 ):
     """Get member hours report for a date range"""
     service = SchedulingService(db)
-    start = date.fromisoformat(start_date)
-    end = date.fromisoformat(end_date)
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     report = await service.get_member_hours_report(
         current_user.organization_id, start, end
     )
@@ -878,9 +910,12 @@ async def get_coverage_report(
 ):
     """Get shift coverage report for a date range"""
     service = SchedulingService(db)
-    start = date.fromisoformat(start_date)
-    end = date.fromisoformat(end_date)
-    report = await service.get_coverage_report(
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    report = await service.get_shift_coverage_report(
         current_user.organization_id, start, end
     )
     return report
@@ -890,14 +925,17 @@ async def get_coverage_report(
 async def get_call_volume_report(
     start_date: str = Query(...),
     end_date: str = Query(...),
-    group_by: str = Query("day"),
+    group_by: str = Query("day", regex="^(day|week|month)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.report")),
 ):
     """Get call volume report for a date range"""
     service = SchedulingService(db)
-    start = date.fromisoformat(start_date)
-    end = date.fromisoformat(end_date)
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     report = await service.get_call_volume_report(
         current_user.organization_id, start, end, group_by=group_by
     )

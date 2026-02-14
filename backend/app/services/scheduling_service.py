@@ -6,7 +6,7 @@ attendance tracking, and calendar views.
 """
 
 from typing import List, Optional, Dict, Tuple, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from uuid import UUID
@@ -22,6 +22,10 @@ from app.models.user import User
 
 class SchedulingService:
     """Service for scheduling management"""
+
+    PROTECTED_FIELDS = frozenset({
+        "id", "organization_id", "created_at", "updated_at", "created_by",
+    })
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -100,7 +104,8 @@ class SchedulingService:
                 return None, "Shift not found"
 
             for key, value in update_data.items():
-                setattr(shift, key, value)
+                if key not in self.PROTECTED_FIELDS:
+                    setattr(shift, key, value)
 
             await self.db.commit()
             await self.db.refresh(shift)
@@ -164,20 +169,23 @@ class SchedulingService:
         return result.scalars().all()
 
     async def update_attendance(
-        self, attendance_id: UUID, update_data: Dict[str, Any]
+        self, attendance_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
         """Update an attendance record"""
         try:
             result = await self.db.execute(
                 select(ShiftAttendance)
+                .join(Shift, ShiftAttendance.shift_id == Shift.id)
                 .where(ShiftAttendance.id == attendance_id)
+                .where(Shift.organization_id == organization_id)
             )
             attendance = result.scalar_one_or_none()
             if not attendance:
                 return None, "Attendance record not found"
 
             for key, value in update_data.items():
-                setattr(attendance, key, value)
+                if key not in self.PROTECTED_FIELDS:
+                    setattr(attendance, key, value)
 
             # Calculate duration if both check-in and check-out are set
             if attendance.checked_in_at and attendance.checked_out_at:
@@ -192,13 +200,15 @@ class SchedulingService:
             return None, str(e)
 
     async def remove_attendance(
-        self, attendance_id: UUID
+        self, attendance_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:
         """Remove an attendance record"""
         try:
             result = await self.db.execute(
                 select(ShiftAttendance)
+                .join(Shift, ShiftAttendance.shift_id == Shift.id)
                 .where(ShiftAttendance.id == attendance_id)
+                .where(Shift.organization_id == organization_id)
             )
             attendance = result.scalar_one_or_none()
             if not attendance:
@@ -357,7 +367,8 @@ class SchedulingService:
                 return None, "Shift call not found"
 
             for key, value in update_data.items():
-                setattr(call, key, value)
+                if key not in self.PROTECTED_FIELDS:
+                    setattr(call, key, value)
 
             await self.db.commit()
             await self.db.refresh(call)
@@ -440,7 +451,8 @@ class SchedulingService:
                 return None, "Shift template not found"
 
             for key, value in update_data.items():
-                setattr(template, key, value)
+                if key not in self.PROTECTED_FIELDS:
+                    setattr(template, key, value)
 
             await self.db.commit()
             await self.db.refresh(template)
@@ -523,7 +535,8 @@ class SchedulingService:
                 return None, "Shift pattern not found"
 
             for key, value in update_data.items():
-                setattr(pattern, key, value)
+                if key not in self.PROTECTED_FIELDS:
+                    setattr(pattern, key, value)
 
             await self.db.commit()
             await self.db.refresh(pattern)
@@ -746,7 +759,8 @@ class SchedulingService:
                 return None, "Shift assignment not found"
 
             for key, value in update_data.items():
-                setattr(assignment, key, value)
+                if key not in self.PROTECTED_FIELDS:
+                    setattr(assignment, key, value)
 
             await self.db.commit()
             await self.db.refresh(assignment)
@@ -784,16 +798,14 @@ class SchedulingService:
             result = await self.db.execute(
                 select(ShiftAssignment)
                 .where(ShiftAssignment.id == assignment_id)
+                .where(ShiftAssignment.user_id == user_id)
             )
             assignment = result.scalar_one_or_none()
             if not assignment:
-                return None, "Shift assignment not found"
-
-            if str(assignment.user_id) != str(user_id):
-                return None, "Only the assigned user can confirm this assignment"
+                return None, "Shift assignment not found or not assigned to you"
 
             assignment.assignment_status = AssignmentStatus.CONFIRMED
-            assignment.confirmed_at = datetime.utcnow()
+            assignment.confirmed_at = datetime.now(timezone.utc)
 
             await self.db.commit()
             await self.db.refresh(assignment)
@@ -890,7 +902,7 @@ class SchedulingService:
 
             swap_request.status = status
             swap_request.reviewed_by = reviewer_id
-            swap_request.reviewed_at = datetime.utcnow()
+            swap_request.reviewed_at = datetime.now(timezone.utc)
             swap_request.reviewer_notes = reviewer_notes
 
             # If approved, perform the actual swap of assignments
@@ -1037,7 +1049,7 @@ class SchedulingService:
 
             time_off.status = status
             time_off.approved_by = reviewer_id
-            time_off.approved_at = datetime.utcnow()
+            time_off.approved_at = datetime.now(timezone.utc)
             time_off.reviewer_notes = reviewer_notes
 
             await self.db.commit()

@@ -130,7 +130,6 @@ class SchedulingSummary(BaseModel):
 
 class ShiftCallCreate(BaseModel):
     """Schema for creating a shift call"""
-    shift_id: UUID
     incident_number: Optional[str] = None
     incident_type: str
     dispatched_at: Optional[datetime] = None
@@ -144,7 +143,6 @@ class ShiftCallCreate(BaseModel):
 
 class ShiftCallUpdate(BaseModel):
     """Schema for updating a shift call"""
-    shift_id: Optional[UUID] = None
     incident_number: Optional[str] = None
     incident_type: Optional[str] = None
     dispatched_at: Optional[datetime] = None
@@ -472,27 +470,27 @@ class ShiftTimeOffResponse(BaseModel):
 class MemberHoursReport(BaseModel):
     """Schema for member hours report"""
     user_id: UUID
-    user_name: str
-    total_shifts: int
+    email: str
+    shift_count: int
+    total_minutes: int
     total_hours: float
-    shifts_as_officer: int
 
 
 class ShiftCoverageReport(BaseModel):
     """Schema for shift coverage report"""
-    date: date
-    shift_count: int
+    date: str
+    total_shifts: int
     total_assigned: int
     total_confirmed: int
-    staffing_met: bool
+    understaffed_shifts: int
 
 
 class CallVolumeReport(BaseModel):
     """Schema for call volume report"""
     period: str
     total_calls: int
-    calls_by_type: dict
-    avg_response_minutes: Optional[float] = None
+    by_type: dict
+    avg_response_seconds: Optional[float] = None
 
 
 class MemberHoursListResponse(BaseModel):
