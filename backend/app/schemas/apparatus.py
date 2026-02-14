@@ -648,6 +648,17 @@ class ApparatusMaintenanceTypeResponse(ApparatusMaintenanceTypeBase):
 
 
 # =============================================================================
+# Shared Attachment Schema
+# =============================================================================
+
+class FileAttachment(BaseModel):
+    """Attachment reference for files (photos, PDFs, email exports, etc.)"""
+    file_path: str
+    file_name: str
+    mime_type: Optional[str] = None
+
+
+# =============================================================================
 # Apparatus Maintenance Record Schemas
 # =============================================================================
 
@@ -680,10 +691,27 @@ class ApparatusMaintenanceBase(BaseModel):
 
     notes: Optional[str] = None
 
+    # Attachments (photos, invoices, email chains, etc.)
+    attachments: Optional[List[FileAttachment]] = None
+
 
 class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
     """Schema for creating maintenance record"""
     is_completed: bool = Field(default=False)
+
+    # Historic entry support — for back-dating records entered during onboarding
+    is_historic: bool = Field(
+        default=False,
+        description="True when entering a past repair that happened before system adoption",
+    )
+    occurred_date: Optional[date] = Field(
+        None,
+        description="Actual date the work was performed (required when is_historic=True)",
+    )
+    historic_source: Optional[str] = Field(
+        None, max_length=200,
+        description='Where the data came from, e.g. "Paper logbook", "Vendor invoice"',
+    )
 
 
 class ApparatusMaintenanceUpdate(BaseModel):
@@ -716,6 +744,13 @@ class ApparatusMaintenanceUpdate(BaseModel):
 
     notes: Optional[str] = None
 
+    # Attachments
+    attachments: Optional[List[FileAttachment]] = None
+
+    # Historic fields (allow correction after creation)
+    occurred_date: Optional[date] = None
+    historic_source: Optional[str] = Field(None, max_length=200)
+
 
 class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
     """Schema for maintenance record response"""
@@ -727,6 +762,11 @@ class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    # Historic entry info
+    is_historic: bool = False
+    occurred_date: Optional[date] = None
+    historic_source: Optional[str] = None
 
     # Nested info
     maintenance_type: Optional[ApparatusMaintenanceTypeResponse] = None
@@ -1452,11 +1492,8 @@ class ApparatusComponentResponse(ApparatusComponentBase):
 # Component Note Schemas
 # =============================================================================
 
-class NoteAttachment(BaseModel):
-    """Attachment reference"""
-    file_path: str
-    file_name: str
-    mime_type: Optional[str] = None
+# NoteAttachment is defined earlier as FileAttachment
+NoteAttachment = FileAttachment
 
 
 class ApparatusComponentNoteBase(BaseModel):

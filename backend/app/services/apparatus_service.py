@@ -1013,7 +1013,7 @@ class ApparatusService:
         organization_id: str,
         created_by: str,
     ) -> ApparatusMaintenance:
-        """Create maintenance record"""
+        """Create maintenance record (current or historic)"""
         # Verify apparatus
         apparatus = await self.get_apparatus(maintenance_data.apparatus_id, organization_id, include_relations=False)
         if not apparatus:
@@ -1024,14 +1024,27 @@ class ApparatusService:
         if not maint_type:
             raise ValueError("Invalid maintenance type")
 
+        # Validate historic entries
+        if maintenance_data.is_historic and not maintenance_data.occurred_date:
+            raise ValueError("occurred_date is required for historic entries")
+
+        dump = maintenance_data.model_dump()
+        # Convert attachment models to dicts for JSON storage
+        if dump.get("attachments"):
+            dump["attachments"] = [
+                a if isinstance(a, dict) else a for a in dump["attachments"]
+            ]
+
         maintenance = ApparatusMaintenance(
             organization_id=organization_id,
             created_by=created_by,
-            **maintenance_data.model_dump()
+            **dump,
         )
 
-        # Check if overdue
-        if maintenance.due_date and maintenance.due_date < date.today() and not maintenance.is_completed:
+        # For historic records that are already completed, don't flag as overdue
+        if maintenance.is_historic and maintenance.is_completed:
+            maintenance.is_overdue = False
+        elif maintenance.due_date and maintenance.due_date < date.today() and not maintenance.is_completed:
             maintenance.is_overdue = True
 
         self.db.add(maintenance)
@@ -1059,6 +1072,9 @@ class ApparatusService:
         maintenance_type_id: Optional[str] = None,
         is_completed: Optional[bool] = None,
         is_overdue: Optional[bool] = None,
+        is_historic: Optional[bool] = None,
+        occurred_after: Optional[date] = None,
+        occurred_before: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[ApparatusMaintenance]:
@@ -1073,6 +1089,12 @@ class ApparatusService:
             conditions.append(ApparatusMaintenance.is_completed == is_completed)
         if is_overdue is not None:
             conditions.append(ApparatusMaintenance.is_overdue == is_overdue)
+        if is_historic is not None:
+            conditions.append(ApparatusMaintenance.is_historic == is_historic)
+        if occurred_after:
+            conditions.append(ApparatusMaintenance.occurred_date >= occurred_after)
+        if occurred_before:
+            conditions.append(ApparatusMaintenance.occurred_date <= occurred_before)
 
         query = (
             select(ApparatusMaintenance)
@@ -1099,6 +1121,12 @@ class ApparatusService:
             return None
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
+
+        # Convert attachment models to dicts for JSON storage
+        if "attachments" in update_data and update_data["attachments"]:
+            update_data["attachments"] = [
+                a if isinstance(a, dict) else a for a in update_data["attachments"]
+            ]
 
         # Handle completion
         if "is_completed" in update_data and update_data["is_completed"] and not maintenance.is_completed:

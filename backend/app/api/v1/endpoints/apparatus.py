@@ -8,7 +8,7 @@ maintenance tracking, equipment, operators, and fleet management.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
+from datetime import date, datetime
 
 from app.core.database import get_db
 from app.models.user import User
@@ -924,13 +924,19 @@ async def list_maintenance_records(
     maintenance_type_id: Optional[str] = Query(None, description="Filter by maintenance type"),
     is_completed: Optional[bool] = Query(None, description="Filter by completion status"),
     is_overdue: Optional[bool] = Query(None, description="Filter by overdue status"),
+    is_historic: Optional[bool] = Query(None, description="Filter by historic entries (True=only historic, False=only current)"),
+    occurred_after: Optional[date] = Query(None, description="Filter records that occurred on or after this date"),
+    occurred_before: Optional[date] = Query(None, description="Filter records that occurred on or before this date"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
-    List maintenance records
+    List maintenance records.
+
+    Supports filtering by historic entries and date ranges on `occurred_date`
+    to help locate back-dated repair history.
 
     **Authentication required**
     **Permissions required:** apparatus.view or apparatus.manage
@@ -942,6 +948,9 @@ async def list_maintenance_records(
         maintenance_type_id=maintenance_type_id,
         is_completed=is_completed,
         is_overdue=is_overdue,
+        is_historic=is_historic,
+        occurred_after=occurred_after,
+        occurred_before=occurred_before,
         skip=skip,
         limit=limit,
     )

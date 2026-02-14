@@ -778,6 +778,18 @@ class ApparatusMaintenance(Base):
     # Notes
     notes = Column(Text, nullable=True)
 
+    # Attachments (file references stored as JSON array)
+    attachments = Column(JSON, nullable=True)  # [{file_path, file_name, mime_type, uploaded_at}]
+
+    # Historic Entry Support
+    # When is_historic=True the record was entered retroactively (e.g. onboarding
+    # a vehicle that has years of prior service history).  occurred_date is the
+    # authoritative date the work actually happened; created_at remains the date
+    # the record was entered into the system.
+    is_historic = Column(Boolean, default=False, nullable=False)
+    occurred_date = Column(Date, nullable=True)  # Actual date of work (may differ from created_at)
+    historic_source = Column(String(200), nullable=True)  # Where the data came from, e.g. "Paper logbook", "Vendor invoice"
+
     # Timestamps
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -797,6 +809,8 @@ class ApparatusMaintenance(Base):
         Index("idx_apparatus_maint_due_date", "due_date"),
         Index("idx_apparatus_maint_completed", "is_completed"),
         Index("idx_apparatus_maint_overdue", "is_overdue"),
+        Index("idx_apparatus_maint_historic", "is_historic"),
+        Index("idx_apparatus_maint_occurred", "occurred_date"),
     )
 
     def __repr__(self):
