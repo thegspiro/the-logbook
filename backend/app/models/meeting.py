@@ -132,7 +132,8 @@ class MeetingAttendee(Base):
 
     # Relationships
     meeting = relationship("Meeting", back_populates="attendees")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    waiver_grantor = relationship("User", foreign_keys=[waiver_granted_by])
 
     __table_args__ = (
         Index("idx_meeting_attendees_meeting", "meeting_id"),

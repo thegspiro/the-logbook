@@ -30,7 +30,7 @@ async def track_event(
         event_id=data.get("event_id"),
         user_id=data.get("user_id") or str(current_user.id),
         device_type=data.get("metadata", {}).get("deviceType"),
-        metadata=data.get("metadata", {}),
+        event_metadata=data.get("metadata", {}),
     )
     db.add(event)
     await db.commit()
@@ -129,7 +129,7 @@ async def export_analytics(
                 "event_id": e.event_id,
                 "user_id": e.user_id,
                 "device_type": e.device_type,
-                "metadata": e.metadata,
+                "metadata": e.event_metadata,
                 "created_at": e.created_at.isoformat() if e.created_at else None,
             }
             for e in events
