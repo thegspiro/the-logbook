@@ -4,8 +4,11 @@ Event API Endpoints
 Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
+import os
+import uuid as uuid_lib
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
@@ -1072,3 +1075,192 @@ async def create_recurring_event(
         )
 
     return [_build_event_response(event) for event in events]
+
+
+# ============================================
+# Event Attachment Endpoints
+# ============================================
+
+ATTACHMENT_UPLOAD_DIR = "/app/uploads/event-attachments"
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".jpg", ".jpeg", ".png", ".gif"}
+MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
+
+
+@router.post("/{event_id}/attachments")
+async def upload_event_attachment(
+    event_id: UUID,
+    file: UploadFile = File(...),
+    description: str = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Upload an attachment to an event (e.g., readahead materials)
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    # Verify event exists
+    service = EventService(db)
+    result = await db.execute(
+        select(Event)
+        .where(Event.id == str(event_id))
+        .where(Event.organization_id == str(current_user.organization_id))
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Validate file extension
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    # Read and validate size
+    content = await file.read()
+    if len(content) > MAX_ATTACHMENT_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 25MB.")
+
+    # Save file
+    org_dir = os.path.join(ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id))
+    os.makedirs(org_dir, exist_ok=True)
+
+    unique_name = f"{uuid_lib.uuid4().hex}{ext}"
+    file_path = os.path.join(org_dir, unique_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Update event attachments list
+    attachments = event.attachments or []
+    attachments.append({
+        "id": uuid_lib.uuid4().hex,
+        "file_name": file.filename or unique_name,
+        "file_path": file_path,
+        "file_size": len(content),
+        "file_type": file.content_type,
+        "description": description,
+        "uploaded_by": str(current_user.id),
+        "uploaded_at": datetime.utcnow().isoformat(),
+    })
+    event.attachments = attachments
+    event.updated_at = datetime.utcnow()
+
+    await db.commit()
+
+    return {
+        "message": "Attachment uploaded successfully",
+        "attachment": attachments[-1],
+        "total_attachments": len(attachments),
+    }
+
+
+@router.get("/{event_id}/attachments")
+async def list_event_attachments(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all attachments for an event
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(Event)
+        .where(Event.id == str(event_id))
+        .where(Event.organization_id == str(current_user.organization_id))
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return event.attachments or []
+
+
+@router.get("/{event_id}/attachments/{attachment_id}/download")
+async def download_event_attachment(
+    event_id: UUID,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Download a specific event attachment
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(Event)
+        .where(Event.id == str(event_id))
+        .where(Event.organization_id == str(current_user.organization_id))
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    attachments = event.attachments or []
+    attachment = next((a for a in attachments if a.get("id") == attachment_id), None)
+
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    file_path = attachment["file_path"]
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Attachment file not found on disk")
+
+    return FileResponse(
+        path=file_path,
+        filename=attachment.get("file_name", "download"),
+        media_type=attachment.get("file_type", "application/octet-stream"),
+    )
+
+
+@router.delete("/{event_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_event_attachment(
+    event_id: UUID,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Delete an event attachment
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    result = await db.execute(
+        select(Event)
+        .where(Event.id == str(event_id))
+        .where(Event.organization_id == str(current_user.organization_id))
+    )
+    event = result.scalar_one_or_none()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    attachments = event.attachments or []
+    attachment = next((a for a in attachments if a.get("id") == attachment_id), None)
+
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # Remove file from disk
+    file_path = attachment["file_path"]
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except OSError:
+        pass
+
+    # Remove from attachments list
+    event.attachments = [a for a in attachments if a.get("id") != attachment_id]
+    event.updated_at = datetime.utcnow()
+
+    await db.commit()
