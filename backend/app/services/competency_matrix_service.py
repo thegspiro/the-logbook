@@ -24,7 +24,7 @@ from app.models.training import (
     TrainingStatus,
     RequirementType,
 )
-from app.models.user import User
+from app.models.user import User, UserStatus
 
 
 class CompetencyMatrixService:
@@ -86,7 +86,8 @@ class CompetencyMatrixService:
         user_query = (
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.is_active == True)
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
         )
         if user_ids:
             user_query = user_query.where(User.id.in_(user_ids))

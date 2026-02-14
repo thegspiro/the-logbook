@@ -22,8 +22,8 @@ depends_on = None
 def upgrade() -> None:
     # Meeting attendance waivers
     op.add_column('meeting_attendees', sa.Column('waiver_reason', sa.Text(), nullable=True))
-    op.add_column('meeting_attendees', sa.Column('waiver_granted_by', sa.String(36), nullable=True))
-    op.add_column('meeting_attendees', sa.Column('waiver_granted_at', sa.DateTime(), nullable=True))
+    op.add_column('meeting_attendees', sa.Column('waiver_granted_by', sa.String(36), sa.ForeignKey('users.id'), nullable=True))
+    op.add_column('meeting_attendees', sa.Column('waiver_granted_at', sa.DateTime(timezone=True), nullable=True))
 
 
 def downgrade() -> None:

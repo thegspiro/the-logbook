@@ -12,7 +12,7 @@ from sqlalchemy import select, func
 from loguru import logger
 
 from app.models.minute import MeetingMinutes
-from app.models.user import User, Organization
+from app.models.user import User, UserStatus, Organization
 
 
 class QuorumService:
@@ -46,7 +46,8 @@ class QuorumService:
         result = await self.db.execute(
             select(func.count(User.id))
             .where(User.organization_id == organization_id)
-            .where(User.is_active == True)
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
         )
         return result.scalar() or 0
 

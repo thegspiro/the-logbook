@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID, uuid4
 import secrets
 import string
+from loguru import logger
 
 from app.models.membership_pipeline import (
     MembershipPipeline,

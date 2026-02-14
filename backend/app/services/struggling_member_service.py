@@ -191,16 +191,18 @@ class StrugglingMemberService:
             service = NotificationsService(self.db)
             await service.log_notification(
                 organization_id=organization_id,
-                rule_id=None,
-                recipient_id=None,  # Will be picked up by training officers
-                channel="in_app",
-                subject=f"Training Alert: {member_data['member_name']} falling behind",
-                message=(
-                    f"{member_data['member_name']} is struggling in "
-                    f"'{member_data['program_name']}' "
-                    f"({member_data['progress_pct']:.0f}% complete). "
-                    f"Issues: {', '.join(i['detail'] for i in member_data['issues'])}"
-                ),
+                log_data={
+                    "rule_id": None,
+                    "recipient_id": None,  # Will be picked up by training officers
+                    "channel": "in_app",
+                    "subject": f"Training Alert: {member_data['member_name']} falling behind",
+                    "message": (
+                        f"{member_data['member_name']} is struggling in "
+                        f"'{member_data['program_name']}' "
+                        f"({member_data['progress_pct']:.0f}% complete). "
+                        f"Issues: {', '.join(i['detail'] for i in member_data['issues'])}"
+                    ),
+                },
             )
         except Exception as e:
             logger.error(f"Failed to send struggling notification: {e}")

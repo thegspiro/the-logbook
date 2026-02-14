@@ -51,7 +51,7 @@ class AttendanceDashboardService:
         member_result = await self.db.execute(
             select(User)
             .where(User.organization_id == org_id)
-            .where(User.is_active == True)
+            .where(User.status == UserStatus.ACTIVE)
             .where(User.deleted_at.is_(None))
             .order_by(User.last_name, User.first_name)
         )

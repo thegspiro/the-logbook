@@ -19,7 +19,7 @@ from sqlalchemy import select, and_
 from loguru import logger
 
 from app.models.training import TrainingRecord, TrainingStatus
-from app.models.user import User, Organization
+from app.models.user import User, UserStatus, Organization
 from app.services.email_service import EmailService
 
 
@@ -98,7 +98,8 @@ class CertAlertService:
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.is_active == True)
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
             .options(selectinload(User.roles))
         )
         users = result.scalars().all()
