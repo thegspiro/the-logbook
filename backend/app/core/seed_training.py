@@ -13,11 +13,16 @@ from app.models.training import (
     TrainingCategory,
     TrainingCourse,
     TrainingRequirement,
+    TrainingProgram,
+    ProgramPhase,
+    ProgramRequirement,
+    ProgramMilestone,
     TrainingType,
     RequirementType,
     RequirementFrequency,
     RequirementSource,
     DueDateType,
+    ProgramStructureType,
 )
 from app.core.utils import generate_uuid
 from loguru import logger
@@ -659,6 +664,794 @@ async def seed_training_requirements(
     return requirement_ids
 
 
+# ============================================
+# Pipeline Template Definitions
+# ============================================
+
+PIPELINE_TEMPLATES = [
+    {
+        "name": "Recruit / Probationary Firefighter",
+        "code": "RECRUIT",
+        "description": "Comprehensive probationary firefighter training program covering all foundational skills required for full membership. Typically 12-18 months.",
+        "target_position": "probationary",
+        "structure_type": ProgramStructureType.PHASES,
+        "time_limit_days": 365,
+        "warning_days_before": 60,
+        "phases": [
+            {
+                "phase_number": 1,
+                "name": "Orientation & Onboarding",
+                "description": "Department orientation, policies and procedures, station familiarization, PPE fitting, and introductory training.",
+                "time_limit_days": 30,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Department Orientation",
+                        "description": "Complete department orientation covering history, mission, organizational structure, policies, and SOGs/SOPs.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Review department history and mission",
+                            "Organizational structure briefing",
+                            "SOG/SOP manual review",
+                            "Facility tour completed",
+                            "IT systems and communications training",
+                            "Uniform and PPE issued and fitted",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Probationary Firefighter Handbook Review",
+                        "description": "Read and acknowledge the probationary firefighter handbook and expectations document.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Handbook read and signed",
+                            "Expectations document acknowledged",
+                            "Probationary timeline reviewed",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "Orientation Complete",
+                        "description": "Recruit has completed all orientation requirements and is ready to begin engine company operations training.",
+                        "completion_percentage_threshold": 100.0,
+                        "notification_message": "Congratulations! You've completed your orientation phase. You're now moving to Engine Company Operations.",
+                    },
+                ],
+            },
+            {
+                "phase_number": 2,
+                "name": "Engine Company Operations",
+                "description": "Core engine company skills including hose operations, pump operations awareness, nozzle techniques, hydrant connections, and water supply.",
+                "time_limit_days": 90,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Hose Operations Skills",
+                        "description": "Demonstrate proficiency in hose loads, lays, advances, and nozzle techniques for both attack and supply lines.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Forward lay",
+                            "Reverse lay",
+                            "Attack line advance (1-3/4\")",
+                            "Attack line advance (2-1/2\")",
+                            "Supply line operations",
+                            "Nozzle patterns and techniques",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Engine Company Training Hours",
+                        "description": "Complete minimum training hours on engine company operations and fire suppression fundamentals.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 40.0,
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                    {
+                        "name": "Hydrant Operations",
+                        "description": "Demonstrate ability to locate, operate, and connect to fire hydrants including dry and wet barrel types.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Hydrant location and identification",
+                            "Hydrant operation (wet and dry barrel)",
+                            "Hydrant-to-engine connection",
+                        ],
+                        "is_required": True,
+                        "sort_order": 3,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "Engine Ops 50% Complete",
+                        "description": "Halfway through engine company operations training.",
+                        "completion_percentage_threshold": 50.0,
+                        "notification_message": "You're halfway through Engine Company Operations. Keep up the great work!",
+                    },
+                ],
+            },
+            {
+                "phase_number": 3,
+                "name": "Truck Company Operations",
+                "description": "Truck company skills including ladders, ventilation, forcible entry, search and rescue, and overhaul.",
+                "time_limit_days": 90,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Ground Ladder Operations",
+                        "description": "Demonstrate proficiency with ground ladders including carries, raises, placement, and climbing.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Single-person ladder carry and raise",
+                            "Two-person ladder carry and raise",
+                            "Extension ladder operations",
+                            "Roof ladder operations",
+                            "Ladder climbing with tools",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Ventilation Operations",
+                        "description": "Demonstrate proficiency in vertical and horizontal ventilation techniques.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Horizontal ventilation (natural and mechanical)",
+                            "Vertical ventilation (flat and pitched roofs)",
+                            "PPV operations",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                    {
+                        "name": "Forcible Entry & Search",
+                        "description": "Demonstrate proficiency in forcible entry techniques and primary/secondary search operations.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Conventional forcible entry (inward/outward)",
+                            "Through-the-lock techniques",
+                            "Primary search techniques",
+                            "Secondary search techniques",
+                            "Victim drag and carry techniques",
+                        ],
+                        "is_required": True,
+                        "sort_order": 3,
+                    },
+                    {
+                        "name": "Truck Company Training Hours",
+                        "description": "Complete minimum training hours on truck company operations.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 40.0,
+                        "is_required": True,
+                        "sort_order": 4,
+                    },
+                ],
+                "milestones": [],
+            },
+            {
+                "phase_number": 4,
+                "name": "EMS & Medical",
+                "description": "Emergency medical services training including patient assessment, BLS skills, medical and trauma emergencies.",
+                "time_limit_days": 60,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Patient Assessment Proficiency",
+                        "description": "Demonstrate competency in scene size-up, primary and secondary patient assessments, and vital signs monitoring.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Scene size-up and BSI",
+                            "Primary assessment (ABCs)",
+                            "Secondary assessment (head-to-toe)",
+                            "Vital signs monitoring",
+                            "SAMPLE/OPQRST history",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "EMS Training Hours",
+                        "description": "Complete minimum EMS continuing education hours.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 24.0,
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [],
+            },
+            {
+                "phase_number": 5,
+                "name": "Final Evaluation & Transition",
+                "description": "Comprehensive skills evaluation, written assessment, and transition to full member status.",
+                "time_limit_days": 30,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Comprehensive Skills Evaluation",
+                        "description": "Pass a comprehensive practical skills evaluation covering all phases of the probationary program.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Engine company operations scenario",
+                            "Truck company operations scenario",
+                            "EMS patient care scenario",
+                            "SCBA confidence course completion",
+                            "Integrated fireground scenario",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Written Assessment",
+                        "description": "Pass the written assessment covering department policies, procedures, and firefighting fundamentals.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Written exam passed (minimum 80%)",
+                            "SOG/SOP knowledge assessment passed",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                    {
+                        "name": "Officer Evaluation Signoff",
+                        "description": "Receive satisfactory performance evaluations from company officers and training officer.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Company officer evaluation - satisfactory",
+                            "Training officer evaluation - satisfactory",
+                            "Chief officer approval",
+                        ],
+                        "is_required": True,
+                        "sort_order": 3,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "Program Complete",
+                        "description": "Recruit has completed all probationary requirements and is ready for full member status.",
+                        "completion_percentage_threshold": 100.0,
+                        "notification_message": "Congratulations! You have successfully completed the Recruit/Probationary Firefighter program!",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        "name": "Driver/Operator Candidate",
+        "code": "DRIVER-CERT",
+        "description": "Driver/Operator certification program covering EVOC, pumper operations, aerial operations, and apparatus-specific training. Typically 6-12 months.",
+        "target_position": "driver_candidate",
+        "structure_type": ProgramStructureType.PHASES,
+        "time_limit_days": 365,
+        "warning_days_before": 60,
+        "phases": [
+            {
+                "phase_number": 1,
+                "name": "EVOC & Driving Fundamentals",
+                "description": "Emergency Vehicle Operators Course (EVOC) and driving fundamentals for all apparatus types.",
+                "time_limit_days": 60,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "EVOC Course Completion",
+                        "description": "Complete the Emergency Vehicle Operators Course including classroom and practical driving exercises.",
+                        "requirement_type": RequirementType.COURSES,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Apparatus Familiarization",
+                        "description": "Complete familiarization training on all department apparatus types.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Engine familiarization complete",
+                            "Truck/Ladder familiarization complete",
+                            "Tanker/Tender familiarization complete",
+                            "Rescue familiarization complete",
+                            "Pre-trip inspection procedures",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                    {
+                        "name": "Driving Hours",
+                        "description": "Complete minimum supervised driving hours on department apparatus.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 20.0,
+                        "is_required": True,
+                        "sort_order": 3,
+                    },
+                ],
+                "milestones": [],
+            },
+            {
+                "phase_number": 2,
+                "name": "Pumper Operations",
+                "description": "Pump operations including hydraulics, water supply, friction loss calculations, and relay pumping.",
+                "time_limit_days": 90,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Pump Operations Theory",
+                        "description": "Complete classroom training on pump theory, hydraulics, friction loss, and water supply calculations.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 16.0,
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Pump Operations Practical Skills",
+                        "description": "Demonstrate proficiency in all pump operations including drafting, relay, and multi-line supply.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Pump engagement and operation",
+                            "Hydrant supply operations",
+                            "Drafting operations",
+                            "Relay pumping",
+                            "Multi-line water supply",
+                            "Friction loss calculations (practical)",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "Pumper Operations Qualified",
+                        "description": "Candidate has demonstrated proficiency in all pumper operations.",
+                        "completion_percentage_threshold": 100.0,
+                        "notification_message": "You've completed Pumper Operations. Moving on to Aerial Operations.",
+                    },
+                ],
+            },
+            {
+                "phase_number": 3,
+                "name": "Aerial Operations",
+                "description": "Aerial apparatus operations including ladder and platform operations, setup, and positioning.",
+                "time_limit_days": 90,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Aerial Operations Training",
+                        "description": "Complete classroom and practical training on aerial apparatus operations.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 24.0,
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Aerial Operations Skills",
+                        "description": "Demonstrate proficiency in aerial apparatus setup, positioning, and operations.",
+                        "requirement_type": RequirementType.SKILLS_EVALUATION,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_skills": [
+                            "Aerial apparatus positioning and setup",
+                            "Aerial ladder deployment and operation",
+                            "Platform/bucket operations",
+                            "Aerial waterway operations",
+                            "Ground stabilization/outriggers",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [],
+            },
+            {
+                "phase_number": 4,
+                "name": "Final Evaluation",
+                "description": "Comprehensive driver/operator evaluation covering all apparatus types and operations.",
+                "time_limit_days": 30,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Driver/Operator Comprehensive Exam",
+                        "description": "Pass the comprehensive written and practical examination for Driver/Operator certification.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Written examination passed (minimum 80%)",
+                            "Pumper operations practical passed",
+                            "Aerial operations practical passed",
+                            "EVOC driving practical passed",
+                            "Officer recommendation received",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "Driver/Operator Certified",
+                        "description": "Candidate has completed all requirements for Driver/Operator certification.",
+                        "completion_percentage_threshold": 100.0,
+                        "notification_message": "Congratulations! You have earned your Driver/Operator certification!",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        "name": "Fire Officer Development",
+        "code": "OFFICER-DEV",
+        "description": "Fire Officer development program covering leadership, incident management, administration, and community relations. Preparation for FO1 certification.",
+        "target_position": "officer",
+        "structure_type": ProgramStructureType.PHASES,
+        "time_limit_days": 548,
+        "warning_days_before": 90,
+        "phases": [
+            {
+                "phase_number": 1,
+                "name": "Leadership Foundations",
+                "description": "Leadership fundamentals including communication, supervision, and team management.",
+                "time_limit_days": 90,
+                "requires_manual_advancement": False,
+                "requirements": [
+                    {
+                        "name": "Leadership & Supervision Training",
+                        "description": "Complete leadership and supervision training covering communication, delegation, conflict resolution, and team dynamics.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 24.0,
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Company Officer Ride-Along",
+                        "description": "Complete supervised ride-alongs serving as acting company officer.",
+                        "requirement_type": RequirementType.SHIFTS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_shifts": 10,
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [],
+            },
+            {
+                "phase_number": 2,
+                "name": "Incident Management",
+                "description": "Incident command, strategy and tactics, resource management, and safety officer functions.",
+                "time_limit_days": 120,
+                "requires_manual_advancement": False,
+                "requirements": [
+                    {
+                        "name": "Incident Command Training",
+                        "description": "Complete ICS training including ICS-100, ICS-200, ICS-300, and department-specific IC procedures.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 40.0,
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Strategy & Tactics Training",
+                        "description": "Complete training on fire ground strategy and tactics, size-up, and decision-making.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 24.0,
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                    {
+                        "name": "Incident Command Practicals",
+                        "description": "Serve as incident commander during training exercises and demonstrate proficiency.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Table-top exercises completed (3 minimum)",
+                            "Live fire IC exercise completed",
+                            "Multi-company scenario IC exercise",
+                            "After-action review participation",
+                        ],
+                        "is_required": True,
+                        "sort_order": 3,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "IC Qualified",
+                        "description": "Officer candidate has completed incident command training and practicals.",
+                        "completion_percentage_threshold": 100.0,
+                        "notification_message": "You've completed the Incident Management phase!",
+                    },
+                ],
+            },
+            {
+                "phase_number": 3,
+                "name": "Administration & Community Relations",
+                "description": "Administrative duties including report writing, budgeting, public education, and community relations.",
+                "time_limit_days": 120,
+                "requires_manual_advancement": False,
+                "requirements": [
+                    {
+                        "name": "Fire Prevention & Inspection",
+                        "description": "Complete training on fire prevention, code enforcement, and inspection procedures.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 16.0,
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Administrative Skills",
+                        "description": "Complete training on department administration including budgeting, records management, and report writing.",
+                        "requirement_type": RequirementType.HOURS,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "required_hours": 16.0,
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [],
+            },
+            {
+                "phase_number": 4,
+                "name": "Final Assessment",
+                "description": "Comprehensive assessment including portfolio review, leadership evaluation, and officer board interview.",
+                "time_limit_days": 30,
+                "requires_manual_advancement": True,
+                "requirements": [
+                    {
+                        "name": "Officer Candidate Portfolio",
+                        "description": "Submit a comprehensive portfolio documenting training, experience, and leadership development.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Training documentation complete",
+                            "Leadership project documentation",
+                            "Peer and subordinate feedback collected",
+                            "Self-assessment essay submitted",
+                        ],
+                        "is_required": True,
+                        "sort_order": 1,
+                    },
+                    {
+                        "name": "Officer Board Review",
+                        "description": "Appear before the officer development board for final evaluation and approval.",
+                        "requirement_type": RequirementType.CHECKLIST,
+                        "source": RequirementSource.DEPARTMENT,
+                        "frequency": RequirementFrequency.ONE_TIME,
+                        "due_date_type": DueDateType.FIXED_DATE,
+                        "checklist_items": [
+                            "Board interview completed",
+                            "Board recommendation received",
+                            "Chief officer approval",
+                        ],
+                        "is_required": True,
+                        "sort_order": 2,
+                    },
+                ],
+                "milestones": [
+                    {
+                        "name": "Officer Development Complete",
+                        "description": "Candidate has completed all requirements for the Fire Officer Development program.",
+                        "completion_percentage_threshold": 100.0,
+                        "notification_message": "Congratulations! You have completed the Fire Officer Development program!",
+                    },
+                ],
+            },
+        ],
+    },
+]
+
+
+async def seed_pipeline_templates(
+    db: AsyncSession,
+    organization_id: str,
+    created_by: str,
+) -> List[str]:
+    """
+    Seed default pipeline templates (Recruit, Driver/Operator, Fire Officer).
+
+    Creates training programs with phases, requirements, and milestones
+    marked as templates that can be cloned by training officers.
+
+    Args:
+        db: Async database session
+        organization_id: Organization to create templates for
+        created_by: User ID of the creator
+
+    Returns:
+        List of created program IDs
+    """
+    logger.info(f"Seeding pipeline templates for organization {organization_id}")
+    program_ids: List[str] = []
+
+    for template in PIPELINE_TEMPLATES:
+        # Check if template already exists
+        result = await db.execute(
+            select(TrainingProgram).where(
+                TrainingProgram.organization_id == organization_id,
+                TrainingProgram.code == template["code"],
+                TrainingProgram.is_template == True,
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            logger.info(f"Pipeline template already exists: {template['name']}")
+            program_ids.append(existing.id)
+            continue
+
+        # Create the program
+        program_id = generate_uuid()
+        program = TrainingProgram(
+            id=program_id,
+            organization_id=organization_id,
+            name=template["name"],
+            description=template["description"],
+            code=template["code"],
+            version=1,
+            target_position=template["target_position"],
+            structure_type=template["structure_type"],
+            time_limit_days=template["time_limit_days"],
+            warning_days_before=template["warning_days_before"],
+            is_template=True,
+            active=True,
+            created_by=created_by,
+        )
+        db.add(program)
+        logger.info(f"Created pipeline template: {template['name']}")
+
+        # Create phases
+        for phase_data in template["phases"]:
+            phase_id = generate_uuid()
+            phase = ProgramPhase(
+                id=phase_id,
+                program_id=program_id,
+                phase_number=phase_data["phase_number"],
+                name=phase_data["name"],
+                description=phase_data["description"],
+                time_limit_days=phase_data.get("time_limit_days"),
+                requires_manual_advancement=phase_data.get("requires_manual_advancement", False),
+            )
+            db.add(phase)
+            logger.info(f"  Created phase: {phase_data['name']}")
+
+            # Create requirements for this phase
+            for req_data in phase_data.get("requirements", []):
+                # Create the training requirement first
+                req_id = generate_uuid()
+                requirement = TrainingRequirement(
+                    id=req_id,
+                    organization_id=organization_id,
+                    name=req_data["name"],
+                    description=req_data["description"],
+                    requirement_type=req_data["requirement_type"],
+                    source=req_data["source"],
+                    frequency=req_data["frequency"],
+                    due_date_type=req_data["due_date_type"],
+                    required_hours=req_data.get("required_hours"),
+                    required_shifts=req_data.get("required_shifts"),
+                    required_skills=req_data.get("required_skills"),
+                    checklist_items=req_data.get("checklist_items"),
+                    applies_to_all=False,
+                    is_editable=True,
+                    active=True,
+                    created_by=created_by,
+                )
+                db.add(requirement)
+
+                # Link requirement to program phase
+                prog_req_id = generate_uuid()
+                prog_req = ProgramRequirement(
+                    id=prog_req_id,
+                    program_id=program_id,
+                    phase_id=phase_id,
+                    requirement_id=req_id,
+                    is_required=req_data.get("is_required", True),
+                    sort_order=req_data.get("sort_order", 0),
+                )
+                db.add(prog_req)
+                logger.info(f"    Created requirement: {req_data['name']}")
+
+            # Create milestones for this phase
+            for ms_data in phase_data.get("milestones", []):
+                ms_id = generate_uuid()
+                milestone = ProgramMilestone(
+                    id=ms_id,
+                    program_id=program_id,
+                    phase_id=phase_id,
+                    name=ms_data["name"],
+                    description=ms_data["description"],
+                    completion_percentage_threshold=ms_data["completion_percentage_threshold"],
+                    notification_message=ms_data.get("notification_message"),
+                )
+                db.add(milestone)
+                logger.info(f"    Created milestone: {ms_data['name']}")
+
+        program_ids.append(program_id)
+
+    await db.commit()
+    logger.info(f"Pipeline templates seeded successfully ({len(program_ids)} total)")
+    return program_ids
+
+
 async def seed_training_data(
     db: AsyncSession,
     organization_id: str,
@@ -689,9 +1482,13 @@ async def seed_training_data(
     # 3. Seed requirements (references categories)
     requirement_ids = await seed_training_requirements(db, organization_id, created_by, category_map)
 
+    # 4. Seed pipeline templates (programs with phases, requirements, milestones)
+    pipeline_ids = await seed_pipeline_templates(db, organization_id, created_by)
+
     logger.info("Training data seeding completed!")
     return {
         "category_map": category_map,
         "course_ids": course_ids,
         "requirement_ids": requirement_ids,
+        "pipeline_ids": pipeline_ids,
     }

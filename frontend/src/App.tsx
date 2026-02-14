@@ -52,6 +52,9 @@ const TrainingOfficerDashboard = lazy(() => import('./pages/TrainingOfficerDashb
 const TrainingRequirementsPage = lazy(() => import('./pages/TrainingRequirementsPage'));
 const TrainingProgramsPage = lazy(() => import('./pages/TrainingProgramsPage'));
 const CreateTrainingSessionPage = lazy(() => import('./pages/CreateTrainingSessionPage'));
+const CreatePipelinePage = lazy(() => import('./pages/CreatePipelinePage'));
+const PipelineDetailPage = lazy(() => import('./pages/PipelineDetailPage'));
+const CourseLibraryPage = lazy(() => import('./pages/CourseLibraryPage'));
 const ExternalTrainingPage = lazy(() => import('./pages/ExternalTrainingPage'));
 
 // Admin/Monitoring
@@ -158,6 +161,9 @@ function App() {
               <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
               <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
               <Route path="/training/programs" element={<TrainingProgramsPage />} />
+              <Route path="/training/programs/new" element={<ProtectedRoute requiredPermission="training.manage"><CreatePipelinePage /></ProtectedRoute>} />
+              <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
+              <Route path="/training/courses" element={<CourseLibraryPage />} />
               <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
 
