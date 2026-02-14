@@ -1308,6 +1308,110 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **Note**: Overrides do NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
 
+#### Meeting: Secretary Attendance Dashboard
+
+**Scenario**: The secretary needs an overview of all members' meeting attendance, voting eligibility, and waiver status.
+
+**Endpoint**: `GET /api/v1/meetings/attendance/dashboard`
+
+**Parameters**:
+- `period_months`: Look-back period (default 12)
+- `meeting_type`: Filter by type (e.g. `business` for business meetings only)
+
+**Returns per member**: `attendance_pct`, `meetings_attended`, `meetings_waived`, `meetings_absent`, `membership_tier`, `voting_eligible`, `voting_blocked_reason`
+
+**Summary block**: Average attendance, voting eligible count, members blocked by attendance.
+
+#### Meeting: Granting an Attendance Waiver
+
+**Scenario**: A member can't make a meeting and the secretary/president/chief wants to excuse them so their attendance percentage isn't penalized, but they also cannot vote in that meeting.
+
+**Steps**:
+1. Call `POST /api/v1/meetings/{meeting_id}/attendance-waiver` with `user_id` and `reason`
+2. The member is marked as excused with a waiver
+3. This meeting is excluded from the member's attendance percentage calculation
+4. The member cannot vote in elections associated with this meeting
+5. View all waivers: `GET /api/v1/meetings/{meeting_id}/attendance-waivers`
+
+**Note**: Waivers are logged as `meeting_attendance_waiver_granted` audit events with `warning` severity.
+
+#### Training: Auto-Enrollment on Member Conversion
+
+**Scenario**: A prospective member has been approved and converted to a full member — they should be automatically enrolled in the probationary training program.
+
+**How It Works**:
+1. When `transfer_to_membership()` is called (from the prospective member pipeline), the system looks for the org's default probationary program
+2. First checks `organization.settings.training.auto_enroll_program_id` for an explicitly configured program
+3. Falls back to any active training program with "probationary" in the name
+4. Creates an active `ProgramEnrollment` automatically
+
+**Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/enrollments?user_id={id}&program_id={id}`.
+
+**Not working?** Check that:
+- A training program exists with "probationary" in the name (or set `auto_enroll_program_id` in org settings)
+- The program is `active = true`
+
+#### Training: Incident-Based Requirements (Calls, Shifts, Hours)
+
+**Scenario**: A department requires driver candidates to respond to 15 calls (10 transports), complete 5 shifts, with specific call type tracking.
+
+**Configuration** (set on `TrainingRequirement`):
+- `requirement_type`: `"calls"`, `"shifts"`, or `"hours"`
+- `required_calls`: Total number of calls required (e.g. 15)
+- `required_call_types`: Specific types to count (e.g. `["transport", "cardiac", "trauma"]`)
+- `required_shifts`: Number of shifts required (e.g. 5)
+- `required_hours`: Total hours (e.g. 40)
+
+**Tracking**: Shift completion reports (`POST /api/v1/training/shift-reports`) auto-update requirement progress:
+- SHIFTS: +1 per shift report
+- CALLS: Counts matching call types from the report's `call_types` array
+- HOURS: Adds `hours_on_shift` from the report
+
+**Call type totals**: View `progress_notes.call_type_totals` on the requirement progress record for a breakdown by type.
+
+#### Scheduled Tasks: Setting Up the Cron
+
+**Scenario**: The system needs daily cert alerts, weekly struggling member checks, and monthly tier advancement.
+
+**Recommended crontab**:
+```
+# Daily at 6:00 AM — cert expiration alerts
+0 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=cert_expiration_alerts
+
+# Weekly Monday 7:00 AM — struggling member detection
+0 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=struggling_member_check
+
+# Weekly Monday 7:30 AM — enrollment deadline warnings
+30 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=enrollment_deadline_warnings
+
+# Monthly 1st at 8:00 AM — membership tier auto-advance
+0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
+```
+
+**Manual trigger**: Any task can be run on-demand via the same endpoint.
+
+**View tasks**: `GET /api/v1/scheduled/tasks` lists all tasks with their schedules.
+
+#### Membership: Editing Tier Requirements
+
+**Scenario**: The training officer or secretary needs to change the meeting attendance percentage required for voting eligibility, or adjust tier benefits.
+
+**Steps**:
+1. View current config: `GET /api/v1/users/membership-tiers/config`
+2. Update config: `PUT /api/v1/users/membership-tiers/config` with the full tier list
+3. Each tier has `benefits` with: `voting_eligible`, `voting_requires_meeting_attendance`, `voting_min_attendance_pct`, `voting_attendance_period_months`, `training_exempt`, `training_exempt_types`, `can_hold_office`
+
+**Example**: To require 60% attendance over 6 months for active members to vote:
+```json
+{
+  "benefits": {
+    "voting_requires_meeting_attendance": true,
+    "voting_min_attendance_pct": 60.0,
+    "voting_attendance_period_months": 6
+  }
+}
+```
+
 #### Voting: Setting Up Proxy Voting
 
 **Scenario**: A member cannot attend the meeting but the department allows proxy voting — another member should be able to vote on their behalf.

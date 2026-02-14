@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Secretary Attendance Dashboard & Meeting Waivers (2026-02-14)
+
+#### Secretary Attendance Dashboard
+- **Attendance dashboard**: `GET /api/v1/meetings/attendance/dashboard` — secretary/leadership view showing every active member's meeting attendance %, meetings attended, waived, absent, membership tier, and voting eligibility
+- **Period filtering**: `period_months` parameter for configurable look-back window (default 12 months)
+- **Meeting type filter**: Optionally filter by meeting type (e.g. `business` only)
+- **Voting eligibility**: Shows whether each member is eligible to vote and the reason if blocked (tier restrictions or attendance below minimum)
+
+#### Meeting Attendance Waivers
+- **Grant waiver**: `POST /api/v1/meetings/{meeting_id}/attendance-waiver` — secretary, president, or chief excuses a member from a meeting
+- **Waiver effect**: The member cannot vote in this meeting, but their attendance percentage is not penalized
+- **Attendance calculation updated**: Waived meetings are excluded from both numerator and denominator of the attendance percentage
+- **List waivers**: `GET /api/v1/meetings/{meeting_id}/attendance-waivers` — view all waivers for a meeting
+- **Audit trail**: Every waiver is logged as `meeting_attendance_waiver_granted` with `warning` severity
+- **Migration**: `20260214_1300` adds `waiver_reason`, `waiver_granted_by`, `waiver_granted_at` to meeting_attendees
+
+### Added - Auto-Enrollment on Prospective Member Conversion (2026-02-14)
+
+#### Probationary Training Pipeline Auto-Enrollment
+- **Auto-enroll on transfer**: When a prospective member is converted to a full member, they are automatically enrolled in the organization's default probationary training program
+- **Program detection**: Looks for `settings.training.auto_enroll_program_id` first, then falls back to any active program with "probationary" in the name
+- **Manual enrollment**: `POST /api/v1/training/enrollments` — training officer can enroll any member into any training pipeline (probationary, driver training, AIC, etc.)
+- **Administrative conversion**: Works for both prospective→operational and administrative→operational conversions
+- **Transfer response**: Includes `auto_enrollment` field showing the program enrolled into
+
+### Added - Incident-Based Training Progress Tracking (2026-02-14)
+
+#### Call Type Tracking in Shift Completion Reports
+- **Call type matching**: When a requirement specifies `required_call_types` (e.g. `["transport", "cardiac"]`), shift completion reports now count only calls matching those types
+- **Call type running totals**: `progress_notes.call_type_totals` tracks per-type counts (e.g. `{"transport": 8, "cardiac": 3}`)
+- **Call type history**: `progress_notes.call_type_history` records each shift report's matching types and counts
+- **Customizable by training officer**: Requirements can specify minimum calls by type (e.g. 15 total calls, 10 transports, 5 shifts) via `required_calls`, `required_call_types`, `required_shifts`, `required_hours` on `TrainingRequirement`
+
+### Added - Scheduled Tasks / Cron Configuration (2026-02-14)
+
+#### Cron Task Runner
+- **List tasks**: `GET /api/v1/scheduled/tasks` — lists all available scheduled tasks with recommended cron schedules
+- **Run task**: `POST /api/v1/scheduled/run-task?task={task_id}` — manually trigger any scheduled task
+- **Recommended schedule**:
+  - **Daily 6:00 AM**: `cert_expiration_alerts` — tiered certification expiration reminders
+  - **Weekly Monday 7:00 AM**: `struggling_member_check` — detect members falling behind
+  - **Weekly Monday 7:30 AM**: `enrollment_deadline_warnings` — warn approaching deadlines
+  - **Monthly 1st 8:00 AM**: `membership_tier_advance` — auto-advance membership tiers
+
+### Added - Struggling Member Detection & Notifications (2026-02-14)
+
+#### Pipeline Progress Monitoring
+- **Behind-pace detection**: Flags members who have used >50% of their enrollment time but completed <25% of requirements
+- **Deadline approaching**: Flags members within 30 days of deadline at <75% completion (critical if within 7 days)
+- **Stalled requirements**: Detects requirements with no progress updates in 30+ days
+- **Auto-notification**: Training officers receive in-app alerts about struggling members (critical/warning severity)
+- **Deadline warnings**: Automatic warnings at 30, 14, and 7 days before enrollment deadline
+- **Large department support**: Proactively surfaces struggling members who might otherwise go unnoticed
+
+### Added - Membership Stage Requirements Editor (2026-02-14)
+
+#### Tier Configuration Management
+- **Get config**: `GET /api/v1/users/membership-tiers/config` — view current tier configuration
+- **Update config**: `PUT /api/v1/users/membership-tiers/config` — training/compliance/secretary can edit membership requirements for each stage
+- **Configurable per-tier settings**: voting eligibility, meeting attendance % required for voting, training exemptions, office-holding eligibility, years-of-service for auto-advancement
+- **Validation**: Ensures all tiers have `id` and `name`, attendance percentages are 0-100
+- **Audit trail**: Config changes logged as `membership_tier_config_updated` with `warning` severity
+
 ### Added - Training Calendar Integration & Double-Booking Prevention (2026-02-14)
 
 #### Training Session Calendar View

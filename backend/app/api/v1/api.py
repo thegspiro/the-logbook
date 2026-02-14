@@ -40,6 +40,7 @@ from app.api.v1.endpoints import (
     member_status,
     email_templates,
     minutes,
+    scheduled,
 )
 
 api_router = APIRouter()
@@ -77,6 +78,7 @@ api_router.include_router(notifications.router, prefix="/notifications", tags=["
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
 api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
+api_router.include_router(scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"])
 api_router.include_router(public_portal_admin.router)
 
 # Placeholder routes

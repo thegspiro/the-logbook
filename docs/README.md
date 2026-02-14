@@ -299,6 +299,12 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
 | Voter override (secretary) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote) |
 | Proxy voting setup | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-setting-up-proxy-voting) |
+| Secretary attendance dashboard | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-secretary-attendance-dashboard) |
+| Meeting attendance waivers | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-granting-an-attendance-waiver) |
+| Auto-enrollment on conversion | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-auto-enrollment-on-member-conversion) |
+| Incident-based requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-incident-based-requirements-calls-shifts-hours) |
+| Scheduled tasks / cron setup | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduled-tasks-setting-up-the-cron) |
+| Membership tier config editor | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-editing-tier-requirements) |
 | Bulk voter overrides | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-bulk-voter-overrides) |
 | Meeting quorum config | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum) |
 | Peer skill eval sign-offs | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs) |
@@ -440,6 +446,24 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Attendance Dashboard, Auto-Enrollment, Incident Tracking, Cron & Tier Editor
+
+**What Changed**:
+- **Secretary Attendance Dashboard**: `GET /api/v1/meetings/attendance/dashboard` shows per-member meeting attendance %, waiver counts, voting eligibility, and tier info
+- **Meeting Attendance Waivers**: Secretary/president/chief can excuse members from meetings — attendance % not penalized, but member can't vote in that meeting
+- **Auto-Enrollment on Conversion**: Prospective members automatically enrolled in probationary training program when converted; training officer can enroll anyone via `POST /api/v1/training/enrollments`
+- **Incident-Based Tracking**: Shift completion reports now match call types against `required_call_types` on requirements; tracks per-type running totals in `progress_notes`
+- **Scheduled Tasks/Cron**: `GET/POST /api/v1/scheduled/tasks` for listing and triggering cron tasks (daily cert alerts, weekly struggling member checks, monthly tier advance)
+- **Struggling Member Detection**: Flags members behind pace, approaching deadlines, or with stalled requirements; sends training officer notifications
+- **Membership Tier Config Editor**: `GET/PUT /api/v1/users/membership-tiers/config` for editing tier benefits (attendance %, voting, training exemptions)
+- **Migration**: `20260214_1300` adds waiver fields to meeting_attendees
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Dashboard, waivers, auto-enrollment, incident tracking, cron, tier config
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
 
 ### 2026-02-14 - Training Module Enhancements (Calendar, Competency Matrix, Alerts, Peer Eval)
 

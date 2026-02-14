@@ -618,3 +618,101 @@ async def advance_membership_tiers(
         performed_by=str(current_user.id),
     )
     return result
+
+
+@router.get("/membership-tiers/config")
+async def get_membership_tier_config(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Get the current membership tier configuration.
+
+    Returns all tiers with their benefits (training exemptions, voting rules,
+    attendance requirements, etc.).
+
+    **Requires permission: members.manage**
+    """
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    tier_config = (organization.settings or {}).get("membership_tiers", {})
+    return tier_config
+
+
+@router.put("/membership-tiers/config")
+async def update_membership_tier_config(
+    config: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Update membership tier configuration.
+
+    The training officer, compliance officer, or secretary can edit the
+    membership requirements for each tier/stage including:
+    - `voting_eligible` — whether members at this tier can vote
+    - `voting_requires_meeting_attendance` — require attendance % to vote
+    - `voting_min_attendance_pct` — minimum attendance percentage (e.g. 50.0)
+    - `voting_attendance_period_months` — look-back window for attendance
+    - `training_exempt` / `training_exempt_types` — training exemptions
+    - `can_hold_office` — office eligibility
+    - `years_required` — years of service for auto-advancement
+
+    **Requires permission: members.manage**
+    """
+    from datetime import datetime as dt
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Validate config structure
+    tiers = config.get("tiers", [])
+    if not isinstance(tiers, list):
+        raise HTTPException(status_code=400, detail="'tiers' must be a list")
+
+    for tier in tiers:
+        if not tier.get("id") or not tier.get("name"):
+            raise HTTPException(status_code=400, detail="Each tier must have 'id' and 'name'")
+        benefits = tier.get("benefits", {})
+        if not isinstance(benefits, dict):
+            raise HTTPException(status_code=400, detail=f"Tier '{tier['id']}' benefits must be a dict")
+        # Validate attendance percentage range
+        min_pct = benefits.get("voting_min_attendance_pct", 0.0)
+        if not (0 <= min_pct <= 100):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tier '{tier['id']}' voting_min_attendance_pct must be 0-100",
+            )
+
+    # Update org settings
+    settings = dict(organization.settings or {})
+    settings["membership_tiers"] = config
+    organization.settings = settings
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_tier_config_updated",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "tier_count": len(tiers),
+            "tier_ids": [t["id"] for t in tiers],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "message": "Membership tier configuration updated",
+        "tiers": tiers,
+    }

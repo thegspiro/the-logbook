@@ -36,10 +36,17 @@ class MembershipTierService:
     ) -> float:
         """
         Calculate a member's meeting attendance percentage over a look-back
-        period.  Attendance = (meetings marked present / total meetings in
-        period) * 100.  Returns 0.0 if no meetings occurred.
+        period.  Attendance = (meetings marked present / eligible meetings) * 100.
+        Waived meetings are excluded from both numerator and denominator so they
+        don't penalise the member's percentage.
+        Returns 100.0 if no eligible meetings occurred.
         """
         cutoff = datetime.utcnow() - timedelta(days=period_months * 30)
+
+        org_meetings_subq = select(Meeting.id).where(
+            Meeting.organization_id == organization_id,
+            Meeting.meeting_date >= cutoff.date(),
+        )
 
         # Total meetings in the organization during the period
         total_result = await self.db.execute(
@@ -52,22 +59,32 @@ class MembershipTierService:
         if total_meetings == 0:
             return 100.0  # No meetings held — don't penalise
 
-        # Meetings where this user was marked present
+        # Count waived meetings for this user (excluded from denominator)
+        waived_result = await self.db.execute(
+            select(func.count(MeetingAttendee.id)).where(
+                MeetingAttendee.user_id == user_id,
+                MeetingAttendee.waiver_reason.isnot(None),
+                MeetingAttendee.meeting_id.in_(org_meetings_subq),
+            )
+        )
+        waived_count = waived_result.scalar() or 0
+
+        eligible_meetings = total_meetings - waived_count
+        if eligible_meetings <= 0:
+            return 100.0  # All meetings waived — don't penalise
+
+        # Meetings where this user was marked present (non-waived only)
         attended_result = await self.db.execute(
             select(func.count(MeetingAttendee.id)).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.present.is_(True),
-                MeetingAttendee.meeting_id.in_(
-                    select(Meeting.id).where(
-                        Meeting.organization_id == organization_id,
-                        Meeting.meeting_date >= cutoff.date(),
-                    )
-                ),
+                MeetingAttendee.waiver_reason.is_(None),
+                MeetingAttendee.meeting_id.in_(org_meetings_subq),
             )
         )
         attended = attended_result.scalar() or 0
 
-        return round((attended / total_meetings) * 100, 1)
+        return round((attended / eligible_meetings) * 100, 1)
 
     # ------------------------------------------------------------------
     # Tier resolution helpers

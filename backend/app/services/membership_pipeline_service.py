@@ -726,12 +726,111 @@ class MembershipPipelineService:
 
         await self.db.flush()
 
+        # Auto-enroll into probationary training pipeline if one exists
+        enrollment_result = await self._auto_enroll_probationary(
+            user_id=user_id,
+            organization_id=prospect.organization_id,
+            enrolled_by=transferred_by,
+        )
+
+        result_msg = f"Prospect {prospect.full_name} transferred to membership as {username}"
+        if enrollment_result:
+            result_msg += f". Auto-enrolled in training program: {enrollment_result['program_name']}"
+
         return {
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
-            "message": f"Prospect {prospect.full_name} transferred to membership as {username}",
+            "message": result_msg,
+            "auto_enrollment": enrollment_result,
         }
+
+    async def _auto_enroll_probationary(
+        self,
+        user_id: str,
+        organization_id: str,
+        enrolled_by: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Auto-enroll a newly converted member into the organization's
+        default probationary training program if one exists.
+
+        The org setting `auto_enroll_program_id` in `settings.training` points
+        to the default probationary training program. If not set, looks for a
+        program with "probationary" in the name.
+        """
+        try:
+            from app.models.training import TrainingProgram, ProgramEnrollment, EnrollmentStatus
+            from app.models.user import Organization
+
+            # Check org settings for auto-enroll program
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return None
+
+            training_settings = (org.settings or {}).get("training", {})
+            auto_program_id = training_settings.get("auto_enroll_program_id")
+
+            if auto_program_id:
+                program_result = await self.db.execute(
+                    select(TrainingProgram).where(
+                        TrainingProgram.id == auto_program_id,
+                        TrainingProgram.organization_id == organization_id,
+                    )
+                )
+                program = program_result.scalar_one_or_none()
+            else:
+                # Look for a program with "probationary" in the name
+                program_result = await self.db.execute(
+                    select(TrainingProgram).where(
+                        TrainingProgram.organization_id == organization_id,
+                        TrainingProgram.name.ilike("%probationary%"),
+                        TrainingProgram.active == True,
+                    ).limit(1)
+                )
+                program = program_result.scalar_one_or_none()
+
+            if not program:
+                return None
+
+            # Check if already enrolled
+            existing = await self.db.execute(
+                select(ProgramEnrollment).where(
+                    ProgramEnrollment.user_id == user_id,
+                    ProgramEnrollment.program_id == str(program.id),
+                    ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                )
+            )
+            if existing.scalar_one_or_none():
+                return None  # Already enrolled
+
+            enrollment = ProgramEnrollment(
+                organization_id=organization_id,
+                user_id=user_id,
+                program_id=str(program.id),
+                enrolled_by=enrolled_by,
+                status=EnrollmentStatus.ACTIVE,
+            )
+            self.db.add(enrollment)
+            await self.db.flush()
+
+            logger.info(
+                f"Auto-enrolled user {user_id} in probationary program "
+                f"'{program.name}' (program_id={program.id})"
+            )
+
+            return {
+                "enrollment_id": str(enrollment.id),
+                "program_id": str(program.id),
+                "program_name": program.name,
+            }
+
+        except Exception as e:
+            logger.error(f"Auto-enrollment failed for user {user_id}: {e}")
+            return None
 
     def _generate_username(self, first_name: str, last_name: str) -> str:
         """Generate a username from first and last name"""

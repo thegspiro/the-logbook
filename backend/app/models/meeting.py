@@ -122,6 +122,11 @@ class MeetingAttendee(Base):
     present = Column(Boolean, default=True)
     excused = Column(Boolean, default=False)
 
+    # Waiver — excuses the member from attendance % penalty (can't vote in this meeting)
+    waiver_reason = Column(Text)
+    waiver_granted_by = Column(String(36), ForeignKey("users.id"))
+    waiver_granted_at = Column(DateTime(timezone=True))
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

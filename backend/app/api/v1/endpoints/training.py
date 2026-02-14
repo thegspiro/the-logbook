@@ -800,3 +800,92 @@ async def check_evaluator_permission(
         "is_authorized": is_authorized,
         "reason": reason,
     }
+
+
+@router.post("/enrollments")
+async def enroll_member_in_program(
+    user_id: UUID = Query(..., description="Member to enroll"),
+    program_id: UUID = Query(..., description="Training program to enroll into"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Enroll a member into any training pipeline/program.
+
+    The training officer can enroll anyone into any program. This is used for:
+    - Manually enrolling probationary members who weren't auto-enrolled
+    - Enrolling administrative members converting to operational
+    - Assigning specialty training programs (driver training, AIC, etc.)
+
+    **Requires permission: training.manage**
+    """
+    from app.models.training import TrainingProgram, ProgramEnrollment, EnrollmentStatus
+
+    # Verify user exists in org
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+    )
+    member = user_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    # Verify program exists
+    program_result = await db.execute(
+        select(TrainingProgram)
+        .where(TrainingProgram.id == str(program_id))
+        .where(TrainingProgram.organization_id == str(current_user.organization_id))
+    )
+    program = program_result.scalar_one_or_none()
+    if not program:
+        raise HTTPException(status_code=404, detail="Training program not found")
+
+    # Check for existing active enrollment
+    existing = await db.execute(
+        select(ProgramEnrollment).where(
+            ProgramEnrollment.user_id == str(user_id),
+            ProgramEnrollment.program_id == str(program_id),
+            ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail=f"{member.full_name} is already enrolled in '{program.name}'"
+        )
+
+    enrollment = ProgramEnrollment(
+        organization_id=str(current_user.organization_id),
+        user_id=str(user_id),
+        program_id=str(program_id),
+        enrolled_by=str(current_user.id),
+        status=EnrollmentStatus.ACTIVE,
+    )
+    db.add(enrollment)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment.id),
+            "user_id": str(user_id),
+            "member_name": member.full_name,
+            "program_id": str(program_id),
+            "program_name": program.name,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "enrollment_id": str(enrollment.id),
+        "user_id": str(user_id),
+        "member_name": member.full_name,
+        "program_id": str(program_id),
+        "program_name": program.name,
+        "status": "active",
+    }
