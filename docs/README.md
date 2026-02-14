@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-14 with events module, TypeScript fixes, security hardening, session management, error improvements
+   - **Updated**: 2026-02-14 with inventory/property return reports, training module, events module, TypeScript fixes, security hardening
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -98,7 +98,18 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Form retrieval and submission without authentication
     - Rate limiting, security notes, integration examples
 
-10. **Documents Module**
+10. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-02-14)
+    - Complete Training module documentation
+    - Pipeline programs, requirements, phases, enrollments, progress tracking
+    - Self-reported training with configurable approval workflow
+    - Shift completion reports with auto-pipeline progress updates
+    - Member Training page with configurable visibility (14 toggle settings)
+    - Training reports: training progress, annual training, date range picker
+    - External training integration (Vector Solutions, Target Solutions, Lexipol)
+    - Registry support (NFPA, NREMT, Pro Board)
+    - API reference and database schema for all training tables
+
+11. **Documents Module**
     - Document storage with folder hierarchy (create, browse, upload, delete)
     - File metadata tracking (size, MIME type, upload date)
     - Document status workflow (draft, active, archived)
@@ -119,9 +130,10 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - API endpoints: 10 endpoints for shift CRUD, attendance, calendar views, summary
     - Permissions: `scheduling.view`, `scheduling.manage`
 
-13. **Reports Module**
-    - Report generation: member roster, training summary, event attendance
-    - Data aggregation from members, training records, and events
+13. **Reports Module** (Updated 2026-02-14)
+    - Report generation: member roster, training summary, event attendance, training progress, annual training
+    - Data aggregation from members, training records, events, shift reports, and pipeline enrollments
+    - Customizable reporting period with date range picker (This Year, Last Year, Last 90 Days, Custom)
     - Tabular report display with filtering
     - API endpoints: 2 endpoints (available reports list, generate report)
     - Permissions: `reports.view`, `reports.manage`

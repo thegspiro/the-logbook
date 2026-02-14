@@ -44,6 +44,12 @@ export interface TrainingSession {
   event_id: string;  // Links to Event table
   course_id?: string;  // Links to TrainingCourse if using existing course
 
+  // Category and program linkage
+  category_id?: string;     // Training category (Fire, EMS, Hazmat, etc.)
+  program_id?: string;      // Training program (Recruit School, Driver Training, etc.)
+  phase_id?: string;        // Program phase
+  requirement_id?: string;  // Specific requirement this satisfies
+
   // Training-specific details
   course_name: string;
   course_code?: string;
@@ -91,6 +97,12 @@ export interface TrainingSessionCreate {
   // Use existing course or create new
   use_existing_course?: boolean;
   course_id?: string;  // If using existing course
+
+  // Category and program linkage
+  category_id?: string;     // Training category (Fire, EMS, Hazmat, etc.)
+  program_id?: string;      // Training program (Recruit School, Driver Training, etc.)
+  phase_id?: string;        // Program phase
+  requirement_id?: string;  // Specific requirement this satisfies
 
   // Training details (for new course)
   course_name?: string;
@@ -687,9 +699,21 @@ export type ImportStatus =
   | 'duplicate';
 
 export interface ExternalProviderConfig {
-  records_endpoint?: string;
-  users_endpoint?: string;
-  categories_endpoint?: string;
+  // Vector Solutions / TargetSolutions specific
+  site_id?: string;              // Required for Vector Solutions - the TS site identifier
+  page_size?: number;            // Max records per page (Vector Solutions max: 1000)
+  date_filter_param?: string;    // Custom date filter parameter name
+
+  // General endpoint overrides
+  records_endpoint?: string;     // Override the default records endpoint path
+  users_endpoint?: string;       // Override the default users endpoint path
+  categories_endpoint?: string;  // Override the default categories endpoint path
+  test_endpoint?: string;        // Override the default connection test endpoint
+
+  // Custom API support
+  param_mapping?: Record<string, string>;   // Map standard param names to provider-specific names
+  field_mapping?: Record<string, string>;   // Map standard field names to provider-specific names
+  records_path?: string;                     // JSON path to records array in response (e.g. "data.records")
   additional_headers?: Record<string, string>;
   date_format?: string;
 }
@@ -876,4 +900,289 @@ export interface BulkImportResponse {
   skipped: number;
   failed: number;
   errors: string[];
+}
+
+// ==================== Self-Reported Training Types ====================
+
+export type SubmissionStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+  | 'revision_requested';
+
+export interface FieldConfig {
+  visible: boolean;
+  required: boolean;
+  label: string;
+}
+
+export interface SelfReportConfig {
+  id: string;
+  organization_id: string;
+  require_approval: boolean;
+  auto_approve_under_hours?: number;
+  approval_deadline_days: number;
+  notify_officer_on_submit: boolean;
+  notify_member_on_decision: boolean;
+  field_config: Record<string, FieldConfig>;
+  allowed_training_types?: string[];
+  max_hours_per_submission?: number;
+  member_instructions?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SelfReportConfigUpdate {
+  require_approval?: boolean;
+  auto_approve_under_hours?: number | null;
+  approval_deadline_days?: number;
+  notify_officer_on_submit?: boolean;
+  notify_member_on_decision?: boolean;
+  field_config?: Record<string, FieldConfig>;
+  allowed_training_types?: string[] | null;
+  max_hours_per_submission?: number | null;
+  member_instructions?: string | null;
+}
+
+export interface TrainingSubmission {
+  id: string;
+  organization_id: string;
+  submitted_by: string;
+  course_name: string;
+  course_code?: string;
+  training_type: TrainingType;
+  description?: string;
+  completion_date: string;
+  hours_completed: number;
+  credit_hours?: number;
+  instructor?: string;
+  location?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  expiration_date?: string;
+  category_id?: string;
+  attachments?: string[];
+  status: SubmissionStatus;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  reviewer_notes?: string;
+  training_record_id?: string;
+  submitted_at: string;
+  updated_at: string;
+}
+
+export interface TrainingSubmissionCreate {
+  course_name: string;
+  course_code?: string;
+  training_type: TrainingType;
+  description?: string;
+  completion_date: string;
+  hours_completed: number;
+  credit_hours?: number;
+  instructor?: string;
+  location?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  expiration_date?: string;
+  category_id?: string;
+  attachments?: string[];
+}
+
+export interface TrainingSubmissionUpdate {
+  course_name?: string;
+  course_code?: string;
+  training_type?: TrainingType;
+  description?: string;
+  completion_date?: string;
+  hours_completed?: number;
+  credit_hours?: number;
+  instructor?: string;
+  location?: string;
+  certification_number?: string;
+  issuing_agency?: string;
+  expiration_date?: string;
+  category_id?: string;
+  attachments?: string[];
+}
+
+export interface SubmissionReviewRequest {
+  action: 'approve' | 'reject' | 'revision_requested';
+  reviewer_notes?: string;
+  override_hours?: number;
+  override_credit_hours?: number;
+  override_training_type?: TrainingType;
+}
+
+// ==================== Shift Completion Reports ====================
+
+export interface SkillObservation {
+  skill_name: string;
+  demonstrated: boolean;
+  notes?: string;
+}
+
+export interface TaskPerformed {
+  task: string;
+  description?: string;
+}
+
+export interface ShiftCompletionReportCreate {
+  shift_id?: string;
+  shift_date: string;
+  trainee_id: string;
+  hours_on_shift: number;
+  calls_responded?: number;
+  call_types?: string[];
+  performance_rating?: number;
+  areas_of_strength?: string;
+  areas_for_improvement?: string;
+  officer_narrative?: string;
+  skills_observed?: SkillObservation[];
+  tasks_performed?: TaskPerformed[];
+  enrollment_id?: string;
+}
+
+export interface ShiftCompletionReport {
+  id: string;
+  organization_id: string;
+  shift_id?: string;
+  shift_date: string;
+  trainee_id: string;
+  officer_id: string;
+  hours_on_shift: number;
+  calls_responded: number;
+  call_types?: string[];
+  performance_rating?: number;
+  areas_of_strength?: string;
+  areas_for_improvement?: string;
+  officer_narrative?: string;
+  skills_observed?: SkillObservation[];
+  tasks_performed?: TaskPerformed[];
+  enrollment_id?: string;
+  requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
+  trainee_acknowledged: boolean;
+  trainee_acknowledged_at?: string;
+  trainee_comments?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TraineeShiftStats {
+  total_reports: number;
+  total_hours: number;
+  total_calls: number;
+  avg_rating: number | null;
+}
+
+
+// ============================================
+// Training Module Configuration (Visibility)
+// ============================================
+
+export interface TrainingModuleConfig {
+  id: string;
+  organization_id: string;
+  show_training_history: boolean;
+  show_training_hours: boolean;
+  show_certification_status: boolean;
+  show_pipeline_progress: boolean;
+  show_requirement_details: boolean;
+  show_shift_reports: boolean;
+  show_shift_stats: boolean;
+  show_officer_narrative: boolean;
+  show_performance_rating: boolean;
+  show_areas_of_strength: boolean;
+  show_areas_for_improvement: boolean;
+  show_skills_observed: boolean;
+  show_submission_history: boolean;
+  allow_member_report_export: boolean;
+}
+
+export interface MemberVisibility {
+  show_training_history: boolean;
+  show_training_hours: boolean;
+  show_certification_status: boolean;
+  show_pipeline_progress: boolean;
+  show_requirement_details: boolean;
+  show_shift_reports: boolean;
+  show_shift_stats: boolean;
+  show_officer_narrative: boolean;
+  show_performance_rating: boolean;
+  show_areas_of_strength: boolean;
+  show_areas_for_improvement: boolean;
+  show_skills_observed: boolean;
+  show_submission_history: boolean;
+  allow_member_report_export: boolean;
+}
+
+export interface MyTrainingSummary {
+  visibility: MemberVisibility;
+  training_records?: Array<{
+    id: string;
+    course_name: string;
+    course_code?: string;
+    training_type: string;
+    status: string;
+    completion_date: string | null;
+    hours_completed: number;
+    expiration_date: string | null;
+    instructor?: string;
+  }>;
+  hours_summary?: { total_records: number; total_hours: number };
+  certifications?: Array<{
+    id: string;
+    course_name: string;
+    certification_number?: string;
+    expiration_date: string | null;
+    is_expired: boolean;
+    days_until_expiry: number | null;
+  }>;
+  enrollments?: Array<{
+    id: string;
+    program_id: string;
+    status: string;
+    progress_percentage: number;
+    enrolled_at: string | null;
+    target_completion_date: string | null;
+    completed_at: string | null;
+    requirements?: Array<{
+      id: string;
+      requirement_id: string;
+      status: string;
+      progress_value: number;
+      progress_percentage: number;
+      completed_at: string | null;
+    }>;
+  }>;
+  shift_reports?: Array<{
+    id: string;
+    shift_date: string;
+    hours_on_shift: number;
+    calls_responded: number;
+    call_types?: string[];
+    tasks_performed?: unknown[];
+    trainee_acknowledged: boolean;
+    performance_rating?: number;
+    areas_of_strength?: string;
+    areas_for_improvement?: string;
+    officer_narrative?: string;
+    skills_observed?: unknown[];
+  }>;
+  shift_stats?: {
+    total_shifts: number;
+    total_hours: number;
+    total_calls: number;
+    avg_rating: number | null;
+  };
+  submissions?: Array<{
+    id: string;
+    course_name: string;
+    training_type: string;
+    completion_date: string | null;
+    hours_completed: number;
+    status: string;
+    submitted_at: string | null;
+    reviewed_at: string | null;
+  }>;
 }

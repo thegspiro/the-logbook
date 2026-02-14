@@ -2798,6 +2798,157 @@ export const trainingSessionService = {
 };
 
 // ============================================
+// Training Submissions Service
+// ============================================
+
+import type {
+  SelfReportConfig,
+  SelfReportConfigUpdate,
+  TrainingSubmission,
+  TrainingSubmissionCreate,
+  TrainingSubmissionUpdate,
+  SubmissionReviewRequest,
+} from '../types/training';
+
+export const trainingSubmissionService = {
+  // Config
+  async getConfig(): Promise<SelfReportConfig> {
+    const response = await api.get<SelfReportConfig>('/training/submissions/config');
+    return response.data;
+  },
+
+  async updateConfig(updates: SelfReportConfigUpdate): Promise<SelfReportConfig> {
+    const response = await api.put<SelfReportConfig>('/training/submissions/config', updates);
+    return response.data;
+  },
+
+  // Member submissions
+  async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    const response = await api.post<TrainingSubmission>('/training/submissions', data);
+    return response.data;
+  },
+
+  async getMySubmissions(status?: string): Promise<TrainingSubmission[]> {
+    const response = await api.get<TrainingSubmission[]>('/training/submissions/my', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  async getSubmission(submissionId: string): Promise<TrainingSubmission> {
+    const response = await api.get<TrainingSubmission>(`/training/submissions/${submissionId}`);
+    return response.data;
+  },
+
+  async updateSubmission(submissionId: string, updates: TrainingSubmissionUpdate): Promise<TrainingSubmission> {
+    const response = await api.patch<TrainingSubmission>(`/training/submissions/${submissionId}`, updates);
+    return response.data;
+  },
+
+  async deleteSubmission(submissionId: string): Promise<void> {
+    await api.delete(`/training/submissions/${submissionId}`);
+  },
+
+  // Officer review
+  async getPendingSubmissions(): Promise<TrainingSubmission[]> {
+    const response = await api.get<TrainingSubmission[]>('/training/submissions/pending');
+    return response.data;
+  },
+
+  async getPendingCount(): Promise<{ pending_count: number }> {
+    const response = await api.get<{ pending_count: number }>('/training/submissions/pending/count');
+    return response.data;
+  },
+
+  async getAllSubmissions(params?: { status?: string; user_id?: string; limit?: number; offset?: number }): Promise<TrainingSubmission[]> {
+    const response = await api.get<TrainingSubmission[]>('/training/submissions/all', { params });
+    return response.data;
+  },
+
+  async reviewSubmission(submissionId: string, review: SubmissionReviewRequest): Promise<TrainingSubmission> {
+    const response = await api.post<TrainingSubmission>(`/training/submissions/${submissionId}/review`, review);
+    return response.data;
+  },
+};
+
+// ============================================
+// Shift Completion Reports Service
+// ============================================
+
+export const shiftCompletionService = {
+  async createReport(data: import('../types/training').ShiftCompletionReportCreate): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post('/training/shift-reports', data);
+    return response.data;
+  },
+
+  async getMyReports(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/my-reports', { params });
+    return response.data;
+  },
+
+  async getMyStats(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
+    const response = await api.get('/training/shift-reports/my-stats', { params });
+    return response.data;
+  },
+
+  async getReportsByOfficer(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/by-officer');
+    return response.data;
+  },
+
+  async getReportsForTrainee(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get(`/training/shift-reports/trainee/${traineeId}`, { params });
+    return response.data;
+  },
+
+  async getTraineeStats(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
+    const response = await api.get(`/training/shift-reports/trainee/${traineeId}/stats`, { params });
+    return response.data;
+  },
+
+  async getAllReports(params?: { trainee_id?: string; officer_id?: string; start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get('/training/shift-reports/all', { params });
+    return response.data;
+  },
+
+  async getReport(reportId: string): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.get(`/training/shift-reports/${reportId}`);
+    return response.data;
+  },
+
+  async acknowledgeReport(reportId: string, comments?: string): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
+    return response.data;
+  },
+};
+
+// ============================================
+// Training Module Config Service
+// ============================================
+
+export const trainingModuleConfigService = {
+  async getConfig(): Promise<import('../types/training').TrainingModuleConfig> {
+    const response = await api.get('/training/module-config/config');
+    return response.data;
+  },
+
+  async updateConfig(updates: Partial<import('../types/training').TrainingModuleConfig>): Promise<import('../types/training').TrainingModuleConfig> {
+    const response = await api.put('/training/module-config/config', updates);
+    return response.data;
+  },
+
+  async getVisibility(): Promise<import('../types/training').MemberVisibility> {
+    const response = await api.get('/training/module-config/visibility');
+    return response.data;
+  },
+
+  async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
+    const response = await api.get('/training/module-config/my-training');
+    return response.data;
+  },
+};
+
+// ============================================
 // Integrations Service
 // ============================================
 

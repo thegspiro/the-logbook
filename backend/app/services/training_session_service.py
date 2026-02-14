@@ -13,7 +13,10 @@ from sqlalchemy.orm import selectinload
 import secrets
 
 from app.models.event import Event, EventRSVP, EventType, CheckInWindowType
-from app.models.training import TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus, TrainingType, TrainingRecord
+from app.models.training import (
+    TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus,
+    TrainingType, TrainingRecord, ProgramEnrollment, RequirementProgress,
+)
 from app.models.user import User, Role
 from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
 from app.core.config import settings
@@ -115,6 +118,10 @@ class TrainingSessionService:
             organization_id=organization_id,
             event_id=event.id,
             course_id=course_id,
+            category_id=str(session_data.category_id) if session_data.category_id else None,
+            program_id=str(session_data.program_id) if session_data.program_id else None,
+            phase_id=str(session_data.phase_id) if session_data.phase_id else None,
+            requirement_id=str(session_data.requirement_id) if session_data.requirement_id else None,
             course_name=course_name,
             course_code=course_code,
             training_type=TrainingType(session_data.training_type),
@@ -558,4 +565,69 @@ class TrainingSessionService:
                 )
                 self.db.add(training_record)
 
+            # If session is linked to a program, update the enrollee's progress
+            if training_session.program_id and training_session.requirement_id:
+                await self._update_enrollment_progress(
+                    user_id=str(attendee.user_id),
+                    program_id=training_session.program_id,
+                    requirement_id=training_session.requirement_id,
+                    hours_completed=hours_completed,
+                )
+
         await self.db.commit()
+
+    async def _update_enrollment_progress(
+        self,
+        user_id: str,
+        program_id: str,
+        requirement_id: str,
+        hours_completed: float,
+    ) -> None:
+        """
+        Update a member's enrollment progress when a training session linked to
+        a program is finalized. Finds the active enrollment and matching
+        requirement progress record, then increments the progress value.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Find the member's active enrollment in this program
+            enrollment_result = await self.db.execute(
+                select(ProgramEnrollment)
+                .where(ProgramEnrollment.user_id == user_id)
+                .where(ProgramEnrollment.program_id == program_id)
+                .where(ProgramEnrollment.status == "active")
+            )
+            enrollment = enrollment_result.scalar_one_or_none()
+
+            if not enrollment:
+                return
+
+            # Find the requirement progress record for this enrollment
+            progress_result = await self.db.execute(
+                select(RequirementProgress)
+                .where(RequirementProgress.enrollment_id == enrollment.id)
+                .where(RequirementProgress.requirement_id == requirement_id)
+            )
+            progress = progress_result.scalar_one_or_none()
+
+            if not progress:
+                return
+
+            # Increment the progress value (hours, count, etc.)
+            current_value = float(progress.progress_value or 0)
+            progress.progress_value = current_value + hours_completed
+
+            # Update status if not already completed
+            if progress.status == "not_started":
+                progress.status = "in_progress"
+
+            logger.info(
+                f"Updated enrollment progress: user={user_id}, "
+                f"program={program_id}, requirement={requirement_id}, "
+                f"added={hours_completed}, total={progress.progress_value}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to update enrollment progress: {e}")

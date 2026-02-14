@@ -372,6 +372,12 @@ class TrainingSession(Base):
     event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True)
 
+    # Category and Program linkage — connects this session to the training pipeline
+    category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="SET NULL"), nullable=True, index=True)
+    phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True)
+    requirement_id = Column(String(36), ForeignKey("training_requirements.id", ondelete="SET NULL"), nullable=True)
+
     # Training Details (stored here for quick access)
     course_name = Column(String(255), nullable=False)
     course_code = Column(String(50))
@@ -827,6 +833,288 @@ class SkillCheckoff(Base):
 
     def __repr__(self):
         return f"<SkillCheckoff(user_id={self.user_id}, skill_id={self.skill_evaluation_id}, status={self.status})>"
+
+
+# ============================================
+# Shift Completion Reports
+# ============================================
+
+
+class ShiftCompletionReport(Base):
+    """
+    Shift Completion Report model
+
+    Allows shift officers to report on a trainee's experience during a shift.
+    Feeds into pipeline requirement progress for shift-based and call-based requirements.
+    """
+
+    __tablename__ = "shift_completion_reports"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Shift context
+    shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True)
+    shift_date = Column(Date, nullable=False)
+
+    # People
+    trainee_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    officer_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Shift details
+    hours_on_shift = Column(Float, nullable=False)
+    calls_responded = Column(Integer, default=0)
+    call_types = Column(JSON)  # Array of incident types responded to
+
+    # Performance observations
+    performance_rating = Column(Integer)  # 1-5 scale
+    areas_of_strength = Column(Text)
+    areas_for_improvement = Column(Text)
+    officer_narrative = Column(Text)  # Free-form description of the shift experience
+
+    # Skills observed
+    skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
+    tasks_performed = Column(JSON)  # Array of { task, description }
+
+    # Pipeline linkage
+    enrollment_id = Column(String(36), ForeignKey("program_enrollments.id", ondelete="SET NULL"), nullable=True)
+    requirements_progressed = Column(JSON)  # Array of { requirement_progress_id, value_added }
+
+    # Trainee acknowledgment
+    trainee_acknowledged = Column(Boolean, default=False)
+    trainee_acknowledged_at = Column(DateTime(timezone=True))
+    trainee_comments = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_shift_report_trainee', 'trainee_id', 'shift_date'),
+        Index('idx_shift_report_officer', 'officer_id'),
+        Index('idx_shift_report_enrollment', 'enrollment_id'),
+        Index('idx_shift_report_org_date', 'organization_id', 'shift_date'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftCompletionReport(trainee={self.trainee_id}, date={self.shift_date}, officer={self.officer_id})>"
+
+
+# ============================================
+# Training Module Configuration (Member Visibility)
+# ============================================
+
+
+class TrainingModuleConfig(Base):
+    """
+    Training Module Configuration model
+
+    Organization-level configuration controlling what training data members
+    can see about themselves. Each field group can be toggled on/off.
+    Training officers and chiefs always see everything regardless of settings.
+    """
+
+    __tablename__ = "training_module_configs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"),
+                             nullable=False, unique=True, index=True)
+
+    # -- Member visibility: what members see on their own training page --
+
+    # Training records & history
+    show_training_history = Column(Boolean, default=True)
+    show_training_hours = Column(Boolean, default=True)
+    show_certification_status = Column(Boolean, default=True)
+
+    # Pipeline / program progress
+    show_pipeline_progress = Column(Boolean, default=True)
+    show_requirement_details = Column(Boolean, default=True)
+
+    # Shift completion reports
+    show_shift_reports = Column(Boolean, default=True)
+    show_shift_stats = Column(Boolean, default=True)
+
+    # Officer-written content visibility to members
+    show_officer_narrative = Column(Boolean, default=False)  # Officer narrative on shift reports
+    show_performance_rating = Column(Boolean, default=True)  # 1-5 star ratings
+    show_areas_of_strength = Column(Boolean, default=True)
+    show_areas_for_improvement = Column(Boolean, default=True)
+    show_skills_observed = Column(Boolean, default=True)
+
+    # Self-reported submissions
+    show_submission_history = Column(Boolean, default=True)
+
+    # Reports access
+    allow_member_report_export = Column(Boolean, default=False)  # Can members download their own data
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(String(36), ForeignKey("users.id"))
+
+    def __repr__(self):
+        return f"<TrainingModuleConfig(org_id={self.organization_id})>"
+
+    def to_visibility_dict(self):
+        """Return a dictionary of all visibility settings for frontend consumption."""
+        return {
+            "show_training_history": self.show_training_history,
+            "show_training_hours": self.show_training_hours,
+            "show_certification_status": self.show_certification_status,
+            "show_pipeline_progress": self.show_pipeline_progress,
+            "show_requirement_details": self.show_requirement_details,
+            "show_shift_reports": self.show_shift_reports,
+            "show_shift_stats": self.show_shift_stats,
+            "show_officer_narrative": self.show_officer_narrative,
+            "show_performance_rating": self.show_performance_rating,
+            "show_areas_of_strength": self.show_areas_of_strength,
+            "show_areas_for_improvement": self.show_areas_for_improvement,
+            "show_skills_observed": self.show_skills_observed,
+            "show_submission_history": self.show_submission_history,
+            "allow_member_report_export": self.allow_member_report_export,
+        }
+
+
+# ============================================
+# Self-Reported Training
+# ============================================
+
+
+class SubmissionStatus(str, enum.Enum):
+    """Status of a self-reported training submission"""
+    DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    REVISION_REQUESTED = "revision_requested"
+
+
+class SelfReportConfig(Base):
+    """
+    Self-Report Configuration model
+
+    Organization-level configuration for what fields are required when
+    members self-report training, and whether officer approval is needed.
+    """
+
+    __tablename__ = "self_report_configs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+
+    # Approval Settings
+    require_approval = Column(Boolean, default=True)  # Require training officer approval
+    auto_approve_under_hours = Column(Float, nullable=True)  # Auto-approve if under X hours (null = never auto-approve)
+    approval_deadline_days = Column(Integer, default=14)  # Days officers have to review
+
+    # Notification Settings
+    notify_officer_on_submit = Column(Boolean, default=True)  # Email training officer when submission arrives
+    notify_member_on_decision = Column(Boolean, default=True)  # Email member when approved/rejected
+
+    # Field Configuration (JSON)
+    # Each key is a field name, value is { "visible": bool, "required": bool, "label": str }
+    # e.g. {"course_name": {"visible": true, "required": true, "label": "Course/Class Name"}, ...}
+    field_config = Column(JSON, nullable=False, default=lambda: {
+        "course_name": {"visible": True, "required": True, "label": "Course / Class Name"},
+        "training_type": {"visible": True, "required": True, "label": "Training Type"},
+        "completion_date": {"visible": True, "required": True, "label": "Date Completed"},
+        "hours_completed": {"visible": True, "required": True, "label": "Hours Completed"},
+        "credit_hours": {"visible": True, "required": False, "label": "Credit Hours"},
+        "instructor": {"visible": True, "required": False, "label": "Instructor Name"},
+        "location": {"visible": True, "required": False, "label": "Location / Facility"},
+        "description": {"visible": True, "required": False, "label": "Description / Notes"},
+        "category_id": {"visible": True, "required": False, "label": "Training Category"},
+        "certification_number": {"visible": True, "required": False, "label": "Certificate / ID Number"},
+        "issuing_agency": {"visible": True, "required": False, "label": "Issuing Agency"},
+        "attachments": {"visible": True, "required": False, "label": "Supporting Documents"},
+    })
+
+    # Allowed training types for self-reporting (null = all types allowed)
+    allowed_training_types = Column(JSON, nullable=True)
+
+    # Maximum hours per submission (null = no limit)
+    max_hours_per_submission = Column(Float, nullable=True)
+
+    # Instructions displayed to members
+    member_instructions = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(String(36), ForeignKey("users.id"))
+
+    def __repr__(self):
+        return f"<SelfReportConfig(org_id={self.organization_id}, require_approval={self.require_approval})>"
+
+
+class TrainingSubmission(Base):
+    """
+    Training Submission model
+
+    Tracks self-reported training from members. Once approved, a
+    TrainingRecord is created from the submission data.
+    """
+
+    __tablename__ = "training_submissions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    submitted_by = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Training Details
+    course_name = Column(String(255), nullable=False)
+    course_code = Column(String(50))
+    training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    description = Column(Text)
+
+    # Dates and Hours
+    completion_date = Column(Date, nullable=False)
+    hours_completed = Column(Float, nullable=False)
+    credit_hours = Column(Float)
+
+    # Instructor and Location
+    instructor = Column(String(255))
+    location = Column(String(255))
+
+    # Certification Details
+    certification_number = Column(String(100))
+    issuing_agency = Column(String(255))
+    expiration_date = Column(Date)
+
+    # Category Linkage
+    category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True)
+
+    # Supporting Documents
+    attachments = Column(JSON)  # List of file URLs or references
+
+    # Submission Status
+    status = Column(Enum(SubmissionStatus, values_callable=lambda x: [e.value for e in x]),
+                    default=SubmissionStatus.PENDING_REVIEW, nullable=False, index=True)
+
+    # Review Details
+    reviewed_by = Column(String(36), ForeignKey("users.id"))
+    reviewed_at = Column(DateTime(timezone=True))
+    reviewer_notes = Column(Text)  # Officer notes on approval/rejection
+
+    # Link to created TrainingRecord (populated on approval)
+    training_record_id = Column(String(36), ForeignKey("training_records.id", ondelete="SET NULL"), nullable=True)
+
+    # Timestamps
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    training_record = relationship("TrainingRecord")
+
+    __table_args__ = (
+        Index('idx_submission_org_status', 'organization_id', 'status'),
+        Index('idx_submission_user', 'submitted_by', 'status'),
+        Index('idx_submission_date', 'completion_date'),
+    )
+
+    def __repr__(self):
+        return f"<TrainingSubmission(course={self.course_name}, status={self.status}, by={self.submitted_by})>"
 
 
 # ============================================

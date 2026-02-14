@@ -18,216 +18,9 @@ import { trainingProgramService } from '../services/api';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
-  ProgramStructureType,
 } from '../types/training';
 
 type TabView = 'programs' | 'requirements' | 'templates';
-
-interface CreateProgramModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const CreateProgramModal: React.FC<CreateProgramModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    target_position: '',
-    structure_type: 'flexible' as ProgramStructureType,
-    time_limit_days: '',
-    warning_days_before: '30',
-    is_template: false,
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-
-    try {
-      await trainingProgramService.createProgram({
-        name: formData.name,
-        description: formData.description || undefined,
-        target_position: formData.target_position || undefined,
-        structure_type: formData.structure_type,
-        time_limit_days: formData.time_limit_days ? parseInt(formData.time_limit_days) : undefined,
-        warning_days_before: parseInt(formData.warning_days_before),
-        is_template: formData.is_template,
-      });
-
-      onSuccess();
-      onClose();
-      setFormData({
-        name: '',
-        description: '',
-        target_position: '',
-        structure_type: 'flexible',
-        time_limit_days: '',
-        warning_days_before: '30',
-        is_template: false,
-      });
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create program');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-program-title"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-    >
-      <div className="bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-700">
-          <h2 id="create-program-title" className="text-2xl font-bold text-white">Create Training Program</h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="program-name" className="block text-sm font-medium text-gray-300 mb-2">
-              Program Name <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="program-name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              required
-              aria-required="true"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="program-description" className="block text-sm font-medium text-gray-300 mb-2">
-              Description
-            </label>
-            <textarea
-              id="program-description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="program-target-position" className="block text-sm font-medium text-gray-300 mb-2">
-                Target Position
-              </label>
-              <select
-                id="program-target-position"
-                value={formData.target_position}
-                onChange={(e) => setFormData({ ...formData, target_position: e.target.value })}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <option value="">All Positions</option>
-                <option value="probationary">Probationary</option>
-                <option value="firefighter">Firefighter</option>
-                <option value="driver_candidate">Driver Candidate</option>
-                <option value="driver">Driver</option>
-                <option value="officer">Officer</option>
-                <option value="aic">AIC (Attendant in Charge)</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="program-structure-type" className="block text-sm font-medium text-gray-300 mb-2">
-                Structure Type
-              </label>
-              <select
-                id="program-structure-type"
-                value={formData.structure_type}
-                onChange={(e) => setFormData({ ...formData, structure_type: e.target.value as ProgramStructureType })}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <option value="flexible">Flexible</option>
-                <option value="sequential">Sequential</option>
-                <option value="phases">Phases</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="program-time-limit" className="block text-sm font-medium text-gray-300 mb-2">
-                Time Limit (days)
-              </label>
-              <input
-                id="program-time-limit"
-                type="number"
-                value={formData.time_limit_days}
-                onChange={(e) => setFormData({ ...formData, time_limit_days: e.target.value })}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="Optional"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="program-warning-days" className="block text-sm font-medium text-gray-300 mb-2">
-                Warning (days before)
-              </label>
-              <input
-                id="program-warning-days"
-                type="number"
-                value={formData.warning_days_before}
-                onChange={(e) => setFormData({ ...formData, warning_days_before: e.target.value })}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="is_template"
-              checked={formData.is_template}
-              onChange={(e) => setFormData({ ...formData, is_template: e.target.checked })}
-              className="w-4 h-4 text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
-            />
-            <label htmlFor="is_template" className="text-sm text-gray-300">
-              Save as template (can be reused for other positions)
-            </label>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
-              disabled={isSubmitting}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Creating...' : 'Create Program'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
 
 const TrainingProgramsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -236,7 +29,6 @@ const TrainingProgramsPage: React.FC = () => {
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [importingRegistry, setImportingRegistry] = useState<string | null>(null);
 
   useEffect(() => {
@@ -302,11 +94,11 @@ const TrainingProgramsPage: React.FC = () => {
 
           {activeTab === 'programs' && (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => navigate('/training/programs/new')}
               className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
               <Plus className="w-5 h-5" aria-hidden="true" />
-              <span>New Program</span>
+              <span>New Pipeline</span>
             </button>
           )}
         </div>
@@ -391,10 +183,10 @@ const TrainingProgramsPage: React.FC = () => {
                     </p>
                     {!searchTerm && activeTab === 'programs' && (
                       <button
-                        onClick={() => setShowCreateModal(true)}
+                        onClick={() => navigate('/training/programs/new')}
                         className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                       >
-                        Create Your First Program
+                        Create Your First Pipeline
                       </button>
                     )}
                   </div>
@@ -536,11 +328,6 @@ const TrainingProgramsPage: React.FC = () => {
         )}
       </main>
 
-      <CreateProgramModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={loadData}
-      />
     </div>
   );
 };

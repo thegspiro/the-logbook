@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import {
   FileText,
-  Calendar,
+  Calendar as CalendarIcon,
   Users,
   TrendingUp,
   Download,
@@ -15,6 +15,8 @@ import {
   AlertCircle,
   X,
   Loader2,
+  ClipboardList,
+  BarChart3,
 } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
 import { reportsService } from '../services/api';
@@ -26,6 +28,7 @@ interface ReportCard {
   icon: React.ElementType;
   category: 'member' | 'training' | 'event' | 'compliance';
   available: boolean;
+  usesDateRange?: boolean;
 }
 
 /** Maps frontend report IDs to the API report_type values. */
@@ -33,6 +36,27 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'member-roster': 'member_roster',
   'training-summary': 'training_summary',
   'event-attendance': 'event_attendance',
+  'training-progress': 'training_progress',
+  'annual-training': 'annual_training',
+};
+
+type DatePreset = 'this-year' | 'last-year' | 'last-90' | 'custom';
+
+const getPresetDates = (preset: DatePreset): { start: string; end: string } => {
+  const now = new Date();
+  switch (preset) {
+    case 'this-year':
+      return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
+    case 'last-year':
+      return { start: `${now.getFullYear() - 1}-01-01`, end: `${now.getFullYear() - 1}-12-31` };
+    case 'last-90': {
+      const ago = new Date(now);
+      ago.setDate(ago.getDate() - 90);
+      return { start: ago.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+    }
+    default:
+      return { start: '', end: '' };
+  }
 };
 
 export const ReportsPage: React.FC = () => {
@@ -41,6 +65,18 @@ export const ReportsPage: React.FC = () => {
   const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);
   const [activeReport, setActiveReport] = useState<ReportCard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<DatePreset>('this-year');
+  const [startDate, setStartDate] = useState<string>(() => getPresetDates('this-year').start);
+  const [endDate, setEndDate] = useState<string>(() => getPresetDates('this-year').end);
+
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== 'custom') {
+      const { start, end } = getPresetDates(preset);
+      setStartDate(start);
+      setEndDate(end);
+    }
+  };
 
   const reports: ReportCard[] = [
     {
@@ -58,14 +94,33 @@ export const ReportsPage: React.FC = () => {
       icon: TrendingUp,
       category: 'training',
       available: true,
+      usesDateRange: true,
     },
     {
       id: 'event-attendance',
       title: 'Event Attendance',
       description: 'Attendance records for all events and training sessions',
-      icon: Calendar,
+      icon: CalendarIcon,
       category: 'event',
       available: true,
+      usesDateRange: true,
+    },
+    {
+      id: 'training-progress',
+      title: 'Training Progress',
+      description: 'Pipeline enrollment progress, requirement completion, and member advancement',
+      icon: ClipboardList,
+      category: 'training',
+      available: true,
+    },
+    {
+      id: 'annual-training',
+      title: 'Annual Training Report',
+      description: 'Comprehensive annual breakdown of training hours, shift experience, and performance',
+      icon: BarChart3,
+      category: 'training',
+      available: true,
+      usesDateRange: true,
     },
     {
       id: 'compliance-status',
@@ -98,7 +153,18 @@ export const ReportsPage: React.FC = () => {
     setError(null);
 
     try {
-      const data = await reportsService.generateReport({ report_type: reportType });
+      const params: { report_type: string; start_date?: string; end_date?: string } = {
+        report_type: reportType,
+      };
+
+      if (report.usesDateRange && startDate) {
+        params.start_date = startDate;
+      }
+      if (report.usesDateRange && endDate) {
+        params.end_date = endDate;
+      }
+
+      const data = await reportsService.generateReport(params);
       setReportData(data);
       setActiveReport(report);
     } catch (err: unknown) {
@@ -279,6 +345,148 @@ export const ReportsPage: React.FC = () => {
     );
   };
 
+  const renderTrainingProgress = (data: Record<string, unknown>) => {
+    const entries = (data.entries ?? []) as Array<Record<string, unknown>>;
+    const statusSummary = (data.status_summary ?? {}) as Record<string, number>;
+    const avgProgress = data.average_progress;
+
+    return (
+      <>
+        <div className="flex flex-wrap gap-4 mb-4">
+          {avgProgress !== undefined && (
+            <p className="text-sm text-slate-300">
+              Average progress: <span className="font-semibold text-white">{String(avgProgress)}%</span>
+            </p>
+          )}
+          {Object.entries(statusSummary).map(([status, count]) => (
+            <span key={status} className="text-xs px-2 py-1 bg-white/10 rounded text-slate-300">
+              {status}: <span className="font-semibold text-white">{count}</span>
+            </span>
+          ))}
+        </div>
+        {entries.length > 0 && (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Member</th>
+                  <th className="px-4 py-2">Program</th>
+                  <th className="px-4 py-2">Progress</th>
+                  <th className="px-4 py-2">Requirements</th>
+                  <th className="px-4 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {entries.map((e, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.member_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.program_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-slate-700 rounded-full h-2">
+                          <div
+                            className="bg-red-500 h-2 rounded-full"
+                            style={{ width: `${Number(e.progress_percentage ?? 0)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs">{String(e.progress_percentage ?? 0)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-xs">
+                      {String(e.requirements_completed ?? 0)} / {String(e.requirements_total ?? 0)}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(e.status ?? '-')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {entries.length === 0 && (
+          <p className="text-slate-400 text-sm">No pipeline enrollments found.</p>
+        )}
+      </>
+    );
+  };
+
+  const renderAnnualTraining = (data: Record<string, unknown>) => {
+    const summary = (data.summary ?? {}) as Record<string, unknown>;
+    const entries = (data.entries ?? []) as Array<Record<string, unknown>>;
+    const byType = (summary.training_by_type ?? {}) as Record<string, number>;
+
+    return (
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-white">{String(summary.total_combined_hours ?? 0)}</div>
+            <div className="text-xs text-slate-400">Total Hours</div>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-white">{String(summary.total_completions ?? 0)}</div>
+            <div className="text-xs text-slate-400">Completions</div>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-white">{String(summary.total_calls_responded ?? 0)}</div>
+            <div className="text-xs text-slate-400">Calls Responded</div>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-white">{String(summary.avg_hours_per_member ?? 0)}</div>
+            <div className="text-xs text-slate-400">Avg Hours/Member</div>
+          </div>
+        </div>
+
+        {Object.keys(byType).length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-slate-400 mb-1">By Training Type:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(byType).map(([type, count]) => (
+                <span key={type} className="text-xs px-2 py-1 bg-white/10 rounded text-slate-300">
+                  {type.replace(/_/g, ' ')}: <span className="font-semibold text-white">{count}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {entries.length > 0 && (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Member</th>
+                  <th className="px-4 py-2">Rank</th>
+                  <th className="px-4 py-2">Training Hrs</th>
+                  <th className="px-4 py-2">Shift Hrs</th>
+                  <th className="px-4 py-2">Courses</th>
+                  <th className="px-4 py-2">Shifts</th>
+                  <th className="px-4 py-2">Calls</th>
+                  <th className="px-4 py-2">Rating</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {entries.map((e, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.member_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(e.rank ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.training_hours ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.shift_hours ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.courses_completed ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.shifts_completed ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{String(e.calls_responded ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{e.avg_performance_rating != null ? String(e.avg_performance_rating) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {entries.length === 0 && (
+          <p className="text-slate-400 text-sm">No training data found for this period.</p>
+        )}
+      </>
+    );
+  };
+
   const renderReportContent = () => {
     if (!reportData || !activeReport) return null;
 
@@ -289,6 +497,10 @@ export const ReportsPage: React.FC = () => {
         return renderTrainingSummary(reportData);
       case 'event-attendance':
         return renderEventAttendance(reportData);
+      case 'training-progress':
+        return renderTrainingProgress(reportData);
+      case 'annual-training':
+        return renderAnnualTraining(reportData);
       default:
         return (
           <pre className="text-sm text-slate-300 whitespace-pre-wrap overflow-auto max-h-[50vh]">
@@ -335,6 +547,58 @@ export const ReportsPage: React.FC = () => {
               {category.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Date Range Picker */}
+      <div className="mb-6 bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="flex items-center space-x-2 mb-3">
+          <CalendarIcon className="w-4 h-4 text-slate-400" aria-hidden="true" />
+          <span className="text-sm font-medium text-slate-300">Reporting Period</span>
+          <span className="text-xs text-slate-500">(applies to date-based reports)</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            { id: 'this-year' as DatePreset, label: 'This Year' },
+            { id: 'last-year' as DatePreset, label: 'Last Year' },
+            { id: 'last-90' as DatePreset, label: 'Last 90 Days' },
+            { id: 'custom' as DatePreset, label: 'Custom' },
+          ]).map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => handlePresetChange(preset.id)}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                datePreset === preset.id
+                  ? 'bg-red-600 text-white'
+                  : 'bg-white/10 text-slate-300 hover:bg-white/20'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+
+          <div className="flex items-center gap-2 ml-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            <span className="text-slate-500 text-sm">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </div>
         </div>
       </div>
 
@@ -453,7 +717,14 @@ export const ReportsPage: React.FC = () => {
                         'aria-hidden': true,
                       })}
                     </div>
-                    <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                    <div>
+                      <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                      {activeReport.usesDateRange && (reportData?.period_start || reportData?.period_end) && (
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {reportData.period_start ? String(reportData.period_start) : 'Start'} — {reportData.period_end ? String(reportData.period_end) : 'End'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <button
                     type="button"

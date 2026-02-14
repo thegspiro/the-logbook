@@ -38,6 +38,7 @@ class NotificationTrigger(str, enum.Enum):
     TRAINING_EXPIRY = "training_expiry"
     SCHEDULE_CHANGE = "schedule_change"
     NEW_MEMBER = "new_member"
+    MEMBER_DROPPED = "member_dropped"
     MAINTENANCE_DUE = "maintenance_due"
     ELECTION_STARTED = "election_started"
     FORM_SUBMITTED = "form_submitted"

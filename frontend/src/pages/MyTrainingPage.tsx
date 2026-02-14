@@ -1,0 +1,539 @@
+/**
+ * My Training Page
+ *
+ * Member-facing page showing their own training data. Content is controlled
+ * by the organization's TrainingModuleConfig visibility settings.
+ * Officers/admins always see everything.
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  GraduationCap,
+  Clock,
+  Award,
+  TrendingUp,
+  ClipboardList,
+  FileText,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  CheckCircle2,
+  Settings,
+  Loader2,
+  Shield,
+  Send,
+} from 'lucide-react';
+import { trainingModuleConfigService } from '../services/api';
+import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
+
+// ==================== Helpers ====================
+
+const formatDate = (d: string | null | undefined) => {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'completed': return 'bg-green-500/20 text-green-400';
+    case 'approved': return 'bg-green-500/20 text-green-400';
+    case 'active': return 'bg-blue-500/20 text-blue-400';
+    case 'in_progress': return 'bg-blue-500/20 text-blue-400';
+    case 'pending_review': return 'bg-yellow-500/20 text-yellow-400';
+    case 'rejected': return 'bg-red-500/20 text-red-400';
+    case 'revision_requested': return 'bg-orange-500/20 text-orange-400';
+    default: return 'bg-gray-500/20 text-gray-400';
+  }
+};
+
+// ==================== Stat Card ====================
+
+const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number; color?: string }> = ({
+  icon: Icon, label, value, color = 'text-white',
+}) => (
+  <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+    <div className="flex items-center space-x-2 mb-1">
+      <Icon className="w-4 h-4 text-slate-400" />
+      <span className="text-xs text-slate-400">{label}</span>
+    </div>
+    <p className={`text-xl font-bold ${color}`}>{value}</p>
+  </div>
+);
+
+// ==================== Section Wrapper ====================
+
+const Section: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean }> = ({
+  title, icon: Icon, children, defaultOpen = true,
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center space-x-3">
+          <Icon className="w-5 h-5 text-red-500" />
+          <h2 className="text-lg font-semibold text-white">{title}</h2>
+        </div>
+        {open ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+};
+
+// ==================== Config Editor (Officers Only) ====================
+
+interface ConfigEditorProps {
+  config: TMConfig;
+  onSave: (updates: Partial<TMConfig>) => Promise<void>;
+}
+
+const VISIBILITY_FIELDS: Array<{ key: keyof TMConfig; label: string; description: string; group: string }> = [
+  { key: 'show_training_history', label: 'Training History', description: 'Members can see their training record list', group: 'Training Records' },
+  { key: 'show_training_hours', label: 'Training Hours Summary', description: 'Members can see their total hours', group: 'Training Records' },
+  { key: 'show_certification_status', label: 'Certification Status', description: 'Members can see certification expiration dates', group: 'Training Records' },
+  { key: 'show_pipeline_progress', label: 'Pipeline Progress', description: 'Members can see their program enrollment progress', group: 'Pipeline' },
+  { key: 'show_requirement_details', label: 'Requirement Details', description: 'Members can see individual requirement progress', group: 'Pipeline' },
+  { key: 'show_shift_reports', label: 'Shift Reports', description: 'Members can see their shift completion reports', group: 'Shift Reports' },
+  { key: 'show_shift_stats', label: 'Shift Statistics', description: 'Members can see aggregate shift stats (hours, calls)', group: 'Shift Reports' },
+  { key: 'show_performance_rating', label: 'Performance Rating', description: 'Members can see their 1-5 performance rating', group: 'Officer Observations' },
+  { key: 'show_areas_of_strength', label: 'Areas of Strength', description: 'Members can see officer-noted strengths', group: 'Officer Observations' },
+  { key: 'show_areas_for_improvement', label: 'Areas for Improvement', description: 'Members can see improvement notes', group: 'Officer Observations' },
+  { key: 'show_skills_observed', label: 'Skills Observed', description: 'Members can see observed skill evaluations', group: 'Officer Observations' },
+  { key: 'show_officer_narrative', label: 'Officer Narrative', description: 'Members can see officer written narratives (off by default)', group: 'Officer Observations' },
+  { key: 'show_submission_history', label: 'Submission History', description: 'Members can see their self-reported submissions', group: 'Self-Reported' },
+  { key: 'allow_member_report_export', label: 'Allow Report Export', description: 'Members can download their own training data', group: 'Reports' },
+];
+
+const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
+  const [draft, setDraft] = useState<Partial<TMConfig>>({});
+  const [saving, setSaving] = useState(false);
+
+  const groups = [...new Set(VISIBILITY_FIELDS.map((f) => f.group))];
+
+  const getCurrentValue = (key: keyof TMConfig) => {
+    return draft[key] !== undefined ? draft[key] as boolean : config[key] as boolean;
+  };
+
+  const handleSave = async () => {
+    if (Object.keys(draft).length === 0) return;
+    setSaving(true);
+    try {
+      await onSave(draft);
+      setDraft({});
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-slate-400">
+        Control what training data members can see on their personal training page.
+        Officers and administrators always see the full dataset regardless of these settings.
+      </p>
+
+      {groups.map((group) => (
+        <div key={group}>
+          <h4 className="text-sm font-semibold text-slate-300 mb-3">{group}</h4>
+          <div className="space-y-2">
+            {VISIBILITY_FIELDS.filter((f) => f.group === group).map((field) => (
+              <label key={field.key} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800/70 transition-colors">
+                <div>
+                  <p className="text-sm font-medium text-white">{field.label}</p>
+                  <p className="text-xs text-slate-500">{field.description}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={getCurrentValue(field.key)}
+                  onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
+                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-red-600 focus:ring-red-500"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {Object.keys(draft).length > 0 && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {saving ? 'Saving...' : `Save ${Object.keys(draft).length} Change${Object.keys(draft).length > 1 ? 's' : ''}`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== Main Component ====================
+
+const MyTrainingPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [data, setData] = useState<MyTrainingSummary | null>(null);
+  const [config, setConfig] = useState<TMConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  const [isOfficer, setIsOfficer] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const trainingData = await trainingModuleConfigService.getMyTraining();
+      setData(trainingData);
+
+      // Try to load the full config (only works for officers)
+      try {
+        const cfg = await trainingModuleConfigService.getConfig();
+        setConfig(cfg);
+        setIsOfficer(true);
+      } catch {
+        setIsOfficer(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load training data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfigSave = async (updates: Partial<TMConfig>) => {
+    const updated = await trainingModuleConfigService.updateConfig(updates);
+    setConfig(updated);
+    // Reload the data to reflect visibility changes
+    const trainingData = await trainingModuleConfigService.getMyTraining();
+    setData(trainingData);
+  };
+
+  const v = data?.visibility;
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+          <p className="text-red-400">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white flex items-center space-x-3">
+              <GraduationCap className="w-8 h-8 text-red-500" />
+              <span>My Training</span>
+            </h1>
+            <p className="text-slate-400 mt-1">
+              Your training records, certifications, pipeline progress, and shift experience
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => navigate('/training/submit')}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              <span>Submit Training</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs (only show settings tab for officers) */}
+      {isOfficer && (
+        <div className="flex space-x-2 mb-6">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'overview' ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+            }`}
+          >
+            My Training
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'settings' ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Member Visibility Settings</span>
+          </button>
+        </div>
+      )}
+
+      {/* Settings Tab */}
+      {activeTab === 'settings' && config && (
+        <Section title="Member Visibility Settings" icon={Shield} defaultOpen>
+          <ConfigEditor config={config} onSave={handleConfigSave} />
+        </Section>
+      )}
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && data && (
+        <div className="space-y-6">
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {v?.show_training_hours && data.hours_summary && (
+              <>
+                <StatCard icon={Clock} label="Total Hours" value={data.hours_summary.total_hours} color="text-blue-400" />
+                <StatCard icon={FileText} label="Records" value={data.hours_summary.total_records} />
+              </>
+            )}
+            {v?.show_shift_stats && data.shift_stats && (
+              <>
+                <StatCard icon={ClipboardList} label="Shifts" value={data.shift_stats.total_shifts} color="text-purple-400" />
+                <StatCard icon={Star} label="Avg Rating" value={data.shift_stats.avg_rating ?? '-'} color="text-yellow-400" />
+              </>
+            )}
+          </div>
+
+          {/* Certifications */}
+          {v?.show_certification_status && data.certifications && data.certifications.length > 0 && (
+            <Section title="Certifications" icon={Award}>
+              <div className="space-y-2">
+                {data.certifications.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">{c.course_name}</p>
+                      {c.certification_number && (
+                        <p className="text-xs text-slate-500">#{c.certification_number}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      {c.is_expired ? (
+                        <span className="flex items-center space-x-1 text-red-400 text-sm">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span>Expired</span>
+                        </span>
+                      ) : c.days_until_expiry !== null && c.days_until_expiry <= 90 ? (
+                        <span className="text-yellow-400 text-sm">
+                          Expires in {c.days_until_expiry} days
+                        </span>
+                      ) : (
+                        <span className="flex items-center space-x-1 text-green-400 text-sm">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Valid</span>
+                        </span>
+                      )}
+                      <p className="text-xs text-slate-500">{formatDate(c.expiration_date)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Pipeline Progress */}
+          {v?.show_pipeline_progress && data.enrollments && data.enrollments.length > 0 && (
+            <Section title="Pipeline Progress" icon={TrendingUp}>
+              <div className="space-y-4">
+                {data.enrollments.map((e) => (
+                  <div key={e.id} className="bg-slate-800/50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs px-2 py-1 rounded ${getStatusColor(e.status)}`}>
+                        {e.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-sm text-white font-semibold">{Math.round(e.progress_percentage)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          e.progress_percentage >= 75 ? 'bg-green-500' :
+                          e.progress_percentage >= 50 ? 'bg-blue-500' :
+                          e.progress_percentage >= 25 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${e.progress_percentage}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Enrolled: {formatDate(e.enrolled_at)}</span>
+                      {e.target_completion_date && <span>Target: {formatDate(e.target_completion_date)}</span>}
+                    </div>
+                    {v?.show_requirement_details && e.requirements && e.requirements.length > 0 && (
+                      <div className="mt-3 space-y-1">
+                        {e.requirements.map((r) => (
+                          <div key={r.id} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center space-x-2">
+                              {r.status === 'completed' ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                              ) : (
+                                <div className="w-3.5 h-3.5 rounded-full border border-slate-600" />
+                              )}
+                              <span className="text-slate-300">{Math.round(r.progress_percentage)}%</span>
+                            </div>
+                            <span className={`px-1.5 py-0.5 rounded ${getStatusColor(r.status)}`}>
+                              {r.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Training History */}
+          {v?.show_training_history && data.training_records && data.training_records.length > 0 && (
+            <Section title="Training History" icon={FileText} defaultOpen={false}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                    <tr>
+                      <th className="px-4 py-2">Course</th>
+                      <th className="px-4 py-2">Type</th>
+                      <th className="px-4 py-2">Date</th>
+                      <th className="px-4 py-2">Hours</th>
+                      <th className="px-4 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {data.training_records.map((r) => (
+                      <tr key={r.id} className="text-slate-200">
+                        <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
+                        <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{r.hours_completed}</td>
+                        <td className="px-4 py-2">
+                          <span className={`text-xs px-2 py-1 rounded ${getStatusColor(r.status)}`}>
+                            {r.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+
+          {/* Shift Reports */}
+          {v?.show_shift_reports && data.shift_reports && data.shift_reports.length > 0 && (
+            <Section title="Shift Completion Reports" icon={ClipboardList} defaultOpen={false}>
+              <div className="space-y-3">
+                {data.shift_reports.map((sr) => (
+                  <div key={sr.id} className="bg-slate-800/50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-white">{formatDate(sr.shift_date)}</p>
+                      <div className="flex items-center space-x-3 text-xs text-slate-400">
+                        <span>{sr.hours_on_shift}h</span>
+                        <span>{sr.calls_responded} calls</span>
+                        {v?.show_performance_rating && sr.performance_rating && (
+                          <span className="flex items-center space-x-1">
+                            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                            <span>{sr.performance_rating}/5</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {v?.show_areas_of_strength && sr.areas_of_strength && (
+                      <p className="text-xs text-green-400 mb-1"><span className="font-medium">Strengths:</span> {sr.areas_of_strength}</p>
+                    )}
+                    {v?.show_areas_for_improvement && sr.areas_for_improvement && (
+                      <p className="text-xs text-yellow-400 mb-1"><span className="font-medium">Improvement:</span> {sr.areas_for_improvement}</p>
+                    )}
+                    {v?.show_officer_narrative && sr.officer_narrative && (
+                      <p className="text-xs text-slate-300 mb-1"><span className="font-medium">Narrative:</span> {sr.officer_narrative}</p>
+                    )}
+                    {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+                            {s.skill_name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Submission History */}
+          {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
+            <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                    <tr>
+                      <th className="px-4 py-2">Course</th>
+                      <th className="px-4 py-2">Date</th>
+                      <th className="px-4 py-2">Hours</th>
+                      <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2">Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {data.submissions.map((s) => (
+                      <tr key={s.id} className="text-slate-200">
+                        <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
+                        <td className="px-4 py-2">
+                          <span className={`text-xs px-2 py-1 rounded ${getStatusColor(s.status)}`}>
+                            {s.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-500">{formatDate(s.submitted_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+
+          {/* Empty State */}
+          {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && (
+            <div className="text-center py-12 bg-white/5 border border-white/10 rounded-lg">
+              <GraduationCap className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-2">No Training Data Yet</h3>
+              <p className="text-slate-400 mb-4">
+                Your training records, certifications, and shift reports will appear here as they are added.
+              </p>
+              <button
+                onClick={() => navigate('/training/submit')}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Submit External Training
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MyTrainingPage;

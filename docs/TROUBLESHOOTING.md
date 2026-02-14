@@ -1189,6 +1189,231 @@ The Reports module generates data reports including member roster, training summ
 | `member_roster` | List of all active members with roles | Users table |
 | `training_summary` | Training completion and certification status | Training records |
 | `event_attendance` | Event participation rates | Events and attendees |
+| `training_progress` | Pipeline enrollment progress and requirement completion | Program enrollments |
+| `annual_training` | Comprehensive annual training and shift breakdown | Training records + shift reports |
+
+#### Date Range Not Applied to Report
+
+**Symptoms**: Report generates but ignores the selected date range
+
+**Causes**:
+1. Report type does not support date ranges (e.g., member_roster, training_progress)
+2. Date format is incorrect
+
+**Solutions**:
+- Only reports marked with `usesDateRange: true` use the date range picker (training_summary, event_attendance, annual_training)
+- Verify dates are in `YYYY-MM-DD` format
+- Check that start date is before end date
+
+---
+
+## Inventory Module & Property Return Reports
+
+### Overview
+
+The Inventory module manages equipment, assignments, checkout/check-in, and maintenance tracking. When a member is dropped (voluntarily or involuntarily), a property-return report is automatically generated listing all assigned items.
+
+**API Endpoints**: `/api/v1/inventory/`, `/api/v1/users/{user_id}/status`
+
+### Common Issues
+
+#### Property Return Report: No Items Listed
+
+**Symptoms**: Member was dropped but the property return report shows an empty item table
+
+**Causes**:
+1. Items were not assigned through the inventory system (only verbal assignments)
+2. Items were previously unassigned or checked in but the drop was processed later
+3. Items are assigned to a different user ID
+
+**Solutions**:
+- Verify the member has active assignments in Inventory → Items → filter by assigned user
+- Check that items were assigned using the `POST /inventory/items/{id}/assign` endpoint, not just manually tracked
+- Review the member's assignment history via `GET /inventory/users/{user_id}/assignments`
+
+#### Property Return Report: Dollar Values Show $0.00
+
+**Symptoms**: Items are listed but all values show $0.00
+
+**Causes**:
+1. Neither `purchase_price` nor `current_value` was entered when the item was created
+2. Items were created without purchase information
+
+**Solutions**:
+- Update items with their purchase price or current value before dropping the member
+- Use `PATCH /inventory/items/{item_id}` to set `purchase_price` or `current_value`
+- The report uses `current_value` first, then falls back to `purchase_price`
+
+#### Property Return Email Not Sent
+
+**Symptoms**: Member was dropped but no email was received
+
+**Causes**:
+1. `send_property_return_email` was set to `false` in the status change request
+2. Member has no email address on file
+3. SMTP is not configured or email is disabled
+4. Email was sent but caught by spam filter
+
+**Solutions**:
+- Verify the status change request included `"send_property_return_email": true`
+- Check the member's email address in their profile
+- Review SMTP configuration in organization settings or global config
+- Check the email service logs for delivery errors
+- The report is always saved to Documents regardless of email delivery
+
+#### Member Status Change: Invalid Status Error
+
+**Symptoms**: `400 Bad Request` when trying to change a member's status
+
+**Causes**:
+1. The status value is misspelled or not a valid UserStatus
+2. The member is already in the requested status
+
+**Solutions**:
+- Valid statuses: `active`, `inactive`, `suspended`, `probationary`, `retired`, `dropped_voluntary`, `dropped_involuntary`
+- Check the member's current status first — you cannot change to the same status
+
+#### Property Return Report: Preview vs. Actual Drop
+
+**Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
+
+#### Property Return Reminders: 30-Day or 90-Day Not Sending
+
+**Symptoms**: A member was dropped more than 30 days ago but no reminder was sent
+
+**Causes**:
+1. The process endpoint hasn't been called (reminders require a trigger)
+2. The member has no outstanding items (all were returned)
+3. The reminder was already sent previously (duplicate prevention)
+4. The member was dropped before `status_changed_at` was tracked (legacy drops)
+
+**Solutions**:
+- Call `POST /api/v1/users/property-return-reminders/process` manually or set up a daily scheduler
+- Check the overdue list: `GET /api/v1/users/property-return-reminders/overdue`
+- Verify the member still has active assignments/checkouts in the inventory system
+- For legacy drops: update the member's `status_changed_at` to their actual drop date
+
+#### Property Return Reminders: Overdue List Shows Returned Items
+
+**Symptoms**: Items appear on the overdue list but the member already returned them
+
+**Causes**:
+1. Items were physically returned but not checked in / unassigned in the system
+2. Officer forgot to process the return in the inventory module
+
+**Solutions**:
+- Unassign items: `POST /api/v1/inventory/items/{item_id}/unassign`
+- Check in items: `POST /api/v1/inventory/checkout/{checkout_id}/checkin`
+- Once all items are returned in the system, the member will no longer appear on the overdue list and no further reminders will be sent
+
+---
+
+## Training Module
+
+### Overview
+
+The Training module manages courses, requirements, programs (pipelines), shift completion reports, self-reported training, and member visibility settings. Training data is accessible to individual members via their "My Training" page with configurable visibility settings per department.
+
+**API Endpoints**: `/api/v1/training/`, `/api/v1/training/programs/`, `/api/v1/training/shift-reports/`, `/api/v1/training/submissions/`, `/api/v1/training/module-config/`
+
+### Common Issues
+
+#### Self-Reported Training: Submission Not Appearing for Review
+
+**Symptoms**: Member submits training but officer doesn't see it in Review Submissions
+
+**Causes**:
+1. Submission is still in "draft" status
+2. Officer doesn't have `training.manage` permission
+3. Different organization context
+
+**Solutions**:
+- Confirm the member clicked "Submit" (not just "Save Draft")
+- Verify the officer has `training.manage` permission assigned
+- Ensure both the member and officer are in the same organization
+- Refresh the Review Submissions page
+
+#### Self-Reported Training: Auto-Approve Not Working
+
+**Symptoms**: Submissions under the configured hour threshold are not auto-approved
+
+**Causes**:
+1. `auto_approve_under_hours` is set to null (disabled)
+2. The submitted hours exceed the threshold
+3. `require_approval` is set to true and overrides auto-approve
+
+**Solutions**:
+- Navigate to Review Submissions → Settings and verify auto-approve is configured
+- Check the hour threshold value
+- Ensure the submission's hours are strictly below the threshold
+
+#### Shift Report: Pipeline Progress Not Updating
+
+**Symptoms**: Filing a shift report doesn't update the trainee's requirement progress
+
+**Causes**:
+1. No enrollment_id was linked to the shift report
+2. The trainee has no active enrollments
+3. The enrollment's requirements don't include SHIFTS, CALLS, or HOURS types
+
+**Solutions**:
+- When creating a shift report, select the trainee's program enrollment from the dropdown
+- Verify the trainee has an active program enrollment
+- Check that the program's requirements include shift-based, call-based, or hour-based requirement types
+- Look at the enrollment's requirement progress to confirm the types match
+
+#### Shift Report: Trainee Can't See Report
+
+**Symptoms**: Trainee doesn't see shift reports on their My Training page
+
+**Causes**:
+1. The `show_shift_reports` visibility setting is turned off
+2. The report was filed for a different trainee
+
+**Solutions**:
+- Officers: Go to My Training → Member Visibility Settings and enable "Shift Reports"
+- Verify the correct trainee was selected when filing the report
+
+#### My Training Page: Missing Data Sections
+
+**Symptoms**: Member's training page is missing sections (e.g., no shift stats, no certifications)
+
+**Causes**:
+1. Visibility settings have been turned off for those sections
+2. No data exists for those sections yet
+
+**Solutions**:
+- Officers: Navigate to My Training → Member Visibility Settings to check which sections are enabled
+- Data sections only appear when there is data to show — an empty certification list won't show the Certifications section
+- Check that training records, shift reports, or enrollments exist for the member
+
+#### Member Visibility Settings: Changes Not Taking Effect
+
+**Symptoms**: After toggling visibility settings, members still see/don't see certain data
+
+**Causes**:
+1. Settings weren't saved (the Save button was not clicked)
+2. Browser cache showing stale data
+
+**Solutions**:
+- Ensure the "Save Changes" button is clicked after toggling settings
+- Ask the member to refresh their browser
+- Verify the settings took effect by checking GET `/api/v1/training/module-config/visibility`
+
+#### Training Reports: Annual Report Shows No Data
+
+**Symptoms**: Annual Training Report generates but all values are zero
+
+**Causes**:
+1. Date range doesn't match any training records or shift reports
+2. No completed training records exist in the period
+3. Members don't have training records linked to the organization
+
+**Solutions**:
+- Check the reporting period — default is current year (Jan 1 - Dec 31)
+- Try "Last Year" if training was recorded in the prior year
+- Verify training records exist with `completed_date` within the selected range
+- For shift data, verify shift completion reports exist with `shift_date` in range
 
 ---
 

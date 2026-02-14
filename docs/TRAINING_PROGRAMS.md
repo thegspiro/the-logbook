@@ -19,6 +19,11 @@ The Training Programs module provides a comprehensive system for managing member
 11. [Training Officer Workflow](#training-officer-workflow)
 12. [API Reference](#api-reference)
 13. [Database Schema](#database-schema)
+14. [Self-Reported Training](#self-reported-training)
+15. [Shift Completion Reports](#shift-completion-reports)
+16. [Member Training Page](#member-training-page-my-training)
+17. [Member Visibility Configuration](#member-visibility-configuration)
+18. [Training Reports](#training-reports)
 
 ---
 
@@ -129,6 +134,33 @@ Members are enrolled in training programs to track their progress toward complet
 - Next steps displayed
 - Upcoming deadline warnings
 - Click-through to detailed progress page
+
+#### Self-Reported Training
+- Members submit external training for officer review
+- Configurable approval workflow (auto-approve, manual, by hours threshold)
+- Customizable form fields (visible, required, label per field)
+- Status tracking: draft, pending review, approved, rejected, revision requested
+- Approved submissions automatically create TrainingRecords
+
+#### Shift Completion Reports
+- Shift officers file reports on trainee experiences
+- Auto-updates pipeline requirement progress (shifts, calls, hours)
+- Performance ratings, skill observations, officer narratives
+- Trainee acknowledgment with comments
+- Aggregate statistics per trainee
+
+#### Member Training Page
+- Personal training page (`/training/my-training`) for each member
+- Shows training history, certifications, pipeline progress, shift reports, submissions
+- Configurable visibility per department (14 toggle settings)
+- Officers see all data; member view is controlled by TrainingModuleConfig
+- Settings tab for officers to customize what members see
+
+#### Training Reports
+- Training Summary report with date range filtering
+- Training Progress report showing pipeline enrollment status
+- Annual Training Report with comprehensive member breakdown
+- Customizable reporting period (This Year, Last Year, Last 90 Days, Custom)
 
 #### External Training Integration
 - Connect to external training platforms (Vector Solutions, Target Solutions, Lexipol, I Am Responding)
@@ -1132,10 +1164,243 @@ Content-Type: application/json
 
 ---
 
+## Self-Reported Training
+
+Members can submit their own training records for officer review and approval.
+
+### How It Works
+
+1. Member navigates to **Training** → **Submit Training** (or **My Training** → **Submit Training**)
+2. Fills out the training form (fields are configurable per department)
+3. Submission enters **Pending Review** status
+4. Training officer reviews on the **Review Submissions** page
+5. Officer can **Approve**, **Reject**, or **Request Revision**
+6. On approval, a `TrainingRecord` is automatically created
+7. Member is notified of the decision
+
+### Configuration
+
+Each department can customize:
+- **Approval Settings**: Require approval, auto-approve under X hours, review deadline
+- **Notification Settings**: Notify officer on submit, notify member on decision
+- **Field Visibility**: Toggle which fields are visible, required, or optional
+- **Allowed Training Types**: Restrict which types members can self-report
+- **Maximum Hours**: Cap hours per submission
+- **Member Instructions**: Custom instructions displayed on the form
+
+Navigate to **Training** → **Review Submissions** → **Settings** tab to configure.
+
+### API Endpoints
+
+```http
+POST   /api/v1/training/submissions/                 Submit training (member)
+GET    /api/v1/training/submissions/my-submissions    Member's own submissions
+POST   /api/v1/training/submissions/{id}/review       Approve/reject (officer)
+GET    /api/v1/training/submissions/config             Get config
+PUT    /api/v1/training/submissions/config             Update config (officer)
+```
+
+---
+
+## Shift Completion Reports
+
+Shift officers submit reports on trainee experiences after each shift. These reports feed into pipeline requirement progress for shift, call, and hour-based requirements.
+
+### Report Contents
+
+- **Shift Details**: Date, hours on shift, calls responded, call types
+- **Performance Observations**: 1-5 rating, areas of strength, areas for improvement, officer narrative
+- **Skills Observed**: List of skills with demonstrated/not demonstrated status
+- **Tasks Performed**: List of tasks completed during the shift
+- **Pipeline Linkage**: Optionally link to a trainee's program enrollment to auto-update requirement progress
+
+### Auto-Progress Updates
+
+When a shift report is linked to a program enrollment, the system automatically updates requirement progress:
+- **SHIFTS** requirements: Incremented by 1
+- **CALLS** requirements: Incremented by the number of calls responded
+- **HOURS** requirements: Incremented by hours on shift
+
+Progress percentages and enrollment completion are automatically recalculated.
+
+### Trainee Acknowledgment
+
+Trainees can acknowledge shift reports and add their own comments. This creates a record that the trainee has reviewed the officer's observations.
+
+### Pages
+
+| Page | Path | Access |
+|------|------|--------|
+| New Report / Filed / Received | `/training/shift-reports` | All members |
+
+### API Endpoints
+
+```http
+POST   /api/v1/training/shift-reports/                   Create report (officer)
+GET    /api/v1/training/shift-reports/my-reports          Trainee's received reports
+GET    /api/v1/training/shift-reports/my-stats            Trainee's aggregate stats
+GET    /api/v1/training/shift-reports/by-officer          Officer's filed reports
+GET    /api/v1/training/shift-reports/trainee/{id}        Trainee reports (officer)
+GET    /api/v1/training/shift-reports/trainee/{id}/stats  Trainee stats (officer)
+GET    /api/v1/training/shift-reports/all                 All reports (officer)
+GET    /api/v1/training/shift-reports/{id}                Single report
+POST   /api/v1/training/shift-reports/{id}/acknowledge    Trainee acknowledges
+```
+
+---
+
+## Member Training Page ("My Training")
+
+Every member has access to a personal training page at `/training/my-training` that aggregates all their training data in one place.
+
+### What Members See
+
+Depending on the department's visibility configuration:
+- **Training Hours Summary**: Total records and hours completed
+- **Certifications**: Status, expiration dates, days until expiry
+- **Pipeline Progress**: Enrollment status, progress bars, requirement completion
+- **Shift Reports**: Shift completion reports filed by officers
+- **Shift Statistics**: Aggregate shift hours, calls, average rating
+- **Self-Reported Submissions**: Status of submitted training
+- **Training History**: Full table of training records
+
+### What Members DON'T See (by default)
+
+- **Officer Narrative**: Detailed written narratives from shift officers (hidden by default)
+- **Report Export**: Members cannot download their data unless enabled
+
+### Officer/Admin View
+
+Officers and administrators always see the full dataset regardless of visibility settings. They also have access to a **Member Visibility Settings** tab where they can toggle each data category on/off for their department.
+
+---
+
+## Member Visibility Configuration
+
+Each department can control exactly what training data individual members see on their personal training page. This is managed through the **Training Module Configuration**.
+
+### Visibility Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Training History | On | Members see their training record list |
+| Training Hours | On | Members see total hours summary |
+| Certification Status | On | Members see certification expiration dates |
+| Pipeline Progress | On | Members see program enrollment progress |
+| Requirement Details | On | Members see individual requirement progress |
+| Shift Reports | On | Members see shift completion reports |
+| Shift Statistics | On | Members see aggregate shift stats |
+| Performance Rating | On | Members see 1-5 performance ratings |
+| Areas of Strength | On | Members see officer-noted strengths |
+| Areas for Improvement | On | Members see improvement notes |
+| Skills Observed | On | Members see skill evaluations |
+| Officer Narrative | **Off** | Members see officer written narratives |
+| Submission History | On | Members see self-reported submission status |
+| Report Export | **Off** | Members can download their own data |
+
+### Changing Visibility Settings
+
+1. Navigate to **Training** → **My Training** (as an officer/admin)
+2. Click the **Member Visibility Settings** tab
+3. Toggle settings on/off
+4. Click **Save Changes**
+5. Changes take effect immediately for all members
+
+### API Endpoints
+
+```http
+GET    /api/v1/training/module-config/config       Get full config (officer)
+PUT    /api/v1/training/module-config/config       Update config (officer)
+GET    /api/v1/training/module-config/visibility   Get visibility flags (member)
+GET    /api/v1/training/module-config/my-training  Get member's training data
+```
+
+---
+
+## Training Reports
+
+The Reports module includes training-specific reports that aggregate data from training records, shift completion reports, and pipeline enrollments.
+
+### Available Training Reports
+
+#### Training Summary
+Overview of training completion rates, hours, and per-member statistics.
+- Supports date range filtering (This Year, Last Year, custom)
+- Shows completion rate, per-member hours, and course counts
+
+#### Training Progress
+Pipeline enrollment progress across all members.
+- Shows enrollment status summary (active, completed, withdrawn)
+- Per-member progress bars with requirement completion ratios
+- Average progress percentage
+
+#### Annual Training Report
+Comprehensive annual breakdown of all training activity.
+- Defaults to current year; customizable with date range picker
+- Summary statistics: total hours, completions, calls responded
+- Training by type breakdown
+- Per-member table: training hours, shift hours, courses, shifts, calls, performance rating
+
+### Date Range Picker
+
+Training reports support customizable reporting periods:
+- **This Year**: January 1 - December 31 of current year
+- **Last Year**: Full previous calendar year
+- **Last 90 Days**: Rolling 90-day window
+- **Custom**: Pick any start and end date
+
+The selected period is passed to the API and displayed in the report results modal.
+
+Navigate to **Reports** page and use the **Reporting Period** section above the report cards.
+
+---
+
+## Database Schema (New Tables)
+
+### `shift_completion_reports`
+- id, organization_id
+- shift_id, shift_date
+- trainee_id, officer_id
+- hours_on_shift, calls_responded, call_types (JSON)
+- performance_rating (1-5), areas_of_strength, areas_for_improvement, officer_narrative
+- skills_observed (JSON), tasks_performed (JSON)
+- enrollment_id, requirements_progressed (JSON)
+- trainee_acknowledged, trainee_acknowledged_at, trainee_comments
+- created_at, updated_at
+
+### `training_module_configs`
+- id, organization_id (unique)
+- show_training_history, show_training_hours, show_certification_status
+- show_pipeline_progress, show_requirement_details
+- show_shift_reports, show_shift_stats
+- show_officer_narrative, show_performance_rating
+- show_areas_of_strength, show_areas_for_improvement, show_skills_observed
+- show_submission_history, allow_member_report_export
+- created_at, updated_at, updated_by
+
+### `self_report_configs`
+- id, organization_id (unique)
+- require_approval, auto_approve_under_hours, approval_deadline_days
+- notify_officer_on_submit, notify_member_on_decision
+- field_config (JSON), allowed_training_types (JSON)
+- max_hours_per_submission, member_instructions
+- created_at, updated_at, updated_by
+
+### `training_submissions`
+- id, organization_id, submitted_by
+- course_name, course_code, training_type, description
+- completion_date, hours_completed, credit_hours
+- instructor, location, certification_number, issuing_agency, expiration_date
+- category_id, attachments (JSON)
+- status (draft, pending_review, approved, rejected, revision_requested)
+- reviewed_by, reviewed_at, reviewer_notes
+- training_record_id, submitted_at, updated_at
+
+---
+
 ## Future Enhancements
 
 ### Planned Features
-- **Shift Module Integration**: Auto-populate shift requirements from shift attendance
 - **Training Session Integration**: Auto-populate hours from training sessions
 - **Automated Reporting**: Schedule automatic progress reports
 - **Email Notifications**: Automated emails for milestones and deadlines
@@ -1155,4 +1420,4 @@ For questions or issues with the Training Programs module:
 
 ---
 
-*Last Updated: February 5, 2026*
+*Last Updated: February 14, 2026*

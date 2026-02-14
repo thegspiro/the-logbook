@@ -52,7 +52,14 @@ const TrainingOfficerDashboard = lazy(() => import('./pages/TrainingOfficerDashb
 const TrainingRequirementsPage = lazy(() => import('./pages/TrainingRequirementsPage'));
 const TrainingProgramsPage = lazy(() => import('./pages/TrainingProgramsPage'));
 const CreateTrainingSessionPage = lazy(() => import('./pages/CreateTrainingSessionPage'));
+const CreatePipelinePage = lazy(() => import('./pages/CreatePipelinePage'));
+const PipelineDetailPage = lazy(() => import('./pages/PipelineDetailPage'));
+const CourseLibraryPage = lazy(() => import('./pages/CourseLibraryPage'));
 const ExternalTrainingPage = lazy(() => import('./pages/ExternalTrainingPage'));
+const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
+const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
+const ShiftReportPage = lazy(() => import('./pages/ShiftReportPage'));
+const MyTrainingPage = lazy(() => import('./pages/MyTrainingPage'));
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
@@ -158,8 +165,15 @@ function App() {
               <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
               <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
               <Route path="/training/programs" element={<TrainingProgramsPage />} />
+              <Route path="/training/programs/new" element={<ProtectedRoute requiredPermission="training.manage"><CreatePipelinePage /></ProtectedRoute>} />
+              <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
+              <Route path="/training/courses" element={<CourseLibraryPage />} />
               <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
+              <Route path="/training/submit" element={<SubmitTrainingPage />} />
+              <Route path="/training/submissions" element={<ProtectedRoute requiredPermission="training.manage"><ReviewSubmissionsPage /></ProtectedRoute>} />
+              <Route path="/training/shift-reports" element={<ShiftReportPage />} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
+              <Route path="/training/my-training" element={<MyTrainingPage />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
