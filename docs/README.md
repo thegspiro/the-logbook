@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-14 with inventory/property return reports, training module, events module, TypeScript fixes, security hardening
+   - **Updated**: 2026-02-14 with drop notification configuration, inventory/property return reports, training module, events module, TypeScript fixes, security hardening
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -108,6 +108,15 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - External training integration (Vector Solutions, Target Solutions, Lexipol)
     - Registry support (NFPA, NREMT, Pro Board)
     - API reference and database schema for all training tables
+
+11. **[DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md)** (New 2026-02-14)
+    - Configurable drop/separation notification messages
+    - Organization-level settings: CC roles, static CC emails, personal email toggle
+    - Default MEMBER_DROPPED email template with 10 template variables
+    - CC/BCC support in EmailService for all outbound emails
+    - Personal email field on user profiles for post-separation contact
+    - Template editing via Settings > Email Templates
+    - API reference for organization settings and email template endpoints
 
 11. **Documents Module**
     - Document storage with folder hierarchy (create, browse, upload, delete)
@@ -286,6 +295,9 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Shift scheduling / calendar | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module) |
 | Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
+| Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
+| Email templates / customization | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management) |
+| Personal email / post-separation | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email) |
 | Prospective members pipeline | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md) |
 | Inactivity timeouts / purging | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system) |
 | Meeting minutes / templates | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) |
@@ -386,6 +398,7 @@ docker-compose ps
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
 | ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
+| DROP_NOTIFICATIONS.md | 1.0 | 2026-02-14 | Current |
 | TYPESCRIPT_SAFEGUARDS.md | 1.1 | 2026-02-14 | Current |
 
 ---
@@ -415,6 +428,23 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Configurable Drop Notifications & Email Template Settings
+
+**What Changed**:
+- **Configurable Drop Notifications**: Drop/separation notification messages are now fully configurable per organization
+- **CC Recipient Settings**: Organization settings control which roles (admin, quartermaster, chief by default) and static email addresses are CC'd on every drop notification
+- **Personal Email Field**: Members can now have a `personal_email` for post-separation contact; configurable whether it receives the drop notification
+- **Default MEMBER_DROPPED Template**: Auto-created for each org with 10 template variables; fully editable via Settings > Email Templates
+- **CC/BCC Support**: `EmailService.send_email()` now supports `cc_emails` and `bcc_emails` parameters for all outbound emails
+- **Migration**: `20260214_0800` adds `personal_email` column to users table
+
+**New Documentation**:
+- Created [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) — Complete configuration guide, template variables, API reference
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — CC recipients, personal email, and template customization troubleshooting
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
 
 ### 2026-02-14 - Events Module, TypeScript Quality & Backend Fixes
 

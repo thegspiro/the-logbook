@@ -1277,6 +1277,8 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
 
+**For full configuration documentation, see [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md).**
+
 #### Drop Notification: CC Recipients Not Receiving Email
 
 **Symptoms**: Leadership or quartermaster didn't receive a copy of the drop notification
