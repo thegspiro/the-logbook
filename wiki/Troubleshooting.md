@@ -14,6 +14,8 @@ This guide covers common issues and their solutions for The Logbook deployment.
 8. [Network & Connectivity](#network--connectivity)
 9. [Security Issues](#security-issues)
 10. [Accessibility Issues](#accessibility-issues)
+11. [Events Module Issues](#events-module-issues)
+12. [TypeScript Quality Issues](#typescript-quality-issues)
 
 ---
 
@@ -1096,3 +1098,81 @@ Use this checklist to verify accessibility:
 # Run Lighthouse accessibility audit from command line
 npx lighthouse http://localhost:3000 --only-categories=accessibility
 ```
+
+---
+
+## Events Module Issues
+
+### Problem: Event creation fails with booking conflict
+
+**Error:** `Location is already booked for this time slot`
+
+### Root Cause
+The booking prevention system detects overlapping events at the same location.
+
+### Solution
+1. Choose a different location or adjust the event time
+2. Admins can use RSVP override to bypass booking restrictions if needed
+3. Check the calendar view to see what's already booked
+
+---
+
+### Problem: Event attachments won't upload
+
+**Error:** Upload returns 400 or 500 error
+
+### Root Cause
+File may exceed size limits or the event ID may be invalid.
+
+### Solution
+1. Check file size against server limits
+2. Verify the event exists and you have `events.manage` permission
+3. Check backend logs for specific error details:
+```bash
+docker logs the-logbook-backend-1 | grep "attachment"
+```
+
+---
+
+### Problem: Recurring events not showing in calendar
+
+### Root Cause
+Recurrence patterns may be misconfigured or end dates may be in the past.
+
+### Solution
+1. Verify recurrence settings: frequency, interval, end date
+2. Check that the recurrence end date is in the future
+3. Refresh the calendar view (recurrence expansion happens on-demand)
+
+---
+
+## TypeScript Quality Issues
+
+### Problem: TypeScript build fails after git pull (Fixed 2026-02-14)
+
+**Status:** All TypeScript build errors have been resolved as of commit `e97be90`.
+
+If you encounter build errors after pulling:
+```bash
+git pull origin main
+cd frontend
+rm -rf node_modules
+npm install
+npm run typecheck
+```
+
+### Problem: `as any` type assertions in codebase
+
+**Status:** All 17 `as any` assertions have been removed as of commit `ef938f7`.
+
+If you find new `as any` assertions, replace them with proper types. See `docs/TYPESCRIPT_SAFEGUARDS.md` for patterns and examples.
+
+### Problem: Broken JSX after merge conflict (Fixed 2026-02-14)
+
+**Status:** Fixed in commit `1ac8d46`.
+
+**Symptoms:** `DocumentsPage` or `MinutesPage` render blank or show React errors.
+
+**Root Cause:** Git merge duplicated JSX blocks within components.
+
+**Solution:** Pull latest changes. If the issue recurs after a merge, check for duplicate return statements or JSX blocks in the affected component.

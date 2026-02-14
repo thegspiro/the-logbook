@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-12 with security hardening, session management, error improvements
+   - **Updated**: 2026-02-14 with events module, TypeScript fixes, security hardening, session management, error improvements
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -132,6 +132,21 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Notification log tracking with delivery status and read state
     - API endpoints: 8 endpoints for rule CRUD, toggle, logs, mark-read, summary
     - Permissions: `notifications.view`, `notifications.manage`
+
+15. **Events Module** (Enhanced 2026-02-14)
+    - Event creation with dedicated `EventCreatePage` and reusable `EventForm` component
+    - Event edit/delete with `EventEditPage`, cancel notifications
+    - Event duplication from detail page
+    - Recurring events with daily/weekly/monthly/yearly patterns
+    - Event templates for reusable configurations
+    - Attachment upload, download, and delete
+    - Location booking prevention (double-booking protection)
+    - RSVP overrides for admin flexibility
+    - Organization timezone support in date formatting
+    - QR code check-in, self-check-in pages, analytics
+    - Comprehensive test coverage (5 test files, 1,865+ lines)
+    - API endpoints: events CRUD, RSVP, attachments, templates, recurrence, duplication
+    - Permissions: `events.view`, `events.manage`
 
 ---
 
@@ -265,6 +280,9 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Document management / folders | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
+| Events / recurring events / RSVP | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues) |
+| TypeScript build errors | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#typescript-build-issues) |
+| TypeScript safeguards / `as any` | [TYPESCRIPT_SAFEGUARDS.md](./TYPESCRIPT_SAFEGUARDS.md) |
 | Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
 | Security questions | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md) |
 
@@ -341,7 +359,7 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.3 | 2026-02-12 | Current |
+| TROUBLESHOOTING.md | 1.7 | 2026-02-14 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
@@ -356,6 +374,7 @@ docker-compose ps
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
 | ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
+| TYPESCRIPT_SAFEGUARDS.md | 1.1 | 2026-02-14 | Current |
 
 ---
 
@@ -384,6 +403,26 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Events Module, TypeScript Quality & Backend Fixes
+
+**What Changed**:
+- **Events Module Enhanced**: Recurring events, event templates, event duplication, attachment upload/download/delete, booking prevention, RSVP overrides, cancel notifications, organization timezone support
+- **Dedicated Event Pages**: New `EventCreatePage`, `EventEditPage` with `EventForm` component (extracted from monolithic `EventsPage`)
+- **TypeScript Build Fixed**: All TypeScript compilation errors resolved across the entire frontend codebase
+- **17 `as any` Assertions Removed**: All unsafe type assertions replaced with proper typing across 7 files
+- **Backend Quality**: Fixed broken dependency injection, duplicate models, missing permissions across 29 backend files; fixed mutable default arguments across 9 models
+- **Startup Fixes**: Fixed infinite polling loop in onboarding, type safety issues in hooks, API client signatures
+- **Events Module Bugs**: Fixed critical runtime crashes, simplified event endpoints, fixed location model relationships
+- **Comprehensive Event Tests**: 5 test files with 1,865+ lines covering all event components
+- **JSX Merge Fixes**: Repaired broken JSX in `DocumentsPage` and `MinutesPage` from merge conflicts
+
+**Updated Documentation**:
+- Updated TROUBLESHOOTING.md v1.7 with events module and TypeScript build sections
+- Updated TYPESCRIPT_SAFEGUARDS.md v1.1 with `as any` removal and mutable defaults fix
+- Updated CHANGELOG.md with full details of all changes
+
+---
 
 ### 2026-02-12 - Five New Modules: Documents, Minutes, Scheduling, Reports, Notifications
 

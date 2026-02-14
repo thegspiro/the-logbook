@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-13 (includes meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-14 (includes events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -21,8 +21,10 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 9. [Elections Module Issues](#elections-module-issues)
 10. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
 11. [Documents Module Issues](#documents-module-issues)
-12. [Error Message Reference](#error-message-reference)
-13. [Getting Help](#getting-help)
+12. [Events Module Issues](#events-module-issues)
+13. [TypeScript Build Issues](#typescript-build-issues)
+14. [Error Message Reference](#error-message-reference)
+15. [Getting Help](#getting-help)
 
 ---
 
@@ -1848,7 +1850,156 @@ Expected: 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training
 
 ---
 
+## Events Module Issues
+
+### Event Creation Fails
+
+**Symptoms**: Creating an event returns an error or the form doesn't submit.
+
+**Possible Causes & Solutions**:
+
+1. **Missing required fields**: Ensure title, event type, start date, and end date are all provided.
+
+2. **End date before start date**: Event end time must be after the start time.
+
+3. **Location double-booking**: If booking prevention is enabled, the selected location may already be reserved for the chosen time slot. Choose a different location or time.
+
+4. **Missing `events.manage` permission**: Check that your user role includes `events.manage` permission.
+
+---
+
+### Event Duplication Not Working
+
+**Symptoms**: "Duplicate Event" button on the detail page returns an error or nothing happens.
+
+**Possible Causes & Solutions**:
+
+1. **Missing permission**: User needs `events.manage` permission to duplicate events.
+
+2. **API error**: Check the browser console (F12) for specific error messages from the `POST /events/{id}/duplicate` endpoint.
+
+3. **Network issue**: Verify backend connectivity.
+
+---
+
+### Event Attachments Upload Fails
+
+**Symptoms**: Uploading an attachment to an event returns an error.
+
+**Possible Causes & Solutions**:
+
+1. **File too large**: Check server upload size limits in your configuration.
+
+2. **Invalid file type**: Verify the file type is allowed by your server configuration.
+
+3. **Event not found**: Ensure the event ID is valid and belongs to your organization.
+
+4. **Missing permission**: User needs `events.manage` permission to upload attachments.
+
+---
+
+### Recurring Event Not Generating Occurrences
+
+**Symptoms**: A recurring event was created but individual occurrences don't appear in the calendar.
+
+**Possible Causes & Solutions**:
+
+1. **Recurrence pattern misconfigured**: Check that the recurrence interval, frequency (daily/weekly/monthly/yearly), and end conditions are set correctly.
+
+2. **End date already passed**: If the recurrence end date is in the past, no future occurrences will be generated.
+
+3. **Backend processing**: Recurrence expansion may happen on-demand when loading the calendar view. Refresh the page.
+
+---
+
+### Event Edit Page Shows Blank Form
+
+**Symptoms**: Navigating to the edit page shows an empty form instead of pre-populated event data.
+
+**Possible Causes & Solutions**:
+
+1. **Event not found**: The event ID in the URL may be invalid. Check the URL path.
+
+2. **Permission issue**: User may not have `events.manage` permission to edit events.
+
+3. **Network issue**: The API call to fetch event details may have failed. Check browser console.
+
+---
+
+### RSVP Not Working
+
+**Symptoms**: Members cannot RSVP to events or RSVP count is wrong.
+
+**Possible Causes & Solutions**:
+
+1. **RSVP deadline passed**: Check if the event has an RSVP deadline that has expired.
+
+2. **RSVP limit reached**: The event may have reached its maximum RSVP capacity. Admins can use RSVP override to bypass limits.
+
+3. **Missing `events.view` permission**: Users need at least view permission to RSVP.
+
+---
+
+## TypeScript Build Issues
+
+### All Build Errors (Fixed 2026-02-14)
+
+**Status**: Fixed in commit `e97be90`
+
+All TypeScript compilation errors across the frontend codebase have been resolved. If you encounter build errors after pulling the latest changes:
+
+```bash
+# Pull latest and rebuild
+git pull origin main
+cd frontend && npm install
+npm run typecheck
+
+# If errors persist, clean and rebuild
+rm -rf node_modules
+npm install
+npm run typecheck
+```
+
+---
+
+### 'as any' Type Assertions (Removed 2026-02-14)
+
+**Status**: Fixed in commit `ef938f7`
+
+All 17 `as any` type assertions have been replaced with proper typing. Files affected:
+
+| File | What Changed |
+|------|-------------|
+| `modules/apparatus/services/api.ts` | Added proper response types |
+| `pages/AddMember.tsx` | Used correct form data types |
+| `pages/EventDetailPage.tsx` | Added event-specific types |
+| `pages/EventQRCodePage.test.tsx` | Fixed mock types |
+| `pages/MinutesDetailPage.tsx` | Added minutes types |
+| `test/setup.ts` | Proper mock typing |
+| `utils/errorHandling.ts` | Added `unknown` error type handling |
+
+If you find new `as any` assertions, replace them with proper types following the patterns in these files.
+
+---
+
+### Broken JSX After Merge (Fixed 2026-02-14)
+
+**Status**: Fixed in commit `1ac8d46`
+
+**Symptoms**: `DocumentsPage` or `MinutesPage` show blank content or React errors after pulling merged code.
+
+**Cause**: Git merge created duplicate JSX blocks within the same component.
+
+**Solution**: Already fixed. Pull latest changes.
+
+---
+
 ## Version History
+
+**v1.7** - 2026-02-14
+- Added events module troubleshooting section (6 new entries)
+- Added TypeScript build issues section (3 entries covering build errors, type assertions, broken JSX)
+- Covers: event creation, duplication, attachments, recurring events, RSVP, editing
 
 **v1.6** - 2026-02-13
 - Added meeting minutes module troubleshooting section (6 new entries)
