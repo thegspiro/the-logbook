@@ -44,6 +44,12 @@ export interface TrainingSession {
   event_id: string;  // Links to Event table
   course_id?: string;  // Links to TrainingCourse if using existing course
 
+  // Category and program linkage
+  category_id?: string;     // Training category (Fire, EMS, Hazmat, etc.)
+  program_id?: string;      // Training program (Recruit School, Driver Training, etc.)
+  phase_id?: string;        // Program phase
+  requirement_id?: string;  // Specific requirement this satisfies
+
   // Training-specific details
   course_name: string;
   course_code?: string;
@@ -91,6 +97,12 @@ export interface TrainingSessionCreate {
   // Use existing course or create new
   use_existing_course?: boolean;
   course_id?: string;  // If using existing course
+
+  // Category and program linkage
+  category_id?: string;     // Training category (Fire, EMS, Hazmat, etc.)
+  program_id?: string;      // Training program (Recruit School, Driver Training, etc.)
+  phase_id?: string;        // Program phase
+  requirement_id?: string;  // Specific requirement this satisfies
 
   // Training details (for new course)
   course_name?: string;

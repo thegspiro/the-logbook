@@ -38,6 +38,12 @@ class TrainingSessionCreate(BaseModel):
     use_existing_course: bool = Field(default=False)
     course_id: Optional[UUID] = None  # If using existing course
 
+    # Category and program linkage
+    category_id: Optional[UUID] = Field(None, description="Training category this session falls under (Fire, EMS, Hazmat, etc.)")
+    program_id: Optional[UUID] = Field(None, description="Training program this session is part of (e.g., Recruit School, Driver Training)")
+    phase_id: Optional[UUID] = Field(None, description="Specific program phase (e.g., Phase 2 of Recruit School)")
+    requirement_id: Optional[UUID] = Field(None, description="Specific requirement this session satisfies")
+
     # New course details (if not using existing)
     course_name: Optional[str] = Field(None, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
@@ -66,6 +72,12 @@ class TrainingSessionResponse(BaseModel):
     organization_id: UUID
     event_id: UUID
     course_id: Optional[UUID]
+
+    # Category and program linkage
+    category_id: Optional[UUID] = None
+    program_id: Optional[UUID] = None
+    phase_id: Optional[UUID] = None
+    requirement_id: Optional[UUID] = None
 
     course_name: str
     course_code: Optional[str]

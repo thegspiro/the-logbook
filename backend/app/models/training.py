@@ -372,6 +372,12 @@ class TrainingSession(Base):
     event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     course_id = Column(String(36), ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True)
 
+    # Category and Program linkage — connects this session to the training pipeline
+    category_id = Column(String(36), ForeignKey("training_categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    program_id = Column(String(36), ForeignKey("training_programs.id", ondelete="SET NULL"), nullable=True, index=True)
+    phase_id = Column(String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True)
+    requirement_id = Column(String(36), ForeignKey("training_requirements.id", ondelete="SET NULL"), nullable=True)
+
     # Training Details (stored here for quick access)
     course_name = Column(String(255), nullable=False)
     course_code = Column(String(50))
