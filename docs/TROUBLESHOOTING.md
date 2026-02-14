@@ -1308,6 +1308,28 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **Note**: Overrides do NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
 
+#### Voting: Setting Up Proxy Voting
+
+**Scenario**: A member cannot attend the meeting but the department allows proxy voting — another member should be able to vote on their behalf.
+
+**Prerequisites**: Proxy voting must be enabled for the organization. Set `organization.settings.proxy_voting.enabled = true` via org settings. This is a department-level decision and is disabled by default.
+
+**Steps**:
+1. An officer with `elections.manage` permission calls `POST /api/v1/elections/{election_id}/proxy-authorizations` with:
+   - `delegating_user_id`: the absent member
+   - `proxy_user_id`: the member who will vote on their behalf
+   - `proxy_type`: `"single_election"` (one-time) or `"regular"` (standing proxy)
+   - `reason`: why the proxy is being authorized
+2. The authorization is recorded with both member names, the authorizing officer, and a timestamp
+3. When ballot emails are sent, the proxy holder is automatically CC'd on the absent member's ballot notification
+4. The proxy casts the vote via `POST /api/v1/elections/{election_id}/proxy-vote` with their `proxy_authorization_id`
+5. The system checks the *delegating* member's eligibility and applies double-vote prevention against them
+6. The hash trail shows: `is_proxy_vote=true`, who physically voted (`proxy_voter_id`), and on whose behalf (`proxy_delegating_user_id`)
+7. To revoke before voting: `DELETE /api/v1/elections/{election_id}/proxy-authorizations/{id}`
+8. View all authorizations: `GET /api/v1/elections/{election_id}/proxy-authorizations`
+
+**Note**: A proxy authorization cannot be revoked after the proxy has cast the vote. The vote itself must be soft-deleted first. Proxy voting does NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
+
 #### Voting: Member Blocked Due to Meeting Attendance
 
 **Symptoms**: An active member gets "attendance below minimum" when trying to vote

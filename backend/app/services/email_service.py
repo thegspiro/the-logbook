@@ -171,6 +171,7 @@ class EmailService:
         ballot_url: Optional[str],
         meeting_date: Optional[datetime],
         custom_message: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
     ) -> bool:
         """
         Send a ballot notification email
@@ -262,6 +263,7 @@ Please do not reply to this email.
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            cc_emails=cc_emails,
         )
 
         return success_count > 0

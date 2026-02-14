@@ -1432,3 +1432,164 @@ async def remove_voter_override(
     )
 
     return {"success": True, "message": "Voter override removed"}
+
+
+# ==================== Proxy Voting ====================
+
+
+from app.schemas.election import (
+    ProxyAuthorizationCreate,
+    ProxyAuthorizationListResponse,
+    ProxyVoteCreate,
+)
+
+
+@router.post("/{election_id}/proxy-authorizations", status_code=status.HTTP_201_CREATED)
+async def add_proxy_authorization(
+    election_id: UUID,
+    body: ProxyAuthorizationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Authorize one member to vote on behalf of another (proxy voting).
+
+    The organization must have proxy voting enabled in its settings
+    (`settings.proxy_voting.enabled = true`).  The secretary chooses
+    the proxy type:
+
+    - **single_election**: one-time proxy for this election only
+    - **regular**: standing proxy (noted for reference; enforcement is
+      per-election since each election stores its own authorizations)
+
+    When ballot emails are sent, the proxy holder is automatically CC'd
+    on the delegating member's ballot notification.
+
+    Requires `elections.manage` permission.
+    """
+    service = ElectionService(db)
+    auth_record, error = await service.add_proxy_authorization(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        delegating_user_id=body.delegating_user_id,
+        proxy_user_id=body.proxy_user_id,
+        proxy_type=body.proxy_type,
+        reason=body.reason,
+        authorized_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return auth_record
+
+
+@router.get("/{election_id}/proxy-authorizations", response_model=ProxyAuthorizationListResponse)
+async def list_proxy_authorizations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    List all proxy voting authorizations for an election.
+
+    Includes both active and revoked authorizations.  The response
+    also indicates whether proxy voting is enabled at the org level.
+
+    Requires `elections.manage` permission.
+    """
+    service = ElectionService(db)
+    result = await service.get_proxy_authorizations(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    return result
+
+
+@router.delete("/{election_id}/proxy-authorizations/{authorization_id}", status_code=status.HTTP_200_OK)
+async def revoke_proxy_authorization(
+    election_id: UUID,
+    authorization_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Revoke a proxy voting authorization.
+
+    Cannot revoke if the proxy has already cast a vote using this
+    authorization — the vote must be soft-deleted first.
+
+    Requires `elections.manage` permission.
+    """
+    service = ElectionService(db)
+    success, error = await service.revoke_proxy_authorization(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        authorization_id=authorization_id,
+        revoked_by=current_user.id,
+    )
+
+    if error:
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in error.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=error)
+
+    return {"success": True, "message": "Proxy authorization revoked"}
+
+
+@router.post("/{election_id}/proxy-vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
+async def cast_proxy_vote(
+    election_id: UUID,
+    vote: ProxyVoteCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cast a vote on behalf of another member using a proxy authorization.
+
+    The current user must be the designated proxy in the authorization.
+    The vote is recorded under the *delegating* member's identity (for
+    eligibility and double-vote prevention), with full audit metadata
+    showing who physically cast the proxy vote.
+
+    The hash trail records:
+    - `voter_id` / `voter_hash`: the delegating (absent) member
+    - `proxy_voter_id`: the proxy who physically voted
+    - `proxy_authorization_id`: the authorization used
+    - `is_proxy_vote`: true
+
+    **Authentication required**
+    """
+    if vote.election_id != election_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Election ID mismatch",
+        )
+
+    service = ElectionService(db)
+    new_vote, error = await service.cast_proxy_vote(
+        proxy_user_id=current_user.id,
+        election_id=election_id,
+        candidate_id=vote.candidate_id,
+        proxy_authorization_id=vote.proxy_authorization_id,
+        position=vote.position,
+        organization_id=current_user.organization_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        vote_rank=vote.vote_rank,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return new_vote

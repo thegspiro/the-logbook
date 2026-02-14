@@ -430,3 +430,55 @@ class BallotSubmissionResponse(BaseModel):
     votes_cast: int
     abstentions: int
     message: str
+
+
+# Proxy Voting Schemas
+
+class ProxyAuthorizationCreate(BaseModel):
+    """Request to authorize one member to vote on behalf of another"""
+    delegating_user_id: UUID = Field(..., description="The absent member who is delegating their vote")
+    proxy_user_id: UUID = Field(..., description="The member who will cast the vote on their behalf")
+    proxy_type: str = Field(
+        default="single_election",
+        description="'single_election' (one-time for this election) or 'regular' (standing proxy for future elections)"
+    )
+    reason: str = Field(..., min_length=1, max_length=500, description="Why the proxy is being authorized")
+
+    @field_validator("proxy_type")
+    @classmethod
+    def validate_proxy_type(cls, v: str) -> str:
+        if v not in {"single_election", "regular"}:
+            raise ValueError("proxy_type must be 'single_election' or 'regular'")
+        return v
+
+
+class ProxyAuthorizationResponse(BaseModel):
+    """A proxy authorization record"""
+    id: str
+    delegating_user_id: str
+    delegating_user_name: str
+    proxy_user_id: str
+    proxy_user_name: str
+    proxy_type: str
+    reason: str
+    authorized_by: str
+    authorized_by_name: str
+    authorized_at: str
+    revoked_at: Optional[str] = None
+
+
+class ProxyAuthorizationListResponse(BaseModel):
+    """List of proxy authorizations for an election"""
+    election_id: str
+    election_title: str
+    proxy_voting_enabled: bool
+    authorizations: List[ProxyAuthorizationResponse]
+
+
+class ProxyVoteCreate(BaseModel):
+    """Cast a vote on behalf of another member using a proxy authorization"""
+    election_id: UUID
+    candidate_id: UUID
+    proxy_authorization_id: str = Field(..., description="ID of the proxy authorization being used")
+    position: Optional[str] = Field(None, max_length=100)
+    vote_rank: Optional[int] = Field(None, ge=1, description="Rank for ranked-choice voting")

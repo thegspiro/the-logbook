@@ -297,6 +297,7 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
 | Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
 | Voter override (secretary) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote) |
+| Proxy voting setup | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-setting-up-proxy-voting) |
 | Voting attendance requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance) |
 | Training exemptions by tier | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements) |
 | Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
@@ -432,6 +433,19 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Proxy Voting for Elections
+
+**What Changed**:
+- **Organization Opt-In**: Proxy voting is a department choice — enable via `settings.proxy_voting.enabled`; disabled by default
+- **Proxy Authorization**: Secretary can designate one member to vote on behalf of another with `single_election` or `regular` proxy type
+- **Proxy Vote Casting**: Proxy casts a vote; eligibility and double-vote prevention apply to the *delegating* (absent) member
+- **Hash Trail**: Each proxy vote records who physically voted (`proxy_voter_id`) and on whose behalf (`proxy_delegating_user_id`) — full forensic traceability
+- **Ballot Email CC**: When ballot emails are sent, the proxy holder is automatically CC'd on the delegating member's notification
+- **Forensics**: Election forensics report includes `proxy_voting` section with all authorizations and proxy votes
+- **Migration**: `20260214_1100` adds `proxy_authorizations` column and vote proxy fields
+
+---
 
 ### 2026-02-14 - Secretary Voter Override for Elections
 

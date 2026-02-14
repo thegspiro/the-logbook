@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Proxy Voting for Elections (2026-02-14)
+
+#### Proxy Voting System
+- **Organization opt-in**: Proxy voting is a department choice — enabled via `organization.settings.proxy_voting.enabled`; disabled by default
+- **Authorize a proxy**: `POST /api/v1/elections/{election_id}/proxy-authorizations` — secretary designates one member to vote on behalf of another, with a reason
+- **Proxy types**: `single_election` (one-time for this election) or `regular` (standing proxy, noted for reference)
+- **Cast proxy vote**: `POST /api/v1/elections/{election_id}/proxy-vote` — the designated proxy casts a vote; eligibility and double-vote prevention apply to the *delegating* (absent) member
+- **Hash trail**: Each proxy vote records `is_proxy_vote=true`, `proxy_voter_id` (who physically voted), `proxy_delegating_user_id` (on whose behalf), and `proxy_authorization_id`; the `voter_hash` identifies the delegating member so the audit trail shows who voted on whose behalf
+- **Ballot email CC**: When ballot emails are sent, the proxy holder is automatically CC'd on the delegating member's ballot notification
+- **List authorizations**: `GET /api/v1/elections/{election_id}/proxy-authorizations` — view all active and revoked authorizations
+- **Revoke authorization**: `DELETE /api/v1/elections/{election_id}/proxy-authorizations/{id}` — revoke before the proxy votes; cannot revoke after the vote is cast
+- **Forensics integration**: The election forensics report includes a `proxy_voting` section with all authorizations and proxy votes cast
+- **Full audit trail**: `proxy_authorization_granted`, `proxy_authorization_revoked`, `proxy_vote_cast`, and `proxy_vote_double_attempt` audit events
+- **`proxy_authorizations` column**: New JSON column on the elections table
+- **Vote columns**: `is_proxy_vote`, `proxy_voter_id`, `proxy_authorization_id`, `proxy_delegating_user_id` added to votes table
+- **Migration**: `20260214_1100` adds proxy voting columns
+
 ### Added - Secretary Voter Override for Elections (2026-02-14)
 
 #### Voter Eligibility Overrides
