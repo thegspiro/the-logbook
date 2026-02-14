@@ -115,6 +115,7 @@ class MeetingAttendee(Base):
     __tablename__ = "meeting_attendees"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     meeting_id = Column(String(36), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
@@ -138,6 +139,7 @@ class MeetingAttendee(Base):
     __table_args__ = (
         Index("idx_meeting_attendees_meeting", "meeting_id"),
         Index("idx_meeting_attendees_user", "user_id"),
+        Index("idx_meeting_attendees_organization", "organization_id"),
     )
 
     def __repr__(self):

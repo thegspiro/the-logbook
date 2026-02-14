@@ -211,6 +211,7 @@ class VotingToken(Base):
     __tablename__ = "voting_tokens"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Secure token for ballot access (sent via email)
@@ -241,6 +242,7 @@ class VotingToken(Base):
         Index("ix_voting_tokens_election_id", "election_id"),
         Index("ix_voting_tokens_token", "token"),
         Index("ix_voting_tokens_voter_hash", "voter_hash"),
+        Index("ix_voting_tokens_organization_id", "organization_id"),
     )
 
 

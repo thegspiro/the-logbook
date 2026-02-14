@@ -2016,8 +2016,8 @@ Best regards,
         return sent_count
 
     async def _generate_voting_token(
-        self, user_id: UUID, election_id: UUID, election_end_date: datetime,
-        anonymity_salt: str = "",
+        self, user_id: UUID, election_id: UUID, organization_id: UUID,
+        election_end_date: datetime, anonymity_salt: str = "",
     ) -> VotingToken:
         """
         Generate a secure voting token for a user-election pair
@@ -2025,6 +2025,7 @@ Best regards,
         Args:
             user_id: User ID (for hashing, not stored directly)
             election_id: Election ID
+            organization_id: Organization ID for tenant isolation
             election_end_date: Election end date (token expires after this)
             anonymity_salt: Per-election salt for voter anonymity
 
@@ -2043,6 +2044,7 @@ Best regards,
 
         voting_token = VotingToken(
             id=uuid4(),
+            organization_id=organization_id,
             election_id=election_id,
             token=token,
             voter_hash=voter_hash,
@@ -2464,6 +2466,7 @@ Best regards,
             voting_token = await self._generate_voting_token(
                 user_id=recipient.id,
                 election_id=election_id,
+                organization_id=organization_id,
                 election_end_date=election.end_date,
                 anonymity_salt=election.voter_anonymity_salt or "",
             )

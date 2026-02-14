@@ -154,6 +154,7 @@ class EventRSVP(Base):
     __tablename__ = "event_rsvps"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
@@ -186,6 +187,7 @@ class EventRSVP(Base):
     __table_args__ = (
         Index("ix_event_rsvps_event_id", "event_id"),
         Index("ix_event_rsvps_user_id", "user_id"),
+        Index("ix_event_rsvps_organization_id", "organization_id"),
         # Unique constraint: one RSVP per user per event
         Index("ix_event_rsvps_event_user", "event_id", "user_id", unique=True),
     )

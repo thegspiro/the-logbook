@@ -52,7 +52,11 @@ class MeetingsService:
             # Add attendees
             for att_data in attendees_data:
                 if isinstance(att_data, dict):
-                    attendee = MeetingAttendee(meeting_id=meeting.id, **att_data)
+                    attendee = MeetingAttendee(
+                        organization_id=organization_id,
+                        meeting_id=meeting.id,
+                        **att_data,
+                    )
                     self.db.add(attendee)
 
             # Add action items
@@ -216,7 +220,11 @@ class MeetingsService:
             if not meeting:
                 return None, "Meeting not found"
 
-            attendee = MeetingAttendee(meeting_id=meeting_id, **attendee_data)
+            attendee = MeetingAttendee(
+                organization_id=organization_id,
+                meeting_id=meeting_id,
+                **attendee_data,
+            )
             self.db.add(attendee)
             await self.db.commit()
             await self.db.refresh(attendee)
@@ -234,6 +242,7 @@ class MeetingsService:
                 select(MeetingAttendee)
                 .where(MeetingAttendee.id == attendee_id)
                 .where(MeetingAttendee.meeting_id == meeting_id)
+                .where(MeetingAttendee.organization_id == organization_id)
             )
             attendee = result.scalar_one_or_none()
             if not attendee:

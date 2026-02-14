@@ -397,6 +397,7 @@ class EventService:
         else:
             # Create new RSVP
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 **rsvp_data.model_dump()
@@ -527,6 +528,7 @@ class EventService:
         else:
             # Create new RSVP
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 status=RSVPStatus(status),
@@ -666,6 +668,7 @@ class EventService:
         if not rsvp:
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 status=RSVPStatus.GOING,
@@ -975,6 +978,7 @@ class EventService:
 
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 status=RSVPStatus.GOING,
