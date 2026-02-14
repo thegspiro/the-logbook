@@ -6,6 +6,7 @@ Supports fire engines, ambulances, utility vehicles, and custom apparatus types.
 """
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     String,
     Boolean,
@@ -324,7 +325,7 @@ class Apparatus(Base):
     status_id = Column(String(36), ForeignKey("apparatus_statuses.id"), nullable=False, index=True)
     status_reason = Column(Text, nullable=True)  # Reason for current status (esp. if out of service)
     status_changed_at = Column(DateTime(timezone=True), nullable=True)
-    status_changed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    status_changed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # ===========================================
     # Vehicle Specifications
@@ -416,7 +417,7 @@ class Apparatus(Base):
     # ===========================================
     is_archived = Column(Boolean, default=False, nullable=False, index=True)  # Moved to "Previously Owned"
     archived_at = Column(DateTime(timezone=True), nullable=True)
-    archived_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    archived_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     sold_date = Column(Date, nullable=True)
     sold_price = Column(Numeric(12, 2), nullable=True)
@@ -447,7 +448,7 @@ class Apparatus(Base):
     # ===========================================
     # Metadata
     # ===========================================
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -470,13 +471,14 @@ class Apparatus(Base):
     status_history = relationship("ApparatusStatusHistory", back_populates="apparatus", cascade="all, delete-orphan")
     components = relationship("ApparatusComponent", back_populates="apparatus", cascade="all, delete-orphan")
     component_notes = relationship("ApparatusComponentNote", back_populates="apparatus", cascade="all, delete-orphan")
+    nfpa_compliance = relationship("ApparatusNFPACompliance", back_populates="apparatus", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_apparatus_org_unit", "organization_id", "unit_number", unique=True),
         Index("idx_apparatus_org_type", "organization_id", "apparatus_type_id"),
         Index("idx_apparatus_org_status", "organization_id", "status_id"),
         Index("idx_apparatus_org_station", "organization_id", "primary_station_id"),
-        Index("idx_apparatus_vin", "vin"),
+        Index("idx_apparatus_vin", "organization_id", "vin", unique=True),
         Index("idx_apparatus_is_archived", "is_archived"),
     )
 
@@ -550,7 +552,7 @@ class ApparatusCustomField(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -596,7 +598,7 @@ class ApparatusPhoto(Base):
     is_primary = Column(Boolean, default=False, nullable=False)  # Primary display photo
 
     # Timestamps
-    uploaded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -644,7 +646,7 @@ class ApparatusDocument(Base):
 
     # Timestamps
     document_date = Column(Date, nullable=True)  # Date of the document itself
-    uploaded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -747,7 +749,7 @@ class ApparatusMaintenance(Base):
 
     # Completion
     completed_date = Column(Date, nullable=True)
-    completed_by = Column(String(36), ForeignKey("users.id"), nullable=True)  # If internal
+    completed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # If internal
     performed_by = Column(String(200), nullable=True)  # External vendor/person name
 
     # Status
@@ -777,7 +779,7 @@ class ApparatusMaintenance(Base):
     notes = Column(Text, nullable=True)
 
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -835,7 +837,7 @@ class ApparatusFuelLog(Base):
     notes = Column(Text, nullable=True)
 
     # Timestamps
-    recorded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    recorded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -871,7 +873,7 @@ class ApparatusOperator(Base):
     is_certified = Column(Boolean, default=True, nullable=False)
     certification_date = Column(Date, nullable=True)
     certification_expiration = Column(Date, nullable=True)
-    certified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    certified_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # License Requirements
     license_type_required = Column(String(50), nullable=True)  # CDL, Class B, etc.
@@ -890,7 +892,7 @@ class ApparatusOperator(Base):
     notes = Column(Text, nullable=True)
 
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -952,7 +954,7 @@ class ApparatusEquipment(Base):
 
     # Timestamps
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
-    assigned_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
@@ -990,7 +992,7 @@ class ApparatusLocationHistory(Base):
     assignment_reason = Column(Text, nullable=True)
 
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -1031,7 +1033,7 @@ class ApparatusStatusHistory(Base):
     hours_at_change = Column(Numeric(10, 2), nullable=True)
 
     # Timestamps
-    changed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    changed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     apparatus = relationship("Apparatus", back_populates="status_history")
@@ -1074,7 +1076,7 @@ class ApparatusNFPACompliance(Base):
 
     # Last Check
     last_checked_date = Column(Date, nullable=True)
-    last_checked_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    last_checked_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Next Due
     next_due_date = Column(Date, nullable=True)
@@ -1086,6 +1088,9 @@ class ApparatusNFPACompliance(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    apparatus = relationship("Apparatus", back_populates="nfpa_compliance")
 
     __table_args__ = (
         Index("idx_apparatus_nfpa_apparatus", "apparatus_id"),
@@ -1119,7 +1124,7 @@ class ApparatusReportConfig(Base):
     # Schedule
     is_scheduled = Column(Boolean, default=False, nullable=False)
     schedule_frequency = Column(String(50), nullable=True)  # daily, weekly, monthly, quarterly, yearly
-    schedule_day = Column(Integer, nullable=True)  # Day of week (1-7) or day of month (1-31)
+    schedule_day = Column(Integer, nullable=True)  # For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)
     next_run_date = Column(DateTime(timezone=True), nullable=True)
     last_run_date = Column(DateTime(timezone=True), nullable=True)
 
@@ -1149,7 +1154,7 @@ class ApparatusReportConfig(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -1214,10 +1219,10 @@ class ApparatusServiceProvider(Base):
 
     # Archive (soft-delete for compliance — providers are never hard-deleted)
     archived_at = Column(DateTime(timezone=True), nullable=True)
-    archived_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    archived_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -1230,6 +1235,7 @@ class ApparatusServiceProvider(Base):
         Index("idx_service_providers_org_name", "organization_id", "name"),
         Index("idx_service_providers_preferred", "organization_id", "is_preferred"),
         Index("idx_service_providers_active", "organization_id", "is_active"),
+        CheckConstraint("rating IS NULL OR (rating >= 1 AND rating <= 5)", name="ck_service_provider_rating"),
     )
 
     def __repr__(self):
@@ -1288,8 +1294,12 @@ class ApparatusComponent(Base):
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # Archive (soft-delete)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    archived_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
     # Timestamps
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -1352,8 +1362,8 @@ class ApparatusComponentNote(Base):
     actual_cost = Column(Numeric(10, 2), nullable=True)
 
     # Resolution
-    reported_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reported_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    resolved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolution_notes = Column(Text, nullable=True)
 
@@ -1364,6 +1374,7 @@ class ApparatusComponentNote(Base):
     tags = Column(JSON, nullable=True)  # ["warranty_claim", "recurring", "safety"]
 
     # Timestamps
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

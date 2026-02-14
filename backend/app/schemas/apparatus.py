@@ -1167,7 +1167,7 @@ class ApparatusReportConfigBase(BaseModel):
     # Schedule
     is_scheduled: bool = Field(default=False)
     schedule_frequency: Optional[ScheduleFrequencyEnum] = None
-    schedule_day: Optional[int] = Field(None, ge=1, le=31)
+    schedule_day: Optional[int] = Field(None, ge=1, le=31, description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)")
 
     # Data Range
     data_range_type: Optional[str] = Field(None, max_length=50)
@@ -1207,7 +1207,7 @@ class ApparatusReportConfigUpdate(BaseModel):
 
     is_scheduled: Optional[bool] = None
     schedule_frequency: Optional[ScheduleFrequencyEnum] = None
-    schedule_day: Optional[int] = Field(None, ge=1, le=31)
+    schedule_day: Optional[int] = Field(None, ge=1, le=31, description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)")
 
     data_range_type: Optional[str] = Field(None, max_length=50)
     data_range_days: Optional[int] = Field(None, ge=1)
@@ -1307,12 +1307,12 @@ class ApparatusServiceProviderBase(BaseModel):
     contact_name: Optional[str] = Field(None, max_length=200)
 
     phone: Optional[str] = Field(None, max_length=50)
-    email: Optional[str] = Field(None, max_length=200)
+    email: Optional[str] = Field(None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     address: Optional[str] = None
     city: Optional[str] = Field(None, max_length=100)
     state: Optional[str] = Field(None, max_length=50)
     zip_code: Optional[str] = Field(None, max_length=20)
-    website: Optional[str] = Field(None, max_length=300)
+    website: Optional[str] = Field(None, max_length=300, pattern=r"^https?://")
 
     specialties: Optional[List[ComponentTypeEnum]] = None
     certifications: Optional[List[str]] = None
@@ -1438,6 +1438,9 @@ class ApparatusComponentResponse(ApparatusComponentBase):
     """Schema for component response"""
     id: str
     organization_id: str
+    apparatus_id: str
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1504,6 +1507,7 @@ class ApparatusComponentNoteResponse(ApparatusComponentNoteBase):
     """Schema for component note response"""
     id: str
     organization_id: str
+    created_by: Optional[str] = None
     reported_by: Optional[str] = None
     resolved_by: Optional[str] = None
     resolved_at: Optional[datetime] = None

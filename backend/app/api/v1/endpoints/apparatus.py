@@ -1150,6 +1150,8 @@ async def list_operators(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     user_id: Optional[str] = Query(None, description="Filter by user"),
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
@@ -1165,6 +1167,8 @@ async def list_operators(
         apparatus_id=apparatus_id,
         user_id=user_id,
         is_active=is_active,
+        skip=skip,
+        limit=limit,
     )
     return operators
 
@@ -1210,11 +1214,14 @@ async def update_operator(
     """
     service = ApparatusService(db)
 
-    operator = await service.update_operator(
-        operator_id=operator_id,
-        operator_data=operator_data,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        operator = await service.update_operator(
+            operator_id=operator_id,
+            operator_data=operator_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     if not operator:
         raise HTTPException(
@@ -1259,6 +1266,8 @@ async def delete_operator(
 async def list_equipment(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     is_present: Optional[bool] = Query(None, description="Filter by presence on apparatus"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
@@ -1273,6 +1282,8 @@ async def list_equipment(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
         is_present=is_present,
+        skip=skip,
+        limit=limit,
     )
     return equipment
 
@@ -1291,11 +1302,14 @@ async def create_equipment(
     """
     service = ApparatusService(db)
 
-    equipment = await service.create_equipment(
-        equipment_data=equipment_data,
-        organization_id=current_user.organization_id,
-        assigned_by=current_user.id,
-    )
+    try:
+        equipment = await service.create_equipment(
+            equipment_data=equipment_data,
+            organization_id=current_user.organization_id,
+            assigned_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return equipment
 
@@ -1315,11 +1329,14 @@ async def update_equipment(
     """
     service = ApparatusService(db)
 
-    equipment = await service.update_equipment(
-        equipment_id=equipment_id,
-        equipment_data=equipment_data,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        equipment = await service.update_equipment(
+            equipment_id=equipment_id,
+            equipment_data=equipment_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     if not equipment:
         raise HTTPException(
@@ -1612,12 +1629,15 @@ async def update_nfpa_compliance(
     """
     service = ApparatusService(db)
 
-    record = await service.update_nfpa_compliance(
-        compliance_id=compliance_id,
-        compliance_data=compliance_data,
-        organization_id=current_user.organization_id,
-        checked_by=current_user.id,
-    )
+    try:
+        record = await service.update_nfpa_compliance(
+            compliance_id=compliance_id,
+            compliance_data=compliance_data,
+            organization_id=current_user.organization_id,
+            checked_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     if not record:
         raise HTTPException(
@@ -1721,11 +1741,14 @@ async def create_report_config(
     """
     service = ApparatusService(db)
 
-    config = await service.create_report_config(
-        config_data=config_data,
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
-    )
+    try:
+        config = await service.create_report_config(
+            config_data=config_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return config
 
@@ -1745,11 +1768,14 @@ async def update_report_config(
     """
     service = ApparatusService(db)
 
-    config = await service.update_report_config(
-        config_id=config_id,
-        config_data=config_data,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        config = await service.update_report_config(
+            config_id=config_id,
+            config_data=config_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     if not config:
         raise HTTPException(
@@ -1795,6 +1821,8 @@ async def list_service_providers(
     is_active: Optional[bool] = Query(True, description="Filter by active status. Set to false to see archived providers, or omit for all."),
     is_preferred: Optional[bool] = Query(None, description="Filter preferred providers"),
     specialty: Optional[str] = Query(None, description="Filter by component specialty"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
@@ -1813,6 +1841,8 @@ async def list_service_providers(
         is_active=is_active,
         specialty=specialty,
         is_preferred=is_preferred,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -1846,11 +1876,14 @@ async def create_service_provider(
     **Permissions required:** apparatus.edit or apparatus.manage
     """
     service = ApparatusService(db)
-    return await service.create_service_provider(
-        provider_data=provider_data,
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
-    )
+    try:
+        return await service.create_service_provider(
+            provider_data=provider_data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.patch("/service-providers/{provider_id}", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
@@ -1866,7 +1899,10 @@ async def update_service_provider(
     **Permissions required:** apparatus.edit or apparatus.manage
     """
     service = ApparatusService(db)
-    provider = await service.update_service_provider(provider_id, provider_data, current_user.organization_id)
+    try:
+        provider = await service.update_service_provider(provider_id, provider_data, current_user.organization_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not provider:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
     return provider
@@ -1924,6 +1960,8 @@ async def list_components(
     apparatus_id: Optional[str] = Query(None, description="Filter by apparatus"),
     component_type: Optional[str] = Query(None, description="Filter by component type"),
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
@@ -1938,6 +1976,8 @@ async def list_components(
         apparatus_id=apparatus_id,
         component_type=component_type,
         is_active=is_active,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -1994,7 +2034,10 @@ async def update_component(
     **Permissions required:** apparatus.edit or apparatus.manage
     """
     service = ApparatusService(db)
-    component = await service.update_component(component_id, component_data, current_user.organization_id)
+    try:
+        component = await service.update_component(component_id, component_data, current_user.organization_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not component:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
     return component
@@ -2007,12 +2050,14 @@ async def delete_component(
     current_user: User = Depends(require_permission("apparatus.manage")),
 ):
     """
-    Delete a component and its notes
+    Archive a component (soft-delete)
 
     **Permissions required:** apparatus.manage
     """
     service = ApparatusService(db)
-    if not await service.delete_component(component_id, current_user.organization_id):
+    if not await service.delete_component(
+        component_id, current_user.organization_id, archived_by=current_user.id,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component not found")
 
 
@@ -2028,6 +2073,8 @@ async def list_component_notes(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     note_type: Optional[str] = Query(None, description="Filter by note type"),
     service_provider_id: Optional[str] = Query(None, description="Filter by service provider"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
@@ -2045,6 +2092,8 @@ async def list_component_notes(
         severity=severity,
         note_type=note_type,
         service_provider_id=service_provider_id,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -2082,6 +2131,7 @@ async def create_component_note(
         return await service.create_component_note(
             note_data=note_data,
             organization_id=current_user.organization_id,
+            created_by=current_user.id,
             reported_by=current_user.id,
         )
     except ValueError as e:
@@ -2101,12 +2151,15 @@ async def update_component_note(
     **Permissions required:** apparatus.maintenance, apparatus.edit, or apparatus.manage
     """
     service = ApparatusService(db)
-    note = await service.update_component_note(
-        note_id=note_id,
-        note_data=note_data,
-        organization_id=current_user.organization_id,
-        resolved_by=current_user.id,
-    )
+    try:
+        note = await service.update_component_note(
+            note_id=note_id,
+            note_data=note_data,
+            organization_id=current_user.organization_id,
+            resolved_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Component note not found")
     return note
@@ -2163,4 +2216,4 @@ async def generate_service_report(
             component_ids=parsed_ids,
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

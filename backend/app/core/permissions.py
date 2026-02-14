@@ -665,6 +665,7 @@ DEFAULT_ROLES = {
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
             COMPLIANCE_VIEW.name,
+            APPARATUS_VIEW.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,

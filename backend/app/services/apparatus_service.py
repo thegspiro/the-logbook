@@ -6,7 +6,7 @@ Business logic for apparatus/vehicle management.
 
 from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
@@ -204,10 +204,11 @@ class ApparatusService:
         if apparatus_type.is_system:
             raise ValueError("Cannot delete system apparatus types")
 
-        # Check if any apparatus uses this type
+        # Check if any apparatus in this organization uses this type
         result = await self.db.execute(
             select(func.count(Apparatus.id))
             .where(Apparatus.apparatus_type_id == type_id)
+            .where(Apparatus.organization_id == organization_id)
         )
         count = result.scalar()
         if count > 0:
@@ -353,6 +354,7 @@ class ApparatusService:
         result = await self.db.execute(
             select(func.count(Apparatus.id))
             .where(Apparatus.status_id == status_id)
+            .where(Apparatus.organization_id == organization_id)
         )
         count = result.scalar()
         if count > 0:
@@ -990,6 +992,7 @@ class ApparatusService:
         result = await self.db.execute(
             select(func.count(ApparatusMaintenance.id))
             .where(ApparatusMaintenance.maintenance_type_id == type_id)
+            .where(ApparatusMaintenance.organization_id == organization_id)
         )
         count = result.scalar()
         if count > 0:
@@ -1258,11 +1261,12 @@ class ApparatusService:
         created_by: str,
     ) -> ApparatusOperator:
         """Create operator certification"""
-        # Check if already exists
+        # Check if already exists within this organization
         result = await self.db.execute(
             select(ApparatusOperator)
             .where(ApparatusOperator.apparatus_id == operator_data.apparatus_id)
             .where(ApparatusOperator.user_id == operator_data.user_id)
+            .where(ApparatusOperator.organization_id == organization_id)
         )
         if result.scalar_one_or_none():
             raise ValueError("Operator already assigned to this apparatus")
@@ -1285,6 +1289,8 @@ class ApparatusService:
         apparatus_id: Optional[str] = None,
         user_id: Optional[str] = None,
         is_active: Optional[bool] = True,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusOperator]:
         """List operators"""
         conditions = [ApparatusOperator.organization_id == organization_id]
@@ -1300,6 +1306,8 @@ class ApparatusService:
             select(ApparatusOperator)
             .where(and_(*conditions))
             .options(selectinload(ApparatusOperator.user))
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
@@ -1376,6 +1384,8 @@ class ApparatusService:
         organization_id: str,
         apparatus_id: Optional[str] = None,
         is_present: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusEquipment]:
         """List equipment"""
         conditions = [ApparatusEquipment.organization_id == organization_id]
@@ -1389,6 +1399,8 @@ class ApparatusService:
             select(ApparatusEquipment)
             .where(and_(*conditions))
             .order_by(ApparatusEquipment.name)
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
@@ -1448,16 +1460,12 @@ class ApparatusService:
         uploaded_by: str,
     ) -> ApparatusPhoto:
         """Create photo"""
-        # If setting as primary, unset other primary photos
+        # If setting as primary, unset other primary photos for this apparatus
         if photo_data.is_primary:
-            await self.db.execute(
-                select(ApparatusPhoto)
-                .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
-                .where(ApparatusPhoto.is_primary == True)
-            )
             result = await self.db.execute(
                 select(ApparatusPhoto)
                 .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
+                .where(ApparatusPhoto.organization_id == organization_id)
                 .where(ApparatusPhoto.is_primary == True)
             )
             for photo in result.scalars().all():
@@ -1828,6 +1836,7 @@ class ApparatusService:
     async def list_service_providers(
         self, organization_id: UUID, is_active: Optional[bool] = None,
         specialty: Optional[str] = None, is_preferred: Optional[bool] = None,
+        skip: int = 0, limit: int = 100,
     ) -> List[ApparatusServiceProvider]:
         """List service providers"""
         query = select(ApparatusServiceProvider).where(
@@ -1841,7 +1850,7 @@ class ApparatusService:
         query = query.order_by(
             ApparatusServiceProvider.is_preferred.desc(),
             ApparatusServiceProvider.name,
-        )
+        ).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -1927,6 +1936,7 @@ class ApparatusService:
     async def list_components(
         self, organization_id: UUID, apparatus_id: Optional[str] = None,
         component_type: Optional[str] = None, is_active: Optional[bool] = None,
+        skip: int = 0, limit: int = 100,
     ) -> List[ApparatusComponent]:
         """List apparatus components"""
         query = select(ApparatusComponent).where(
@@ -1939,7 +1949,9 @@ class ApparatusService:
         if is_active is not None:
             query = query.where(ApparatusComponent.is_active == is_active)
 
-        query = query.order_by(ApparatusComponent.sort_order, ApparatusComponent.name)
+        query = query.order_by(
+            ApparatusComponent.sort_order, ApparatusComponent.name,
+        ).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -1992,14 +2004,17 @@ class ApparatusService:
         return component
 
     async def delete_component(
-        self, component_id: str, organization_id: UUID
+        self, component_id: str, organization_id: UUID,
+        archived_by: UUID = None,
     ) -> bool:
-        """Delete a component and its notes"""
+        """Soft-delete (archive) a component"""
         component = await self.get_component(component_id, organization_id)
         if not component:
             return False
 
-        await self.db.delete(component)
+        component.is_active = False
+        component.archived_at = datetime.now(tz=timezone.utc)
+        component.archived_by = archived_by
         await self.db.commit()
         return True
 
@@ -2012,6 +2027,7 @@ class ApparatusService:
         component_id: Optional[str] = None, note_status: Optional[str] = None,
         severity: Optional[str] = None, note_type: Optional[str] = None,
         service_provider_id: Optional[str] = None,
+        skip: int = 0, limit: int = 100,
     ) -> List[ApparatusComponentNote]:
         """List component notes with filtering"""
         query = select(ApparatusComponentNote).where(
@@ -2030,7 +2046,9 @@ class ApparatusService:
         if service_provider_id:
             query = query.where(ApparatusComponentNote.service_provider_id == service_provider_id)
 
-        query = query.order_by(ApparatusComponentNote.created_at.desc())
+        query = query.order_by(
+            ApparatusComponentNote.created_at.desc(),
+        ).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -2046,7 +2064,8 @@ class ApparatusService:
         return result.scalar_one_or_none()
 
     async def create_component_note(
-        self, note_data, organization_id: UUID, reported_by: UUID = None,
+        self, note_data, organization_id: UUID,
+        created_by: UUID = None, reported_by: UUID = None,
     ) -> ApparatusComponentNote:
         """Create a component note"""
         component = await self.get_component(note_data.component_id, organization_id)
@@ -2060,7 +2079,8 @@ class ApparatusService:
 
         note = ApparatusComponentNote(
             organization_id=organization_id,
-            reported_by=reported_by,
+            created_by=created_by,
+            reported_by=reported_by or created_by,
             **dump,
         )
         self.db.add(note)
@@ -2207,5 +2227,5 @@ class ApparatusService:
             "open_issues": open_issues,
             "recent_maintenance": recent_maintenance,
             "service_providers": providers,
-            "generated_at": datetime.utcnow(),
+            "generated_at": datetime.now(tz=timezone.utc),
         }
