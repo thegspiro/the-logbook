@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Member Archive & Reactivation (2026-02-14)
+
+#### Member Archiving Lifecycle
+- **New `archived` status**: Added to UserStatus enum — represents a dropped member who has returned all property
+- **Auto-archive on last item return**: When a dropped member returns their last assigned/checked-out item, they are automatically transitioned to `archived` status
+- **Manual archive endpoint**: `POST /api/v1/users/{user_id}/archive` — allows leadership to archive a dropped member manually (e.g. items written off)
+- **Reactivation endpoint**: `POST /api/v1/users/{user_id}/reactivate` — restores an archived member to `active` status when they rejoin the department
+- **Archived members list**: `GET /api/v1/users/archived` — lists all archived members for legal requests or reactivation lookup
+- **Audit trail**: All archive/reactivation events logged with full event data
+- **Admin notification**: Admins, quartermasters, and chiefs notified by email when auto-archive occurs
+- **`archived_at` column**: Tracks the exact timestamp of archiving on the user record
+- **Profile preservation**: Archived members' full profile, training history, and inventory records remain accessible
+- **Migration**: `20260214_0700` adds `archived` enum value and `archived_at` column
+
 ### Added - Property Return Report & Member Drop Statuses (2026-02-14)
 
 #### Member Drop Statuses

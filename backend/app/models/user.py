@@ -39,6 +39,7 @@ class UserStatus(str, enum.Enum):
     RETIRED = "retired"
     DROPPED_VOLUNTARY = "dropped_voluntary"
     DROPPED_INVOLUNTARY = "dropped_involuntary"
+    ARCHIVED = "archived"
 
 
 class OrganizationType(str, enum.Enum):
@@ -195,6 +196,7 @@ class User(Base):
     status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
     status_changed_at = Column(DateTime(timezone=True))  # When status last changed (used for drop-date tracking)
     status_change_reason = Column(Text)  # Reason for the last status change
+    archived_at = Column(DateTime(timezone=True))  # When the member was archived (after all property returned)
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 

@@ -298,3 +298,172 @@ async def get_overdue_property_returns(
         "overdue_count": len(overdue_list),
         "members": overdue_list,
     }
+
+
+# ==================== Member Archive & Reactivation ====================
+
+
+class ArchiveMemberRequest(BaseModel):
+    """Request body for manually archiving a dropped member."""
+    reason: Optional[str] = Field(None, description="Reason for archiving")
+
+
+class ReactivateMemberRequest(BaseModel):
+    """Request body for reactivating an archived member."""
+    reason: Optional[str] = Field(None, description="Reason for reactivation")
+
+
+@router.post("/{user_id}/archive")
+async def archive_member(
+    user_id: UUID,
+    request: ArchiveMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Manually archive a dropped member.
+
+    Members are automatically archived when they return all outstanding
+    items. This endpoint allows leadership to manually archive a dropped
+    member (e.g. items were written off, or the member had no items).
+
+    Only members with a dropped status (`dropped_voluntary` or
+    `dropped_involuntary`) can be archived. Use the reactivation
+    endpoint to restore an archived member.
+
+    Requires `members.manage` permission.
+    """
+    from datetime import datetime as dt
+
+    # Load the target member
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found",
+        )
+
+    if member.status not in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only dropped members can be archived. Current status: {member.status.value}",
+        )
+
+    previous_status = member.status.value
+    now = dt.utcnow()
+    member.status = UserStatus.ARCHIVED
+    member.archived_at = now
+    member.status_changed_at = now
+    member.status_change_reason = request.reason or "Manually archived by leadership"
+    await db.commit()
+
+    # Audit log
+    await log_audit_event(
+        db=db,
+        event_type="member_archived",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "member_name": member.full_name,
+            "previous_status": previous_status,
+            "new_status": UserStatus.ARCHIVED.value,
+            "reason": request.reason or "Manually archived by leadership",
+            "archived_by": str(current_user.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "user_id": str(user_id),
+        "member_name": member.full_name,
+        "previous_status": previous_status,
+        "new_status": UserStatus.ARCHIVED.value,
+        "archived_at": now.isoformat(),
+    }
+
+
+@router.post("/{user_id}/reactivate")
+async def reactivate_member(
+    user_id: UUID,
+    request: ReactivateMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Reactivate an archived member, restoring them to ACTIVE status.
+
+    Use this when a former member returns to the department and needs
+    their account restored. The member's full profile history is
+    preserved during archiving, so all prior data is still accessible.
+
+    Requires `members.manage` permission.
+    """
+    from app.services.member_archive_service import reactivate_member as do_reactivate
+
+    try:
+        result = await do_reactivate(
+            db=db,
+            user_id=str(user_id),
+            organization_id=str(current_user.organization_id),
+            reactivated_by=str(current_user.id),
+            reason=request.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    return result
+
+
+@router.get("/archived")
+async def get_archived_members(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    List all archived members in the organization.
+
+    Returns archived members sorted by archive date (most recent first).
+    Useful for leadership to review former members for legal requests
+    or to identify members eligible for reactivation.
+
+    Requires `members.manage` permission.
+    """
+    result = await db.execute(
+        select(User)
+        .where(
+            User.organization_id == current_user.organization_id,
+            User.status == UserStatus.ARCHIVED,
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.archived_at.desc())
+    )
+    members = result.scalars().all()
+
+    return {
+        "organization_id": str(current_user.organization_id),
+        "archived_count": len(members),
+        "members": [
+            {
+                "user_id": str(m.id),
+                "name": m.full_name,
+                "email": m.email,
+                "badge_number": m.badge_number,
+                "rank": m.rank,
+                "archived_at": m.archived_at.isoformat() if m.archived_at else None,
+                "status_change_reason": m.status_change_reason,
+            }
+            for m in members
+        ],
+    }

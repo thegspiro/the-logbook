@@ -1305,6 +1305,34 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 - Unassign items: `POST /api/v1/inventory/items/{item_id}/unassign`
 - Check in items: `POST /api/v1/inventory/checkout/{checkout_id}/checkin`
 - Once all items are returned in the system, the member will no longer appear on the overdue list and no further reminders will be sent
+- Once all items are returned, the member is automatically archived (see below)
+
+#### Member Not Auto-Archived After Returning All Items
+
+**Symptoms**: A dropped member returned all items but is still in `dropped_voluntary` or `dropped_involuntary` status
+
+**Causes**:
+1. Items were returned physically but not processed through the system (unassign / check-in)
+2. There is still an active `ItemAssignment` or unreturned `CheckOutRecord` for the member
+3. The member was not in a dropped status when items were returned
+
+**Solutions**:
+- Verify all items are unassigned: check `GET /api/v1/inventory/users/{user_id}/assignments?active_only=true`
+- Verify all checkouts are returned: check active checkouts for the user
+- Manually archive the member: `POST /api/v1/users/{user_id}/archive`
+
+#### Cannot Reactivate Member
+
+**Symptoms**: Reactivation endpoint returns an error
+
+**Causes**:
+1. Member is not in `archived` status (only archived members can be reactivated)
+2. Member was soft-deleted (`deleted_at` is set)
+
+**Solutions**:
+- Verify the member's current status — only `archived` members can be reactivated
+- If the member is still in a dropped status, archive them first, then reactivate
+- If the member was soft-deleted, this requires direct database intervention
 
 ---
 
