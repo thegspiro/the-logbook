@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Training Calendar Integration & Double-Booking Prevention (2026-02-14)
+
+#### Training Session Calendar View
+- **Calendar endpoint**: `GET /api/v1/training-sessions/calendar` — returns training sessions with linked Event data (dates, times, locations, training metadata) for calendar display
+- **Date range filtering**: `start_after` / `start_before` query parameters for fetching sessions in a date window
+- **Training type filter**: Filter calendar by `training_type` (certification, continuing_education, etc.)
+- **Double-booking prevention**: Training sessions with a `location_id` are checked against the organization's event calendar — prevents scheduling a training session at a location already booked by another event
+- **Shared calendar**: Training events appear on the organization-wide event calendar alongside all other events
+- **Hall coordinator filtering**: `GET /api/v1/events?exclude_event_types=training` — hall coordinators can hide training events from their view while double-booking prevention still applies across all event types
+- **`location_id` field**: Added to `TrainingSessionCreate` schema for location-aware training sessions
+- **Event relationship**: Explicit `event` and `course` relationships added to `TrainingSession` model for eager loading
+
+### Added - Competency Matrix / Heat Map Dashboard (2026-02-14)
+
+#### Department Readiness Dashboard
+- **Competency matrix**: `GET /api/v1/training/competency-matrix` — generates a member vs. requirement matrix showing certification/training status for every member
+- **Color-coded statuses**: `current` (green), `expiring_soon` (yellow, within 90 days), `expired` (red), `not_started` (gray)
+- **Readiness percentage**: Summary block with total members, requirements, and overall department readiness score
+- **Filterable**: Optional `requirement_ids` and `user_ids` query parameters to focus on specific requirements or members
+- **Gap identification**: Helps training officers identify where gaps exist and create targeted training plans
+
+### Added - Certification Expiration Alert Pipeline (2026-02-14)
+
+#### Tiered Expiration Reminders
+- **Process alerts**: `POST /api/v1/training/certifications/process-alerts` — scans all certification records and sends tiered reminders
+- **Four tiers**: 90-day, 60-day, 30-day, and 7-day warnings before expiration
+- **Escalation**: Expired certifications trigger an escalation email CC'd to training officer, compliance officer, and chief
+- **CC on escalation**: 30-day → training officers CC'd; 7-day → training + compliance officers; expired → + chief officer
+- **Idempotent**: Each tier is tracked per-record (`alert_90_sent_at`, `alert_60_sent_at`, etc.) — will not re-send
+- **Alert tracking columns**: `alert_90_sent_at`, `alert_60_sent_at`, `alert_30_sent_at`, `alert_7_sent_at`, `escalation_sent_at` on training_records
+
+### Added - Peer Skill Evaluation Sign-Offs (2026-02-14)
+
+#### Configurable Evaluator Permissions
+- **Check evaluator**: `POST /api/v1/training/skill-evaluations/{skill_id}/check-evaluator` — verifies whether the current user is authorized to sign off on a skill
+- **Role-based**: `allowed_evaluators.type = "roles"` — e.g. only `shift_leader` can sign off on AIC skills, `driver_trainer` for driver trainees
+- **User-specific**: `allowed_evaluators.type = "specific_users"` — explicitly named users who may evaluate
+- **Default fallback**: `null` → any user with `training.manage` permission can sign off
+- **Training officer configurable**: Training officer or chief sets the `allowed_evaluators` JSON on each `SkillEvaluation` record
+- **`allowed_evaluators` column**: New JSON column on skill_evaluations table
+
+### Added - Meeting Quorum Enforcement (2026-02-14)
+
+#### Organization-Configurable Quorum
+- **Get quorum status**: `GET /api/v1/minutes/{minutes_id}/quorum` — calculates and returns current quorum status for a meeting
+- **Configure quorum**: `PATCH /api/v1/minutes/{minutes_id}/quorum-config` — set per-meeting quorum type and threshold
+- **Organization defaults**: `organization.settings.quorum_config` — default quorum rules applied to all meetings (type: "count" or "percentage", threshold value)
+- **Check-in driven**: Quorum is calculated from attendees marked `present: true` in the meeting's attendee list
+- **Per-meeting override**: Individual meetings can override the org default with `quorum_type` and `quorum_threshold` columns
+- **Auto-update**: `update_quorum_on_checkin()` recalculates quorum each time an attendee checks in or is removed
+- **`quorum_threshold`/`quorum_type` columns**: New columns on meeting_minutes table
+
+### Added - Bulk Voter Override for Elections (2026-02-14)
+
+#### Secretary Bulk Override
+- **Bulk override**: `POST /api/v1/elections/{election_id}/voter-overrides/bulk` — secretary can grant voting overrides to multiple members in a single request
+- **Reason required**: A reason (10–500 characters) is required for every bulk override
+- **Enhanced audit logging**: Each override is individually logged with `warning` severity, and a summary audit event captures the full batch with all user IDs
+- **Existing override protection**: Members who already have an override are skipped (not duplicated)
+
+### Added - Migration 20260214_1200 (2026-02-14)
+
+#### Schema Changes
+- `meeting_minutes.quorum_threshold` (Float, nullable) — configurable quorum threshold per meeting
+- `meeting_minutes.quorum_type` (String(20), nullable) — "count" or "percentage"
+- `skill_evaluations.allowed_evaluators` (JSON, nullable) — configurable evaluator permissions
+- `training_records.alert_90_sent_at` through `alert_7_sent_at` (DateTime, nullable) — certification alert tracking
+- `training_records.escalation_sent_at` (DateTime, nullable) — escalation alert tracking
+
 ### Added - Proxy Voting for Elections (2026-02-14)
 
 #### Proxy Voting System

@@ -161,7 +161,8 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Recurring events with daily/weekly/monthly/yearly patterns
     - Event templates for reusable configurations
     - Attachment upload, download, and delete
-    - Location booking prevention (double-booking protection)
+    - Location booking prevention (double-booking protection across all event types including training)
+    - `exclude_event_types` filter for hall coordinators to hide training events from their view
     - RSVP overrides for admin flexibility
     - Organization timezone support in date formatting
     - QR code check-in, self-check-in pages, analytics
@@ -298,6 +299,12 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
 | Voter override (secretary) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote) |
 | Proxy voting setup | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-setting-up-proxy-voting) |
+| Bulk voter overrides | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-bulk-voter-overrides) |
+| Meeting quorum config | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum) |
+| Peer skill eval sign-offs | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs) |
+| Cert expiration alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline) |
+| Competency matrix dashboard | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard) |
+| Training calendar / booking | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention) |
 | Voting attendance requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance) |
 | Training exemptions by tier | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements) |
 | Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
@@ -433,6 +440,25 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Training Module Enhancements (Calendar, Competency Matrix, Alerts, Peer Eval)
+
+**What Changed**:
+- **Training Calendar Integration**: Training sessions now appear on the organization calendar via linked Events; new `GET /api/v1/training-sessions/calendar` endpoint returns sessions with dates, times, locations
+- **Double-Booking Prevention**: Training sessions with a `location_id` are checked against all other events — prevents scheduling conflicts across training and non-training events
+- **Hall Coordinator Filtering**: `GET /api/v1/events?exclude_event_types=training` lets hall coordinators hide training events from their view while booking prevention remains organization-wide
+- **Competency Matrix Dashboard**: `GET /api/v1/training/competency-matrix` generates a member vs. requirement heat map (current/expiring_soon/expired/not_started) with readiness percentage
+- **Certification Expiration Alerts**: Tiered pipeline (90/60/30/7 days + expired escalation) with CC to training officer, compliance officer, and chief on escalating notifications
+- **Peer Skill Evaluation Sign-Offs**: Training officer can configure who signs off on each skill — role-based (`shift_leader`, `driver_trainer`) or user-specific — with permission check endpoint
+- **Meeting Quorum Enforcement**: Org-configurable quorum (count or percentage) with per-meeting override; auto-recalculates when attendees check in
+- **Bulk Voter Overrides**: `POST /api/v1/elections/{election_id}/voter-overrides/bulk` — secretary can grant overrides to multiple members with enhanced audit logging
+- **Migration**: `20260214_1200` adds quorum columns, allowed_evaluators, and cert alert tracking columns
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Quorum, peer eval, cert alerts, competency matrix, calendar/booking, bulk override troubleshooting
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog for all 7 features
+
+---
 
 ### 2026-02-14 - Proxy Voting for Elections
 

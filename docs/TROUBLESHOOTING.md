@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-14 (includes events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-14 (includes meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -1329,6 +1329,135 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 8. View all authorizations: `GET /api/v1/elections/{election_id}/proxy-authorizations`
 
 **Note**: A proxy authorization cannot be revoked after the proxy has cast the vote. The vote itself must be soft-deleted first. Proxy voting does NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
+
+#### Voting: Bulk Voter Overrides
+
+**Scenario**: The Secretary needs to grant voting overrides to multiple members at once (e.g., for a special election where several excused members were approved by board vote).
+
+**Steps**:
+1. Call `POST /api/v1/elections/{election_id}/voter-overrides/bulk` with:
+   - `user_ids`: list of member UUIDs to override
+   - `reason`: explanation for the bulk override (10–500 characters)
+2. Each member is individually logged with `warning` severity in the audit trail
+3. A summary audit event captures the full batch with all user IDs and the officer who granted them
+4. Members who already have an override are skipped (no duplicates)
+
+**Note**: Bulk overrides follow the same scope rules as individual overrides — they bypass tier/attendance checks only, NOT eligible_voters lists, role requirements, or double-vote prevention.
+
+#### Meeting: Configuring Quorum
+
+**Scenario**: The department wants quorum enforcement for meetings — the system should show whether enough members are present.
+
+**Organization-Level Configuration**:
+Set `organization.settings.quorum_config`:
+```json
+{
+  "enabled": true,
+  "type": "percentage",
+  "threshold": 50.0
+}
+```
+- `type`: `"percentage"` (of active members) or `"count"` (absolute number required)
+- `threshold`: the value (e.g., 50.0 for 50% or 10 for 10 members)
+
+**Per-Meeting Override**:
+Use `PATCH /api/v1/minutes/{minutes_id}/quorum-config` to set `quorum_type` and `quorum_threshold` on a specific meeting, overriding the org default.
+
+**Checking Quorum**:
+- `GET /api/v1/minutes/{minutes_id}/quorum` returns `quorum_met`, `present_count`, `required_count`, and a description
+- Quorum recalculates automatically when attendees are marked present or removed
+
+**Common Issue**: Quorum says 0 present — ensure attendees have `present: true` in the meeting's attendee list.
+
+#### Meeting: Quorum Not Updating After Check-In
+
+**Symptoms**: Members are checking in but quorum still shows 0 present.
+
+**Causes**:
+1. Attendees are added to the meeting but not marked as `present: true`
+2. The org quorum config has `enabled: false`
+
+**Solutions**:
+- Verify the meeting's `attendees` JSON array — each entry should have `"present": true`
+- Check `Organization Settings > quorum_config > enabled` is `true`
+- If using per-meeting override, verify both `quorum_type` and `quorum_threshold` are set on the meeting
+
+#### Training: Configuring Peer Skill Evaluation Sign-Offs
+
+**Scenario**: The training officer wants to control who can sign off on skill evaluations — for example, only the shift leader can evaluate Attendant in Charge (AIC) skills, while only a driver trainer can evaluate driver trainees.
+
+**Configuration** (set by training officer or chief on each SkillEvaluation record):
+
+**Role-based** (`allowed_evaluators` JSON):
+```json
+{"type": "roles", "roles": ["shift_leader", "driver_trainer"]}
+```
+Only users with one of these roles can sign off on this skill.
+
+**User-specific**:
+```json
+{"type": "specific_users", "user_ids": ["uuid1", "uuid2"]}
+```
+Only explicitly named users can evaluate.
+
+**Default** (set to `null`): Any user with `training.manage` permission can sign off.
+
+**Checking Permission**:
+- `POST /api/v1/training/skill-evaluations/{skill_id}/check-evaluator` — returns whether the current user is authorized
+
+#### Training: Certification Expiration Alert Pipeline
+
+**Scenario**: Members with expiring certifications should receive tiered reminders, and training/compliance officers should be CC'd on escalating notifications when members are non-responsive.
+
+**Alert Tiers**:
+| Days Before Expiry | Alert Level | CC Recipients |
+|---|---|---|
+| 90 days | First notice | Member only |
+| 60 days | Second notice | Member only |
+| 30 days | Urgent | Member + Training officers |
+| 7 days | Final warning | Member + Training + Compliance officers |
+| Expired | Escalation | Member + Training + Compliance + Chief |
+
+**Triggering Alerts**:
+- `POST /api/v1/training/certifications/process-alerts` — designed to be called by a daily cron job
+- Each tier is tracked per-record (`alert_90_sent_at`, etc.) — idempotent, won't re-send
+
+**Common Issue**: No alerts being sent — verify that training records have an `expiration_date` set and that the email service is configured.
+
+#### Training: Using the Competency Matrix Dashboard
+
+**Scenario**: Training officers need an at-a-glance view of department readiness — who is current, who is expiring soon, and where the gaps are.
+
+**Endpoint**: `GET /api/v1/training/competency-matrix`
+
+**Returns**: A matrix of members vs. requirements with status for each cell:
+- **current** (green): Active and not expiring soon
+- **expiring_soon** (yellow): Expires within 90 days
+- **expired** (red): Past expiration date
+- **not_started** (gray): No record on file
+
+**Filtering**:
+- `requirement_ids`: comma-separated list to focus on specific requirements
+- `user_ids`: comma-separated list to focus on specific members
+
+**Summary Block** includes `readiness_percentage` — the percentage of all member/requirement cells that are `current` or `expiring_soon`.
+
+#### Training: Calendar Integration & Double-Booking Prevention
+
+**Scenario**: Training sessions should appear on the organization calendar and prevent double-booking at the same location.
+
+**Creating a Training Session with Location**:
+- Include `location_id` in the `POST /api/v1/training-sessions` request
+- The system checks for overlapping events at that location before creating the training event
+- If a conflict exists, the request returns `400` with the conflicting event name(s)
+
+**Calendar View**:
+- `GET /api/v1/training-sessions/calendar` — returns all training sessions with their linked Event data (dates, times, locations)
+- Supports `start_after`, `start_before`, and `training_type` filters
+
+**Hall Coordinator Separation**:
+- Hall coordinators who manage facility bookings can use `GET /api/v1/events?exclude_event_types=training` to see only non-training events
+- Double-booking prevention still applies across ALL event types — training sessions booked at a location will block other events from booking the same slot
 
 #### Voting: Member Blocked Due to Meeting Attendance
 

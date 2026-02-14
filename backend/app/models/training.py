@@ -254,6 +254,13 @@ class TrainingRecord(Base):
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references
 
+    # Certification expiration alert tracking — records when each tier was sent
+    alert_90_sent_at = Column(DateTime, nullable=True)
+    alert_60_sent_at = Column(DateTime, nullable=True)
+    alert_30_sent_at = Column(DateTime, nullable=True)
+    alert_7_sent_at = Column(DateTime, nullable=True)
+    escalation_sent_at = Column(DateTime, nullable=True)  # CC to training/compliance officers
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -408,6 +415,10 @@ class TrainingSession(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    event = relationship("Event", foreign_keys=[event_id], lazy="select")
+    course = relationship("TrainingCourse", foreign_keys=[course_id], lazy="select")
 
     __table_args__ = (
         Index('idx_training_session_event', 'event_id'),
@@ -782,6 +793,12 @@ class SkillEvaluation(Base):
 
     # Linked Programs
     required_for_programs = Column(JSON)  # Program IDs that require this skill
+
+    # Configurable evaluator permissions — training officer/chief sets who may sign off
+    # Format: {"type": "roles", "roles": ["shift_leader", "driver_trainer"]}
+    #      or {"type": "specific_users", "user_ids": ["uuid1", "uuid2"]}
+    #      or null → any user with training.manage permission
+    allowed_evaluators = Column(JSON, nullable=True)
 
     # Status
     active = Column(Boolean, default=True, index=True)

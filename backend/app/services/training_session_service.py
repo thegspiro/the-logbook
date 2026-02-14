@@ -19,6 +19,7 @@ from app.models.training import (
 )
 from app.models.user import User, Role
 from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
+from app.services.location_service import LocationService
 from app.core.config import settings
 
 
@@ -74,12 +75,29 @@ class TrainingSessionService:
             course_code = session_data.course_code
             course_id = None
 
+        # Check for location double-booking
+        if session_data.location_id:
+            location_service = LocationService(self.db)
+            overlapping = await location_service.check_overlapping_events(
+                location_id=session_data.location_id,
+                organization_id=str(organization_id),
+                start_datetime=session_data.start_datetime,
+                end_datetime=session_data.end_datetime,
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                return None, (
+                    f"Location is already booked during this time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
         # Create Event
         event = Event(
             organization_id=organization_id,
             title=session_data.title,
             description=session_data.description,
             event_type=EventType.TRAINING,
+            location_id=session_data.location_id,
             location=session_data.location,
             location_details=session_data.location_details,
             start_datetime=session_data.start_datetime,

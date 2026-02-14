@@ -647,3 +647,156 @@ async def get_expiring_certifications(
         days_ahead=days_ahead
     )
     return expiring
+
+
+# ============================================
+# Competency Matrix / Heat Map
+# ============================================
+
+@router.get("/competency-matrix")
+async def get_competency_matrix(
+    requirement_ids: Optional[str] = Query(None, description="Comma-separated requirement IDs to filter"),
+    user_ids: Optional[str] = Query(None, description="Comma-separated user IDs to filter"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Generate a competency matrix / heat map for the department.
+
+    Shows all active members vs. all active training requirements,
+    color-coded by status:
+    - **current** (green): completed and not expiring soon
+    - **expiring_soon** (yellow): expiring within 90 days
+    - **expired** (red): past expiration date
+    - **not_started** (gray): no record on file
+
+    The `summary` block provides aggregate readiness metrics.
+
+    Requires `training.manage` permission.
+    """
+    from app.services.competency_matrix_service import CompetencyMatrixService
+
+    service = CompetencyMatrixService(db)
+    req_ids = requirement_ids.split(",") if requirement_ids else None
+    u_ids = user_ids.split(",") if user_ids else None
+
+    matrix = await service.get_competency_matrix(
+        organization_id=current_user.organization_id,
+        requirement_ids=req_ids,
+        user_ids=u_ids,
+    )
+    return matrix
+
+
+# ============================================
+# Certification Expiration Alert Processing
+# ============================================
+
+@router.post("/certifications/process-alerts")
+async def process_certification_alerts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Trigger the certification expiration alert pipeline.
+
+    Sends tiered notifications for expiring and expired certifications:
+    - 90/60 days: notify member only
+    - 30 days: notify member + CC training officer
+    - 7 days: notify member + CC training + compliance officers
+    - Expired: escalation with CC to chief
+
+    This endpoint is idempotent — each tier is sent only once.
+    In production, wire this to a daily cron job.
+
+    Requires `training.manage` permission.
+    """
+    from app.services.cert_alert_service import CertAlertService
+
+    service = CertAlertService(db)
+    result = await service.process_alerts(current_user.organization_id)
+    return result
+
+
+# ============================================
+# Peer Skill Evaluation Sign-Off
+# ============================================
+
+@router.post("/skill-evaluations/{skill_id}/check-evaluator")
+async def check_evaluator_permission(
+    skill_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Check if the current user is authorized to sign off on a skill evaluation.
+
+    The training officer/chief configures `allowed_evaluators` on each
+    SkillEvaluation to control who may sign off:
+    - `{"type": "roles", "roles": ["shift_leader", "driver_trainer"]}` — role-based
+    - `{"type": "specific_users", "user_ids": ["uuid1", ...]}` — named individuals
+    - `null` — any user with `training.manage` permission (default)
+
+    **Authentication required**
+    """
+    from app.models.training import SkillEvaluation
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(SkillEvaluation)
+        .where(SkillEvaluation.id == skill_id)
+        .where(SkillEvaluation.organization_id == current_user.organization_id)
+    )
+    skill = result.scalar_one_or_none()
+    if not skill:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill evaluation not found")
+
+    allowed = skill.allowed_evaluators
+    is_authorized = False
+    reason = ""
+
+    if allowed is None:
+        # Default: any user with training.manage permission
+        # Check user roles for the permission
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.roles))
+        )
+        user_with_roles = user_result.scalar_one_or_none()
+        if user_with_roles:
+            user_perms = set()
+            for role in user_with_roles.roles:
+                user_perms.update(role.permissions or [])
+            is_authorized = "training.manage" in user_perms
+        reason = "Authorized via training.manage permission" if is_authorized else "Default: requires training.manage permission"
+
+    elif allowed.get("type") == "roles":
+        required_roles = set(allowed.get("roles", []))
+        # Load user roles
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == current_user.id)
+            .options(selectinload(User.roles))
+        )
+        user = user_result.scalar_one_or_none()
+        if user:
+            user_roles = {r.slug for r in user.roles}
+            is_authorized = bool(user_roles & required_roles)
+            if is_authorized:
+                matching = user_roles & required_roles
+                reason = f"Authorized via role(s): {', '.join(matching)}"
+            else:
+                reason = f"Required role(s): {', '.join(required_roles)}"
+
+    elif allowed.get("type") == "specific_users":
+        allowed_ids = set(allowed.get("user_ids", []))
+        is_authorized = str(current_user.id) in allowed_ids
+        reason = "Authorized as designated evaluator" if is_authorized else "Not in designated evaluators list"
+
+    return {
+        "skill_id": skill_id,
+        "skill_name": skill.name,
+        "is_authorized": is_authorized,
+        "reason": reason,
+    }

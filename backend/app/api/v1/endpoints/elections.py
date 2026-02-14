@@ -1434,6 +1434,110 @@ async def remove_voter_override(
     return {"success": True, "message": "Voter override removed"}
 
 
+class BulkVoterOverrideRequest(_PydanticBase):
+    """Bulk grant voting overrides for multiple members at once."""
+    user_ids: list
+    reason: str = _Field(..., min_length=10, max_length=500, description="Shared reason for all overrides (e.g. 'Shift B excused due to weather emergency')")
+
+
+@router.post("/{election_id}/voter-overrides/bulk", status_code=status.HTTP_201_CREATED)
+async def bulk_add_voter_overrides(
+    election_id: UUID,
+    body: BulkVoterOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Grant voting overrides to multiple members at once.
+
+    Useful when an entire shift or group missed a meeting due to
+    a weather event or operational commitment.  Each override uses
+    the same reason.  Already-overridden members are skipped.
+
+    Creates an enhanced audit trail with `bulk_voter_override_granted`
+    event and `warning` severity logging all affected members.
+
+    Requires `elections.manage` permission.
+    """
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    overrides = election.voter_overrides or []
+    existing_ids = {o.get("user_id") for o in overrides}
+
+    added = []
+    skipped = []
+
+    for uid in body.user_ids:
+        uid_str = str(uid)
+        if uid_str in existing_ids:
+            skipped.append(uid_str)
+            continue
+
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == uid_str)
+            .where(User.organization_id == current_user.organization_id)
+        )
+        target_user = user_result.scalar_one_or_none()
+        if not target_user:
+            skipped.append(uid_str)
+            continue
+
+        override_record = {
+            "user_id": uid_str,
+            "member_name": target_user.full_name,
+            "reason": body.reason,
+            "overridden_by": str(current_user.id),
+            "overridden_by_name": current_user.full_name,
+            "overridden_at": datetime.utcnow().isoformat(),
+        }
+        overrides.append(override_record)
+        existing_ids.add(uid_str)
+        added.append({"user_id": uid_str, "name": target_user.full_name})
+
+    election.voter_overrides = overrides
+    await db.commit()
+
+    # Enhanced audit trail for bulk operation
+    await log_audit_event(
+        db=db,
+        event_type="bulk_voter_override_granted",
+        event_category="elections",
+        severity="warning",
+        event_data={
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "reason": body.reason,
+            "members_added": [m["name"] for m in added],
+            "members_added_count": len(added),
+            "members_skipped_count": len(skipped),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    logger.warning(
+        f"BULK voter override granted | election={election_id} "
+        f"added={len(added)} skipped={len(skipped)} by={current_user.id} "
+        f"reason={body.reason!r}"
+    )
+
+    return {
+        "success": True,
+        "added": added,
+        "added_count": len(added),
+        "skipped_count": len(skipped),
+        "message": f"{len(added)} override(s) granted, {len(skipped)} skipped (already overridden or not found)",
+    }
+
+
 # ==================== Proxy Voting ====================
 
 
