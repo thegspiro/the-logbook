@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-14 (includes meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-14 (includes shift module enhancements: templates, patterns, assignments, swaps, time-off, calls, reports; facilities module: building management, maintenance, utilities, keys, rooms, compliance; plus meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -22,9 +22,10 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 10. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
 11. [Documents Module Issues](#documents-module-issues)
 12. [Events Module Issues](#events-module-issues)
-13. [TypeScript Build Issues](#typescript-build-issues)
-14. [Error Message Reference](#error-message-reference)
-15. [Getting Help](#getting-help)
+13. [Facilities Module](#facilities-module)
+14. [TypeScript Build Issues](#typescript-build-issues)
+15. [Error Message Reference](#error-message-reference)
+16. [Getting Help](#getting-help)
 
 ---
 
@@ -1081,10 +1082,10 @@ Meetings follow a status workflow: **draft** -> **approved** -> **archived**
 
 ### Overview
 
-The Scheduling module manages shift creation, week/month calendar views, and attendance tracking per shift.
+The Scheduling module provides full shift management including shift creation, templates, recurring patterns, duty roster assignments, swap requests, time-off tracking, call recording, and reporting.
 
 **API Endpoints**: `/api/v1/scheduling/`
-**Permissions**: `scheduling.view` (read), `scheduling.manage` (create/edit/delete)
+**Permissions**: `scheduling.view` (read), `scheduling.manage` (create/edit/delete), `scheduling.assign` (assign members), `scheduling.swap` (swap requests), `scheduling.report` (reports/analytics)
 
 ### Common Issues
 
@@ -1113,7 +1114,7 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Message**: `"Unable to create the shift. Please check your input and try again."`
 
 **Causes**:
-1. Missing required fields (title, shift_date, start_time, end_time)
+1. Missing required fields (shift_date, start_time)
 2. End time before start time
 3. Missing `scheduling.manage` permission
 
@@ -1136,6 +1137,243 @@ docker exec the-logbook-backend-1 alembic upgrade head
 - Navigate to the correct week using the calendar navigation
 - Check that shifts have been created for the current week
 - Verify shift dates are correct in the database
+
+---
+
+#### Shift Template: Not Appearing in Template List
+
+**Symptoms**: Created a template but it doesn't show up when listing templates
+
+**Causes**:
+1. Template marked as inactive (`is_active = false`)
+2. The `active_only` query parameter defaults to `true`
+
+**Solutions**:
+- Check the template's `is_active` status
+- To see all templates including inactive: `GET /api/v1/scheduling/templates?active_only=false`
+- Update the template: `PATCH /api/v1/scheduling/templates/{id}` with `{"is_active": true}`
+
+---
+
+#### Shift Pattern: Auto-Generation Not Creating Shifts
+
+**Symptoms**: `POST /api/v1/scheduling/patterns/{id}/generate` returns 0 shifts
+
+**Causes**:
+1. Start date is after end date
+2. Pattern has no template linked (`template_id` is null)
+3. For WEEKLY patterns: `schedule_config.weekdays` doesn't include any days in the range
+4. For PLATOON patterns: `days_on` and `days_off` not configured
+5. Pattern is inactive
+
+**Solutions**:
+- Verify the pattern has a valid `template_id`
+- For weekly patterns, ensure `schedule_config` includes `{"weekdays": [0, 1, 2, 3, 4]}` (Mon-Fri)
+- For platoon patterns, set `rotation_days`, `days_on`, and `days_off`
+- Check that the date range in the generation request covers at least one matching day
+
+---
+
+#### Shift Assignment: Member Can't Confirm
+
+**Symptoms**: Member gets an error when trying to confirm their shift assignment
+
+**Causes**:
+1. The logged-in user doesn't match the assignment's `user_id`
+2. Assignment has already been confirmed or declined
+
+**Solutions**:
+- Members can only confirm their own assignments
+- Check the current `assignment_status` — only `assigned` status can be confirmed
+
+---
+
+#### Shift Swap: Request Denied Unexpectedly
+
+**Symptoms**: Swap request was denied even though both members agreed
+
+**Causes**:
+1. An officer must review and approve swap requests — member-to-member agreement is not sufficient
+2. The reviewer may have added notes explaining the denial
+
+**Solutions**:
+- Check `reviewer_notes` on the swap request for the reason
+- Ensure the request was reviewed by someone with `scheduling.manage` permission
+- Submit a new request if the original was denied in error
+
+---
+
+#### Time-Off: Request Not Showing in Availability
+
+**Symptoms**: Submitted a time-off request but `GET /availability` doesn't show it
+
+**Causes**:
+1. Time-off request is still `pending` — only `approved` requests appear in availability
+2. Date range doesn't overlap with the time-off dates
+
+**Solutions**:
+- Have an officer approve the time-off request: `POST /api/v1/scheduling/time-off/{id}/review`
+- Verify the availability query date range overlaps with the time-off dates
+
+---
+
+#### Shift Calls: Not Linked to Correct Shift
+
+**Symptoms**: Call records appear under the wrong shift
+
+**Causes**:
+1. Wrong `shift_id` provided when creating the call
+
+**Solutions**:
+- Verify the shift ID before creating a call: `GET /api/v1/scheduling/shifts` to list shifts by date
+- Update the call if needed: `PATCH /api/v1/scheduling/calls/{id}`
+
+---
+
+#### Reports: Member Hours Showing Zero
+
+**Symptoms**: Member hours report shows 0 hours for members who worked shifts
+
+**Causes**:
+1. Members have attendance records but no `checked_out_at` time (duration not calculated)
+2. Date range doesn't cover the shift dates
+
+**Solutions**:
+- Ensure attendance records have both `checked_in_at` and `checked_out_at` — duration is auto-calculated from these
+- Expand the date range in the report query
+
+---
+
+#### Scheduling: Permission Denied for Assignment
+
+**Symptoms**: User gets 403 when trying to assign members to shifts
+
+**Causes**:
+1. User has `scheduling.manage` but not `scheduling.assign`
+2. The `scheduling.assign` permission is separate from general manage
+
+**Solutions**:
+- Grant the user the `scheduling.assign` permission
+- Officers, chiefs, and the Scheduling Officer role have this by default
+
+---
+
+## Facilities Module
+
+### Overview
+
+The Facilities module manages buildings, stations, and properties including maintenance scheduling, utility tracking, key/access management, room inventory, emergency contacts, capital projects, insurance policies, occupant assignments, and compliance checklists.
+
+**API Endpoints**: `/api/v1/facilities/`
+**Permissions**: `facilities.view` (read), `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance` (log maintenance), `facilities.manage` (full access)
+
+### Common Issues
+
+#### Error: Unable to load facilities
+
+**Message**: `"Unable to load facilities. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. Migration not applied (facilities tables don't exist)
+3. Facilities module not enabled during onboarding
+
+**Solutions**:
+```bash
+# Run migrations
+docker exec the-logbook-backend-1 alembic upgrade head
+
+# Verify the facilities tables exist
+docker exec the-logbook-db-1 mysql -u root -p the_logbook -e "SHOW TABLES LIKE 'facilit%';"
+```
+
+---
+
+#### Facility Types/Statuses Empty
+
+**Symptoms**: No facility types or statuses available when creating a facility
+
+**Causes**:
+1. Seed migration `20260214_2000` not applied
+2. Organization-specific types not yet created (system defaults have `organization_id = NULL`)
+
+**Solutions**:
+```bash
+# Run seed migration
+docker exec the-logbook-backend-1 alembic upgrade head
+```
+- System defaults (10 types, 6 statuses, 20 maintenance types) are seeded automatically
+- Organizations can create additional custom types
+
+---
+
+#### Maintenance Scheduling: No Default Types
+
+**Symptoms**: No maintenance types available when logging maintenance
+
+**Causes**:
+1. Seed migration not applied
+
+**Solutions**:
+- Run `alembic upgrade head` — migration `20260214_2000` seeds 20 default maintenance types (HVAC, generator, fire alarm, sprinkler, elevator, bay door, etc.) with recommended scheduling intervals
+
+---
+
+#### Utility Readings: Can't Add Meter Reading
+
+**Symptoms**: Error when adding a utility reading
+
+**Causes**:
+1. No utility account exists for the facility
+2. Missing `facilities.maintenance` permission
+
+**Solutions**:
+- First create a utility account: `POST /api/v1/facilities/{id}/utility-accounts`
+- Then add readings: `POST /api/v1/facilities/{id}/utility-accounts/{account_id}/readings`
+- Ensure user has `facilities.maintenance` permission
+
+---
+
+#### Key/Access: Member Not Found for Assignment
+
+**Symptoms**: Can't assign an access key to a member
+
+**Causes**:
+1. The `assigned_to` field expects a valid user ID
+2. The user must be in the same organization
+
+**Solutions**:
+- Verify the user ID: `GET /api/v1/users` to list organization members
+- Use the correct `user_id` in the `assigned_to` field
+
+---
+
+#### Compliance Checklist: Items Not Saving
+
+**Symptoms**: Compliance checklist items aren't persisting
+
+**Causes**:
+1. Must create the checklist first, then add items to it
+2. Missing `facilities.edit` permission
+
+**Solutions**:
+- Create checklist: `POST /api/v1/facilities/{id}/compliance-checklists`
+- Then add items: `POST /api/v1/facilities/{id}/compliance-checklists/{checklist_id}/items`
+
+---
+
+#### Facilities Manager Role: Missing Permissions
+
+**Symptoms**: Facilities Manager can view but can't edit or log maintenance
+
+**Causes**:
+1. The Facilities Manager role intentionally excludes `facilities.delete` and `facilities.manage`
+2. It includes: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.maintenance`
+
+**Solutions**:
+- This is by design — the role is for day-to-day management, not full admin
+- For full access, assign the Chief, President, or Assistant Chief role
+- Or create a custom role with all 6 facilities permissions
 
 ---
 
@@ -2605,6 +2843,11 @@ If you find new `as any` assertions, replace them with proper types following th
 ---
 
 ## Version History
+
+**v1.8** - 2026-02-14
+- Expanded Scheduling module section with 10 new troubleshooting entries (templates, patterns, assignments, swaps, time-off, calls, reports, permissions)
+- Added Facilities module troubleshooting section (7 new entries covering facility creation, types/statuses, maintenance, utilities, keys, compliance, permissions)
+- Updated permissions reference for new scheduling permissions (assign, swap, report)
 
 **v1.7** - 2026-02-14
 - Added events module troubleshooting section (6 new entries)

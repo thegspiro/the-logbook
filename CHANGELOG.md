@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Shift Module Enhancement: Full Scheduling System (2026-02-14)
+
+#### Shift Templates & Recurring Patterns
+- **Shift templates**: `POST /api/v1/scheduling/templates` — define reusable shift definitions (Day Shift, Night Shift, Weekend Duty) with start/end times, duration, positions, min staffing, and calendar color
+- **Shift patterns**: `POST /api/v1/scheduling/patterns` — create recurring schedules with support for four pattern types: `daily`, `weekly`, `platoon` (A/B/C rotation), and `custom`
+- **Auto-generation**: `POST /api/v1/scheduling/patterns/{id}/generate` — generates shifts for a date range from a pattern template, with automatic assignment creation for pre-assigned members
+- **Template CRUD**: Full create/read/update/delete for shift templates with active/inactive toggle
+
+#### Duty Roster & Shift Assignments
+- **Assign members**: `POST /api/v1/scheduling/shifts/{id}/assignments` — assign members to shifts with position designation (officer, driver, firefighter, EMS, captain, lieutenant, probationary, volunteer)
+- **Confirm/decline**: `POST /api/v1/scheduling/assignments/{id}/confirm` — members confirm their own shift assignments
+- **Assignment statuses**: `assigned`, `confirmed`, `declined`, `no_show`
+- **My assignments**: `GET /api/v1/scheduling/my-assignments` — personal view of upcoming shift assignments
+
+#### Shift Swap Requests
+- **Request swap**: `POST /api/v1/scheduling/swap-requests` — members request to swap shifts, optionally targeting a specific shift or member
+- **Officer review**: `POST /api/v1/scheduling/swap-requests/{id}/review` — approve or deny swap requests with notes
+- **Cancel request**: `POST /api/v1/scheduling/swap-requests/{id}/cancel` — requestor can cancel pending requests
+- **Status tracking**: `pending`, `approved`, `denied`, `cancelled` with full audit trail
+
+#### Time-Off / Unavailability
+- **Request time off**: `POST /api/v1/scheduling/time-off` — members submit time-off requests with date range and reason
+- **Officer review**: `POST /api/v1/scheduling/time-off/{id}/review` — approve or deny with notes
+- **Availability check**: `GET /api/v1/scheduling/availability` — view which members have approved time off in a date range, for scheduling decisions
+- **Cancel request**: `POST /api/v1/scheduling/time-off/{id}/cancel` — cancel pending requests
+
+#### Shift Call Recording
+- **Record calls**: `POST /api/v1/scheduling/shifts/{id}/calls` — log incidents/calls during shifts with incident number, type, dispatch/on-scene/cleared times, responding members
+- **Call details**: Track `cancelled_en_route`, `medical_refusal`, and per-call responding member list
+- **Call CRUD**: Full create/read/update/delete for shift call records
+
+#### Shift Reporting & Analytics
+- **Member hours report**: `GET /api/v1/scheduling/reports/member-hours` — per-member shift count and total hours for a date range
+- **Coverage report**: `GET /api/v1/scheduling/reports/coverage` — daily staffing levels showing assigned vs. confirmed vs. minimum required
+- **Call volume report**: `GET /api/v1/scheduling/reports/call-volume` — call counts by type with average response times, groupable by day/week/month
+- **My shifts**: `GET /api/v1/scheduling/my-shifts` — personal shift history and upcoming assignments
+
+#### New Permissions & Roles
+- **`scheduling.assign`**: Assign members to shifts (officers and above)
+- **`scheduling.swap`**: Request and manage shift swaps (all members)
+- **`scheduling.report`**: View shift reports and analytics (officers and above)
+- **Scheduling Officer role**: New system role with full scheduling permissions for dedicated scheduling coordinators
+
+#### New Models
+- `ShiftTemplate` — reusable shift definitions with positions and min staffing
+- `ShiftPattern` — recurring schedule definitions with platoon rotation support
+- `ShiftAssignment` — duty roster assignments with position and confirmation status
+- `ShiftSwapRequest` — swap request workflow with officer review
+- `ShiftTimeOff` — time-off request workflow with approval
+- **Migration**: `20260214_2200` creates 5 new tables with indexes
+
+### Added - Facilities Module: Building & Property Management (2026-02-14)
+
+#### Core Facilities Management
+- **Facility CRUD**: Create, edit, archive facilities with types, statuses, addresses, GPS coordinates, year built, square footage
+- **Facility types**: 10 default types (Fire Station, EMS Station, Training Center, Administrative Office, Meeting Hall, Storage Building, Maintenance Shop, Communications Center, Community Center, Other)
+- **Facility statuses**: 6 default statuses with color coding (Operational, Under Renovation, Under Construction, Temporarily Closed, Decommissioned, Other)
+- **Photos & documents**: Attach photos and documents to facilities with metadata
+- **Systems tracking**: Track building systems (HVAC, electrical, plumbing, etc.) with install dates and warranty info
+
+#### Facility Maintenance
+- **Maintenance scheduling**: `POST /api/v1/facilities/{id}/maintenance` — log maintenance records with type, priority, scheduling, and cost tracking
+- **20 default maintenance types**: HVAC, Generator, Fire Alarm, Sprinkler, Roof, Elevator, Bay Door, Pest Control, and more with recommended frequencies
+- **Inspections**: Track facility inspections with pass/fail, findings, and follow-up
+
+#### Extended Facilities Features
+- **Utility tracking**: Track utility accounts (electric, gas, water, sewer, internet, phone, trash) with billing cycles and meter readings
+- **Key & access management**: Track physical keys, key fobs, access cards, codes, and gate remotes with assignment to members
+- **Room/space inventory**: Catalog rooms with type, capacity, equipment, and availability
+- **Emergency contacts & shutoffs**: Record emergency contacts by type (fire, police, utility, building) and shutoff locations (water, gas, electric, HVAC, sprinkler)
+- **Capital improvement projects**: Track renovation/construction/equipment projects with budget, timeline, and contractor info
+- **Insurance policies**: Manage building, liability, flood, earthquake, and equipment policies with coverage amounts and renewal dates
+- **Occupant/unit assignments**: Track tenant/unit assignments for multi-use facilities
+- **ADA/compliance checklists**: Create compliance checklists (ADA, fire code, building code, OSHA, environmental) with individual checklist items and due dates
+
+#### Permissions & Roles
+- **6 permissions**: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance`, `facilities.manage`
+- **Facilities Manager role**: System role with VIEW, CREATE, EDIT, MAINTENANCE permissions for day-to-day building management
+- **Onboarding integration**: Facilities module added to onboarding available modules list
+
+#### Seed Data & Migration
+- **Migration**: `20260214_1900` creates 9 core facility tables; `20260214_2100` creates 11 extended feature tables
+- **Seed migration**: `20260214_2000` seeds default facility types, statuses, and maintenance types
+
+### Added - Apparatus Module Hardening (2026-02-14)
+
+#### Security & Quality Improvements
+- **Tenant isolation**: All queries filter by `organization_id` — no cross-organization data leakage
+- **Pagination**: All list endpoints support `skip`/`limit` with total count
+- **Error handling**: Consistent error responses with proper HTTP status codes
+- **Soft-delete**: `is_archived`/`archived_at`/`archived_by` pattern for apparatus records
+- **Historic repair entries**: Maintenance records support attachments and repair history
+
 ### Added - Secretary Attendance Dashboard & Meeting Waivers (2026-02-14)
 
 #### Secretary Attendance Dashboard

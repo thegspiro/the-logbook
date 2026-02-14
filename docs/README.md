@@ -132,14 +132,39 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - API endpoints: 12 endpoints for meeting CRUD, attendees, action items, summary
     - Permissions: `meetings.view`, `meetings.manage`
 
-12. **Scheduling Module**
-    - Shift creation and management with position types
+12. **Scheduling Module** (Enhanced 2026-02-14)
+    - Shift creation, templates, and recurring patterns (daily/weekly/platoon/custom)
+    - Auto-generation of shifts from patterns with pre-assigned members
+    - Duty roster: assign members to shifts with position and confirm/decline workflow
+    - Shift swap requests with officer approval workflow
+    - Time-off requests with approval and member availability checking
+    - Shift call recording with incident details and responding members
     - Week and month calendar views with real shift data
-    - Attendance tracking per shift
-    - API endpoints: 10 endpoints for shift CRUD, attendance, calendar views, summary
-    - Permissions: `scheduling.view`, `scheduling.manage`
+    - Attendance tracking per shift with check-in/check-out
+    - Reports: member hours, shift coverage, call volume analysis
+    - Personal views: my-shifts, my-assignments
+    - API endpoints: 49 endpoints for shifts, templates, patterns, assignments, swaps, time-off, calls, reports
+    - Permissions: `scheduling.view`, `scheduling.manage`, `scheduling.assign`, `scheduling.swap`, `scheduling.report`
+    - Roles: Scheduling Officer with full scheduling access
 
-13. **Reports Module** (Updated 2026-02-14)
+13. **Facilities Module** (New 2026-02-14)
+    - Building and property management with types, statuses, addresses, GPS, and photos
+    - Maintenance scheduling with 20 default maintenance types and recommended frequencies
+    - Facility inspections with pass/fail tracking and follow-up
+    - Utility tracking: accounts and meter readings for electric, gas, water, sewer, internet, phone, trash
+    - Key & access management: keys, fobs, cards, codes with member assignment
+    - Room/space inventory with type, capacity, and equipment tracking
+    - Emergency contacts & shutoff locations by category
+    - Capital improvement projects with budget, timeline, and contractor tracking
+    - Insurance policies: building, liability, flood, earthquake, equipment with coverage and renewal tracking
+    - Occupant/unit assignments for multi-use facilities
+    - ADA/compliance checklists with individual items and due dates
+    - Seed data: 10 facility types, 6 statuses, 20 maintenance types
+    - API endpoints: full CRUD for 14 entity types under `/api/v1/facilities/`
+    - Permissions: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance`, `facilities.manage`
+    - Roles: Facilities Manager for day-to-day building management
+
+14. **Reports Module** (Updated 2026-02-14)
     - Report generation: member roster, training summary, event attendance, training progress, annual training
     - Data aggregation from members, training records, events, shift reports, and pipeline enrollments
     - Customizable reporting period with date range picker (This Year, Last Year, Last 90 Days, Custom)
@@ -294,6 +319,13 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Documents / file management | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#documents-module) |
 | Meeting minutes / action items | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meetings--minutes-module) |
 | Shift scheduling / calendar | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module) |
+| Shift templates / patterns | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-template-not-appearing-in-template-list) |
+| Shift assignments / duty roster | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-assignment-member-cant-confirm) |
+| Shift swap requests | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-swap-request-denied-unexpectedly) |
+| Time-off / availability | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#time-off-request-not-showing-in-availability) |
+| Facilities / building management | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#facilities-module) |
+| Facility maintenance | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#maintenance-scheduling-no-default-types) |
+| Facility compliance / ADA | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#compliance-checklist-items-not-saving) |
 | Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
 | Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
@@ -401,7 +433,7 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.7 | 2026-02-14 | Current |
+| TROUBLESHOOTING.md | 1.8 | 2026-02-14 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
@@ -446,6 +478,25 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Shift Module Enhancement & Facilities Module
+
+**What Changed**:
+- **Shift Module Enhanced**: Added shift templates, recurring patterns (daily/weekly/platoon/custom), duty roster assignments, shift swap requests, time-off tracking, shift call recording, and reporting/analytics
+- **5 New Shift Tables**: `shift_templates`, `shift_patterns`, `shift_assignments`, `shift_swap_requests`, `shift_time_off`
+- **3 New Scheduling Permissions**: `scheduling.assign`, `scheduling.swap`, `scheduling.report`
+- **Scheduling Officer Role**: New system role for dedicated scheduling coordinators
+- **Facilities Module**: Complete building/property management with maintenance, utilities, keys, rooms, emergency contacts, capital projects, insurance, occupants, compliance checklists
+- **Facilities Extended**: 11 additional tables for utility tracking, access keys, rooms, emergency contacts, shutoff locations, capital projects, insurance policies, occupants, compliance
+- **Seed Data**: 10 facility types, 6 statuses, 20 maintenance types seeded automatically
+- **Facilities Manager Role**: System role for day-to-day building management
+- **Apparatus Hardened**: Tenant isolation, pagination, soft-delete, historic repair entries
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) v1.8 — Scheduling module expanded (10 new entries), Facilities module added (7 entries)
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog for shift enhancement, facilities, and apparatus hardening
+
+---
 
 ### 2026-02-14 - Attendance Dashboard, Auto-Enrollment, Incident Tracking, Cron & Tier Editor
 
