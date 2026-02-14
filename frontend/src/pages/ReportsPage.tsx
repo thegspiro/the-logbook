@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import {
   FileText,
-  Calendar,
+  Calendar as CalendarIcon,
   Users,
   TrendingUp,
   Download,
@@ -28,6 +28,7 @@ interface ReportCard {
   icon: React.ElementType;
   category: 'member' | 'training' | 'event' | 'compliance';
   available: boolean;
+  usesDateRange?: boolean;
 }
 
 /** Maps frontend report IDs to the API report_type values. */
@@ -39,12 +40,43 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'annual-training': 'annual_training',
 };
 
+type DatePreset = 'this-year' | 'last-year' | 'last-90' | 'custom';
+
+const getPresetDates = (preset: DatePreset): { start: string; end: string } => {
+  const now = new Date();
+  switch (preset) {
+    case 'this-year':
+      return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
+    case 'last-year':
+      return { start: `${now.getFullYear() - 1}-01-01`, end: `${now.getFullYear() - 1}-12-31` };
+    case 'last-90': {
+      const ago = new Date(now);
+      ago.setDate(ago.getDate() - 90);
+      return { start: ago.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+    }
+    default:
+      return { start: '', end: '' };
+  }
+};
+
 export const ReportsPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);
   const [activeReport, setActiveReport] = useState<ReportCard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<DatePreset>('this-year');
+  const [startDate, setStartDate] = useState<string>(() => getPresetDates('this-year').start);
+  const [endDate, setEndDate] = useState<string>(() => getPresetDates('this-year').end);
+
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== 'custom') {
+      const { start, end } = getPresetDates(preset);
+      setStartDate(start);
+      setEndDate(end);
+    }
+  };
 
   const reports: ReportCard[] = [
     {
@@ -62,14 +94,16 @@ export const ReportsPage: React.FC = () => {
       icon: TrendingUp,
       category: 'training',
       available: true,
+      usesDateRange: true,
     },
     {
       id: 'event-attendance',
       title: 'Event Attendance',
       description: 'Attendance records for all events and training sessions',
-      icon: Calendar,
+      icon: CalendarIcon,
       category: 'event',
       available: true,
+      usesDateRange: true,
     },
     {
       id: 'training-progress',
@@ -86,6 +120,7 @@ export const ReportsPage: React.FC = () => {
       icon: BarChart3,
       category: 'training',
       available: true,
+      usesDateRange: true,
     },
     {
       id: 'compliance-status',
@@ -118,7 +153,18 @@ export const ReportsPage: React.FC = () => {
     setError(null);
 
     try {
-      const data = await reportsService.generateReport({ report_type: reportType });
+      const params: { report_type: string; start_date?: string; end_date?: string } = {
+        report_type: reportType,
+      };
+
+      if (report.usesDateRange && startDate) {
+        params.start_date = startDate;
+      }
+      if (report.usesDateRange && endDate) {
+        params.end_date = endDate;
+      }
+
+      const data = await reportsService.generateReport(params);
       setReportData(data);
       setActiveReport(report);
     } catch (err: unknown) {
@@ -504,6 +550,58 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Date Range Picker */}
+      <div className="mb-6 bg-white/5 border border-white/10 rounded-lg p-4">
+        <div className="flex items-center space-x-2 mb-3">
+          <CalendarIcon className="w-4 h-4 text-slate-400" aria-hidden="true" />
+          <span className="text-sm font-medium text-slate-300">Reporting Period</span>
+          <span className="text-xs text-slate-500">(applies to date-based reports)</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            { id: 'this-year' as DatePreset, label: 'This Year' },
+            { id: 'last-year' as DatePreset, label: 'Last Year' },
+            { id: 'last-90' as DatePreset, label: 'Last 90 Days' },
+            { id: 'custom' as DatePreset, label: 'Custom' },
+          ]).map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => handlePresetChange(preset.id)}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                datePreset === preset.id
+                  ? 'bg-red-600 text-white'
+                  : 'bg-white/10 text-slate-300 hover:bg-white/20'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+
+          <div className="flex items-center gap-2 ml-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            <span className="text-slate-500 text-sm">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Error Banner */}
       {error && !activeReport && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
@@ -619,7 +717,14 @@ export const ReportsPage: React.FC = () => {
                         'aria-hidden': true,
                       })}
                     </div>
-                    <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                    <div>
+                      <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                      {activeReport.usesDateRange && (reportData?.period_start || reportData?.period_end) && (
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {reportData.period_start ? String(reportData.period_start) : 'Start'} — {reportData.period_end ? String(reportData.period_end) : 'End'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <button
                     type="button"
