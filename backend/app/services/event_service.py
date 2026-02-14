@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
-from app.models.event import Event, EventRSVP, EventType, RSVPStatus, CheckInWindowType
+from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
 from app.models.user import User, Role, user_roles
 from app.models.location import Location
 from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
@@ -1106,3 +1106,200 @@ class EventService:
         }
 
         return stats, None
+
+    # ============================================================
+    # Event Templates
+    # ============================================================
+
+    async def create_template(
+        self, template_data: Dict[str, Any], organization_id: UUID, created_by: UUID
+    ) -> EventTemplate:
+        """Create a new event template"""
+        template = EventTemplate(
+            organization_id=str(organization_id),
+            created_by=str(created_by),
+            **template_data,
+        )
+        self.db.add(template)
+        await self.db.commit()
+        await self.db.refresh(template)
+        return template
+
+    async def list_templates(
+        self, organization_id: UUID, include_inactive: bool = False
+    ) -> List[EventTemplate]:
+        """List all event templates for an organization"""
+        query = (
+            select(EventTemplate)
+            .where(EventTemplate.organization_id == str(organization_id))
+        )
+        if not include_inactive:
+            query = query.where(EventTemplate.is_active == True)
+        query = query.order_by(EventTemplate.name)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_template(
+        self, template_id: UUID, organization_id: UUID
+    ) -> Optional[EventTemplate]:
+        """Get a specific event template"""
+        result = await self.db.execute(
+            select(EventTemplate)
+            .where(EventTemplate.id == str(template_id))
+            .where(EventTemplate.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def update_template(
+        self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+    ) -> Optional[EventTemplate]:
+        """Update an event template"""
+        template = await self.get_template(template_id, organization_id)
+        if not template:
+            return None
+
+        for field, value in update_data.items():
+            setattr(template, field, value)
+
+        template.updated_at = datetime.utcnow()
+        await self.db.commit()
+        await self.db.refresh(template)
+        return template
+
+    async def delete_template(
+        self, template_id: UUID, organization_id: UUID
+    ) -> bool:
+        """Soft-delete a template by deactivating it"""
+        template = await self.get_template(template_id, organization_id)
+        if not template:
+            return False
+
+        template.is_active = False
+        template.updated_at = datetime.utcnow()
+        await self.db.commit()
+        return True
+
+    # ============================================================
+    # Recurring Events
+    # ============================================================
+
+    def _generate_recurrence_dates(
+        self,
+        start_datetime: datetime,
+        end_datetime: datetime,
+        pattern: str,
+        recurrence_end_date: datetime,
+        custom_days: Optional[List[int]] = None,
+    ) -> List[Tuple[datetime, datetime]]:
+        """
+        Generate all occurrence dates for a recurring event.
+
+        Returns list of (start, end) datetime tuples.
+        """
+        duration = end_datetime - start_datetime
+        occurrences = []
+        current = start_datetime
+
+        while current <= recurrence_end_date:
+            occurrences.append((current, current + duration))
+
+            if pattern == RecurrencePattern.DAILY.value:
+                current += timedelta(days=1)
+            elif pattern == RecurrencePattern.WEEKLY.value:
+                current += timedelta(weeks=1)
+            elif pattern == RecurrencePattern.BIWEEKLY.value:
+                current += timedelta(weeks=2)
+            elif pattern == RecurrencePattern.MONTHLY.value:
+                # Move to same day next month
+                month = current.month + 1
+                year = current.year
+                if month > 12:
+                    month = 1
+                    year += 1
+                try:
+                    current = current.replace(year=year, month=month)
+                except ValueError:
+                    # Handle months with fewer days (e.g., Jan 31 -> Feb 28)
+                    import calendar
+                    last_day = calendar.monthrange(year, month)[1]
+                    current = current.replace(year=year, month=month, day=min(current.day, last_day))
+            elif pattern == RecurrencePattern.CUSTOM.value and custom_days:
+                # Find next matching weekday
+                found = False
+                for i in range(1, 8):
+                    next_date = current + timedelta(days=i)
+                    if next_date.weekday() in custom_days:
+                        current = next_date
+                        found = True
+                        break
+                if not found:
+                    break
+            else:
+                break
+
+        return occurrences
+
+    async def create_recurring_event(
+        self,
+        event_data: Dict[str, Any],
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[List[Event], Optional[str]]:
+        """
+        Create a series of recurring events.
+
+        Creates a parent event and individual occurrences.
+        """
+        recurrence_pattern = event_data.pop("recurrence_pattern")
+        recurrence_end_date = event_data.pop("recurrence_end_date")
+        recurrence_custom_days = event_data.pop("recurrence_custom_days", None)
+
+        # Generate occurrence dates
+        occurrences = self._generate_recurrence_dates(
+            start_datetime=event_data["start_datetime"],
+            end_datetime=event_data["end_datetime"],
+            pattern=recurrence_pattern,
+            recurrence_end_date=recurrence_end_date,
+            custom_days=recurrence_custom_days,
+        )
+
+        if len(occurrences) == 0:
+            return [], "No valid occurrences generated for the given recurrence pattern"
+
+        if len(occurrences) > 365:
+            return [], "Too many occurrences (max 365). Please narrow the date range."
+
+        # Create parent event (first occurrence)
+        parent_event = Event(
+            organization_id=str(organization_id),
+            created_by=str(created_by),
+            is_recurring=True,
+            recurrence_pattern=RecurrencePattern(recurrence_pattern),
+            recurrence_end_date=recurrence_end_date,
+            recurrence_custom_days=recurrence_custom_days,
+            start_datetime=occurrences[0][0],
+            end_datetime=occurrences[0][1],
+            **{k: v for k, v in event_data.items() if k not in ("start_datetime", "end_datetime")},
+        )
+        self.db.add(parent_event)
+        await self.db.flush()  # Get the parent ID
+
+        created_events = [parent_event]
+
+        # Create child events for subsequent occurrences
+        for start, end in occurrences[1:]:
+            child_event = Event(
+                organization_id=str(organization_id),
+                created_by=str(created_by),
+                is_recurring=True,
+                recurrence_parent_id=parent_event.id,
+                recurrence_pattern=RecurrencePattern(recurrence_pattern),
+                start_datetime=start,
+                end_datetime=end,
+                **{k: v for k, v in event_data.items() if k not in ("start_datetime", "end_datetime")},
+            )
+            self.db.add(child_event)
+            created_events.append(child_event)
+
+        await self.db.commit()
+        return created_events, None

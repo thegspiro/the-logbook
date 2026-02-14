@@ -31,6 +31,10 @@ from app.schemas.event import (
     CheckInMonitoringStats,
     ManagerAddAttendee,
     RSVPOverride,
+    EventTemplateCreate,
+    EventTemplateUpdate,
+    EventTemplateResponse,
+    RecurringEventCreate,
 )
 from app.services.event_service import EventService
 from app.api.dependencies import get_current_user, require_permission
@@ -906,3 +910,165 @@ async def get_check_in_monitoring(
         )
 
     return stats
+
+
+# ============================================
+# Event Template Endpoints
+# ============================================
+
+@router.post("/templates", response_model=EventTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def create_event_template(
+    template_data: EventTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Create an event template
+
+    Templates allow departments to save reusable event configurations.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    data = template_data.model_dump(exclude_unset=True)
+    template = await service.create_template(
+        template_data=data,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+    return EventTemplateResponse.model_validate(template)
+
+
+@router.get("/templates", response_model=List[EventTemplateResponse])
+async def list_event_templates(
+    include_inactive: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    List all event templates
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    templates = await service.list_templates(
+        organization_id=current_user.organization_id,
+        include_inactive=include_inactive,
+    )
+    return [EventTemplateResponse.model_validate(t) for t in templates]
+
+
+@router.get("/templates/{template_id}", response_model=EventTemplateResponse)
+async def get_event_template(
+    template_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Get a specific event template
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    template = await service.get_template(
+        template_id=template_id,
+        organization_id=current_user.organization_id,
+    )
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found"
+        )
+    return EventTemplateResponse.model_validate(template)
+
+
+@router.patch("/templates/{template_id}", response_model=EventTemplateResponse)
+async def update_event_template(
+    template_id: UUID,
+    update_data: EventTemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Update an event template
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    data = update_data.model_dump(exclude_unset=True)
+    template = await service.update_template(
+        template_id=template_id,
+        organization_id=current_user.organization_id,
+        update_data=data,
+    )
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found"
+        )
+    return EventTemplateResponse.model_validate(template)
+
+
+@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_event_template(
+    template_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Deactivate an event template
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    success = await service.delete_template(
+        template_id=template_id,
+        organization_id=current_user.organization_id,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Template not found"
+        )
+
+
+# ============================================
+# Recurring Event Endpoints
+# ============================================
+
+@router.post("/recurring", response_model=List[EventResponse], status_code=status.HTTP_201_CREATED)
+async def create_recurring_event(
+    recurring_data: RecurringEventCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Create a recurring event series
+
+    Generates individual event instances based on the recurrence pattern.
+    Each instance can be independently managed (edited, cancelled, etc.).
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = EventService(db)
+    data = recurring_data.model_dump(exclude_unset=True)
+
+    events, error = await service.create_recurring_event(
+        event_data=data,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return [_build_event_response(event) for event in events]

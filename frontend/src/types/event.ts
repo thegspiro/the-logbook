@@ -42,6 +42,11 @@ export interface Event {
   require_checkout?: boolean;
   custom_fields?: Record<string, string | number | boolean | null>;
   attachments?: Array<{ [key: string]: string }>;
+  is_recurring?: boolean;
+  recurrence_pattern?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+  recurrence_end_date?: string;
+  recurrence_parent_id?: string;
+  template_id?: string;
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
@@ -229,4 +234,87 @@ export interface CheckInMonitoringStats {
   recent_check_ins: CheckInActivity[];
   avg_check_in_time_minutes: number | null;
   last_check_in_at: string | null;
+}
+
+// Event Templates
+export type RecurrencePattern = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+
+export interface EventTemplate {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  event_type: EventType;
+  default_title?: string;
+  default_description?: string;
+  default_location_id?: string;
+  default_location?: string;
+  default_location_details?: string;
+  default_duration_minutes?: number;
+  requires_rsvp: boolean;
+  max_attendees?: number;
+  is_mandatory: boolean;
+  eligible_roles?: string[];
+  allow_guests: boolean;
+  check_in_window_type?: 'flexible' | 'strict' | 'window';
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout: boolean;
+  send_reminders: boolean;
+  reminder_hours_before: number;
+  custom_fields_template?: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventTemplateCreate {
+  name: string;
+  description?: string;
+  event_type?: EventType;
+  default_title?: string;
+  default_description?: string;
+  default_location_id?: string;
+  default_location?: string;
+  default_location_details?: string;
+  default_duration_minutes?: number;
+  requires_rsvp?: boolean;
+  max_attendees?: number;
+  is_mandatory?: boolean;
+  eligible_roles?: string[];
+  allow_guests?: boolean;
+  check_in_window_type?: 'flexible' | 'strict' | 'window';
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
+  send_reminders?: boolean;
+  reminder_hours_before?: number;
+  custom_fields_template?: Record<string, unknown>;
+}
+
+export interface RecurringEventCreate {
+  title: string;
+  description?: string;
+  event_type?: EventType;
+  location_id?: string;
+  location?: string;
+  location_details?: string;
+  start_datetime: string;
+  end_datetime: string;
+  recurrence_pattern: RecurrencePattern;
+  recurrence_end_date: string;
+  recurrence_custom_days?: number[];
+  requires_rsvp?: boolean;
+  rsvp_deadline?: string;
+  max_attendees?: number;
+  is_mandatory?: boolean;
+  eligible_roles?: string[];
+  allow_guests?: boolean;
+  send_reminders?: boolean;
+  reminder_hours_before?: number;
+  check_in_window_type?: 'flexible' | 'strict' | 'window';
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
+  template_id?: string;
 }

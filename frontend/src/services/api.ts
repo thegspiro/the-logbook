@@ -1469,6 +1469,38 @@ export const eventService = {
     const response = await api.patch<import('../types/event').RSVP>(`/events/${eventId}/rsvps/${userId}/override`, data);
     return response.data;
   },
+
+  // Event Templates
+  async getTemplates(includeInactive?: boolean): Promise<import('../types/event').EventTemplate[]> {
+    const params = includeInactive ? { include_inactive: true } : undefined;
+    const response = await api.get<import('../types/event').EventTemplate[]>('/events/templates', { params });
+    return response.data;
+  },
+
+  async createTemplate(data: import('../types/event').EventTemplateCreate): Promise<import('../types/event').EventTemplate> {
+    const response = await api.post<import('../types/event').EventTemplate>('/events/templates', data);
+    return response.data;
+  },
+
+  async getTemplate(templateId: string): Promise<import('../types/event').EventTemplate> {
+    const response = await api.get<import('../types/event').EventTemplate>(`/events/templates/${templateId}`);
+    return response.data;
+  },
+
+  async updateTemplate(templateId: string, data: Partial<import('../types/event').EventTemplateCreate>): Promise<import('../types/event').EventTemplate> {
+    const response = await api.patch<import('../types/event').EventTemplate>(`/events/templates/${templateId}`, data);
+    return response.data;
+  },
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await api.delete(`/events/templates/${templateId}`);
+  },
+
+  // Recurring Events
+  async createRecurringEvent(data: import('../types/event').RecurringEventCreate): Promise<import('../types/event').Event[]> {
+    const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
+    return response.data;
+  },
 };
 
 export interface UserInventoryItem {
