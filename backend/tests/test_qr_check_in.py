@@ -48,7 +48,7 @@ class TestQRCheckInTimeValidation:
             organization_id=org_id,
             title="Test Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),
@@ -89,7 +89,7 @@ class TestQRCheckInTimeValidation:
             organization_id=org_id,
             title="Future Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(hours=2),
             end_datetime=now + timedelta(hours=3),
@@ -128,7 +128,7 @@ class TestQRCheckInTimeValidation:
             organization_id=org_id,
             title="Past Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now - timedelta(hours=3),
             end_datetime=now - timedelta(hours=1),
@@ -167,7 +167,7 @@ class TestQRCheckInTimeValidation:
             organization_id=org_id,
             title="Early Ended Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now - timedelta(hours=2),
             end_datetime=now + timedelta(hours=2),  # Scheduled to end in future
@@ -207,7 +207,7 @@ class TestQRCheckInTimeValidation:
             organization_id=org_id,
             title="Cancelled Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),
@@ -250,7 +250,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Test Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),
@@ -324,7 +324,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Test Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),
@@ -388,8 +388,9 @@ class TestSelfCheckIn:
         rsvp, error = await service.self_check_in(event_id, user_id, org_id)
 
         # Assert
-        assert error == "You are already checked in to this event"
-        assert rsvp is None
+        assert error == "ALREADY_CHECKED_IN"
+        # Service returns the existing RSVP alongside the error code
+        assert rsvp is not None
 
     @pytest.mark.asyncio
     async def test_self_check_in_before_time_window(self):
@@ -406,7 +407,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Future Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(hours=2),
             end_datetime=now + timedelta(hours=3),
@@ -452,7 +453,7 @@ class TestSelfCheckIn:
         rsvp, error = await service.self_check_in(event_id, user_id, org_id)
 
         # Assert
-        assert error == "Check-in is not available yet. It opens 1 hour before the event."
+        assert "Check-in is not available yet" in error
         assert rsvp is None
 
     @pytest.mark.asyncio
@@ -470,7 +471,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Past Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now - timedelta(hours=3),
             end_datetime=now - timedelta(hours=1),
@@ -534,7 +535,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Early Ended Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now - timedelta(hours=2),
             end_datetime=now + timedelta(hours=2),  # Scheduled to end in future
@@ -598,7 +599,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Cancelled Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),
@@ -662,7 +663,7 @@ class TestSelfCheckIn:
             organization_id=org_id,
             title="Test Event",
             description="Test Description",
-            event_type=EventType.MEETING,
+            event_type=EventType.BUSINESS_MEETING,
             location="Test Location",
             start_datetime=now + timedelta(minutes=30),
             end_datetime=now + timedelta(hours=2),

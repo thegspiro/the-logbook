@@ -23,7 +23,7 @@ from app.core.security_middleware import check_rate_limit
 from app.services.onboarding import OnboardingService
 from app.services.auth_service import AuthService
 from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
-from app.api.v1.test_email_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
+from app.api.v1.email_test_helper import test_smtp_connection, test_gmail_oauth, test_microsoft_oauth
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.utils.image_validator import validate_logo_image
 from datetime import datetime, timedelta
