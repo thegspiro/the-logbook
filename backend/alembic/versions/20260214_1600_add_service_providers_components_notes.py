@@ -79,6 +79,10 @@ def upgrade() -> None:
         # Status
         sa.Column('is_active', sa.Boolean(), nullable=False,
                    server_default='1'),
+        # Archive (soft-delete for compliance)
+        sa.Column('archived_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('archived_by', sa.String(36),
+                   sa.ForeignKey('users.id'), nullable=True),
         # Timestamps
         sa.Column('created_by', sa.String(36),
                    sa.ForeignKey('users.id'), nullable=True),
@@ -96,6 +100,9 @@ def upgrade() -> None:
     op.create_index('idx_service_providers_preferred',
                      'apparatus_service_providers',
                      ['organization_id', 'is_preferred'])
+    op.create_index('idx_service_providers_active',
+                     'apparatus_service_providers',
+                     ['organization_id', 'is_active'])
 
     # =========================================================================
     # 2. Create apparatus_components table
@@ -290,6 +297,8 @@ def downgrade() -> None:
     op.drop_table('apparatus_components')
 
     # Drop apparatus_service_providers
+    op.drop_index('idx_service_providers_active',
+                   table_name='apparatus_service_providers')
     op.drop_index('idx_service_providers_preferred',
                    table_name='apparatus_service_providers')
     op.drop_index('idx_service_providers_org_name',

@@ -1886,17 +1886,39 @@ class ApparatusService:
         await self.db.refresh(provider)
         return provider
 
-    async def delete_service_provider(
-        self, provider_id: str, organization_id: UUID
-    ) -> bool:
-        """Delete a service provider"""
+    async def archive_service_provider(
+        self, provider_id: str, organization_id: UUID, archived_by: str
+    ) -> Optional[ApparatusServiceProvider]:
+        """Archive a service provider (soft-delete for compliance).
+
+        Providers are never hard-deleted so their records remain available
+        for historical compliance checks and audit trails.
+        """
         provider = await self.get_service_provider(provider_id, organization_id)
         if not provider:
-            return False
+            return None
 
-        await self.db.delete(provider)
+        provider.is_active = False
+        provider.archived_at = datetime.utcnow()
+        provider.archived_by = archived_by
         await self.db.commit()
-        return True
+        await self.db.refresh(provider)
+        return provider
+
+    async def restore_service_provider(
+        self, provider_id: str, organization_id: UUID
+    ) -> Optional[ApparatusServiceProvider]:
+        """Restore an archived service provider back to active status."""
+        provider = await self.get_service_provider(provider_id, organization_id)
+        if not provider:
+            return None
+
+        provider.is_active = True
+        provider.archived_at = None
+        provider.archived_by = None
+        await self.db.commit()
+        await self.db.refresh(provider)
+        return provider
 
     # ========================================================================
     # Components

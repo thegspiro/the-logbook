@@ -1792,14 +1792,18 @@ async def delete_report_config(
 
 @router.get("/service-providers", response_model=List[ApparatusServiceProviderResponse], tags=["Service Providers"])
 async def list_service_providers(
-    is_active: Optional[bool] = Query(True, description="Filter by active status"),
+    is_active: Optional[bool] = Query(True, description="Filter by active status. Set to false to see archived providers, or omit for all."),
     is_preferred: Optional[bool] = Query(None, description="Filter preferred providers"),
     specialty: Optional[str] = Query(None, description="Filter by component specialty"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
 ):
     """
-    List service providers
+    List service providers.
+
+    Defaults to showing only active providers. Pass `is_active=false` to see
+    archived providers (for compliance/audit lookups), or omit the parameter
+    to see all providers regardless of status.
 
     **Permissions required:** apparatus.view or apparatus.manage
     """
@@ -1868,20 +1872,47 @@ async def update_service_provider(
     return provider
 
 
-@router.delete("/service-providers/{provider_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Service Providers"])
-async def delete_service_provider(
+@router.post("/service-providers/{provider_id}/archive", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+async def archive_service_provider(
     provider_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("apparatus.manage")),
 ):
     """
-    Delete a service provider
+    Archive a service provider (soft-delete).
+
+    Service providers are never permanently deleted so their records remain
+    available for historical compliance checks and audit trails.
 
     **Permissions required:** apparatus.manage
     """
     service = ApparatusService(db)
-    if not await service.delete_service_provider(provider_id, current_user.organization_id):
+    provider = await service.archive_service_provider(
+        provider_id, current_user.organization_id, current_user.id
+    )
+    if not provider:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+    return provider
+
+
+@router.post("/service-providers/{provider_id}/restore", response_model=ApparatusServiceProviderResponse, tags=["Service Providers"])
+async def restore_service_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Restore an archived service provider back to active status.
+
+    **Permissions required:** apparatus.manage
+    """
+    service = ApparatusService(db)
+    provider = await service.restore_service_provider(
+        provider_id, current_user.organization_id
+    )
+    if not provider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service provider not found")
+    return provider
 
 
 # ============================================================================

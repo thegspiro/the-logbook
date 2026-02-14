@@ -1212,6 +1212,10 @@ class ApparatusServiceProvider(Base):
     # Status
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # Archive (soft-delete for compliance — providers are never hard-deleted)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    archived_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+
     # Timestamps
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1225,6 +1229,7 @@ class ApparatusServiceProvider(Base):
         Index("idx_service_providers_org", "organization_id"),
         Index("idx_service_providers_org_name", "organization_id", "name"),
         Index("idx_service_providers_preferred", "organization_id", "is_preferred"),
+        Index("idx_service_providers_active", "organization_id", "is_active"),
     )
 
     def __repr__(self):

@@ -1369,6 +1369,8 @@ class ApparatusServiceProviderResponse(ApparatusServiceProviderBase):
     """Schema for service provider response"""
     id: str
     organization_id: str
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
