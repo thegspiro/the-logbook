@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Configurable Drop Notification Messages (2026-02-14)
+
+#### Email Template & Recipient Configuration
+- **Default MEMBER_DROPPED email template**: Auto-created for each organization with template variables (`{{member_name}}`, `{{reason}}`, `{{item_count}}`, etc.) — fully editable via the Email Templates settings page
+- **CC/BCC support**: `EmailService.send_email()` now supports `cc_emails` and `bcc_emails` parameters
+- **Configurable CC recipients**: Organization settings > `member_drop_notifications.cc_roles` controls which roles are CC'd (default: admin, quartermaster, chief)
+- **Static CC emails**: `member_drop_notifications.cc_emails` allows adding extra email addresses always CC'd on drop notifications
+- **Personal email support**: New `personal_email` field on user profiles for post-separation contact; `member_drop_notifications.include_personal_email` controls whether it receives the drop notification (default: true)
+- **Template variable reference**: 10 available variables for the member_dropped template type, documented in the template editor
+- **Migration**: `20260214_0800` adds `personal_email` column to users table
+
 ### Added - Member Archive & Reactivation (2026-02-14)
 
 #### Member Archiving Lifecycle

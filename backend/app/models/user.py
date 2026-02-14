@@ -160,6 +160,7 @@ class User(Base):
     # Basic Info
     username = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, index=True)
+    personal_email = Column(String(255))  # Personal/home email for post-separation contact
     password_hash = Column(String(255))
     first_name = Column(String(100))
     middle_name = Column(String(100))

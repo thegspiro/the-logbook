@@ -49,6 +49,18 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "organization_name", "description": "Organization name"},
         {"name": "expiry_hours", "description": "Minutes until link expires"},
     ],
+    "member_dropped": [
+        {"name": "member_name", "description": "Full name of the dropped member"},
+        {"name": "organization_name", "description": "Organization/department name"},
+        {"name": "drop_type_display", "description": "Type of separation (Voluntary/Involuntary)"},
+        {"name": "reason", "description": "Reason for the status change"},
+        {"name": "effective_date", "description": "Date the drop takes effect"},
+        {"name": "return_deadline", "description": "Deadline to return all property"},
+        {"name": "item_count", "description": "Number of outstanding items"},
+        {"name": "total_value", "description": "Total dollar value of outstanding items"},
+        {"name": "performed_by_name", "description": "Name of the officer who performed the drop"},
+        {"name": "performed_by_title", "description": "Title/rank of the officer"},
+    ],
 }
 
 # Default welcome email HTML body
@@ -142,6 +154,66 @@ This is an automated message from {{organization_name}}.
 Please do not reply to this email."""
 
 DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
+
+# Default member dropped / property return email template
+DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
+    <div class="header">
+        <h1>{{organization_name}}</h1>
+    </div>
+    <div class="content">
+        <p><strong>Re: {{drop_type_display}} — Notice of Department Property Return</strong></p>
+        <p>Dear {{member_name}},</p>
+        <p>
+            This message serves as formal notice that your membership status with
+            <strong>{{organization_name}}</strong> has been changed to
+            <strong>{{drop_type_display}}</strong> effective <strong>{{effective_date}}</strong>.
+        </p>
+        <p><strong>Reason:</strong> {{reason}}</p>
+        <div class="details">
+            <p><strong>Outstanding Items:</strong> {{item_count}} item(s)</p>
+            <p><strong>Total Assessed Value:</strong> ${{total_value}}</p>
+            <p><strong>Return Deadline:</strong> {{return_deadline}}</p>
+        </div>
+        <p>
+            In accordance with department policy, all department-issued property must be
+            returned in its current condition by the deadline above. Please contact the
+            department administration to arrange return of these items.
+        </p>
+        <p>
+            Respectfully,<br/>
+            {{performed_by_name}}<br/>
+            {{performed_by_title}}<br/>
+            {{organization_name}}
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is an official department notice. A copy has been placed in your member file.</p>
+    </div>
+</div>"""
+
+DEFAULT_MEMBER_DROPPED_TEXT = """Notice of Department Property Return
+
+Dear {{member_name}},
+
+Your membership status with {{organization_name}} has been changed to {{drop_type_display}} effective {{effective_date}}.
+
+Reason: {{reason}}
+
+Outstanding Items: {{item_count}} item(s)
+Total Assessed Value: ${{total_value}}
+Return Deadline: {{return_deadline}}
+
+In accordance with department policy, all department-issued property must be returned in its current condition by the deadline above.
+
+Please contact the department administration to arrange return of these items.
+
+Respectfully,
+{{performed_by_name}}
+{{performed_by_title}}
+{{organization_name}}
+
+---
+This is an official department notice. A copy has been placed in your member file."""
 
 
 class EmailTemplateService:
@@ -357,5 +429,28 @@ class EmailTemplateService:
             )
             created.append(template)
             logger.info(f"Created default password reset email template for org {organization_id}")
+
+        # Check for member dropped template
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.MEMBER_DROPPED, active_only=False
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.MEMBER_DROPPED,
+                name="Member Dropped — Property Return Notice",
+                subject="Notice of Department Property Return — {{organization_name}}",
+                html_body=DEFAULT_MEMBER_DROPPED_HTML,
+                text_body=DEFAULT_MEMBER_DROPPED_TEXT,
+                description=(
+                    "Sent to a member when their status changes to dropped. "
+                    "Includes the reason for separation and a notice to return all department property. "
+                    "CC recipients are controlled in Organization Settings > Drop Notifications."
+                ),
+                allow_attachments=True,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(f"Created default member dropped email template for org {organization_id}")
 
         return created

@@ -71,6 +71,8 @@ class EmailService:
         html_body: str,
         text_body: Optional[str] = None,
         attachment_paths: Optional[List[str]] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -81,6 +83,8 @@ class EmailService:
             html_body: HTML email body
             text_body: Optional plain text version of email
             attachment_paths: Optional list of file paths to attach
+            cc_emails: Optional list of CC recipient email addresses
+            bcc_emails: Optional list of BCC recipient email addresses (not shown in headers)
 
         Returns:
             Tuple of (success_count, failure_count)
@@ -128,6 +132,15 @@ class EmailService:
                 msg['Subject'] = subject
                 msg['Date'] = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
 
+                # Add CC and BCC recipients
+                all_recipients = [to_email]
+                if cc_emails:
+                    msg['Cc'] = ', '.join(cc_emails)
+                    all_recipients.extend(cc_emails)
+                if bcc_emails:
+                    # BCC recipients are NOT added to headers (invisible to other recipients)
+                    all_recipients.extend(bcc_emails)
+
                 # Send email
                 with smtplib.SMTP(self._smtp_config['host'], self._smtp_config['port']) as server:
                     if self._smtp_config['use_tls']:
@@ -136,7 +149,11 @@ class EmailService:
                     if self._smtp_config['user'] and self._smtp_config['password']:
                         server.login(self._smtp_config['user'], self._smtp_config['password'])
 
-                    server.send_message(msg)
+                    server.sendmail(
+                        self._smtp_config['from_email'],
+                        all_recipients,
+                        msg.as_string(),
+                    )
 
                 success_count += 1
 

@@ -159,12 +159,42 @@ async def change_member_status(
         if doc:
             response.document_id = str(doc.id)
 
-        # Email the report to the member
+        # Email the report to the member (with configurable CC and personal email)
         if request.send_property_return_email and member.email:
             org_result = await db.execute(
                 select(Organization).where(Organization.id == current_user.organization_id)
             )
             organization = org_result.scalar_one_or_none()
+
+            # Load drop notification settings from organization
+            org_settings = (organization.settings or {}) if organization else {}
+            drop_notif_config = org_settings.get("member_drop_notifications", {})
+            cc_role_names = drop_notif_config.get("cc_roles", ["admin", "quartermaster", "chief"])
+            cc_static_emails = drop_notif_config.get("cc_emails", [])
+            include_personal = drop_notif_config.get("include_personal_email", True)
+
+            # Build CC list from roles
+            cc_emails = list(cc_static_emails)  # start with static list
+            if cc_role_names:
+                cc_users_result = await db.execute(
+                    select(User).where(
+                        User.organization_id == current_user.organization_id,
+                        User.status == UserStatus.ACTIVE,
+                        User.deleted_at.is_(None),
+                    ).options(selectinload(User.roles))
+                )
+                cc_users = cc_users_result.scalars().all()
+                for u in cc_users:
+                    role_names = [r.name for r in (u.roles or [])]
+                    if any(r in role_names for r in cc_role_names):
+                        if u.email and u.email not in cc_emails and u.id != str(user_id):
+                            cc_emails.append(u.email)
+
+            # Build recipient list — primary email + optionally personal email
+            to_emails = [member.email]
+            if include_personal and getattr(member, 'personal_email', None):
+                if member.personal_email not in to_emails:
+                    to_emails.append(member.personal_email)
 
             async def _send_report():
                 try:
@@ -176,7 +206,7 @@ async def change_member_status(
                     if report_data.get("reason"):
                         reason_line = f"Reason: {report_data['reason']}\n\n"
                     await email_svc.send_email(
-                        to_emails=[member.email],
+                        to_emails=to_emails,
                         subject=subject,
                         html_body=html_content,
                         text_body=(
@@ -195,6 +225,7 @@ async def change_member_status(
                             f"{report_data['performed_by_title']}\n"
                             f"{org_name}"
                         ),
+                        cc_emails=cc_emails if cc_emails else None,
                     )
                 except Exception as e:
                     from loguru import logger

@@ -1277,6 +1277,36 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
 
+#### Drop Notification: CC Recipients Not Receiving Email
+
+**Symptoms**: Leadership or quartermaster didn't receive a copy of the drop notification
+
+**Causes**:
+1. The CC roles are not configured in organization settings
+2. The user with that role has no email address
+3. Email sending is disabled for the organization
+
+**Solutions**:
+- Check `Organization Settings > member_drop_notifications > cc_roles` — default is `["admin", "quartermaster", "chief"]`
+- Add specific emails to `cc_emails` list for users who should always receive copies
+- Verify email service is enabled: `Organization Settings > email_service > enabled`
+
+#### Drop Notification: Personal Email Not Included
+
+**Symptoms**: The drop notification was only sent to the department email, not the member's personal email
+
+**Causes**:
+1. The member has no `personal_email` on file
+2. The `include_personal_email` setting is disabled
+
+**Solutions**:
+- Ensure the member's profile has a `personal_email` value set
+- Check `Organization Settings > member_drop_notifications > include_personal_email` is `true`
+
+#### Drop Notification: Customizing the Email Template
+
+**Tip**: The drop notification uses the `MEMBER_DROPPED` email template. Edit it at **Settings > Email Templates** to customize the subject, body, and styling. Available template variables: `{{member_name}}`, `{{organization_name}}`, `{{drop_type_display}}`, `{{reason}}`, `{{effective_date}}`, `{{return_deadline}}`, `{{item_count}}`, `{{total_value}}`, `{{performed_by_name}}`, `{{performed_by_title}}`.
+
 #### Property Return Reminders: 30-Day or 90-Day Not Sending
 
 **Symptoms**: A member was dropped more than 30 days ago but no reminder was sent

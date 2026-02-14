@@ -5,7 +5,7 @@ Request and response schemas for organization-related endpoints.
 """
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from uuid import UUID
 from enum import Enum
@@ -79,6 +79,31 @@ class EmailServiceSettings(BaseModel):
     from_email: Optional[str] = Field(None, description="From email address")
     from_name: Optional[str] = Field(None, description="From name")
     use_tls: bool = Field(default=True, description="Use TLS encryption")
+
+
+class MemberDropNotificationSettings(BaseModel):
+    """
+    Configuration for notifications sent when a member is dropped.
+
+    Controls message recipients, CC behavior, and whether the member's
+    personal email is included in drop/property-return notifications.
+    """
+    cc_roles: List[str] = Field(
+        default_factory=lambda: ["admin", "quartermaster", "chief"],
+        description="Role names whose holders are automatically CC'd on drop notifications",
+    )
+    cc_emails: List[str] = Field(
+        default_factory=list,
+        description="Additional static email addresses always CC'd on drop notifications",
+    )
+    include_personal_email: bool = Field(
+        default=True,
+        description="Also send the drop notification to the member's personal email (if on file)",
+    )
+    use_custom_template: bool = Field(
+        default=False,
+        description="Use the MEMBER_DROPPED email template instead of the default property return letter",
+    )
 
 
 class ITTeamMember(BaseModel):
@@ -198,6 +223,10 @@ class OrganizationSettings(BaseModel):
         default_factory=ITTeamSettings,
         description="IT team members and backup access configuration"
     )
+    member_drop_notifications: MemberDropNotificationSettings = Field(
+        default_factory=MemberDropNotificationSettings,
+        description="Configuration for drop/separation notifications (CC, personal email, template)",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -231,6 +260,7 @@ class OrganizationSettingsUpdate(BaseModel):
     auth: Optional[AuthSettings] = None
     modules: Optional[ModuleSettingsUpdate] = None
     it_team: Optional[ITTeamSettings] = None
+    member_drop_notifications: Optional[MemberDropNotificationSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
