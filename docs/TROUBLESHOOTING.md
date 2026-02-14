@@ -1279,6 +1279,51 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **For full configuration documentation, see [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md).**
 
+#### Membership Tier: Member Not Auto-Advancing
+
+**Symptoms**: A member has enough years of service but is still at a lower tier
+
+**Causes**:
+1. `auto_advance` is disabled in the membership tier settings
+2. The member's `hire_date` is not set on their profile
+3. The `advance-membership-tiers` endpoint hasn't been called
+4. The member is not in `active` or `probationary` status
+
+**Solutions**:
+- Call `POST /api/v1/users/advance-membership-tiers` to trigger a batch scan
+- Check `Organization Settings > membership_tiers > auto_advance` is `true`
+- Ensure the member's profile has a `hire_date` value
+- Manually promote: `PATCH /api/v1/users/{user_id}/membership-type` with the target tier
+
+#### Voting: Member Blocked Due to Meeting Attendance
+
+**Symptoms**: An active member gets "attendance below minimum" when trying to vote
+
+**Causes**:
+1. The member's tier has `voting_requires_meeting_attendance: true` with a minimum percentage
+2. The member hasn't attended enough meetings in the look-back period
+3. Meeting attendance was not recorded (member was present but not marked)
+
+**Solutions**:
+- Check the member's tier in `Organization Settings > membership_tiers > tiers` — look at `benefits.voting_min_attendance_pct`
+- Verify meeting attendance records: ensure the member is marked `present: true` in meeting attendee records
+- Adjust the look-back period (`voting_attendance_period_months`) or lower the minimum if the policy was set too aggressively
+- Alternatively, promote the member to a tier without attendance requirements
+
+#### Training: Life Member Still Showing Pending Requirements
+
+**Symptoms**: A life member is flagged for incomplete training requirements
+
+**Causes**:
+1. The member's `membership_type` hasn't been updated to the exempt tier
+2. The tier's `training_exempt` setting is not enabled
+3. Auto-advancement hasn't been triggered
+
+**Solutions**:
+- Verify the member's tier: check `membership_type` on their profile
+- Check `Organization Settings > membership_tiers > tiers` — the life tier should have `benefits.training_exempt: true`
+- Run `POST /api/v1/users/advance-membership-tiers` or manually update via `PATCH /api/v1/users/{user_id}/membership-type`
+
 #### Drop Notification: CC Recipients Not Receiving Email
 
 **Symptoms**: Leadership or quartermaster didn't receive a copy of the drop notification

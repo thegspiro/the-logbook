@@ -503,3 +503,118 @@ async def get_archived_members(
             for m in members
         ],
     }
+
+
+# ==================== Membership Tier Management ====================
+
+
+class MembershipTypeChangeRequest(BaseModel):
+    """Request body for changing a member's membership tier."""
+    membership_type: str = Field(..., min_length=1, max_length=50, description="New tier ID (e.g. 'senior', 'life')")
+    reason: Optional[str] = Field(None, description="Reason for the tier change")
+
+
+@router.patch("/{user_id}/membership-type")
+async def change_membership_type(
+    user_id: UUID,
+    request: MembershipTypeChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Change a member's membership tier.
+
+    Leadership can promote or adjust a member's tier (e.g. probationary -> active,
+    active -> life). The available tiers are configured in Organization Settings >
+    membership_tiers.
+
+    Requires `members.manage` permission.
+    """
+    from datetime import datetime as dt
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    # Validate the tier exists in org settings
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    tier_config = (organization.settings or {}).get("membership_tiers", {})
+    valid_tier_ids = [t["id"] for t in tier_config.get("tiers", [])]
+    # Allow the change even if no tiers are configured (freeform)
+    if valid_tier_ids and request.membership_type not in valid_tier_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid membership tier '{request.membership_type}'. Valid tiers: {valid_tier_ids}",
+        )
+
+    previous_type = member.membership_type or "active"
+    if previous_type == request.membership_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Member is already at tier '{request.membership_type}'",
+        )
+
+    now = dt.utcnow()
+    member.membership_type = request.membership_type
+    member.membership_type_changed_at = now
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_type_changed",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "member_name": member.full_name,
+            "previous_type": previous_type,
+            "new_type": request.membership_type,
+            "reason": request.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "user_id": str(user_id),
+        "member_name": member.full_name,
+        "previous_membership_type": previous_type,
+        "new_membership_type": request.membership_type,
+        "changed_at": now.isoformat(),
+    }
+
+
+@router.post("/advance-membership-tiers")
+async def advance_membership_tiers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Auto-advance all eligible members to their next membership tier.
+
+    Scans every active/probationary member, calculates their years of
+    service from `hire_date`, and promotes them to the highest tier they
+    qualify for based on the organization's `membership_tiers` settings.
+
+    This endpoint is idempotent and designed to be called periodically
+    (e.g. daily, monthly, or on-demand by leadership).
+
+    Requires `members.manage` permission.
+    """
+    from app.services.membership_tier_service import MembershipTierService
+
+    service = MembershipTierService(db)
+    result = await service.advance_all(
+        organization_id=str(current_user.organization_id),
+        performed_by=str(current_user.id),
+    )
+    return result

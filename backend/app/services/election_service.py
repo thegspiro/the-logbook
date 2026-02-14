@@ -414,6 +414,53 @@ class ElectionService:
                 reason="User not found",
             )
 
+        # ---- Membership tier voting rules ----
+        # Look up the member's tier in org settings and enforce voting_eligible
+        # and meeting attendance requirements.
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        if org:
+            tier_config = (org.settings or {}).get("membership_tiers", {})
+            tiers = tier_config.get("tiers", [])
+            member_tier_id = getattr(user, "membership_type", None) or "active"
+            tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+            if tier_def:
+                benefits = tier_def.get("benefits", {})
+                # Check basic voting eligibility for this tier
+                if not benefits.get("voting_eligible", True):
+                    return VoterEligibility(
+                        is_eligible=False,
+                        has_voted=False,
+                        positions_voted=[],
+                        positions_remaining=[],
+                        reason=f"Members at the '{tier_def.get('name', member_tier_id)}' tier are not eligible to vote",
+                    )
+                # Check meeting attendance requirement
+                if benefits.get("voting_requires_meeting_attendance", False):
+                    min_pct = benefits.get("voting_min_attendance_pct", 0.0)
+                    period = benefits.get("voting_attendance_period_months", 12)
+                    if min_pct > 0:
+                        from app.services.membership_tier_service import MembershipTierService
+                        tier_svc = MembershipTierService(self.db)
+                        actual_pct = await tier_svc.get_meeting_attendance_pct(
+                            user_id=str(user_id),
+                            organization_id=str(organization_id),
+                            period_months=period,
+                        )
+                        if actual_pct < min_pct:
+                            return VoterEligibility(
+                                is_eligible=False,
+                                has_voted=False,
+                                positions_voted=[],
+                                positions_remaining=[],
+                                reason=(
+                                    f"Your meeting attendance is {actual_pct:.1f}% over the last "
+                                    f"{period} months, below the {min_pct:.0f}% minimum required to vote"
+                                ),
+                            )
+
         # Check position-specific eligibility (if checking for a specific position)
         if position and election.position_eligibility:
             position_rules = election.position_eligibility.get(position)

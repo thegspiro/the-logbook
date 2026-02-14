@@ -181,6 +181,32 @@ class TrainingService:
         requirements_pending = []
 
         if user_id:
+            # Check tier-based training exemptions
+            tier_exempt = False
+            tier_exempt_types: list = []
+            try:
+                from app.models.user import User as _User, Organization as _Org
+                user_result = await self.db.execute(
+                    select(_User).where(_User.id == str(user_id))
+                )
+                _member = user_result.scalar_one_or_none()
+                if _member:
+                    org_result = await self.db.execute(
+                        select(_Org).where(_Org.id == str(organization_id))
+                    )
+                    _org = org_result.scalar_one_or_none()
+                    if _org:
+                        _tier_cfg = (_org.settings or {}).get("membership_tiers", {})
+                        _tiers = _tier_cfg.get("tiers", [])
+                        _member_tier_id = getattr(_member, "membership_type", None) or "active"
+                        _tier_def = next((t for t in _tiers if t.get("id") == _member_tier_id), None)
+                        if _tier_def:
+                            _benefits = _tier_def.get("benefits", {})
+                            tier_exempt = _benefits.get("training_exempt", False)
+                            tier_exempt_types = _benefits.get("training_exempt_types", [])
+            except Exception:
+                pass  # Fail open — don't block training checks if tier lookup fails
+
             # Get all active requirements
             req_result = await self.db.execute(
                 select(TrainingRequirement)
@@ -190,6 +216,16 @@ class TrainingService:
             requirements = req_result.scalars().all()
 
             for req in requirements:
+                # Tier-based exemption: treat requirement as met
+                if tier_exempt:
+                    requirements_met.append(req.id)
+                    continue
+                if tier_exempt_types and getattr(req, "training_type", None):
+                    req_type = req.training_type.value if hasattr(req.training_type, "value") else str(req.training_type)
+                    if req_type in tier_exempt_types:
+                        requirements_met.append(req.id)
+                        continue
+
                 progress = await self.check_requirement_progress(
                     user_id, req.id, organization_id
                 )

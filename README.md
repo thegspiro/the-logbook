@@ -36,7 +36,7 @@ An open-source, highly flexible, secure, and modular intranet platform designed 
 - **Compliance Management** - Compliance tracking and auditing
 - **Scheduling & Shift Management** - Week/month calendar views, shift templates (day, night, morning), staffing requirements
 - **Inventory Management** - Full CRUD with item types, status/condition tracking, category management, search and filtering
-- **Member Directory & Tracking** - Member list, profiles, add/import, training history per member, configurable drop notifications with CC recipients, personal email support, and editable email templates
+- **Member Directory & Tracking** - Member list, profiles, add/import, training history per member, configurable drop notifications with CC recipients, personal email support, editable email templates, membership tiers (Probationary/Active/Senior/Life) with auto-advancement, tier-based training exemptions, and voting eligibility gated by meeting attendance
 - **Meeting Minutes** ([Documentation](docs/MEETING_MINUTES_MODULE.md))
   - 8 meeting types (business, special, committee, board, trustee, executive, annual, other)
   - Template system with configurable default sections per meeting type

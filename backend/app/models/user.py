@@ -193,6 +193,10 @@ class User(Base):
     # Format: {"email": true, "sms": false, "push": true, "digest": "daily", ...}
     notification_preferences = Column(JSON, default=dict)
 
+    # Membership
+    membership_type = Column(String(50), default="active")  # Org-defined tier: probationary, active, senior, life, etc.
+    membership_type_changed_at = Column(DateTime(timezone=True))  # When membership tier last changed
+
     # Status
     status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
     status_changed_at = Column(DateTime(timezone=True))  # When status last changed (used for drop-date tracking)

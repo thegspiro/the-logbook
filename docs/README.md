@@ -295,6 +295,9 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Shift scheduling / calendar | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module) |
 | Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
+| Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
+| Voting attendance requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance) |
+| Training exemptions by tier | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements) |
 | Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
 | Email templates / customization | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management) |
 | Personal email / post-separation | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email) |
@@ -428,6 +431,22 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Membership Tiers, Voting Attendance Rules & Training Exemptions
+
+**What Changed**:
+- **Membership Tier System**: Organizations can define ordered tiers (Probationary, Active, Senior, Life) with years-of-service thresholds and per-tier benefits
+- **Tier Benefits**: Training exemptions (full or by type), voting eligibility rules, meeting attendance requirements for voting, office-holding eligibility
+- **Manual + Auto Advancement**: Leadership can change a member's tier directly, or trigger batch auto-advancement based on years of service
+- **Voting Attendance Gating**: Election system enforces minimum meeting attendance percentage per tier before allowing votes
+- **Training Exemptions**: Members at exempt tiers (e.g. Life Members) have all training requirements treated as met
+- **Migration**: `20260214_0900` adds `membership_type` and `membership_type_changed_at` to users table
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Tier advancement, voting attendance, training exemption troubleshooting
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
 
 ### 2026-02-14 - Configurable Drop Notifications & Email Template Settings
 
