@@ -37,6 +37,8 @@ class UserStatus(str, enum.Enum):
     SUSPENDED = "suspended"
     PROBATIONARY = "probationary"
     RETIRED = "retired"
+    DROPPED_VOLUNTARY = "dropped_voluntary"
+    DROPPED_INVOLUNTARY = "dropped_involuntary"
 
 
 class OrganizationType(str, enum.Enum):

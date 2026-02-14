@@ -34,6 +34,7 @@ class EmailTemplateType(str, enum.Enum):
     EVENT_REMINDER = "event_reminder"
     TRAINING_APPROVAL = "training_approval"
     BALLOT_NOTIFICATION = "ballot_notification"
+    MEMBER_DROPPED = "member_dropped"
     CUSTOM = "custom"
 
 

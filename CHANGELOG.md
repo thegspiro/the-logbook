@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Property Return Report & Member Drop Statuses (2026-02-14)
+
+#### Member Drop Statuses
+- **New UserStatus values**: `dropped_voluntary` and `dropped_involuntary` added to the UserStatus enum
+- **Status change endpoint**: `PATCH /api/v1/users/{user_id}/status` with `members.manage` permission
+- **Audit logging**: All status changes logged with severity `warning` for drops
+- **Migration**: `20260214_0500` adds new enum values to users, email_templates, and notification_rules tables
+
+#### Property Return Report (Auto-Generated)
+- **Automatic trigger**: When a member status changes to dropped, a formal property-return letter is generated
+- **Printable HTML letter**: Professional letterhead format with department name, member address block (window-envelope compatible), and formal language
+- **Item inventory table**: Lists every assigned and checked-out item with serial number, asset tag, condition, type (assigned/checked out), and dollar value
+- **Total assessed value**: Summed from `current_value` or `purchase_price` of all items
+- **Return instructions**: Three methods documented (in person, by appointment, by mail/courier) with tracking advice
+- **Involuntary notice**: Additional legal-recovery paragraph automatically included for involuntary drops
+- **Configurable deadline**: Return deadline in days (1-90, default 14) set per status change
+- **Custom instructions**: Optional extra paragraph for department-specific notes
+- **Document storage**: Report automatically saved to the Documents module (Reports folder) as a generated document
+- **Email delivery**: Report emailed to the member's address on file (toggleable via `send_property_return_email`)
+- **Plain text fallback**: Text version included for email clients that don't render HTML
+- **Preview endpoint**: `GET /api/v1/users/{user_id}/property-return-report` to preview before dropping a member
+
+#### Notification & Email Template Support
+- **MEMBER_DROPPED trigger**: Added to NotificationTrigger enum for notification rules
+- **MEMBER_DROPPED template type**: Added to EmailTemplateType for admin-customizable templates
+
 ### Added - Training Module Expansion (2026-02-14)
 
 #### Self-Reported Training

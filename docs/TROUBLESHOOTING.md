@@ -1207,6 +1207,78 @@ The Reports module generates data reports including member roster, training summ
 
 ---
 
+## Inventory Module & Property Return Reports
+
+### Overview
+
+The Inventory module manages equipment, assignments, checkout/check-in, and maintenance tracking. When a member is dropped (voluntarily or involuntarily), a property-return report is automatically generated listing all assigned items.
+
+**API Endpoints**: `/api/v1/inventory/`, `/api/v1/users/{user_id}/status`
+
+### Common Issues
+
+#### Property Return Report: No Items Listed
+
+**Symptoms**: Member was dropped but the property return report shows an empty item table
+
+**Causes**:
+1. Items were not assigned through the inventory system (only verbal assignments)
+2. Items were previously unassigned or checked in but the drop was processed later
+3. Items are assigned to a different user ID
+
+**Solutions**:
+- Verify the member has active assignments in Inventory → Items → filter by assigned user
+- Check that items were assigned using the `POST /inventory/items/{id}/assign` endpoint, not just manually tracked
+- Review the member's assignment history via `GET /inventory/users/{user_id}/assignments`
+
+#### Property Return Report: Dollar Values Show $0.00
+
+**Symptoms**: Items are listed but all values show $0.00
+
+**Causes**:
+1. Neither `purchase_price` nor `current_value` was entered when the item was created
+2. Items were created without purchase information
+
+**Solutions**:
+- Update items with their purchase price or current value before dropping the member
+- Use `PATCH /inventory/items/{item_id}` to set `purchase_price` or `current_value`
+- The report uses `current_value` first, then falls back to `purchase_price`
+
+#### Property Return Email Not Sent
+
+**Symptoms**: Member was dropped but no email was received
+
+**Causes**:
+1. `send_property_return_email` was set to `false` in the status change request
+2. Member has no email address on file
+3. SMTP is not configured or email is disabled
+4. Email was sent but caught by spam filter
+
+**Solutions**:
+- Verify the status change request included `"send_property_return_email": true`
+- Check the member's email address in their profile
+- Review SMTP configuration in organization settings or global config
+- Check the email service logs for delivery errors
+- The report is always saved to Documents regardless of email delivery
+
+#### Member Status Change: Invalid Status Error
+
+**Symptoms**: `400 Bad Request` when trying to change a member's status
+
+**Causes**:
+1. The status value is misspelled or not a valid UserStatus
+2. The member is already in the requested status
+
+**Solutions**:
+- Valid statuses: `active`, `inactive`, `suspended`, `probationary`, `retired`, `dropped_voluntary`, `dropped_involuntary`
+- Check the member's current status first — you cannot change to the same status
+
+#### Property Return Report: Preview vs. Actual Drop
+
+**Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
+
+---
+
 ## Training Module
 
 ### Overview

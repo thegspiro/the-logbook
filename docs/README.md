@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-14 with training module (self-reports, shift reports, visibility, reports), events module, TypeScript fixes, security hardening
+   - **Updated**: 2026-02-14 with inventory/property return reports, training module, events module, TypeScript fixes, security hardening
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
