@@ -123,6 +123,12 @@ class Election(Base):
     #           "checked_in_by": "user-456"}]
     attendees = Column(JSON, nullable=True)
 
+    # Voter eligibility overrides — secretary can grant voting rights
+    # Format: [{"user_id": "abc-123", "reason": "Excused absence approved",
+    #           "overridden_by": "user-456", "overridden_by_name": "Jane Smith",
+    #           "overridden_at": "2026-02-14T10:00:00"}]
+    voter_overrides = Column(JSON, nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",

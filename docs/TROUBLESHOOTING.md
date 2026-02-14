@@ -1295,6 +1295,19 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 - Ensure the member's profile has a `hire_date` value
 - Manually promote: `PATCH /api/v1/users/{user_id}/membership-type` with the target tier
 
+#### Voting: Granting a Member an Override to Vote
+
+**Scenario**: A member is blocked from voting (due to tier or attendance) but leadership wants to allow them to vote anyway
+
+**Solution**:
+1. An officer with `elections.manage` permission calls `POST /api/v1/elections/{election_id}/voter-overrides` with the member's `user_id` and a `reason`
+2. The override is recorded with the granting officer's name, timestamp, and reason
+3. The member can now vote in that election — tier and attendance checks are skipped
+4. To revoke before they vote: `DELETE /api/v1/elections/{election_id}/voter-overrides/{user_id}`
+5. View all overrides: `GET /api/v1/elections/{election_id}/voter-overrides`
+
+**Note**: Overrides do NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
+
 #### Voting: Member Blocked Due to Meeting Attendance
 
 **Symptoms**: An active member gets "attendance below minimum" when trying to vote

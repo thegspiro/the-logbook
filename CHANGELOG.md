@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Secretary Voter Override for Elections (2026-02-14)
+
+#### Voter Eligibility Overrides
+- **Secretary override**: `POST /api/v1/elections/{election_id}/voter-overrides` — grants a member voting rights for a specific election, bypassing tier-based and meeting attendance restrictions
+- **Reason required**: Every override must include a reason (e.g. "Excused absence approved by board vote")
+- **Full audit trail**: Each override records the member, reason, granting officer name, and timestamp; logged as a `voter_override_granted` audit event with `warning` severity
+- **List overrides**: `GET /api/v1/elections/{election_id}/voter-overrides` — view all overrides for an election
+- **Remove override**: `DELETE /api/v1/elections/{election_id}/voter-overrides/{user_id}` — revoke an override before the member votes
+- **Scope**: Overrides skip tier voting eligibility and attendance percentage checks only; they do NOT bypass election-level eligible_voters lists, position-specific role requirements, or double-vote prevention
+- **`voter_overrides` column**: New JSON column on the elections table
+- **Migration**: `20260214_1000` adds `voter_overrides` column to elections table
+
 ### Added - Membership Tiers, Voting Attendance Rules & Training Exemptions (2026-02-14)
 
 #### Membership Tier System

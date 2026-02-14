@@ -1258,3 +1258,177 @@ async def remove_attendee(
         )
 
     return {"success": True, "message": "Attendee removed"}
+
+
+# ==================== Voter Eligibility Overrides ====================
+
+
+from pydantic import BaseModel as _PydanticBase, Field as _Field
+from typing import Optional as _Opt
+
+
+class VoterOverrideRequest(_PydanticBase):
+    """Request to grant a member voting rights despite tier/attendance restrictions."""
+    user_id: UUID
+    reason: str = _Field(..., min_length=1, max_length=500, description="Why this member is being allowed to vote")
+
+
+@router.post("/{election_id}/voter-overrides", status_code=status.HTTP_201_CREATED)
+async def add_voter_override(
+    election_id: UUID,
+    body: VoterOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Grant a member voting rights for this election, bypassing tier-based
+    and meeting attendance restrictions.
+
+    The override is recorded with a reason and the identity of the officer
+    who granted it.  This does NOT bypass election-level eligible_voters
+    lists, position-specific role requirements, or double-vote prevention.
+
+    Requires `elections.manage` permission.
+    """
+    # Load the election
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    # Verify the target user exists in the same org
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(body.user_id))
+        .where(User.organization_id == current_user.organization_id)
+    )
+    target_user = user_result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    overrides = election.voter_overrides or []
+
+    # Prevent duplicate overrides for the same user
+    if any(o.get("user_id") == str(body.user_id) for o in overrides):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{target_user.full_name} already has a voting override for this election",
+        )
+
+    override_record = {
+        "user_id": str(body.user_id),
+        "member_name": target_user.full_name,
+        "reason": body.reason,
+        "overridden_by": str(current_user.id),
+        "overridden_by_name": current_user.full_name,
+        "overridden_at": datetime.utcnow().isoformat(),
+    }
+    overrides.append(override_record)
+    election.voter_overrides = overrides
+
+    await db.commit()
+
+    # Audit log
+    await log_audit_event(
+        db=db,
+        event_type="voter_override_granted",
+        event_category="elections",
+        severity="warning",
+        event_data={
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "target_user_id": str(body.user_id),
+            "member_name": target_user.full_name,
+            "reason": body.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    logger.info(
+        f"Voter override granted | election={election_id} "
+        f"member={body.user_id} ({target_user.full_name}) by={current_user.id} reason={body.reason!r}"
+    )
+
+    return override_record
+
+
+@router.get("/{election_id}/voter-overrides")
+async def list_voter_overrides(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    List all voter eligibility overrides for an election.
+
+    Requires `elections.manage` permission.
+    """
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    return {
+        "election_id": str(election_id),
+        "election_title": election.title,
+        "overrides": election.voter_overrides or [],
+    }
+
+
+@router.delete("/{election_id}/voter-overrides/{user_id}", status_code=status.HTTP_200_OK)
+async def remove_voter_override(
+    election_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Remove a voter eligibility override for a member.
+
+    Requires `elections.manage` permission.
+    """
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    overrides = election.voter_overrides or []
+    original_len = len(overrides)
+    overrides = [o for o in overrides if o.get("user_id") != str(user_id)]
+
+    if len(overrides) == original_len:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No override found for this member in this election",
+        )
+
+    election.voter_overrides = overrides
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="voter_override_removed",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election_id),
+            "target_user_id": str(user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"success": True, "message": "Voter override removed"}

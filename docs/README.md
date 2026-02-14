@@ -296,6 +296,7 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
 | Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
+| Voter override (secretary) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote) |
 | Voting attendance requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance) |
 | Training exemptions by tier | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements) |
 | Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
@@ -431,6 +432,17 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Secretary Voter Override for Elections
+
+**What Changed**:
+- **Voter Override Endpoint**: Secretary/elections manager can grant a member voting rights for a specific election, bypassing tier and attendance restrictions
+- **Audit Trail**: Each override records the reason, granting officer, and timestamp; logged with `warning` severity
+- **Override Management**: List all overrides, revoke an override before the member votes
+- **Scope**: Overrides skip tier/attendance checks only — NOT eligible_voters lists, role requirements, or double-vote prevention
+- **Migration**: `20260214_1000` adds `voter_overrides` column to elections table
+
+---
 
 ### 2026-02-14 - Membership Tiers, Voting Attendance Rules & Training Exemptions
 

@@ -414,14 +414,25 @@ class ElectionService:
                 reason="User not found",
             )
 
+        # ---- Secretary voter override ----
+        # If the secretary (or elections manager) has granted this member an
+        # override for this election, skip all tier and attendance checks.
+        _has_override = False
+        if election.voter_overrides:
+            _has_override = any(
+                o.get("user_id") == str(user_id)
+                for o in election.voter_overrides
+            )
+
         # ---- Membership tier voting rules ----
         # Look up the member's tier in org settings and enforce voting_eligible
         # and meeting attendance requirements.
+        # (Skipped entirely when the member has a secretary override.)
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == organization_id)
         )
         org = org_result.scalar_one_or_none()
-        if org:
+        if org and not _has_override:
             tier_config = (org.settings or {}).get("membership_tiers", {})
             tiers = tier_config.get("tiers", [])
             member_tier_id = getattr(user, "membership_type", None) or "active"
