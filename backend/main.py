@@ -294,9 +294,16 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
     logger.info(f"Dropped {dropped} existing tables")
 
     # 3. Create ALL tables from current model definitions
-    #    This handles ~90% of tables in one fast batch operation
+    #    This handles ~90% of tables in one fast batch operation.
+    #    Optimizations for slow/resource-constrained environments:
+    #    - checkfirst=False: skip existence checks (we just dropped everything)
+    #    - FK_CHECKS=0: skip FK validation during CREATE TABLE (much faster)
+    #    - Single connection: avoid pool overhead for 100+ DDL statements
     logger.info("Creating all tables from model definitions...")
-    Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        Base.metadata.create_all(conn, checkfirst=False)
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
     logger.info("Model-based tables created")
 
     # 4. Create tables that only exist in migration files (no SQLAlchemy models)
@@ -396,7 +403,7 @@ def run_migrations():
     # NOTE: NOT wrapped in forgiving try/except - if table creation fails,
     # the app MUST crash. Running without tables causes 500 errors everywhere.
     if current_rev == INITIAL_SQL_REVISION or current_rev is None:
-        with timeout_context(600, "Fast-path database initialization"):
+        with timeout_context(1200, "Fast-path database initialization"):
             _fast_path_init(engine, alembic_cfg, base_dir)
         startup_status.migrations_completed = total_migrations
         startup_status.set_phase("migrations", "Validating database schema...")
