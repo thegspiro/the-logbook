@@ -477,10 +477,12 @@ class TestFastPathInit:
             "_fast_path_init should reference alembic_version to skip it"
         )
 
-        # Look for the skip pattern: continue when table is alembic_version
+        # Look for the skip pattern: alembic_version excluded from drops
         has_skip = (
             'table_name == "alembic_version"' in source
             or "table_name == 'alembic_version'" in source
+            or '!= "alembic_version"' in source
+            or "!= 'alembic_version'" in source
         )
         assert has_skip, (
             "_fast_path_init should skip alembic_version table during drop"
