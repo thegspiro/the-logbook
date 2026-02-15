@@ -6,6 +6,7 @@
  */
 
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { errorTracker } from '../services/errorTracking';
 
 interface Props {
   children: ReactNode;
@@ -41,8 +42,10 @@ export class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
-    // TODO: Send to error tracking service (e.g., Sentry)
-    // errorTrackingService.logError(error, errorInfo);
+    errorTracker.logError(error, {
+      errorType: 'REACT_ERROR_BOUNDARY',
+      additionalContext: { componentStack: errorInfo.componentStack },
+    });
   }
 
   handleReload = (): void => {

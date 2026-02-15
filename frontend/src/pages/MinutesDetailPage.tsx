@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 import type {
   MeetingMinutes,
   MotionCreate,
@@ -123,8 +124,8 @@ export const MinutesDetailPage: React.FC = () => {
       setLoading(true);
       const data = await minutesService.getMinutes(minutesId);
       setMinutes(data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load minutes');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load minutes'));
     } finally {
       setLoading(false);
     }
@@ -145,8 +146,8 @@ export const MinutesDetailPage: React.FC = () => {
       setMinutes(updated);
       setEditingSection(null);
       toast.success('Section saved');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to save');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save'));
     } finally {
       setSaving(false);
     }
@@ -167,8 +168,8 @@ export const MinutesDetailPage: React.FC = () => {
       setSaving(true);
       const updated = await minutesService.updateMinutes(minutesId, { sections: renumbered });
       setMinutes(updated);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to reorder');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reorder'));
     } finally {
       setSaving(false);
     }
@@ -193,8 +194,8 @@ export const MinutesDetailPage: React.FC = () => {
       setNewSectionTitle('');
       setShowAddSection(false);
       toast.success('Section added');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add section');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add section'));
     } finally {
       setSaving(false);
     }
@@ -211,8 +212,8 @@ export const MinutesDetailPage: React.FC = () => {
       const updated = await minutesService.updateMinutes(minutesId, { sections: filtered });
       setMinutes(updated);
       toast.success('Section removed');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete section');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete section'));
     } finally {
       setSaving(false);
     }
@@ -227,8 +228,8 @@ export const MinutesDetailPage: React.FC = () => {
       await minutesService.publishMinutes(minutesId);
       await fetchMinutes();
       toast.success('Minutes published to Documents');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to publish');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to publish'));
     } finally {
       setPublishing(false);
     }
@@ -242,8 +243,8 @@ export const MinutesDetailPage: React.FC = () => {
       const updated = await minutesService.submitForApproval(minutesId);
       setMinutes(updated);
       toast.success('Minutes submitted for approval');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to submit');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to submit'));
     }
   };
 
@@ -253,8 +254,8 @@ export const MinutesDetailPage: React.FC = () => {
       const updated = await minutesService.approve(minutesId);
       setMinutes(updated);
       toast.success('Minutes approved');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to approve');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to approve'));
     }
   };
 
@@ -266,8 +267,8 @@ export const MinutesDetailPage: React.FC = () => {
       setShowRejectModal(false);
       setRejectReason('');
       toast.success('Minutes rejected');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to reject');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reject'));
     }
   };
 
@@ -284,8 +285,8 @@ export const MinutesDetailPage: React.FC = () => {
       setMotionForm({ motion_text: '', moved_by: '', seconded_by: '', status: 'passed', votes_for: undefined, votes_against: undefined, votes_abstain: undefined });
       fetchMinutes();
       toast.success('Motion added');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add motion');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add motion'));
     }
   };
 
@@ -295,8 +296,8 @@ export const MinutesDetailPage: React.FC = () => {
       await minutesService.deleteMotion(minutesId, motionId);
       fetchMinutes();
       toast.success('Motion deleted');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete motion');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete motion'));
     }
   };
 
@@ -310,8 +311,8 @@ export const MinutesDetailPage: React.FC = () => {
       setActionForm({ description: '', assignee_name: '', due_date: undefined, priority: 'medium' });
       fetchMinutes();
       toast.success('Action item added');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to add action item');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add action item'));
     }
   };
 
@@ -320,8 +321,8 @@ export const MinutesDetailPage: React.FC = () => {
     try {
       await minutesService.updateActionItem(minutesId, itemId, { status: newStatus });
       fetchMinutes();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to update');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update'));
     }
   };
 
@@ -331,8 +332,8 @@ export const MinutesDetailPage: React.FC = () => {
       await minutesService.deleteActionItem(minutesId, itemId);
       fetchMinutes();
       toast.success('Action item deleted');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete'));
     }
   };
 
@@ -360,8 +361,8 @@ export const MinutesDetailPage: React.FC = () => {
       setMinutes(updated);
       setShowLinkEventModal(false);
       toast.success('Linked to event');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to link event');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to link event'));
     }
   };
 
@@ -372,8 +373,8 @@ export const MinutesDetailPage: React.FC = () => {
       setMinutes(updated);
       setLinkedEvent(null);
       toast.success('Event unlinked');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to unlink event');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to unlink event'));
     }
   };
 
@@ -383,8 +384,8 @@ export const MinutesDetailPage: React.FC = () => {
       await minutesService.deleteMinutes(minutesId);
       toast.success('Minutes deleted');
       navigate('/minutes');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete'));
     }
   };
 

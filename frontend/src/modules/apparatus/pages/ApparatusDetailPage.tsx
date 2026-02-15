@@ -110,7 +110,7 @@ export const ApparatusDetailPage: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error('Failed to load tab data:', err);
+        // Error silently handled - tab data will show empty state
       } finally {
         setLoadingTab(false);
       }

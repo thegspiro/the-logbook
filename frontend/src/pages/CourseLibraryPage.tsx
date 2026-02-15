@@ -403,7 +403,6 @@ const CourseLibraryPage: React.FC = () => {
       setCourses(coursesData);
       setCategories(categoriesData);
     } catch (error) {
-      console.error('Failed to load course library:', error);
       toast.error('Failed to load course library');
     } finally {
       setLoading(false);

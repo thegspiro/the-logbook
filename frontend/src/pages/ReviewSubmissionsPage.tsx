@@ -596,7 +596,6 @@ const ReviewSubmissionsPage: React.FC = () => {
         setSubmissions(data);
       }
     } catch (error) {
-      console.error('Failed to load submissions:', error);
       toast.error('Failed to load submissions');
     } finally {
       setLoading(false);

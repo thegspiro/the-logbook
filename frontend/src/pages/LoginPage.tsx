@@ -52,18 +52,12 @@ export const LoginPage: React.FC = () => {
       }
     };
 
-    // TODO: Load OAuth config from backend
-    // For now, check if we have OAuth configured in organization settings
     const loadOAuthConfig = async () => {
       try {
-        // This would be an API call to get organization's OAuth settings
-        // For now, we'll leave them disabled until OAuth is configured
-        setOAuthConfig({
-          googleEnabled: false, // Will be enabled when Google OAuth is configured
-          microsoftEnabled: false, // Will be enabled when Microsoft OAuth is configured
-        });
-      } catch (err) {
-        console.error('Failed to load OAuth config:', err);
+        const response = await axios.get('/api/v1/auth/oauth-config');
+        setOAuthConfig(response.data);
+      } catch {
+        // OAuth config is optional - leave defaults (disabled)
       }
     };
 
@@ -104,7 +98,6 @@ export const LoginPage: React.FC = () => {
       navigate(from, { replace: true });
     } catch (err) {
       // Error is handled by the store and displayed via error state
-      console.error('Login failed:', err);
     }
   };
 

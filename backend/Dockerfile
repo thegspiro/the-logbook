@@ -98,7 +98,7 @@ EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:3001/health')"
+    CMD python -c "import requests; r = requests.get('http://localhost:3001/health', timeout=5); exit(0 if r.status_code == 200 else 1)"
 
 # Run production server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001", "--workers", "4"]

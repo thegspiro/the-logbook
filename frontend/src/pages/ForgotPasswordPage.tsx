@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { authService } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,10 +24,9 @@ export const ForgotPasswordPage: React.FC = () => {
     try {
       await authService.requestPasswordReset({ email });
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err.response?.data?.detail ||
-        'Failed to send reset email. Please try again or contact your administrator.'
+        getErrorMessage(err, 'Failed to send reset email. Please try again or contact your administrator.')
       );
     } finally {
       setIsLoading(false);

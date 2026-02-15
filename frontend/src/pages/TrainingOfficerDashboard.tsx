@@ -14,7 +14,6 @@ import {
   Award,
   RefreshCw,
   ClipboardCheck,
-  FileText as FileTextIcon,
   ClipboardList,
 } from 'lucide-react';
 import { trainingService, userService, trainingSubmissionService } from '../services/api';
@@ -187,7 +186,6 @@ const TrainingOfficerDashboard: React.FC = () => {
 
       setRequirements(reqs);
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
       setError('Unable to load training dashboard data. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -398,7 +396,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             color="yellow"
           />
           <NavigationCard
-            icon={FileTextIcon}
+            icon={FileText}
             title="Submit Training"
             description="Submit external training for yourself"
             onClick={() => navigate('/training/submit')}

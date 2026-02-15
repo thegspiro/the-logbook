@@ -78,8 +78,8 @@ class CacheManager:
             if self.redis_client:
                 try:
                     await self.redis_client.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to close Redis client during retry: {e}")
                 self.redis_client = None
 
             # Wait before retrying (exponential backoff)

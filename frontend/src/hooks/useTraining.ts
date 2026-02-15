@@ -27,7 +27,6 @@ export const useTrainingCategories = () => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load training categories';
-      console.error('Error fetching training categories:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -53,7 +52,6 @@ export const useTrainingCourses = (activeOnly?: boolean) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load training courses';
-      console.error('Error fetching training courses:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -79,7 +77,6 @@ export const useTrainingRecords = (params?: { user_id?: string; status?: string;
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load training records';
-      console.error('Error fetching training records:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -105,7 +102,6 @@ export const useTrainingRequirements = () => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load training requirements';
-      console.error('Error fetching training requirements:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -131,7 +127,6 @@ export const useTrainingPrograms = () => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load training programs';
-      console.error('Error fetching training programs:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -158,7 +153,6 @@ export const useTrainingStats = (userId: string | undefined) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load training stats';
-      console.error('Error fetching training stats:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -186,7 +180,6 @@ export const useMemberEnrollments = (userId?: string) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load enrollments';
-      console.error('Error fetching enrollments:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -213,7 +206,6 @@ export const useEnrollmentProgress = (enrollmentId: string | undefined) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load enrollment progress';
-      console.error('Error fetching enrollment progress:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -239,7 +231,6 @@ export const useExpiringCertifications = (daysAhead?: number) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load expiring certifications';
-      console.error('Error fetching expiring certifications:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -266,7 +257,6 @@ export const useRequirementProgress = (userId: string | undefined) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load requirement progress';
-      console.error('Error fetching requirement progress:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);

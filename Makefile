@@ -25,7 +25,7 @@ setup:
 	@echo "${BLUE}Setting up project...${NC}"
 	@cp .env.example .env 2>/dev/null || true
 	@npm install
-	@cd backend && npm install
+	@cd backend && pip install -r requirements.txt
 	@cd frontend && npm install
 	@echo "${GREEN}✓ Setup complete! Edit .env file with your configuration.${NC}"
 
@@ -54,7 +54,7 @@ test:
 ## test-backend: Run backend tests
 test-backend:
 	@echo "${BLUE}Running backend tests...${NC}"
-	@cd backend && npm test
+	@cd backend && pytest
 
 ## test-frontend: Run frontend tests
 test-frontend:
@@ -75,8 +75,10 @@ format:
 ## clean: Clean build artifacts and dependencies
 clean:
 	@echo "${RED}Cleaning project...${NC}"
-	@rm -rf node_modules backend/node_modules frontend/node_modules
-	@rm -rf backend/dist frontend/dist
+	@rm -rf node_modules frontend/node_modules
+	@rm -rf frontend/dist
+	@find backend -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@rm -rf backend/.pytest_cache
 	@echo "${GREEN}✓ Clean complete${NC}"
 
 ## docker-build: Build Docker images
@@ -112,25 +114,27 @@ docker-clean:
 ## db-migrate: Run database migrations
 db-migrate:
 	@echo "${BLUE}Running database migrations...${NC}"
-	@cd backend && npm run db:migrate
+	@cd backend && alembic upgrade head
 	@echo "${GREEN}✓ Migrations complete${NC}"
 
 ## db-rollback: Rollback last migration
 db-rollback:
 	@echo "${YELLOW}Rolling back last migration...${NC}"
-	@cd backend && npm run db:rollback
+	@cd backend && alembic downgrade -1
 	@echo "${GREEN}✓ Rollback complete${NC}"
 
 ## db-seed: Seed database with sample data
 db-seed:
 	@echo "${BLUE}Seeding database...${NC}"
-	@cd backend && npm run db:seed
+	@cd backend && python scripts/seed_data.py
 	@echo "${GREEN}✓ Database seeded${NC}"
 
 ## db-reset: Reset database (rollback, migrate, seed)
 db-reset:
 	@echo "${YELLOW}Resetting database...${NC}"
-	@cd backend && npm run db:reset
+	@$(MAKE) db-rollback
+	@$(MAKE) db-migrate
+	@$(MAKE) db-seed
 	@echo "${GREEN}✓ Database reset complete${NC}"
 
 ## logs: View application logs
@@ -141,15 +145,15 @@ logs:
 security-check:
 	@echo "${BLUE}Running security audit...${NC}"
 	@npm audit
-	@cd backend && npm audit
 	@cd frontend && npm audit
+	@cd backend && pip audit 2>/dev/null || echo "${YELLOW}pip-audit not installed, skipping backend audit${NC}"
 
 ## update-deps: Update dependencies
 update-deps:
 	@echo "${BLUE}Updating dependencies...${NC}"
 	@npm update
-	@cd backend && npm update
 	@cd frontend && npm update
+	@cd backend && pip install --upgrade -r requirements.txt
 	@echo "${GREEN}✓ Dependencies updated${NC}"
 
 ## generate-keys: Generate encryption keys

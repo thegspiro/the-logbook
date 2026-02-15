@@ -100,7 +100,6 @@ export const RegisterPage: React.FC = () => {
       navigate('/');
     } catch (err) {
       // Error is handled by the store and displayed via error state
-      console.error('Registration failed:', err);
     }
   };
 

@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import * as api from '../services/publicPortalApi';
 import type {
   PublicPortalConfig,
@@ -32,8 +33,8 @@ export const usePortalConfig = () => {
       setError(null);
       const data = await api.getConfig();
       setConfig(data);
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to load configuration';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to load configuration');
       setError(message);
       toast.error(message);
     } finally {
@@ -48,8 +49,8 @@ export const usePortalConfig = () => {
         setConfig(data);
         toast.success('Configuration updated successfully');
         return data;
-      } catch (err: any) {
-        const message = err.response?.data?.detail || 'Failed to update configuration';
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to update configuration');
         toast.error(message);
         throw err;
       }
@@ -93,8 +94,8 @@ export const useAPIKeys = (includeInactive = false) => {
       setError(null);
       const data = await api.listAPIKeys(includeInactive);
       setApiKeys(data);
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to load API keys';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to load API keys');
       setError(message);
       toast.error(message);
     } finally {
@@ -109,8 +110,8 @@ export const useAPIKeys = (includeInactive = false) => {
         await fetchAPIKeys(); // Refresh list
         toast.success('API key created successfully');
         return newKey;
-      } catch (err: any) {
-        const message = err.response?.data?.detail || 'Failed to create API key';
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to create API key');
         toast.error(message);
         throw err;
       }
@@ -124,8 +125,8 @@ export const useAPIKeys = (includeInactive = false) => {
         await api.revokeAPIKey(keyId);
         await fetchAPIKeys(); // Refresh list
         toast.success('API key revoked successfully');
-      } catch (err: any) {
-        const message = err.response?.data?.detail || 'Failed to revoke API key';
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to revoke API key');
         toast.error(message);
         throw err;
       }
@@ -162,8 +163,8 @@ export const useAccessLogs = (filters: AccessLogFilters = {}) => {
       setError(null);
       const data = await api.getAccessLogs(filters);
       setLogs(data);
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to load access logs';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to load access logs');
       setError(message);
       toast.error(message);
     } finally {
@@ -198,8 +199,8 @@ export const useUsageStats = () => {
       setError(null);
       const data = await api.getUsageStats();
       setStats(data);
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to load usage statistics';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to load usage statistics');
       setError(message);
       toast.error(message);
     } finally {
@@ -234,8 +235,8 @@ export const useDataWhitelist = (category?: string) => {
       setError(null);
       const data = await api.getWhitelist(category);
       setWhitelist(data);
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to load whitelist';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to load whitelist');
       setError(message);
       toast.error(message);
     } finally {
@@ -249,8 +250,8 @@ export const useDataWhitelist = (category?: string) => {
         await api.updateWhitelistEntry(entryId, isEnabled);
         await fetchWhitelist(); // Refresh list
         toast.success(`Field ${isEnabled ? 'enabled' : 'disabled'} successfully`);
-      } catch (err: any) {
-        const message = err.response?.data?.detail || 'Failed to update whitelist';
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to update whitelist');
         toast.error(message);
         throw err;
       }
@@ -266,8 +267,8 @@ export const useDataWhitelist = (category?: string) => {
         const result = await api.bulkUpdateWhitelist(updates);
         await fetchWhitelist(); // Refresh list
         toast.success(result.message);
-      } catch (err: any) {
-        const message = err.response?.data?.detail || 'Failed to bulk update whitelist';
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to bulk update whitelist');
         toast.error(message);
         throw err;
       }

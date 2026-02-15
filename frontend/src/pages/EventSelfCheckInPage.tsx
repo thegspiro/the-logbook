@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { QRCheckInData, RSVP } from '../types/event';
+import { getErrorMessage } from '../utils/errorHandling';
 
 /**
  * Event Self Check-In Page
@@ -21,7 +22,6 @@ const EventSelfCheckInPage: React.FC = () => {
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInData, setCheckInData] = useState<RSVP | null>(null);
-  const [_alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
   const [showCheckOutPrompt, setShowCheckOutPrompt] = useState(false);
 
   useEffect(() => {
@@ -36,9 +36,8 @@ const EventSelfCheckInPage: React.FC = () => {
       setError(null);
       const data = await eventService.getQRCheckInData(eventId);
       setQrData(data);
-    } catch (err: any) {
-      console.error('Error fetching event data:', err);
-      setError(err.response?.data?.detail || 'Failed to load event information');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load event information'));
     } finally {
       setLoading(false);
     }
@@ -56,7 +55,6 @@ const EventSelfCheckInPage: React.FC = () => {
       // Check if user was already checked in (from response headers or data)
       if (!isCheckOut && rsvp.checked_in && !rsvp.checked_out_at) {
         // User was already checked in, prompt for check-out
-        setAlreadyCheckedIn(true);
         setCheckInData(rsvp);
         setShowCheckOutPrompt(true);
       } else {
@@ -65,13 +63,11 @@ const EventSelfCheckInPage: React.FC = () => {
         setCheckedIn(true);
         setShowCheckOutPrompt(false);
       }
-    } catch (err: any) {
-      console.error('Error checking in:', err);
-      const errorMessage = err.response?.data?.detail || 'Failed to check in';
+    } catch (err: unknown) {
+      const errorMessage = getErrorMessage(err, 'Failed to check in');
 
       // Special handling for "already checked in" message
       if (errorMessage.includes('already checked in')) {
-        setAlreadyCheckedIn(true);
         setShowCheckOutPrompt(true);
         setError(null); // Don't show as error, show as prompt
       } else {

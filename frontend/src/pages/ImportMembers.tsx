@@ -5,10 +5,7 @@ import {
   Download,
   FileText,
   CheckCircle,
-  XCircle as _XCircle,
-  AlertTriangle as _AlertTriangle,
   ArrowRight,
-  X as _X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
@@ -114,7 +111,6 @@ const ImportMembers: React.FC = () => {
       toast.success(`File validated successfully! Found ${rows.length - 1} members to import.`);
     } catch (error) {
       toast.error('Failed to parse CSV file. Please check the format.');
-      console.error(error);
     }
     setValidating(false);
   };
@@ -255,7 +251,6 @@ const ImportMembers: React.FC = () => {
       }
     } catch (error) {
       toast.error('Failed to process CSV file. Please try again.');
-      console.error(error);
     }
     setImporting(false);
   };

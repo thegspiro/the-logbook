@@ -11,6 +11,7 @@ import { electionService } from '../services/api';
 import { userService } from '../services/api';
 import type { Election, Attendee } from '../types/election';
 import type { User } from '../types/user';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface MeetingAttendanceProps {
   electionId: string;
@@ -43,7 +44,6 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
       setAttendees(attendeeData.attendees);
       setMembers(memberData.filter((m: User) => m.status === 'active' || m.status === 'probationary'));
     } catch (err) {
-      console.error('Error loading attendance data:', err);
       toast.error('Failed to load attendance data');
     } finally {
       setLoading(false);
@@ -79,9 +79,8 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
       // Refresh election data
       const updated = await electionService.getElection(electionId);
       onUpdate(updated);
-    } catch (err: any) {
-      console.error('Error checking in:', err);
-      toast.error(err.response?.data?.detail || 'Failed to check in member');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to check in member'));
     } finally {
       setChecking(null);
     }
@@ -97,9 +96,8 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
 
       const updated = await electionService.getElection(electionId);
       onUpdate(updated);
-    } catch (err: any) {
-      console.error('Error removing attendee:', err);
-      toast.error(err.response?.data?.detail || 'Failed to remove attendee');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to remove attendee'));
     }
   };
 

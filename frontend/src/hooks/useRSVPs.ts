@@ -27,7 +27,6 @@ export const useRSVPs = (eventId: string | undefined, shouldFetch: boolean = tru
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load RSVPs';
-      console.error('Error fetching RSVPs:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);

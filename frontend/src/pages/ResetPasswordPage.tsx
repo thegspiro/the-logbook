@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 import { validatePasswordStrength } from '../utils/passwordValidation';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -43,10 +44,9 @@ export const ResetPasswordPage: React.FC = () => {
         } else {
           setError('This password reset link is invalid or has expired');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setError(
-          err.response?.data?.detail ||
-          'This password reset link is invalid or has expired'
+          getErrorMessage(err, 'This password reset link is invalid or has expired')
         );
       } finally {
         setIsValidating(false);
@@ -91,10 +91,9 @@ export const ResetPasswordPage: React.FC = () => {
       setTimeout(() => {
         navigate('/login');
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err.response?.data?.detail ||
-        'Failed to reset password. Please try again or request a new reset link.'
+        getErrorMessage(err, 'Failed to reset password. Please try again or request a new reset link.')
       );
     } finally {
       setIsLoading(false);

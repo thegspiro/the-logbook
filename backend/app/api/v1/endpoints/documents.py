@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 import os
 import uuid as uuid_lib
+import logging
 
 from app.core.database import get_db
 from app.models.user import User
@@ -28,6 +29,8 @@ from app.schemas.documents import (
 )
 from app.services.documents_service import DocumentsService
 from app.api.dependencies import get_current_user, require_permission
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -70,11 +73,13 @@ async def create_folder(
     """Create a new document folder"""
     service = DocumentsService(db)
     folder_data = folder.model_dump(exclude_none=True)
-    result, error = await service.create_folder(
-        current_user.organization_id, folder_data, current_user.id
-    )
-    if error:
-        raise HTTPException(status_code=400, detail=f"Unable to create folder. {error}")
+    try:
+        result = await service.create_folder(
+            current_user.organization_id, folder_data, current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create folder: {e}")
+        raise HTTPException(status_code=400, detail=f"Unable to create folder: {e}")
     return result
 
 
@@ -88,11 +93,11 @@ async def update_folder(
     """Update a document folder"""
     service = DocumentsService(db)
     update_data = folder.model_dump(exclude_none=True)
-    result, error = await service.update_folder(
+    result = await service.update_folder(
         folder_id, current_user.organization_id, update_data
     )
-    if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update folder. {error}")
+    if not result:
+        raise HTTPException(status_code=404, detail="Folder not found")
     return result
 
 
@@ -104,9 +109,9 @@ async def delete_folder(
 ):
     """Delete a document folder and all its documents"""
     service = DocumentsService(db)
-    success, error = await service.delete_folder(folder_id, current_user.organization_id)
+    success = await service.delete_folder(folder_id, current_user.organization_id)
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete folder. {error}")
+        raise HTTPException(status_code=404, detail="Folder not found")
 
 
 # ============================================
@@ -187,16 +192,18 @@ async def upload_document(
         "tags": tags,
     }
 
-    document, error = await service.create_document(
-        current_user.organization_id, doc_data, current_user.id
-    )
-    if error:
+    try:
+        document = await service.create_document(
+            current_user.organization_id, doc_data, current_user.id
+        )
+    except Exception as e:
         # Clean up file on error
         try:
             os.remove(file_path)
         except OSError:
-            pass
-        raise HTTPException(status_code=400, detail=f"Unable to save document. {error}")
+            logger.warning(f"Failed to clean up file after document creation error: {file_path}")
+        logger.error(f"Failed to create document record: {e}")
+        raise HTTPException(status_code=400, detail=f"Unable to save document: {e}")
 
     return document
 
@@ -225,11 +232,11 @@ async def update_document(
     """Update a document's metadata"""
     service = DocumentsService(db)
     update_data = doc.model_dump(exclude_none=True)
-    result, error = await service.update_document(
+    result = await service.update_document(
         document_id, current_user.organization_id, update_data
     )
-    if error:
-        raise HTTPException(status_code=400, detail=f"Unable to update document. {error}")
+    if not result:
+        raise HTTPException(status_code=404, detail="Document not found")
     return result
 
 
@@ -241,9 +248,9 @@ async def delete_document(
 ):
     """Delete a document"""
     service = DocumentsService(db)
-    success, error = await service.delete_document(document_id, current_user.organization_id)
+    success = await service.delete_document(document_id, current_user.organization_id)
     if not success:
-        raise HTTPException(status_code=400, detail=f"Unable to delete document. {error}")
+        raise HTTPException(status_code=404, detail="Document not found")
 
 
 # ============================================

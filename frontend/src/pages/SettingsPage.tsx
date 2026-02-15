@@ -29,7 +29,6 @@ export const SettingsPage: React.FC = () => {
         const data = await organizationService.getSettings();
         setSettings(data.contact_info_visibility);
       } catch (err) {
-        console.error('Error fetching settings:', err);
         setError('Unable to load settings. Please check your connection and refresh the page.');
       } finally {
         setLoading(false);
@@ -50,7 +49,6 @@ export const SettingsPage: React.FC = () => {
       setSuccessMessage('Settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      console.error('Error saving settings:', err);
       setError('Unable to save settings. Please check your connection and try again.');
     } finally {
       setSaving(false);

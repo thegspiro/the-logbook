@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { electionService } from '../services/api';
 import type { ElectionResults as ElectionResultsType, Election } from '../types/election';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface ElectionResultsProps {
   electionId: string;
@@ -28,9 +29,8 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       setError(null);
       const data = await electionService.getResults(electionId);
       setResults(data);
-    } catch (err: any) {
-      console.error('Error fetching results:', err);
-      setError(err.response?.data?.detail || 'Results not available yet');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Results not available yet'));
     } finally {
       setLoading(false);
     }

@@ -225,7 +225,7 @@ const ShiftReportPage: React.FC = () => {
       setReceivedReports(receivedData);
       setMyStats(statsData);
     } catch (error) {
-      console.error('Failed to load data:', error);
+      // Error silently handled - empty state shown
     } finally {
       setLoading(false);
     }

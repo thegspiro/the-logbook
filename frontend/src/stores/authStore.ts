@@ -83,7 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await authService.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      // Logout errors are non-critical; tokens are cleared regardless
     } finally {
       // Clear tokens and user data
       localStorage.removeItem('access_token');
@@ -114,7 +114,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      console.error('Load user error:', error);
       // Clear invalid tokens
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');

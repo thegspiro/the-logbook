@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandling';
 import {
   Link2,
   Plus,
@@ -89,8 +90,8 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         auto_sync_enabled: false,
         sync_interval_hours: 24,
       });
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create provider');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to create provider'));
     } finally {
       setIsSubmitting(false);
     }
@@ -504,6 +505,251 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   );
 };
 
+interface EditProviderModalProps {
+  isOpen: boolean;
+  provider: ExternalTrainingProvider | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    api_base_url: '',
+    api_key: '',
+    api_secret: '',
+    auth_type: 'api_key' as 'api_key' | 'basic' | 'oauth2',
+    auto_sync_enabled: false,
+    sync_interval_hours: 24,
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (provider && isOpen) {
+      setFormData({
+        name: provider.name || '',
+        description: provider.description || '',
+        api_base_url: provider.api_base_url || '',
+        api_key: '',
+        api_secret: '',
+        auth_type: (provider.auth_type as 'api_key' | 'basic' | 'oauth2') || 'api_key',
+        auto_sync_enabled: provider.auto_sync_enabled || false,
+        sync_interval_hours: provider.sync_interval_hours || 24,
+      });
+      setError('');
+    }
+  }, [provider, isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!provider) return;
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const updates: Record<string, unknown> = {
+        name: formData.name,
+        description: formData.description || undefined,
+        api_base_url: formData.api_base_url,
+        auth_type: formData.auth_type,
+        auto_sync_enabled: formData.auto_sync_enabled,
+        sync_interval_hours: formData.sync_interval_hours,
+      };
+      // Only send credentials if user entered new ones
+      if (formData.api_key) {
+        updates.api_key = formData.api_key;
+      }
+      if (formData.api_secret) {
+        updates.api_secret = formData.api_secret;
+      }
+      await externalTrainingService.updateProvider(provider.id, updates);
+      toast.success('Provider updated successfully');
+      onSuccess();
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update provider';
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen || !provider) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-provider-title"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
+      <div className="bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-700">
+          <h2 id="edit-provider-title" className="text-2xl font-bold text-white">
+            Edit Provider: {provider.name}
+          </h2>
+          <p className="text-sm text-gray-400 mt-1">
+            {PROVIDER_TYPES.find(p => p.value === provider.provider_type)?.label || provider.provider_type}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded" role="alert">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="edit-provider-name" className="block text-sm font-medium text-gray-300 mb-2">
+              Display Name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="edit-provider-name"
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+              required
+              aria-required="true"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="edit-provider-api-url" className="block text-sm font-medium text-gray-300 mb-2">
+              API Base URL <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="edit-provider-api-url"
+              type="url"
+              value={formData.api_base_url}
+              onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+              required
+              aria-required="true"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="edit-provider-api-key" className="block text-sm font-medium text-gray-300 mb-2">
+              API Key (leave blank to keep current)
+            </label>
+            <input
+              id="edit-provider-api-key"
+              type="password"
+              value={formData.api_key}
+              onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+              placeholder="Enter new API key to update"
+            />
+          </div>
+
+          {formData.auth_type === 'basic' && (
+            <div>
+              <label htmlFor="edit-provider-api-secret" className="block text-sm font-medium text-gray-300 mb-2">
+                API Secret (leave blank to keep current)
+              </label>
+              <input
+                id="edit-provider-api-secret"
+                type="password"
+                value={formData.api_secret}
+                onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+                placeholder="Enter new API secret to update"
+              />
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="edit-provider-description" className="block text-sm font-medium text-gray-300 mb-2">
+              Description
+            </label>
+            <textarea
+              id="edit-provider-description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+              rows={3}
+            />
+          </div>
+
+          <div className="border-t border-gray-700 pt-4">
+            <h3 className="text-lg font-semibold text-white mb-4">Sync Settings</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <label htmlFor="edit-provider-auto-sync" className="text-sm font-medium text-gray-300">
+                  Enable Auto-Sync
+                </label>
+                <p className="text-xs text-gray-500">Automatically sync training records on a schedule</p>
+              </div>
+              <button
+                id="edit-provider-auto-sync"
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, auto_sync_enabled: !prev.auto_sync_enabled }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  formData.auto_sync_enabled ? 'bg-red-600' : 'bg-gray-600'
+                }`}
+                role="switch"
+                aria-checked={formData.auto_sync_enabled}
+                aria-label="Enable auto-sync"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    formData.auto_sync_enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+
+            {formData.auto_sync_enabled && (
+              <div>
+                <label htmlFor="edit-provider-sync-interval" className="block text-sm font-medium text-gray-300 mb-2">
+                  Sync Interval (hours)
+                </label>
+                <select
+                  id="edit-provider-sync-interval"
+                  value={formData.sync_interval_hours}
+                  onChange={(e) => setFormData(prev => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value={6}>Every 6 hours</option>
+                  <option value={12}>Every 12 hours</option>
+                  <option value={24}>Daily</option>
+                  <option value={48}>Every 2 days</option>
+                  <option value={168}>Weekly</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-300 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 interface MappingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -533,7 +779,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
       setCategoryMappings(categories);
       setUserMappings(users);
     } catch (err) {
-      console.error('Failed to load mappings:', err);
+      // Error silently handled - mappings modal will show empty state
     } finally {
       setLoading(false);
     }
@@ -698,6 +944,10 @@ const ExternalTrainingPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
+  const [editModal, setEditModal] = useState<{ isOpen: boolean; provider: ExternalTrainingProvider | null }>({
+    isOpen: false,
+    provider: null,
+  });
   const [mappingsModal, setMappingsModal] = useState<{ isOpen: boolean; providerId: string; providerName: string }>({
     isOpen: false,
     providerId: '',
@@ -714,7 +964,7 @@ const ExternalTrainingPage: React.FC = () => {
       const data = await externalTrainingService.getProviders(false);
       setProviders(data);
     } catch (err) {
-      console.error('Failed to load providers:', err);
+      // Error silently handled - empty provider list shown
     } finally {
       setLoading(false);
     }
@@ -731,8 +981,8 @@ const ExternalTrainingPage: React.FC = () => {
       } else {
         toast.error(`Connection failed: ${result.message}`);
       }
-    } catch (err: any) {
-      toast.error(`Connection test failed: ${err.response?.data?.detail || err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Connection test failed: ${getErrorMessage(err)}`);
     } finally {
       setTestingProvider(null);
     }
@@ -745,15 +995,15 @@ const ExternalTrainingPage: React.FC = () => {
       toast.success(result.message || 'Sync initiated. Check sync logs for progress.');
       // Reload providers after a short delay to show updated last_sync_at
       setTimeout(() => loadProviders(), 2000);
-    } catch (err: any) {
-      toast.error(`Sync failed: ${err.response?.data?.detail || err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Sync failed: ${getErrorMessage(err)}`);
     } finally {
       setSyncingProvider(null);
     }
   };
 
-  const handleEdit = (_provider: ExternalTrainingProvider) => {
-    // TODO: Implement edit modal
+  const handleEdit = (provider: ExternalTrainingProvider) => {
+    setEditModal({ isOpen: true, provider });
   };
 
   const handleDelete = async (providerId: string) => {
@@ -764,8 +1014,8 @@ const ExternalTrainingPage: React.FC = () => {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
       toast.success('Provider deleted successfully');
-    } catch (err: any) {
-      toast.error(`Failed to delete: ${err.response?.data?.detail || err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to delete: ${getErrorMessage(err)}`);
     }
   };
 
@@ -903,6 +1153,12 @@ const ExternalTrainingPage: React.FC = () => {
       <CreateProviderModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+        onSuccess={loadProviders}
+      />
+      <EditProviderModal
+        isOpen={editModal.isOpen}
+        provider={editModal.provider}
+        onClose={() => setEditModal({ isOpen: false, provider: null })}
         onSuccess={loadProviders}
       />
       <MappingsModal

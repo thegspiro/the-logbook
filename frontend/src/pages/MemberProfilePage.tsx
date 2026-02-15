@@ -18,6 +18,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { userService, organizationService, trainingService, inventoryService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
 import type { TrainingRecord } from '../types/training';
@@ -98,7 +99,6 @@ export const MemberProfilePage: React.FC = () => {
       }
     } catch (err) {
       // If we can't fetch module status, default to not showing inventory
-      console.error('Error fetching module status:', err);
       setInventoryModuleEnabled(false);
     }
   };
@@ -110,7 +110,6 @@ export const MemberProfilePage: React.FC = () => {
       const userData = await userService.getUserWithRoles(userId!);
       setUser(userData);
     } catch (err) {
-      console.error('Error fetching user data:', err);
       setError('Unable to load member information. The member may not exist or you may not have access.');
     } finally {
       setLoading(false);
@@ -123,8 +122,7 @@ export const MemberProfilePage: React.FC = () => {
       const records = await trainingService.getRecords({ user_id: userId! });
       setTrainings(records);
     } catch (err) {
-      console.error('Error fetching training records:', err);
-      // Don't set error - just log it and show empty state
+      // Don't set error - show empty state
     } finally {
       setTrainingsLoading(false);
     }
@@ -145,8 +143,7 @@ export const MemberProfilePage: React.FC = () => {
       }));
       setInventoryItems(items);
     } catch (err) {
-      console.error('Error fetching inventory items:', err);
-      // Don't set error - just log it and show empty state
+      // Don't set error - show empty state
     } finally {
       setInventoryLoading(false);
     }
@@ -225,9 +222,8 @@ export const MemberProfilePage: React.FC = () => {
       const updatedUser = await userService.updateContactInfo(userId, editForm);
       setUser(updatedUser);
       setIsEditing(false);
-    } catch (err: any) {
-      console.error('Error updating contact info:', err);
-      setError(err.response?.data?.detail || 'Unable to update contact information. Please check your input and try again.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to update contact information. Please check your input and try again.'));
     } finally {
       setSaving(false);
     }
