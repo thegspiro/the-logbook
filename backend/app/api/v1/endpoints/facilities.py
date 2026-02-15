@@ -104,6 +104,8 @@ from app.schemas.facilities import (
     FacilityComplianceItemResponse,
 )
 from app.services.facilities_service import FacilitiesService
+from app.services.documents_service import DocumentsService
+from app.schemas.documents import FoldersListResponse
 from app.api.dependencies import require_permission
 
 router = APIRouter()
@@ -2750,3 +2752,62 @@ async def delete_facility_compliance_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Compliance item not found"
         )
+
+
+# ============================================================================
+# Facility Folder Endpoints (Document Management Integration)
+# ============================================================================
+
+@router.get("/{facility_id}/folders", response_model=FoldersListResponse, tags=["Facility Folders"])
+async def get_facility_folders(
+    facility_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("facilities.view", "facilities.manage")),
+):
+    """
+    Get the hierarchical folder structure for a facility.
+
+    Auto-creates the folder tree on first access:
+      Facility Files/
+        └── <facility_name>/
+            ├── Photos/
+            ├── Blueprints & Permits/
+            ├── Maintenance Records/
+            ├── Inspection Reports/
+            ├── Insurance & Leases/
+            └── Capital Projects/
+
+    **Permissions required:** facilities.view or facilities.manage
+    """
+    facilities_service = FacilitiesService(db)
+    facility = await facilities_service.get_facility(
+        facility_id=facility_id,
+        organization_id=current_user.organization_id,
+        include_relations=False,
+    )
+    if not facility:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    docs_service = DocumentsService(db)
+    await docs_service.ensure_facility_folder(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+        facility_display_name=facility.display_name,
+    )
+    await db.commit()
+
+    sub_folders = await docs_service.get_facility_sub_folders(
+        organization_id=current_user.organization_id,
+        facility_id=facility_id,
+    )
+
+    return {
+        "folders": [
+            {
+                **{c.key: getattr(f, c.key) for c in f.__table__.columns},
+                "document_count": getattr(f, "document_count", 0),
+            }
+            for f in sub_folders
+        ],
+        "total": len(sub_folders),
+    }

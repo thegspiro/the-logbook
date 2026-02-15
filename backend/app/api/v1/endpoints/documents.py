@@ -8,6 +8,7 @@ document CRUD, and file uploads.
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from uuid import UUID
 import os
 import uuid as uuid_lib
@@ -15,7 +16,7 @@ import logging
 
 from app.core.database import get_db
 from app.models.user import User
-from app.models.document import DocumentStatus
+from app.models.document import Document, DocumentStatus
 from app.schemas.documents import (
     DocumentFolderCreate,
     DocumentFolderUpdate,
@@ -47,10 +48,12 @@ async def list_folders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.view")),
 ):
-    """List all document folders for the organization"""
+    """List document folders the current user can access"""
     service = DocumentsService(db)
     parent_uuid = UUID(parent_id) if parent_id else None
-    folders = await service.get_folders(current_user.organization_id, parent_uuid)
+    folders = await service.get_folders(
+        current_user.organization_id, parent_uuid, current_user=current_user
+    )
 
     return {
         "folders": [
@@ -127,9 +130,18 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.view")),
 ):
-    """List documents with optional filtering"""
+    """List documents with optional filtering and folder access control"""
     service = DocumentsService(db)
     folder_uuid = UUID(folder_id) if folder_id else None
+
+    # Enforce folder-level access when listing by folder
+    if folder_uuid:
+        folder = await service.get_folder_by_id(folder_uuid, current_user.organization_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not service.can_access_folder(folder, current_user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this folder")
+
     documents, total = await service.get_documents(
         current_user.organization_id,
         folder_id=folder_uuid,
@@ -156,7 +168,18 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.manage")),
 ):
-    """Upload a new document"""
+    """Upload a new document (with folder access control)"""
+    service = DocumentsService(db)
+
+    # Enforce folder access if uploading into a specific folder
+    if folder_id:
+        folder = await service.get_folder_by_id(UUID(folder_id), current_user.organization_id)
+        if folder and not service.can_access_folder(folder, current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to upload to this folder",
+            )
+
     # Validate file size (50MB max)
     max_size = 50 * 1024 * 1024
     content = await file.read()
@@ -180,7 +203,6 @@ async def upload_document(
         f.write(content)
 
     # Create document record
-    service = DocumentsService(db)
     doc_data = {
         "name": name,
         "description": description,
@@ -251,6 +273,36 @@ async def delete_document(
     success = await service.delete_document(document_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
+
+
+# ============================================
+# Member Folder Endpoints
+# ============================================
+
+@router.get("/my-folder", response_model=DocumentFolderResponse)
+async def get_my_member_folder(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.view")),
+):
+    """
+    Get (or auto-create) the current user's personal folder
+    under the 'Member Files' hierarchy.
+    """
+    service = DocumentsService(db)
+    folder = await service.ensure_member_folder(current_user.organization_id, current_user)
+    await db.commit()
+
+    count_result = await db.execute(
+        select(func.count(Document.id))
+        .where(Document.folder_id == folder.id)
+        .where(Document.status == DocumentStatus.ACTIVE)
+    )
+    folder.document_count = count_result.scalar() or 0
+
+    return {
+        **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
+        "document_count": folder.document_count,
+    }
 
 
 # ============================================

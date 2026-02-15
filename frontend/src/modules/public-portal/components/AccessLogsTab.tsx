@@ -45,7 +45,7 @@ export const AccessLogsTab: React.FC = () => {
     }
   };
 
-  const handleFilterChange = (key: keyof AccessLogFilters, value: any) => {
+  const handleFilterChange = (key: keyof AccessLogFilters, value: string | number | boolean | undefined) => {
     setFilters(prev => ({
       ...prev,
       [key]: value || undefined,

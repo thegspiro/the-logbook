@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { useAPIKeys } from '../hooks/usePublicPortal';
-import type { CreateAPIKeyRequest } from '../types';
+import type { CreateAPIKeyRequest, PublicPortalAPIKey } from '../types';
 
 interface CreateKeyModalProps {
   isOpen: boolean;
@@ -327,7 +327,7 @@ export const APIKeysTab: React.FC = () => {
     return new Date(isoString).toLocaleString();
   };
 
-  const getStatusBadge = (key: any) => {
+  const getStatusBadge = (key: PublicPortalAPIKey) => {
     if (!key.is_active) {
       return <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">Revoked</span>;
     }

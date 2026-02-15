@@ -580,9 +580,14 @@ async def get_enrollment_progress(
 
     # Check permission: user can view their own or needs training.view_all
     if enrollment.user_id != current_user.id:
-        # Check if user has permission to view all training
-        # This would need to be implemented in the permissions system
-        pass
+        user_permissions = set()
+        for role in current_user.roles:
+            user_permissions.update(role.permissions or [])
+        if "*" not in user_permissions and "training.view_all" not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view this enrollment"
+            )
 
     # Calculate time remaining
     time_remaining_days = None

@@ -218,13 +218,108 @@ def verify_enum_consistency() -> Tuple[bool, List[str]]:
     """
     Verify enum consistency without pytest.
 
+    Extracts enum definitions from migrations, backend models, and frontend
+    types, then checks that they match. Can be called from pre-commit hooks
+    or CI pipelines.
+
     Returns:
         Tuple of (success: bool, errors: List[str])
     """
-    errors = []
+    errors: List[str] = []
 
-    # TODO: Implement standalone verification logic for CI/scripts
-    # This can be called from pre-commit hooks or CI pipelines
+    base_dir = Path(__file__).parent.parent
+
+    # --- Extract migration enums ---
+    migrations_dir = base_dir / "alembic" / "versions"
+    migration_enums: Dict[str, List[str]] = {}
+    enum_pattern = r"sa\.Enum\((.*?name=['\"](\w+)['\"].*?)\)"
+
+    for migration_file in migrations_dir.glob("*.py"):
+        content = migration_file.read_text()
+        for match in re.finditer(enum_pattern, content, re.DOTALL):
+            full_match = match.group(1)
+            enum_name = match.group(2)
+            values_section = full_match.split("name=")[0]
+            values = re.findall(r"['\"]([^'\"]+)['\"]", values_section)
+            if values and enum_name not in migration_enums:
+                migration_enums[enum_name] = values
+
+    # --- Extract backend model enums ---
+    models_dir = base_dir / "app" / "models"
+    model_enums: Dict[str, List[str]] = {}
+    enum_class_pattern = r"class (\w+)\(str, enum\.Enum\):.*?\n(?:\s*\"\"\".*?\"\"\".*?\n)?((?:    \w+ = ['\"].*?\n)+)"
+
+    for model_file in models_dir.glob("*.py"):
+        content = model_file.read_text()
+        for match in re.finditer(enum_class_pattern, content, re.MULTILINE | re.DOTALL):
+            class_name = match.group(1)
+            values_block = match.group(2)
+            values = re.findall(r"= ['\"]([^'\"]+)['\"]", values_block)
+            if values:
+                model_enums[class_name] = values
+
+    # --- Extract frontend enums ---
+    frontend_dir = base_dir.parent / "frontend" / "src" / "modules" / "onboarding"
+    frontend_enums: Dict[str, List[str]] = {}
+    union_type_pattern = r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
+
+    if frontend_dir.exists():
+        for ts_file in frontend_dir.rglob("*.tsx"):
+            content = ts_file.read_text()
+            for match in re.finditer(union_type_pattern, content):
+                type_name = match.group(1)
+                values_str = match.group(2)
+                values = re.findall(r"['\"]([^'\"]+)['\"]", values_str)
+                if values and type_name not in frontend_enums:
+                    frontend_enums[type_name] = values
+
+    # --- Check organization_type consistency ---
+    db_org = set(migration_enums.get("organizationtype", []))
+    be_org = set(model_enums.get("OrganizationType", []))
+    fe_org = set(frontend_enums.get("OrganizationType", []))
+
+    if db_org and be_org and db_org != be_org:
+        errors.append(
+            f"organizationtype mismatch DB↔Backend: "
+            f"DB={sorted(db_org)}, Backend={sorted(be_org)}"
+        )
+    if be_org and fe_org and be_org != fe_org:
+        errors.append(
+            f"OrganizationType mismatch Backend↔Frontend: "
+            f"Backend={sorted(be_org)}, Frontend={sorted(fe_org)}"
+        )
+
+    # --- Check identifier_type consistency ---
+    db_id = set(migration_enums.get("identifiertype", []))
+    be_id = set(model_enums.get("IdentifierType", []))
+    fe_id = set(frontend_enums.get("IdentifierType", []))
+
+    if db_id and be_id and db_id != be_id:
+        errors.append(
+            f"identifiertype mismatch DB↔Backend: "
+            f"DB={sorted(db_id)}, Backend={sorted(be_id)}"
+        )
+    if be_id and fe_id and be_id != fe_id:
+        errors.append(
+            f"IdentifierType mismatch Backend↔Frontend: "
+            f"Backend={sorted(be_id)}, Frontend={sorted(fe_id)}"
+        )
+
+    # --- Check all migration enums are lowercase ---
+    for enum_name, values in migration_enums.items():
+        for value in values:
+            if value != value.lower() and value != value.upper():
+                continue
+            if value != value.lower():
+                errors.append(f"{enum_name}: '{value}' should be '{value.lower()}'")
+
+    # --- Check no enums have empty values ---
+    for enum_name, values in migration_enums.items():
+        if not values:
+            errors.append(f"Database enum '{enum_name}' has no values defined")
+    for enum_name, values in model_enums.items():
+        if not values:
+            errors.append(f"Backend enum '{enum_name}' has no values defined")
 
     return len(errors) == 0, errors
 
@@ -237,7 +332,7 @@ if __name__ == "__main__":
         print("✅ All enum values are consistent across database, backend, and frontend")
         exit(0)
     else:
-        print("❌ Enum consistency check failed:")
+        print(f"❌ Enum consistency check failed ({len(errors)} issue(s)):")
         for error in errors:
             print(f"  - {error}")
         exit(1)

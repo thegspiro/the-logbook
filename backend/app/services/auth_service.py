@@ -47,7 +47,8 @@ async def _check_password_history(db: AsyncSession, user_id: str, new_password: 
     history_entries = result.scalars().all()
 
     for entry in history_entries:
-        if verify_password(new_password, entry.password_hash):
+        matched, _ = verify_password(new_password, entry.password_hash)
+        if matched:
             return True
     return False
 
@@ -110,7 +111,8 @@ class AuthService:
             return None, f"Account is temporarily locked. Try again in {remaining} minutes."
 
         # Verify password
-        if not verify_password(password, user.password_hash):
+        password_valid, rehashed = verify_password(password, user.password_hash)
+        if not password_valid:
             # Increment failed login attempts
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
 
@@ -132,6 +134,10 @@ class AuthService:
                 return None, f"Incorrect username or password. {remaining_attempts} attempt{'s' if remaining_attempts > 1 else ''} remaining before account is locked."
             else:
                 return None, "Incorrect username or password"
+
+        # Transparently upgrade hash if argon2 parameters have changed
+        if rehashed:
+            user.password_hash = rehashed
 
         # Reset failed login attempts on successful login
         user.failed_login_attempts = 0
@@ -433,7 +439,8 @@ class AuthService:
             Tuple of (success, error_message)
         """
         # Verify current password
-        if not user.password_hash or not verify_password(current_password, user.password_hash):
+        current_valid, _ = verify_password(current_password, user.password_hash) if user.password_hash else (False, None)
+        if not current_valid:
             return False, "Current password is incorrect. Please verify your existing password and try again."
 
         # Enforce minimum password age (prevent rapid cycling through history)
@@ -459,7 +466,8 @@ class AuthService:
             )
 
         # Also check against current password
-        if verify_password(new_password, user.password_hash):
+        same_as_current, _ = verify_password(new_password, user.password_hash)
+        if same_as_current:
             return False, "New password must be different from your current password."
 
         # Save current password to history before changing

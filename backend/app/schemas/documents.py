@@ -21,6 +21,9 @@ class DocumentFolderCreate(BaseModel):
     color: str = Field(default="#3B82F6", max_length=20)
     icon: str = Field(default="folder", max_length=50)
     parent_id: Optional[UUID] = None
+    visibility: str = Field(default="organization", pattern="^(organization|leadership|owner)$")
+    owner_user_id: Optional[UUID] = None
+    allowed_roles: Optional[List[str]] = None
 
 
 class DocumentFolderUpdate(BaseModel):
@@ -30,6 +33,9 @@ class DocumentFolderUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=20)
     icon: Optional[str] = Field(None, max_length=50)
     parent_id: Optional[UUID] = None
+    visibility: Optional[str] = Field(None, pattern="^(organization|leadership|owner)$")
+    owner_user_id: Optional[UUID] = None
+    allowed_roles: Optional[List[str]] = None
 
 
 class DocumentFolderResponse(BaseModel):
@@ -44,6 +50,9 @@ class DocumentFolderResponse(BaseModel):
     is_system: bool = False
     sort_order: int = 0
     parent_id: Optional[UUID] = None
+    visibility: str = "organization"
+    owner_user_id: Optional[UUID] = None
+    allowed_roles: Optional[List[str]] = None
     document_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime
