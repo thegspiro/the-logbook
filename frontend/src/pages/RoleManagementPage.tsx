@@ -134,238 +134,242 @@ export const RoleManagementPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500" role="status" aria-live="polite">Loading...</div>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-slate-400" role="status" aria-live="polite">Loading...</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Role Management</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Create and manage custom roles and permissions
-          </p>
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6 flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Role Management</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Create and manage custom roles and permissions
+            </p>
+          </div>
+          <button
+            onClick={handleCreate}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Create Custom Role
+          </button>
         </div>
-        <button
-          onClick={handleCreate}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          Create Custom Role
-        </button>
-      </div>
 
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <ul className="divide-y divide-gray-200">
-          {roles.map((role) => (
-            <li key={role.id} className="px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-medium text-gray-900">{role.name}</h3>
-                    {role.is_system && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        System Role
-                      </span>
+        <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+          <ul className="divide-y divide-white/10">
+            {roles.map((role) => (
+              <li key={role.id} className="px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-medium text-white">{role.name}</h3>
+                      {role.is_system && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          System Role
+                        </span>
+                      )}
+                      <span className="text-sm text-slate-400">Priority: {role.priority}</span>
+                    </div>
+                    {role.description && (
+                      <p className="mt-1 text-sm text-slate-400">{role.description}</p>
                     )}
-                    <span className="text-sm text-gray-500">Priority: {role.priority}</span>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {role.permissions.slice(0, 5).map((perm) => (
+                        <span
+                          key={perm}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-slate-200"
+                        >
+                          {perm.split('.').pop()}
+                        </span>
+                      ))}
+                      {role.permissions.length > 5 && (
+                        <span className="text-xs text-slate-400">
+                          +{role.permissions.length - 5} more
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {role.description && (
-                    <p className="mt-1 text-sm text-gray-500">{role.description}</p>
-                  )}
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {role.permissions.slice(0, 5).map((perm) => (
-                      <span
-                        key={perm}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800"
-                      >
-                        {perm.split('.').pop()}
-                      </span>
-                    ))}
-                    {role.permissions.length > 5 && (
-                      <span className="text-xs text-gray-500">
-                        +{role.permissions.length - 5} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(role)}
-                    className="text-blue-600 hover:text-blue-900 text-sm font-medium"
-                  >
-                    Edit
-                  </button>
-                  {!role.is_system && (
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => handleDelete(role)}
-                      className="text-red-600 hover:text-red-900 text-sm font-medium"
+                      onClick={() => handleEdit(role)}
+                      className="text-blue-400 hover:text-blue-300 text-sm font-medium"
                     >
-                      Delete
+                      Edit
                     </button>
-                  )}
+                    {!role.is_system && (
+                      <button
+                        onClick={() => handleDelete(role)}
+                        className="text-red-400 hover:text-red-300 text-sm font-medium"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+              </li>
+            ))}
+          </ul>
+        </div>
 
-      {/* Create/Edit Role Modal */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="role-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
-        >
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="role-modal-title" className="text-lg font-medium text-gray-900">
-                {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
-              </h3>
-            </div>
-
-            <div className="px-6 py-4 space-y-4">
-              {editingRole?.is_system && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-sm text-yellow-800">
-                    System roles can only have their permissions modified.
-                    Name and priority cannot be changed.
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="role-name" className="block text-sm font-medium text-gray-700">Role Name</label>
-                <input
-                  id="role-name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  disabled={editingRole?.is_system}
-                  required
-                  aria-required="true"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100"
-                />
+        {/* Create/Edit Role Modal */}
+        {showCreateModal && (
+          <div
+            className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-modal-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+          >
+            <div className="bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="px-6 py-4 border-b border-white/20">
+                <h3 id="role-modal-title" className="text-lg font-medium text-white">
+                  {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
+                </h3>
               </div>
 
-              {!editingRole && (
+              <div className="px-6 py-4 space-y-4">
+                {editingRole?.is_system && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-sm text-yellow-800">
+                      System roles can only have their permissions modified.
+                      Name and priority cannot be changed.
+                    </p>
+                  </div>
+                )}
+
                 <div>
-                  <label htmlFor="role-slug" className="block text-sm font-medium text-gray-700">Slug</label>
+                  <label htmlFor="role-name" className="block text-sm font-medium text-slate-200">Role Name</label>
                   <input
-                    id="role-slug"
+                    id="role-name"
                     type="text"
-                    value={formData.slug}
-                    onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    placeholder="custom_role"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    disabled={editingRole?.is_system}
+                    required
+                    aria-required="true"
+                    className="mt-1 block w-full rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-slate-700"
                   />
                 </div>
-              )}
 
-              <div>
-                <label htmlFor="role-description" className="block text-sm font-medium text-gray-700">Description</label>
-                <textarea
-                  id="role-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={2}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
+                {!editingRole && (
+                  <div>
+                    <label htmlFor="role-slug" className="block text-sm font-medium text-slate-200">Slug</label>
+                    <input
+                      id="role-slug"
+                      type="text"
+                      value={formData.slug}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                      className="mt-1 block w-full rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      placeholder="custom_role"
+                    />
+                  </div>
+                )}
 
-              {!editingRole?.is_system && (
                 <div>
-                  <label htmlFor="role-priority" className="block text-sm font-medium text-gray-700">Priority (0-100)</label>
-                  <input
-                    id="role-priority"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                    className="mt-1 block w-32 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  <label htmlFor="role-description" className="block text-sm font-medium text-slate-200">Description</label>
+                  <textarea
+                    id="role-description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={2}
+                    className="mt-1 block w-full rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Higher priority roles have more authority</p>
                 </div>
-              )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Permissions</label>
-                <div className="space-y-4">
-                  {permissionCategories.map((category) => {
-                    const categoryPermissions = category.permissions.map((p) => p.name);
-                    const allSelected = categoryPermissions.every((p) => formData.permissions.includes(p));
-                    const someSelected = categoryPermissions.some((p) => formData.permissions.includes(p));
+                {!editingRole?.is_system && (
+                  <div>
+                    <label htmlFor="role-priority" className="block text-sm font-medium text-slate-200">Priority (0-100)</label>
+                    <input
+                      id="role-priority"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
+                      className="mt-1 block w-32 rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">Higher priority roles have more authority</p>
+                  </div>
+                )}
 
-                    return (
-                      <div key={category.category} className="border border-gray-200 rounded-lg p-4">
-                        <label className="flex items-center mb-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={allSelected}
-                            ref={(input) => {
-                              if (input) input.indeterminate = someSelected && !allSelected;
-                            }}
-                            onChange={() => handleToggleCategory(category)}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-sm font-medium text-gray-900 uppercase">
-                            {category.category.replace(/_/g, ' ')}
-                          </span>
-                        </label>
-                        <div className="ml-6 space-y-1">
-                          {category.permissions.map((perm) => (
-                            <label key={perm.name} className="flex items-start cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={formData.permissions.includes(perm.name)}
-                                onChange={() => handleTogglePermission(perm.name)}
-                                className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                              />
-                              <div className="ml-2">
-                                <div className="text-sm text-gray-900">{perm.name}</div>
-                                <div className="text-xs text-gray-500">{perm.description}</div>
-                              </div>
-                            </label>
-                          ))}
+                <div>
+                  <label className="block text-sm font-medium text-slate-200 mb-3">Permissions</label>
+                  <div className="space-y-4">
+                    {permissionCategories.map((category) => {
+                      const categoryPermissions = category.permissions.map((p) => p.name);
+                      const allSelected = categoryPermissions.every((p) => formData.permissions.includes(p));
+                      const someSelected = categoryPermissions.some((p) => formData.permissions.includes(p));
+
+                      return (
+                        <div key={category.category} className="border border-white/20 rounded-lg p-4">
+                          <label className="flex items-center mb-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              ref={(input) => {
+                                if (input) input.indeterminate = someSelected && !allSelected;
+                              }}
+                              onChange={() => handleToggleCategory(category)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                            />
+                            <span className="ml-2 text-sm font-medium text-white uppercase">
+                              {category.category.replace(/_/g, ' ')}
+                            </span>
+                          </label>
+                          <div className="ml-6 space-y-1">
+                            {category.permissions.map((perm) => (
+                              <label key={perm.name} className="flex items-start cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={formData.permissions.includes(perm.name)}
+                                  onChange={() => handleTogglePermission(perm.name)}
+                                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                                />
+                                <div className="ml-2">
+                                  <div className="text-sm text-white">{perm.name}</div>
+                                  <div className="text-xs text-slate-400">{perm.description}</div>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
-              >
-                {editingRole ? 'Save Changes' : 'Create Role'}
-              </button>
+              <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                >
+                  {editingRole ? 'Save Changes' : 'Create Role'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

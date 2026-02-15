@@ -212,11 +212,11 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Basics === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Event Details</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Event Details</h3>
         <div className="space-y-4">
           {/* Title */}
           <div>
-            <label htmlFor="event-title" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="event-title" className="block text-sm font-medium text-slate-200">
               Title <span className="text-red-500">*</span>
             </label>
             <input
@@ -226,14 +226,14 @@ export const EventForm: React.FC<EventFormProps> = ({
               maxLength={200}
               value={formData.title}
               onChange={(e) => update({ title: e.target.value })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+              className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               placeholder="e.g., Monthly Business Meeting"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="event-description" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="event-description" className="block text-sm font-medium text-slate-200">
               Description
             </label>
             <textarea
@@ -241,14 +241,14 @@ export const EventForm: React.FC<EventFormProps> = ({
               rows={3}
               value={formData.description || ''}
               onChange={(e) => update({ description: e.target.value })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+              className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               placeholder="What is this event about?"
             />
           </div>
 
           {/* Event Type */}
           <div>
-            <label htmlFor="event-type" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="event-type" className="block text-sm font-medium text-slate-200">
               Event Type <span className="text-red-500">*</span>
             </label>
             <select
@@ -256,7 +256,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               required
               value={formData.event_type}
               onChange={(e) => update({ event_type: e.target.value as EventType })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+              className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
             >
               {EVENT_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -275,11 +275,11 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Schedule === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Schedule</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Schedule</h3>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="start-datetime" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="start-datetime" className="block text-sm font-medium text-slate-200">
                 Start Date & Time <span className="text-red-500">*</span>
               </label>
               <input
@@ -288,11 +288,11 @@ export const EventForm: React.FC<EventFormProps> = ({
                 required
                 value={formData.start_datetime}
                 onChange={(e) => handleStartDateChange(e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               />
             </div>
             <div>
-              <label htmlFor="end-datetime" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="end-datetime" className="block text-sm font-medium text-slate-200">
                 End Date & Time <span className="text-red-500">*</span>
               </label>
               <input
@@ -301,21 +301,21 @@ export const EventForm: React.FC<EventFormProps> = ({
                 required
                 value={formData.end_datetime}
                 onChange={(e) => update({ end_datetime: e.target.value })}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               />
             </div>
           </div>
 
           {/* Quick Duration */}
           <div>
-            <span className="block text-sm font-medium text-gray-700 mb-2">Quick Duration</span>
+            <span className="block text-sm font-medium text-slate-200 mb-2">Quick Duration</span>
             <div className="flex flex-wrap gap-2">
               {[1, 2, 4, 8].map((h) => (
                 <button
                   key={h}
                   type="button"
                   onClick={() => setDuration(h)}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-3 py-1.5 text-sm text-slate-300 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   {h} {h === 1 ? 'hour' : 'hours'}
                 </button>
@@ -327,7 +327,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Location === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Location</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Location</h3>
         <div className="space-y-4">
           {locations.length > 0 && (
             <div className="flex gap-4">
@@ -356,14 +356,14 @@ export const EventForm: React.FC<EventFormProps> = ({
 
           {locationMode === 'select' && locations.length > 0 ? (
             <div>
-              <label htmlFor="location-select" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="location-select" className="block text-sm font-medium text-slate-200">
                 Location
               </label>
               <select
                 id="location-select"
                 value={formData.location_id || ''}
                 onChange={(e) => update({ location_id: e.target.value || undefined })}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               >
                 <option value="">-- Select a location --</option>
                 {locations.map((loc) => (
@@ -375,7 +375,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             </div>
           ) : (
             <div>
-              <label htmlFor="location-text" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="location-text" className="block text-sm font-medium text-slate-200">
                 Location
               </label>
               <input
@@ -384,14 +384,14 @@ export const EventForm: React.FC<EventFormProps> = ({
                 maxLength={300}
                 value={formData.location || ''}
                 onChange={(e) => update({ location: e.target.value })}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                 placeholder="e.g., Station 1 Conference Room"
               />
             </div>
           )}
 
           <div>
-            <label htmlFor="location-details" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="location-details" className="block text-sm font-medium text-slate-200">
               Additional Directions
             </label>
             <input
@@ -399,7 +399,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               id="location-details"
               value={formData.location_details || ''}
               onChange={(e) => update({ location_details: e.target.value })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+              className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               placeholder="e.g., Enter through side door, Room 204"
             />
           </div>
@@ -408,7 +408,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Attendance === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Attendance</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Attendance</h3>
         <div className="space-y-4">
           <div className="flex items-center">
             <input
@@ -418,7 +418,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ is_mandatory: e.target.checked })}
               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
             />
-            <label htmlFor="is-mandatory" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="is-mandatory" className="ml-2 block text-sm text-slate-200">
               Mandatory attendance
             </label>
           </div>
@@ -426,10 +426,10 @@ export const EventForm: React.FC<EventFormProps> = ({
           {/* Eligible Roles */}
           {roles.length > 0 && (
             <div>
-              <span className="block text-sm font-medium text-gray-700 mb-2">
+              <span className="block text-sm font-medium text-slate-200 mb-2">
                 Eligible Roles
               </span>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-slate-400 mb-2">
                 Leave all unchecked to allow all members. Check specific roles to restrict attendance.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -452,8 +452,8 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === RSVP Settings === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">RSVP Settings</h3>
-        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+        <h3 className="text-lg font-medium text-white mb-4">RSVP Settings</h3>
+        <div className="space-y-4 p-4 bg-white/5 rounded-lg">
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -462,16 +462,16 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ requires_rsvp: e.target.checked })}
               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
             />
-            <label htmlFor="requires-rsvp" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="requires-rsvp" className="ml-2 block text-sm text-slate-200">
               Require RSVP
             </label>
           </div>
 
           {formData.requires_rsvp && (
-            <div className="space-y-4 pl-6 border-l-2 border-gray-200">
+            <div className="space-y-4 pl-6 border-l-2 border-white/20">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="rsvp-deadline" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="rsvp-deadline" className="block text-sm font-medium text-slate-200">
                     RSVP Deadline
                   </label>
                   <input
@@ -479,11 +479,11 @@ export const EventForm: React.FC<EventFormProps> = ({
                     id="rsvp-deadline"
                     value={formData.rsvp_deadline || ''}
                     onChange={(e) => update({ rsvp_deadline: e.target.value })}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label htmlFor="max-attendees" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="max-attendees" className="block text-sm font-medium text-slate-200">
                     Max Attendees
                   </label>
                   <input
@@ -492,7 +492,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                     min="1"
                     value={formData.max_attendees || ''}
                     onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                     placeholder="Unlimited"
                   />
                 </div>
@@ -506,13 +506,13 @@ export const EventForm: React.FC<EventFormProps> = ({
                   onChange={(e) => update({ allow_guests: e.target.checked })}
                   className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
                 />
-                <label htmlFor="allow-guests" className="ml-2 block text-sm text-gray-700">
+                <label htmlFor="allow-guests" className="ml-2 block text-sm text-slate-200">
                   Allow guests
                 </label>
               </div>
 
               <fieldset>
-                <legend className="block text-sm font-medium text-gray-700 mb-2">
+                <legend className="block text-sm font-medium text-slate-200 mb-2">
                   RSVP Status Options
                 </legend>
                 <div className="flex gap-4">
@@ -536,17 +536,17 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Check-In Settings === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Check-In Settings</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Check-In Settings</h3>
         <div className="space-y-4">
           <div>
-            <label htmlFor="checkin-window" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="checkin-window" className="block text-sm font-medium text-slate-200">
               Check-In Window
             </label>
             <select
               id="checkin-window"
               value={formData.check_in_window_type || 'flexible'}
               onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+              className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
             >
               <option value="flexible">Flexible - Anytime before event ends</option>
               <option value="strict">Strict - Only during actual event time</option>
@@ -555,9 +555,9 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           {formData.check_in_window_type === 'window' && (
-            <div className="grid grid-cols-2 gap-4 pl-6 border-l-2 border-gray-200">
+            <div className="grid grid-cols-2 gap-4 pl-6 border-l-2 border-white/20">
               <div>
-                <label htmlFor="checkin-before" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="checkin-before" className="block text-sm font-medium text-slate-200">
                   Minutes before start
                 </label>
                 <input
@@ -567,11 +567,11 @@ export const EventForm: React.FC<EventFormProps> = ({
                   max="120"
                   value={formData.check_in_minutes_before || 15}
                   onChange={(e) => update({ check_in_minutes_before: parseInt(e.target.value) || 15 })}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                  className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                 />
               </div>
               <div>
-                <label htmlFor="checkin-after" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="checkin-after" className="block text-sm font-medium text-slate-200">
                   Minutes after start
                 </label>
                 <input
@@ -581,7 +581,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   max="120"
                   value={formData.check_in_minutes_after || 15}
                   onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                  className="mt-1 block w-full bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                 />
               </div>
             </div>
@@ -595,7 +595,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ require_checkout: e.target.checked })}
               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
             />
-            <label htmlFor="require-checkout" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="require-checkout" className="ml-2 block text-sm text-slate-200">
               Require manual check-out
             </label>
           </div>
@@ -604,7 +604,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Notifications === */}
       <section>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Notifications</h3>
+        <h3 className="text-lg font-medium text-white mb-4">Notifications</h3>
         <div className="space-y-4">
           <div className="flex items-center">
             <input
@@ -614,21 +614,21 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ send_reminders: e.target.checked })}
               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
             />
-            <label htmlFor="send-reminders" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="send-reminders" className="ml-2 block text-sm text-slate-200">
               Send event reminders
             </label>
           </div>
 
           {formData.send_reminders && (
-            <div className="pl-6 border-l-2 border-gray-200">
-              <label htmlFor="reminder-hours" className="block text-sm font-medium text-gray-700">
+            <div className="pl-6 border-l-2 border-white/20">
+              <label htmlFor="reminder-hours" className="block text-sm font-medium text-slate-200">
                 Reminder hours before event
               </label>
               <select
                 id="reminder-hours"
                 value={formData.reminder_hours_before || 24}
                 onChange={(e) => update({ reminder_hours_before: parseInt(e.target.value) })}
-                className="mt-1 block w-48 border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                className="mt-1 block w-48 bg-slate-900/50 border-slate-600 text-white rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               >
                 <option value={1}>1 hour</option>
                 <option value={2}>2 hours</option>
@@ -645,11 +645,11 @@ export const EventForm: React.FC<EventFormProps> = ({
       </section>
 
       {/* === Actions === */}
-      <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
+      <div className="flex justify-end gap-3 pt-6 border-t border-white/20">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          className="px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-300 bg-white/10 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
         >
           Cancel
         </button>

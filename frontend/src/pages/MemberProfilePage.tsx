@@ -251,9 +251,11 @@ export const MemberProfilePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-slate-400">Loading...</div>
+          </div>
         </div>
       </div>
     );
@@ -261,9 +263,11 @@ export const MemberProfilePage: React.FC = () => {
 
   if (error && !user) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-700">{error || 'Member not found'}</p>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-700">{error || 'Member not found'}</p>
+          </div>
         </div>
       </div>
     );
@@ -271,9 +275,11 @@ export const MemberProfilePage: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-700">Member not found</p>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-700">Member not found</p>
+          </div>
         </div>
       </div>
     );
@@ -281,17 +287,18 @@ export const MemberProfilePage: React.FC = () => {
 
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm text-gray-500 hover:text-gray-700 mb-4 flex items-center gap-1"
+          className="text-sm text-slate-400 hover:text-slate-200 mb-4 flex items-center gap-1"
         >
           &larr; Back
         </button>
 
-        <div className="bg-white shadow rounded-lg p-6">
+        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
               <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -300,12 +307,12 @@ export const MemberProfilePage: React.FC = () => {
                 </span>
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-3xl font-bold text-white">
                   {user.full_name || user.username}
                 </h1>
-                <p className="text-gray-500 mt-1">@{user.username}</p>
+                <p className="text-slate-400 mt-1">@{user.username}</p>
                 {user.badge_number && (
-                  <p className="text-sm text-gray-600 mt-1">Badge #{user.badge_number}</p>
+                  <p className="text-sm text-slate-300 mt-1">Badge #{user.badge_number}</p>
                 )}
                 <div className="flex gap-2 mt-2">
                   {user.roles.map((role) => (
@@ -340,26 +347,26 @@ export const MemberProfilePage: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           {/* Training & Certifications */}
           {trainingEnabled && (
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-white">
                   Training & Certifications
                 </h2>
                 <Link
                   to={`/members/${userId}/training`}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-sm text-blue-400 hover:text-blue-300 font-medium"
                 >
                   View Full History
                 </Link>
               </div>
               {trainingsLoading ? (
                 <div className="flex items-center justify-center h-24">
-                  <div className="text-sm text-gray-500">Loading training records...</div>
+                  <div className="text-sm text-slate-400">Loading training records...</div>
                 </div>
               ) : trainings.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-sm text-gray-500">No training records found.</p>
-                  <p className="text-xs text-gray-400 mt-1">Training records will appear here as they are completed.</p>
+                  <p className="text-sm text-slate-400">No training records found.</p>
+                  <p className="text-xs text-slate-500 mt-1">Training records will appear here as they are completed.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -367,22 +374,22 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.slice(0, 5).map((training) => (
                     <div
                       key={training.id}
-                      className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
+                      className="border border-white/20 rounded-lg p-4 hover:border-slate-500 transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">{training.course_name}</h3>
+                          <h3 className="font-medium text-white">{training.course_name}</h3>
                           {training.certification_number && (
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-sm text-slate-300 mt-1">
                               Cert #: {training.certification_number}
                             </p>
                           )}
-                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
+                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-300">
                             {training.completion_date && (
                               <span>Completed: {formatDate(training.completion_date)}</span>
                             )}
                             {training.expiration_date && (
-                              <span className={isExpired(training) ? 'text-red-600' : isExpiringSoon(training) ? 'text-yellow-600' : ''}>
+                              <span className={isExpired(training) ? 'text-red-400' : isExpiringSoon(training) ? 'text-yellow-400' : ''}>
                                 Expires: {formatDate(training.expiration_date)}
                               </span>
                             )}
@@ -416,7 +423,7 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.length > 5 && (
                     <Link
                       to={`/members/${userId}/training`}
-                      className="block text-center py-3 text-sm text-blue-600 hover:text-blue-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      className="block text-center py-3 text-sm text-blue-400 hover:text-blue-300 border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                     >
                       View all {trainings.length} training records →
                     </Link>
@@ -428,40 +435,40 @@ export const MemberProfilePage: React.FC = () => {
 
           {/* Assigned Inventory - Only shown if inventory module is enabled */}
           {inventoryModuleEnabled && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Assigned Inventory</h2>
+            <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-white mb-4">Assigned Inventory</h2>
               {inventoryLoading ? (
-                <div className="text-center py-4 text-gray-500">Loading inventory...</div>
+                <div className="text-center py-4 text-slate-400">Loading inventory...</div>
               ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-white/10">
                   <thead>
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
                         Item
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
                         Item #
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
                         Category
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
                         Condition
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
                         Assigned
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-white/10">
                     {inventoryItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      <tr key={item.id} className="hover:bg-white/5">
+                        <td className="px-4 py-3 text-sm font-medium text-white">
                           {item.name}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{item.item_number}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
+                        <td className="px-4 py-3 text-sm text-slate-300">{item.item_number}</td>
+                        <td className="px-4 py-3 text-sm text-slate-300">{item.category}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
@@ -475,7 +482,7 @@ export const MemberProfilePage: React.FC = () => {
                             {item.condition}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-sm text-slate-300">
                           {formatDate(item.assigned_date)}
                         </td>
                       </tr>
@@ -491,13 +498,13 @@ export const MemberProfilePage: React.FC = () => {
         {/* Right Column - Contact & Additional Info */}
         <div className="space-y-6">
           {/* Contact Information */}
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Contact Information</h2>
+              <h2 className="text-lg font-semibold text-white">Contact Information</h2>
               {canEdit && !isEditing && (
                 <button
                   onClick={handleEditClick}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  className="text-sm text-blue-400 hover:text-blue-300 font-medium"
                 >
                   Edit
                 </button>
@@ -508,61 +515,61 @@ export const MemberProfilePage: React.FC = () => {
               <div className="space-y-3">
                 {user.email && (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase font-medium">Email</p>
-                    <p className="text-sm text-gray-900 mt-1">{user.email}</p>
+                    <p className="text-xs text-slate-400 uppercase font-medium">Email</p>
+                    <p className="text-sm text-white mt-1">{user.email}</p>
                   </div>
                 )}
                 {user.phone && (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase font-medium">Phone</p>
-                    <p className="text-sm text-gray-900 mt-1">{user.phone}</p>
+                    <p className="text-xs text-slate-400 uppercase font-medium">Phone</p>
+                    <p className="text-sm text-white mt-1">{user.phone}</p>
                   </div>
                 )}
                 {user.mobile && (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase font-medium">Mobile</p>
-                    <p className="text-sm text-gray-900 mt-1">{user.mobile}</p>
+                    <p className="text-xs text-slate-400 uppercase font-medium">Mobile</p>
+                    <p className="text-sm text-white mt-1">{user.mobile}</p>
                   </div>
                 )}
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase font-medium mb-1">
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">
                     Email
                   </label>
                   <input
                     type="email"
                     value={editForm.email}
                     onChange={(e) => handleFormChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase font-medium mb-1">
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">
                     Phone
                   </label>
                   <input
                     type="tel"
                     value={editForm.phone}
                     onChange={(e) => handleFormChange('phone', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase font-medium mb-1">
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">
                     Mobile
                   </label>
                   <input
                     type="tel"
                     value={editForm.mobile}
                     onChange={(e) => handleFormChange('mobile', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
-                <div className="pt-4 border-t border-gray-200">
-                  <label className="block text-xs text-gray-500 uppercase font-medium mb-3">
+                <div className="pt-4 border-t border-white/20">
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-3">
                     Notification Preferences
                   </label>
                   <div className="space-y-2">
@@ -571,27 +578,27 @@ export const MemberProfilePage: React.FC = () => {
                         type="checkbox"
                         checked={editForm.notification_preferences?.email}
                         onChange={() => handleNotificationToggle('email')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">Email notifications</span>
+                      <span className="ml-2 text-sm text-slate-200">Email notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={editForm.notification_preferences?.sms}
                         onChange={() => handleNotificationToggle('sms')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">SMS notifications</span>
+                      <span className="ml-2 text-sm text-slate-200">SMS notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={editForm.notification_preferences?.push}
                         onChange={() => handleNotificationToggle('push')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">Push notifications</span>
+                      <span className="ml-2 text-sm text-slate-200">Push notifications</span>
                     </label>
                   </div>
                 </div>
@@ -607,14 +614,14 @@ export const MemberProfilePage: React.FC = () => {
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving}
-                    className="flex-1 px-4 py-2 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-slate-800 text-slate-300 text-sm font-medium border border-white/30 rounded-md hover:bg-white/5 disabled:opacity-50"
                   >
                     Cancel
                   </button>
                 </div>
 
                 {error && (
-                  <div className="mt-2 text-sm text-red-600">
+                  <div className="mt-2 text-sm text-red-400">
                     {error}
                   </div>
                 )}
@@ -623,43 +630,43 @@ export const MemberProfilePage: React.FC = () => {
           </div>
 
           {/* Employment Info */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Employment</h2>
+          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Employment</h2>
             <div className="space-y-3">
               <div>
-                <p className="text-xs text-gray-500 uppercase font-medium">Status</p>
-                <p className="text-sm text-gray-900 mt-1 capitalize">{user.status}</p>
+                <p className="text-xs text-slate-400 uppercase font-medium">Status</p>
+                <p className="text-sm text-white mt-1 capitalize">{user.status}</p>
               </div>
               {user.hire_date && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-medium">Hire Date</p>
-                  <p className="text-sm text-gray-900 mt-1">{formatDate(user.hire_date)}</p>
+                  <p className="text-xs text-slate-400 uppercase font-medium">Hire Date</p>
+                  <p className="text-sm text-white mt-1">{formatDate(user.hire_date)}</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Quick Stats */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h2>
+          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Quick Stats</h2>
             <div className="space-y-3">
               {trainingEnabled && (
                 <>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Active Training</span>
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm text-slate-300">Active Training</span>
+                    <span className="text-sm font-semibold text-white">
                       {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Expiring Soon</span>
-                    <span className="text-sm font-semibold text-yellow-600">
+                    <span className="text-sm text-slate-300">Expiring Soon</span>
+                    <span className="text-sm font-semibold text-yellow-400">
                       {trainings.filter((t) => isExpiringSoon(t)).length}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Total Hours</span>
-                    <span className="text-sm font-semibold text-gray-900">
+                    <span className="text-sm text-slate-300">Total Hours</span>
+                    <span className="text-sm font-semibold text-white">
                       {trainings.reduce((sum, t) => sum + (t.hours_completed || 0), 0)} hrs
                     </span>
                   </div>
@@ -667,8 +674,8 @@ export const MemberProfilePage: React.FC = () => {
               )}
               {inventoryModuleEnabled && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Assigned Equipment</span>
-                  <span className="text-sm font-semibold text-gray-900">
+                  <span className="text-sm text-slate-300">Assigned Equipment</span>
+                  <span className="text-sm font-semibold text-white">
                     {inventoryItems.length}
                   </span>
                 </div>
@@ -676,6 +683,7 @@ export const MemberProfilePage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

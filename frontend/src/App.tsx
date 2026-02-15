@@ -8,6 +8,9 @@ import { clearLegacySensitiveData } from './modules/onboarding/utils/storage';
 // Error Boundary
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+// Theme
+import { ThemeProvider } from './contexts/ThemeContext';
+
 // Protected Route & Layout
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/layout';
@@ -20,10 +23,10 @@ import { getProspectiveMembersRoutes } from './modules/prospective-members';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+  <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
     <div className="text-center">
       <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
-      <p className="text-white text-lg">Loading...</p>
+      <p className="text-lg" style={{ color: 'var(--text-primary)' }}>Loading...</p>
     </div>
   </div>
 );
@@ -119,6 +122,7 @@ function App() {
   }, []);
 
   return (
+    <ThemeProvider>
     <ErrorBoundary>
       <BrowserRouter>
         <div className="App">
@@ -257,6 +261,7 @@ function App() {
         </div>
       </BrowserRouter>
     </ErrorBoundary>
+    </ThemeProvider>
   );
 }
 

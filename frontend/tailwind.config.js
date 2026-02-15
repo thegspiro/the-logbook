@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -16,6 +17,22 @@ export default {
           800: '#991b1b',
           900: '#7f1d1d',
           950: '#450a0a',
+        },
+        theme: {
+          'bg-from': 'var(--bg-gradient-from)',
+          'bg-via': 'var(--bg-gradient-via)',
+          'bg-to': 'var(--bg-gradient-to)',
+          'surface': 'var(--surface-bg)',
+          'surface-secondary': 'var(--surface-secondary)',
+          'surface-hover': 'var(--surface-hover)',
+          'surface-border': 'var(--surface-border)',
+          'text-primary': 'var(--text-primary)',
+          'text-secondary': 'var(--text-secondary)',
+          'text-muted': 'var(--text-muted)',
+          'nav-bg': 'var(--nav-bg)',
+          'nav-border': 'var(--nav-border)',
+          'input-bg': 'var(--input-bg)',
+          'input-border': 'var(--input-border)',
         },
       },
       fontFamily: {

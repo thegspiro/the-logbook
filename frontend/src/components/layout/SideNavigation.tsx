@@ -27,7 +27,9 @@ import {
   FormInput,
   Plug,
 } from 'lucide-react';
+import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -49,10 +51,21 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
+
+  const cycleTheme = () => {
+    const order = ['dark', 'light', 'system'] as const;
+    const currentIndex = order.indexOf(theme as typeof order[number]);
+    const nextIndex = (currentIndex + 1) % order.length;
+    setTheme(order[nextIndex]);
+  };
+
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: Home },
@@ -320,8 +333,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             </ul>
           </nav>
 
-          {/* Logout Button */}
-          <div className="p-4 border-t border-white/10">
+          {/* Theme Toggle & Logout */}
+          <div className="p-4 border-t border-white/10 space-y-1">
+            <button
+              onClick={cycleTheme}
+              className={`w-full flex items-center text-slate-300 hover:bg-white/10 hover:text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                collapsed ? 'justify-center p-3' : 'px-4 py-3'
+              }`}
+              title={collapsed ? `Theme: ${themeLabel}` : undefined}
+              aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
+            >
+              <ThemeIcon className={`w-5 h-5 flex-shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
+              {!collapsed && <span className="text-sm font-medium">Theme: {themeLabel}</span>}
+            </button>
             <button
               onClick={onLogout}
               className={`w-full flex items-center text-slate-300 hover:bg-white/10 hover:text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${

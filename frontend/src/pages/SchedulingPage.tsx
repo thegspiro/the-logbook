@@ -223,7 +223,7 @@ const SchedulingPage: React.FC = () => {
   const hasShifts = shifts.length > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">

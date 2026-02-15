@@ -41,24 +41,24 @@ const AnalyticsDashboardPage: React.FC = () => {
   if (!metrics) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading analytics...</div>
+        <div className="text-slate-300">Loading analytics...</div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="min-h-screen max-w-7xl mx-auto p-6">
       {/* Header */}
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">QR Code Analytics</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-3xl font-bold text-white">QR Code Analytics</h1>
+          <p className="text-slate-300 mt-1">
             {eventId ? 'Event-specific metrics' : 'Platform-wide metrics'}
           </p>
         </div>
         <button
           onClick={exportData}
-          className="px-4 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-white hover:bg-blue-50"
+          className="px-4 py-2 border border-white/30 rounded-md text-sm font-medium text-blue-400 bg-white/10 hover:bg-white/15"
         >
           Export Data
         </button>
@@ -66,31 +66,31 @@ const AnalyticsDashboardPage: React.FC = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm font-medium mb-1">Total Scans</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-slate-400 text-sm font-medium mb-1">Total Scans</div>
           <div className="text-3xl font-bold text-blue-600">{metrics.totalScans}</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm font-medium mb-1">Successful Check-Ins</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-slate-400 text-sm font-medium mb-1">Successful Check-Ins</div>
           <div className="text-3xl font-bold text-green-600">{metrics.successfulCheckIns}</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm font-medium mb-1">Success Rate</div>
-          <div className="text-3xl font-bold text-gray-900">{metrics.successRate}%</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-slate-400 text-sm font-medium mb-1">Success Rate</div>
+          <div className="text-3xl font-bold text-white">{metrics.successRate}%</div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm font-medium mb-1">Avg Time to Check-In</div>
-          <div className="text-3xl font-bold text-gray-900">{metrics.avgTimeToCheckIn}s</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-slate-400 text-sm font-medium mb-1">Avg Time to Check-In</div>
+          <div className="text-3xl font-bold text-white">{metrics.avgTimeToCheckIn}s</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* Device Breakdown */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Device Breakdown</h2>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Device Breakdown</h2>
           <div className="space-y-3">
             {Object.entries(metrics.deviceBreakdown).map(([device, count]) => {
               const total = Object.values(metrics.deviceBreakdown).reduce((a, b) => a + b, 0);
@@ -104,7 +104,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                       {count} ({Math.round(percentage)}%)
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-white/10 rounded-full h-2">
                     <div
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${percentage}%` }}
@@ -117,10 +117,10 @@ const AnalyticsDashboardPage: React.FC = () => {
         </div>
 
         {/* Error Breakdown */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Error Breakdown</h2>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Error Breakdown</h2>
           {Object.keys(metrics.errorBreakdown).length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-slate-400">
               <svg
                 className="mx-auto h-12 w-12 text-green-400 mb-2"
                 fill="none"
@@ -142,7 +142,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                 .sort(([, a], [, b]) => b - a)
                 .map(([errorType, count]) => (
                   <div key={errorType} className="flex justify-between items-center">
-                    <span className="text-sm text-gray-700 truncate flex-1">{errorType}</span>
+                    <span className="text-sm text-slate-200 truncate flex-1">{errorType}</span>
                     <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold ml-2">
                       {count}
                     </span>
@@ -154,8 +154,8 @@ const AnalyticsDashboardPage: React.FC = () => {
       </div>
 
       {/* Hourly Activity */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Activity by Hour</h2>
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Activity by Hour</h2>
         <div className="flex items-end justify-between gap-1 h-48">
           {metrics.hourlyActivity.map(({ hour, count }) => {
             const maxCount = Math.max(...metrics.hourlyActivity.map(h => h.count), 1);
@@ -168,7 +168,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                   style={{ height: `${heightPercent}%` }}
                   title={`${hour}:00 - ${count} events`}
                 ></div>
-                <div className="text-xs text-gray-500 mt-1">{hour}</div>
+                <div className="text-xs text-slate-400 mt-1">{hour}</div>
               </div>
             );
           })}
@@ -177,8 +177,8 @@ const AnalyticsDashboardPage: React.FC = () => {
 
       {/* Check-In Trends */}
       {metrics.checkInTrends.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">
             Check-In Trends (Last 24 Hours)
           </h2>
           <div className="overflow-x-auto">
@@ -194,7 +194,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                       style={{ height: `${heightPercent}px` }}
                       title={`${time.toLocaleTimeString()} - ${count} check-ins`}
                     ></div>
-                    <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">
+                    <div className="text-xs text-slate-400 mt-1 whitespace-nowrap">
                       {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>

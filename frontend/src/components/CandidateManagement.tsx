@@ -175,8 +175,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="text-gray-500 text-center py-4">Loading candidates...</div>
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+        <div className="text-slate-400 text-center py-4">Loading candidates...</div>
       </div>
     );
   }
@@ -184,9 +184,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   const isClosed = election.status === 'closed' || election.status === 'cancelled';
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-gray-900">
+        <h3 className="text-lg font-medium text-white">
           Candidates ({candidates.length})
         </h3>
         {!isClosed && (
@@ -205,34 +205,34 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded p-3">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
+          <p className="text-sm text-red-300">{error}</p>
         </div>
       )}
 
       {/* Add Candidate Form */}
       {showAddForm && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Add New Candidate</h4>
+        <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/20">
+          <h4 className="text-sm font-semibold text-slate-200 mb-3">Add New Candidate</h4>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name *</label>
+              <label className="block text-sm font-medium text-slate-200">Name *</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Candidate name"
               />
             </div>
 
             {positions.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-gray-700">Position</label>
+                <label className="block text-sm font-medium text-slate-200">Position</label>
                 <select
                   value={formData.position}
                   onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="">Select position...</option>
                   {positions.map((pos) => (
@@ -245,12 +245,12 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Statement</label>
+              <label className="block text-sm font-medium text-slate-200">Statement</label>
               <textarea
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                 rows={3}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Candidate's statement or platform..."
               />
             </div>
@@ -261,9 +261,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 id="is_write_in"
                 checked={formData.is_write_in}
                 onChange={(e) => setFormData((prev) => ({ ...prev, is_write_in: e.target.checked }))}
-                className="rounded border-gray-300 text-blue-600"
+                className="rounded border-slate-600 text-blue-600"
               />
-              <label htmlFor="is_write_in" className="text-sm text-gray-700">
+              <label htmlFor="is_write_in" className="text-sm text-slate-200">
                 Write-in candidate
               </label>
             </div>
@@ -272,7 +272,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-3 py-2 text-sm border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
               >
                 Cancel
               </button>
@@ -291,7 +291,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
       {/* Candidates List */}
       {candidates.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-slate-400">
           <p>No candidates yet.</p>
           {!isClosed && <p className="text-sm mt-1">Click "Add Candidate" to get started.</p>}
         </div>
@@ -300,7 +300,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
           {Object.entries(groupedCandidates).map(([groupName, groupCandidates]) => (
             <div key={groupName}>
               {Object.keys(groupedCandidates).length > 1 && (
-                <h4 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">
+                <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
                   {groupName} ({groupCandidates.length})
                 </h4>
               )}
@@ -311,8 +311,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                     key={candidate.id}
                     className={`p-4 rounded-lg border ${
                       candidate.accepted
-                        ? 'border-gray-200 bg-white'
-                        : 'border-yellow-200 bg-yellow-50'
+                        ? 'border-white/20 bg-white/5'
+                        : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
                     {editingId === candidate.id ? (
@@ -323,7 +323,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           onChange={(e) =>
                             setFormData((prev) => ({ ...prev, name: e.target.value }))
                           }
-                          className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm"
+                          className="block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white text-sm"
                         />
                         <textarea
                           value={formData.statement}
@@ -331,7 +331,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             setFormData((prev) => ({ ...prev, statement: e.target.value }))
                           }
                           rows={2}
-                          className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm"
+                          className="block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white text-sm"
                           placeholder="Statement..."
                         />
                         <div className="flex gap-2">
@@ -346,7 +346,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           <button
                             type="button"
                             onClick={cancelEdit}
-                            className="px-3 py-1 text-sm border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+                            className="px-3 py-1 text-sm border border-white/30 rounded text-slate-300 hover:bg-white/5"
                           >
                             Cancel
                           </button>
@@ -356,20 +356,20 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900">{candidate.name}</span>
+                            <span className="font-medium text-white">{candidate.name}</span>
                             {candidate.is_write_in && (
-                              <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                              <span className="px-2 py-0.5 text-xs bg-white/10 text-slate-300 rounded">
                                 Write-in
                               </span>
                             )}
                             {!candidate.accepted && (
-                              <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">
+                              <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-300 rounded">
                                 Pending
                               </span>
                             )}
                           </div>
                           {candidate.statement && (
-                            <p className="mt-1 text-sm text-gray-500 line-clamp-2">
+                            <p className="mt-1 text-sm text-slate-400 line-clamp-2">
                               {candidate.statement}
                             </p>
                           )}
@@ -382,8 +382,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                               onClick={() => handleToggleAccepted(candidate)}
                               className={`px-2 py-1 text-xs rounded ${
                                 candidate.accepted
-                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                  : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                                  ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
+                                  : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
                               }`}
                             >
                               {candidate.accepted ? 'Accepted' : 'Accept'}
@@ -391,14 +391,14 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             <button
                               type="button"
                               onClick={() => startEdit(candidate)}
-                              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                              className="px-2 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDelete(candidate.id, candidate.name)}
-                              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                              className="px-2 py-1 text-xs bg-red-500/20 text-red-300 rounded hover:bg-red-500/30"
                             >
                               Remove
                             </button>

@@ -197,9 +197,11 @@ export const MembersAdminPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500" role="status" aria-live="polite">Loading...</div>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-slate-400" role="status" aria-live="polite">Loading...</div>
+          </div>
         </div>
       </div>
     );
@@ -207,11 +209,13 @@ export const MembersAdminPage: React.FC = () => {
 
   if (error && !editingRoles && !editingMembers) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <div className="flex">
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
+            <div className="flex">
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -220,11 +224,12 @@ export const MembersAdminPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Members Administration</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <h2 className="text-2xl font-bold text-white">Members Administration</h2>
+          <p className="mt-1 text-sm text-slate-400">
             Manage member roles and permissions
           </p>
         </div>
@@ -266,7 +271,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-member'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Member
@@ -277,7 +282,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-role'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
             } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Role
@@ -287,52 +292,52 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* View by Member */}
       {viewMode === 'by-member' && (
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200" aria-label="Members and their roles">
-            <thead className="bg-gray-50">
+        <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+          <table className="min-w-full divide-y divide-white/10" aria-label="Members and their roles">
+            <thead className="bg-slate-900/50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Member
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Badge
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Roles
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-white/10">
               {users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
+                <tr key={user.id} className="hover:bg-white/5">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-500 font-medium">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
+                        <span className="text-slate-300 font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-white">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-sm text-gray-500">@{user.username}</div>
+                        <div className="text-sm text-slate-400">@{user.username}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                     {user.badge_number || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length === 0 ? (
-                        <span className="text-sm text-gray-400">No roles</span>
+                        <span className="text-sm text-slate-500">No roles</span>
                       ) : (
                         user.roles.map((role) => (
                           <span
@@ -340,7 +345,7 @@ export const MembersAdminPage: React.FC = () => {
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
                                 ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-800'
+                                : 'bg-white/10 text-slate-200'
                             }`}
                           >
                             {role.name}
@@ -370,7 +375,7 @@ export const MembersAdminPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => handleEditRoles(user)}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-blue-400 hover:text-blue-300"
                     >
                       Manage Roles
                     </button>
@@ -391,12 +396,12 @@ export const MembersAdminPage: React.FC = () => {
             );
 
             return (
-              <div key={role.id} className="bg-white shadow sm:rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200">
+              <div key={role.id} className="bg-white/10 backdrop-blur-sm shadow sm:rounded-lg">
+                <div className="px-6 py-4 border-b border-white/20">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-medium text-gray-900">{role.name}</h3>
+                        <h3 className="text-lg font-medium text-white">{role.name}</h3>
                         {role.is_system && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             System
@@ -404,15 +409,15 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                       {role.description && (
-                        <p className="mt-1 text-sm text-gray-500">{role.description}</p>
+                        <p className="mt-1 text-sm text-slate-400">{role.description}</p>
                       )}
-                      <p className="mt-1 text-xs text-gray-400">
+                      <p className="mt-1 text-xs text-slate-500">
                         {role.permissions.length} permissions • {usersWithRole.length} members
                       </p>
                     </div>
                     <button
                       onClick={() => handleEditMembers(role)}
-                      className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-900 border border-blue-600 rounded-md hover:bg-blue-50"
+                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-white/5"
                     >
                       Manage Members
                     </button>
@@ -420,32 +425,32 @@ export const MembersAdminPage: React.FC = () => {
                 </div>
                 <div className="px-6 py-4">
                   {usersWithRole.length === 0 ? (
-                    <p className="text-sm text-gray-400 italic">No members assigned to this role</p>
+                    <p className="text-sm text-slate-500 italic">No members assigned to this role</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {usersWithRole.map((user) => (
                         <div
                           key={user.id}
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg hover:bg-gray-100"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg hover:bg-white/10"
                         >
                           <div className="flex items-center gap-2">
-                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-xs text-gray-500 font-medium">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
+                              <span className="text-xs text-slate-400 font-medium">
                                 {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-sm font-medium text-white">
                                 {user.full_name || user.username}
                               </div>
                               {user.badge_number && (
-                                <div className="text-xs text-gray-500">#{user.badge_number}</div>
+                                <div className="text-xs text-slate-400">#{user.badge_number}</div>
                               )}
                             </div>
                           </div>
                           <button
                             onClick={() => handleQuickRemoveUser(user.id, role)}
-                            className="ml-2 text-gray-400 hover:text-red-600"
+                            className="ml-2 text-slate-500 hover:text-red-600"
                             aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
                             ×
@@ -470,15 +475,15 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="manage-roles-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="manage-roles-title" className="text-lg font-medium text-gray-900">
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="manage-roles-title" className="text-lg font-medium text-white">
                 Manage Roles for {selectedUser.full_name || selectedUser.username}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-slate-400 mb-4">
                 Select the roles to assign to this member
               </p>
 
@@ -486,17 +491,17 @@ export const MembersAdminPage: React.FC = () => {
                 {roles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedRoleIds.includes(role.id)}
                       onChange={() => handleToggleRole(role.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                     />
                     <div className="ml-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-white">
                           {role.name}
                         </span>
                         {role.is_system && (
@@ -506,7 +511,7 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                       {role.description && (
-                        <p className="text-xs text-gray-500 mt-1">{role.description}</p>
+                        <p className="text-xs text-slate-400 mt-1">{role.description}</p>
                       )}
                     </div>
                   </label>
@@ -514,7 +519,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingRoles(false);
@@ -522,7 +527,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -547,15 +552,15 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="manage-members-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="manage-members-title" className="text-lg font-medium text-gray-900">
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="manage-members-title" className="text-lg font-medium text-white">
                 Manage Members for {selectedRole.name}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-slate-400 mb-4">
                 Select the members to assign to this role
               </p>
 
@@ -563,25 +568,25 @@ export const MembersAdminPage: React.FC = () => {
                 {users.map((user) => (
                   <label
                     key={user.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedUserIds.includes(user.id)}
                       onChange={() => handleToggleUser(user.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                     />
                     <div className="ml-3 flex items-center gap-2">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-xs text-gray-500 font-medium">
+                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
+                        <span className="text-xs text-slate-400 font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-white">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-slate-400">
                           @{user.username}
                           {user.badge_number && ` • Badge #${user.badge_number}`}
                         </div>
@@ -592,7 +597,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingMembers(false);
@@ -600,7 +605,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -615,6 +620,7 @@ export const MembersAdminPage: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

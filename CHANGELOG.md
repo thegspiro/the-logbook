@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - System-Wide Theme Support (2026-02-15)
+
+#### Theme System
+- **ThemeProvider context**: New `ThemeContext` with support for light, dark, and system (auto-detect) themes
+- **CSS custom properties**: Theme colors defined as CSS variables in `:root` (light) and `.dark` (dark), enabling centralized theme management instead of per-component hardcoding
+- **Tailwind dark mode**: Configured `darkMode: 'class'` with custom `theme-*` color utilities that reference CSS variables
+- **Theme toggle**: Added theme cycle button (Dark → Light → System) to both TopNavigation and SideNavigation
+- **Theme persistence**: Saves preference to `localStorage`, defaults to dark mode, respects `prefers-color-scheme` in system mode
+- **AppLayout**: Background gradient now uses CSS variables, automatically adapting to the selected theme
+
+#### Dashboard Redesign
+- **Member-focused dashboard**: Replaced admin-oriented dashboard (setup status, getting started guide) with member-focused content
+- **Hours tracking cards**: Shows total, training, standby, and administrative hours for the current month
+- **Notifications widget**: Displays recent notifications with unread indicators and mark-as-read functionality
+- **Upcoming shifts widget**: Shows the member's upcoming shifts for the next 30 days with date, time, and officer info
+- **Training progress**: Retained training enrollment progress with deadlines and next steps
+- **Added API methods**: `schedulingService.getMyShifts()` and `schedulingService.getMyAssignments()` for member-specific shift data
+
+### Fixed - UI Issues (2026-02-15)
+
+#### Footer & Layout
+- **Dashboard footer**: Fixed footer floating mid-page by using flexbox sticky footer pattern (`flex-col` + `flex-1` + `mt-auto`)
+
+#### Election Module Dark Theme
+- **CandidateManagement**: Converted from invisible light theme to dark theme with proper contrast
+- **BallotBuilder**: Converted secretary ballot creation interface to dark theme
+- **ElectionBallot**: Converted voter-facing ballot interface to dark theme
+- **ElectionResults**: Converted results display to dark theme
+- **MeetingAttendance**: Converted attendance tracker to dark theme
+
+#### Election Timezone Handling
+- **Frontend**: Replaced `.toISOString().slice(0,16)` with local datetime formatting helper to prevent UTC conversion of `datetime-local` input values
+- **Backend**: Changed `datetime.utcnow()` to `datetime.now()` in election service comparisons to match user-entered naive datetimes
+
+### Fixed - Duplicate Index Definitions Crashing Startup (2026-02-15)
+
+#### Database Model Fixes
+- **Location model crash fix**: Removed duplicate `ix_locations_organization_id` index that crashed `Base.metadata.create_all()` on MySQL — the `organization_id` column had both `index=True` (auto-generating the index) and an explicit `Index("ix_locations_organization_id", ...)` in `__table_args__` with the same name, causing a `Duplicate key name` error on every fresh database initialization
+- **VotingToken model crash fix**: Same issue — `token` column had `index=True` plus an explicit `Index("ix_voting_tokens_token", ...)` in `__table_args__`, causing startup failure after locations table was fixed
+- **Redundant index cleanup**: Removed `index=True` from 5 additional columns across `apparatus.py`, `facilities.py`, `inventory.py`, `ip_security.py`, and `public_portal.py` that had redundant (but differently-named) explicit indexes in `__table_args__`, preventing double-indexing
+- **Fast-path init log accuracy**: Fixed dropped table count in `_fast_path_init()` to exclude the skipped `alembic_version` table
 ### Fixed - Docker & Deployment (2026-02-15)
 
 #### Database Consistency

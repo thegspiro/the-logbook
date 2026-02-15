@@ -1029,7 +1029,7 @@ const ExternalTrainingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       <div className="p-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">

@@ -53,33 +53,33 @@ const ErrorMonitoringPage: React.FC = () => {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto p-6">
-        <div className="text-gray-600">Loading error data...</div>
+        <div className="text-slate-300">Loading error data...</div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="min-h-screen max-w-7xl mx-auto p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Error Monitoring</h1>
-        <p className="text-gray-600 mt-1">Track and analyze errors across the platform</p>
+        <h1 className="text-3xl font-bold text-white">Error Monitoring</h1>
+        <p className="text-slate-300 mt-1">Track and analyze errors across the platform</p>
       </div>
 
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-gray-500 text-sm font-medium mb-1">Total Errors</div>
-            <div className="text-3xl font-bold text-gray-900">{stats.total}</div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+            <div className="text-slate-400 text-sm font-medium mb-1">Total Errors</div>
+            <div className="text-3xl font-bold text-white">{stats.total}</div>
           </div>
 
           {Object.entries(stats.byType)
             .sort(([, a]: any, [, b]: any) => b - a)
             .slice(0, 3)
             .map(([type, count]: [string, any]) => (
-              <div key={type} className="bg-white rounded-lg shadow-md p-6">
-                <div className="text-gray-500 text-sm font-medium mb-1 truncate">{type}</div>
+              <div key={type} className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+                <div className="text-slate-400 text-sm font-medium mb-1 truncate">{type}</div>
                 <div className="text-3xl font-bold text-red-600">{count}</div>
               </div>
             ))}
@@ -87,13 +87,13 @@ const ErrorMonitoringPage: React.FC = () => {
       )}
 
       {/* Actions Bar */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Filter:</label>
+          <label className="text-sm font-medium text-slate-200">Filter:</label>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-slate-600 rounded-md px-3 py-2 text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Errors</option>
             {stats &&
@@ -108,13 +108,13 @@ const ErrorMonitoringPage: React.FC = () => {
         <div className="flex gap-2">
           <button
             onClick={exportErrors}
-            className="px-4 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-white hover:bg-blue-50"
+            className="px-4 py-2 border border-white/30 rounded-md text-sm font-medium text-blue-400 bg-white/10 hover:bg-white/15"
           >
             Export Errors
           </button>
           <button
             onClick={clearAllErrors}
-            className="px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50"
+            className="px-4 py-2 border border-white/30 rounded-md text-sm font-medium text-red-400 bg-white/10 hover:bg-white/15"
           >
             Clear All
           </button>
@@ -122,11 +122,11 @@ const ErrorMonitoringPage: React.FC = () => {
       </div>
 
       {/* Error List */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md overflow-hidden">
         {errors.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-slate-400">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400 mb-4"
+              className="mx-auto h-12 w-12 text-slate-500 mb-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -147,30 +147,30 @@ const ErrorMonitoringPage: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-white/10">
+              <thead className="bg-slate-900/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Timestamp
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Error Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     User Message
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Context
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Error ID
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-white/10">
                 {errors.map((error) => (
-                  <tr key={error.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <tr key={error.id} className="hover:bg-white/5">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                       {new Date(error.timestamp).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -178,10 +178,10 @@ const ErrorMonitoringPage: React.FC = () => {
                         {error.errorType}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 max-w-md truncate">
+                    <td className="px-6 py-4 text-sm text-slate-300 max-w-md truncate">
                       {error.userMessage}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-slate-300">
                       {error.context.eventId && (
                         <Link
                           to={`/events/${error.context.eventId}`}
@@ -192,7 +192,7 @@ const ErrorMonitoringPage: React.FC = () => {
                       )}
                       {error.context.userId && ` | User: ${error.context.userId.substring(0, 8)}`}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500 font-mono">
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-400 font-mono">
                       {error.id.split('-')[0]}
                     </td>
                   </tr>
@@ -205,18 +205,18 @@ const ErrorMonitoringPage: React.FC = () => {
 
       {/* Recent Errors Preview */}
       {stats && stats.recentErrors.length > 0 && filter === 'all' && (
-        <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Errors</h2>
+        <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Recent Errors</h2>
           <div className="space-y-4">
             {stats.recentErrors.map((error: ErrorLog) => (
               <div
                 key={error.id}
-                className="border-l-4 border-red-500 bg-red-50 p-4 rounded-r"
+                className="border-l-4 border-red-500 bg-red-500/10 p-4 rounded-r"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm font-medium text-red-900">{error.errorType}</p>
-                    <p className="text-sm text-red-700 mt-1">{error.userMessage}</p>
+                    <p className="text-sm font-medium text-red-300">{error.errorType}</p>
+                    <p className="text-sm text-red-300 mt-1">{error.userMessage}</p>
                   </div>
                   <span className="text-xs text-red-600">
                     {new Date(error.timestamp).toLocaleTimeString()}

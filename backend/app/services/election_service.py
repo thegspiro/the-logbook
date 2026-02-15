@@ -358,7 +358,7 @@ class ElectionService:
             )
 
         # Check if election is open
-        now = datetime.utcnow()
+        now = datetime.now()
         if election.status != ElectionStatus.OPEN:
             return VoterEligibility(
                 is_eligible=False,
@@ -1040,7 +1040,7 @@ class ElectionService:
 
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
         election_has_closed = current_time > election.end_date
 
         can_view = (
@@ -2581,7 +2581,7 @@ Best regards,
             return None, None, "Election not found"
 
         # Check if election is still open
-        now = datetime.utcnow()
+        now = datetime.now()
         if election.status != ElectionStatus.OPEN:
             return None, None, f"Election is {election.status.value}"
 

@@ -1271,6 +1271,8 @@ async def save_session_modules(
         "notifications", "mobile",
         # Advanced modules
         "integrations",
+        # Membership
+        "prospective_members",
         # Legacy/additional modules (for backwards compatibility)
         "compliance", "meetings", "fundraising", "incidents",
         "equipment", "vehicles", "budget"

@@ -142,7 +142,7 @@ export const ProspectDetailPage: React.FC = () => {
   };
 
   const getStepIcon = (progress?: StepProgress) => {
-    if (!progress) return <Circle className="h-5 w-5 text-gray-600" />;
+    if (!progress) return <Circle className="h-5 w-5 text-slate-500" />;
     switch (progress.status) {
       case 'completed':
         return <CheckCircle2 className="h-5 w-5 text-green-500" />;
@@ -151,7 +151,7 @@ export const ProspectDetailPage: React.FC = () => {
       case 'skipped':
         return <SkipForward className="h-5 w-5 text-yellow-500" />;
       default:
-        return <Circle className="h-5 w-5 text-gray-600" />;
+        return <Circle className="h-5 w-5 text-slate-500" />;
     }
   };
 
@@ -181,7 +181,7 @@ export const ProspectDetailPage: React.FC = () => {
   if (error || !prospect) {
     return (
       <div className="space-y-4">
-        <Link to="/membership-pipeline" className="flex items-center gap-2 text-gray-400 hover:text-white">
+        <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white">
           <ArrowLeft className="h-4 w-4" /> Back to Pipeline
         </Link>
         <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-4">
@@ -198,9 +198,9 @@ export const ProspectDetailPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen space-y-6">
       {/* Back link */}
-      <Link to="/membership-pipeline" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+      <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
         <ArrowLeft className="h-4 w-4" /> Back to Pipeline
       </Link>
 
@@ -218,11 +218,11 @@ export const ProspectDetailPage: React.FC = () => {
               <div className="flex items-center gap-3 mt-1">
                 {getStatusBadge(prospect.status)}
                 {prospect.pipeline_name && (
-                  <span className="text-sm text-gray-400">{prospect.pipeline_name}</span>
+                  <span className="text-sm text-slate-400">{prospect.pipeline_name}</span>
                 )}
                 {prospect.current_step && (
                   <>
-                    <ChevronRight className="h-4 w-4 text-gray-600" />
+                    <ChevronRight className="h-4 w-4 text-slate-500" />
                     <span className="text-sm text-gray-300">{prospect.current_step.name}</span>
                   </>
                 )}
@@ -276,7 +276,7 @@ export const ProspectDetailPage: React.FC = () => {
               className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
                   ? 'border-red-500 text-white'
-                  : 'border-transparent text-gray-400 hover:text-white'
+                  : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
               {tab === 'progress' && <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Pipeline Progress</span>}
@@ -320,17 +320,17 @@ export const ProspectDetailPage: React.FC = () => {
                       )}
                     </div>
                     {progress.completed_at && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-slate-400">
                         {new Date(progress.completed_at).toLocaleDateString()}
                       </span>
                     )}
                   </div>
                   {progress.step?.description && (
-                    <p className="text-sm text-gray-400 mt-1">{progress.step.description}</p>
+                    <p className="text-sm text-slate-400 mt-1">{progress.step.description}</p>
                   )}
                   {progress.notes && (
                     <div className="mt-2 bg-slate-700/50 rounded-lg p-2 text-sm text-gray-300">
-                      <MessageSquare className="h-3 w-3 inline mr-1 text-gray-500" />
+                      <MessageSquare className="h-3 w-3 inline mr-1 text-slate-400" />
                       {progress.notes}
                     </div>
                   )}
@@ -345,7 +345,7 @@ export const ProspectDetailPage: React.FC = () => {
                             value={stepNotes}
                             onChange={e => setStepNotes(e.target.value)}
                             rows={2}
-                            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                           />
                           <div className="flex gap-2">
                             <button
@@ -385,28 +385,28 @@ export const ProspectDetailPage: React.FC = () => {
             <h2 className="text-lg font-semibold text-white mb-4">Contact Information</h2>
             <dl className="space-y-3">
               <div className="flex items-center gap-3">
-                <Mail className="h-4 w-4 text-gray-500" />
-                <dt className="text-sm text-gray-400 w-20">Email</dt>
+                <Mail className="h-4 w-4 text-slate-400" />
+                <dt className="text-sm text-slate-400 w-20">Email</dt>
                 <dd className="text-sm text-white">{prospect.email}</dd>
               </div>
               {prospect.phone && (
                 <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-gray-500" />
-                  <dt className="text-sm text-gray-400 w-20">Phone</dt>
+                  <Phone className="h-4 w-4 text-slate-400" />
+                  <dt className="text-sm text-slate-400 w-20">Phone</dt>
                   <dd className="text-sm text-white">{prospect.phone}</dd>
                 </div>
               )}
               {prospect.mobile && (
                 <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-gray-500" />
-                  <dt className="text-sm text-gray-400 w-20">Mobile</dt>
+                  <Phone className="h-4 w-4 text-slate-400" />
+                  <dt className="text-sm text-slate-400 w-20">Mobile</dt>
                   <dd className="text-sm text-white">{prospect.mobile}</dd>
                 </div>
               )}
               {prospect.date_of_birth && (
                 <div className="flex items-center gap-3">
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                  <dt className="text-sm text-gray-400 w-20">DOB</dt>
+                  <Calendar className="h-4 w-4 text-slate-400" />
+                  <dt className="text-sm text-slate-400 w-20">DOB</dt>
                   <dd className="text-sm text-white">{new Date(prospect.date_of_birth).toLocaleDateString()}</dd>
                 </div>
               )}
@@ -416,14 +416,14 @@ export const ProspectDetailPage: React.FC = () => {
             <h2 className="text-lg font-semibold text-white mb-4">Address</h2>
             {prospect.address_street ? (
               <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
+                <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
                 <div className="text-sm text-white">
                   <div>{prospect.address_street}</div>
                   <div>{prospect.address_city}{prospect.address_state ? `, ${prospect.address_state}` : ''} {prospect.address_zip}</div>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No address provided</p>
+              <p className="text-sm text-slate-400">No address provided</p>
             )}
           </div>
           <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
@@ -431,19 +431,19 @@ export const ProspectDetailPage: React.FC = () => {
             <dl className="space-y-3">
               {prospect.interest_reason && (
                 <div>
-                  <dt className="text-sm text-gray-400 mb-1">Interest / Reason</dt>
+                  <dt className="text-sm text-slate-400 mb-1">Interest / Reason</dt>
                   <dd className="text-sm text-white bg-slate-700/50 rounded-lg p-3">{prospect.interest_reason}</dd>
                 </div>
               )}
               {prospect.referral_source && (
                 <div>
-                  <dt className="text-sm text-gray-400">Referral Source</dt>
+                  <dt className="text-sm text-slate-400">Referral Source</dt>
                   <dd className="text-sm text-white">{prospect.referral_source}</dd>
                 </div>
               )}
               {prospect.notes && (
                 <div>
-                  <dt className="text-sm text-gray-400 mb-1">Notes</dt>
+                  <dt className="text-sm text-slate-400 mb-1">Notes</dt>
                   <dd className="text-sm text-white bg-slate-700/50 rounded-lg p-3">{prospect.notes}</dd>
                 </div>
               )}
@@ -453,16 +453,16 @@ export const ProspectDetailPage: React.FC = () => {
             <h2 className="text-lg font-semibold text-white mb-4">Dates</h2>
             <dl className="space-y-3">
               <div className="flex justify-between">
-                <dt className="text-sm text-gray-400">Added</dt>
+                <dt className="text-sm text-slate-400">Added</dt>
                 <dd className="text-sm text-white">{new Date(prospect.created_at).toLocaleString()}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm text-gray-400">Last Updated</dt>
+                <dt className="text-sm text-slate-400">Last Updated</dt>
                 <dd className="text-sm text-white">{new Date(prospect.updated_at).toLocaleString()}</dd>
               </div>
               {prospect.transferred_at && (
                 <div className="flex justify-between">
-                  <dt className="text-sm text-gray-400">Transferred</dt>
+                  <dt className="text-sm text-slate-400">Transferred</dt>
                   <dd className="text-sm text-white">{new Date(prospect.transferred_at).toLocaleString()}</dd>
                 </div>
               )}
@@ -475,26 +475,26 @@ export const ProspectDetailPage: React.FC = () => {
         <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Activity Log</h2>
           {activityLog.length === 0 ? (
-            <p className="text-gray-500 text-sm">No activity recorded yet.</p>
+            <p className="text-slate-400 text-sm">No activity recorded yet.</p>
           ) : (
             <div className="space-y-3">
               {activityLog.map(entry => (
                 <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-700/50">
-                  <Activity className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                  <Activity className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">
                         {entry.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-slate-400">
                         {new Date(entry.created_at).toLocaleString()}
                       </span>
                     </div>
                     {entry.performer_name && (
-                      <span className="text-xs text-gray-400">by {entry.performer_name}</span>
+                      <span className="text-xs text-slate-400">by {entry.performer_name}</span>
                     )}
                     {entry.details && (
-                      <div className="mt-1 text-xs text-gray-500">
+                      <div className="mt-1 text-xs text-slate-400">
                         {entry.details.notes ? <span>Note: {String(entry.details.notes)}</span> : null}
                         {entry.details.to_step_name ? <span>Moved to: {String(entry.details.to_step_name)}</span> : null}
                       </div>
@@ -513,7 +513,7 @@ export const ProspectDetailPage: React.FC = () => {
           <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Transfer to Membership</h2>
-              <button onClick={() => setShowTransferModal(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -537,7 +537,7 @@ export const ProspectDetailPage: React.FC = () => {
                   value={transferData.username || ''}
                   onChange={e => setTransferData(prev => ({ ...prev, username: e.target.value }))}
                   placeholder="Auto-generated if left blank"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -548,7 +548,7 @@ export const ProspectDetailPage: React.FC = () => {
                     value={transferData.rank || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, rank: e.target.value }))}
                     placeholder="e.g., Probationary"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -558,7 +558,7 @@ export const ProspectDetailPage: React.FC = () => {
                     value={transferData.station || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, station: e.target.value }))}
                     placeholder="e.g., Station 1"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
               </div>

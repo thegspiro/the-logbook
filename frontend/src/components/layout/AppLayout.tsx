@@ -100,7 +100,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   if (navigationLayout === 'left') {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
@@ -126,7 +126,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, LogOut, Menu, X } from 'lucide-react';
+import { Home, LogOut, Menu, X, Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -15,8 +16,20 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   onLogout,
 }) => {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
+
+  const cycleTheme = () => {
+    const order = ['dark', 'light', 'system'] as const;
+    const currentIndex = order.indexOf(theme as typeof order[number]);
+    const nextIndex = (currentIndex + 1) % order.length;
+    setTheme(order[nextIndex]);
+  };
+
+  const themeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+  const ThemeIcon = themeIcon;
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', active: false },
@@ -39,7 +52,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   };
 
   return (
-    <header className="bg-slate-900 border-b border-white/10" role="banner">
+    <header className="border-b" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}
@@ -79,6 +92,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               </a>
             ))}
             <button
+              onClick={cycleTheme}
+              className="text-slate-300 p-2 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              title={`Theme: ${themeLabel}`}
+              aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
+            >
+              <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <button
               onClick={onLogout}
               className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
             >
@@ -116,6 +137,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   {item.label}
                 </a>
               ))}
+              <button
+                onClick={cycleTheme}
+                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+                <span>Theme: {themeLabel}</span>
+              </button>
               <button
                 onClick={onLogout}
                 className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"

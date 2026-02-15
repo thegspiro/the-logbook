@@ -55,17 +55,17 @@ export default function TrainingDashboardPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="min-h-screen p-6 max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Training Dashboard</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold text-white">Training Dashboard</h1>
+        <p className="text-slate-300 mt-2">
           Manage training courses, requirements, and certifications
         </p>
       </div>
 
       {/* Alert for Expiring Certifications */}
       {expiringCerts.length > 0 && (
-        <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div className="mb-6 bg-yellow-500/10 border-l-4 border-yellow-500 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
@@ -81,7 +81,7 @@ export default function TrainingDashboardPage() {
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-yellow-700">
+              <p className="text-sm text-yellow-300">
                 <span className="font-medium">{expiringCerts.length} certifications</span> expiring within 90 days
               </p>
             </div>
@@ -91,20 +91,20 @@ export default function TrainingDashboardPage() {
 
       {/* Statistics Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-600">Active Courses</div>
-          <div className="mt-2 text-3xl font-semibold text-gray-900">{courses.length}</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-slate-300">Active Courses</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{courses.length}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-600">Requirements ({currentYear})</div>
-          <div className="mt-2 text-3xl font-semibold text-gray-900">{requirements.length}</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-slate-300">Requirements ({currentYear})</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{requirements.length}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-600">Expiring Soon</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-slate-300">Expiring Soon</div>
           <div className="mt-2 text-3xl font-semibold text-yellow-600">{expiringCerts.length}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-600">Quick Actions</div>
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-slate-300">Quick Actions</div>
           <div className="mt-2 space-y-2">
             <button onClick={() => navigate('/training/my-training')} className="text-sm text-blue-600 hover:text-blue-800 block">
               My Training
@@ -117,15 +117,15 @@ export default function TrainingDashboardPage() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="border-b border-gray-200">
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow">
+        <div className="border-b border-white/20">
           <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
             <button
               onClick={() => setActiveTab('courses')}
               className={`${
                 activeTab === 'courses'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Training Courses
@@ -135,7 +135,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'requirements'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Requirements
@@ -145,7 +145,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'certifications'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Expiring Certifications
@@ -158,45 +158,45 @@ export default function TrainingDashboardPage() {
           {activeTab === 'courses' && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Active Training Courses</h2>
+                <h2 className="text-lg font-semibold text-white">Active Training Courses</h2>
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                   Add New Course
                 </button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-white/10">
+                  <thead className="bg-slate-900/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Course Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Code
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Duration
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Instructor
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="divide-y divide-white/10">
                     {courses.map((course) => (
-                      <tr key={course.id} className="hover:bg-gray-50">
+                      <tr key={course.id} className="hover:bg-white/5">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{course.name}</div>
+                          <div className="text-sm font-medium text-white">{course.name}</div>
                           {course.description && (
-                            <div className="text-sm text-gray-500">{course.description}</div>
+                            <div className="text-sm text-slate-400">{course.description}</div>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                           {course.code || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -204,22 +204,22 @@ export default function TrainingDashboardPage() {
                             {course.training_type.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                           {course.duration_hours ? `${course.duration_hours}h` : '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                           {course.instructor || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
-                          <button className="text-gray-600 hover:text-gray-900">View</button>
+                          <button className="text-slate-300 hover:text-white">View</button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {courses.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-slate-400">
                     No active courses. Add a new course to get started.
                   </div>
                 )}
@@ -231,7 +231,7 @@ export default function TrainingDashboardPage() {
           {activeTab === 'requirements' && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-white">
                   Training Requirements for {currentYear}
                 </h2>
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
@@ -240,27 +240,27 @@ export default function TrainingDashboardPage() {
               </div>
               <div className="space-y-4">
                 {requirements.map((req) => (
-                  <div key={req.id} className="border border-gray-200 rounded-lg p-4">
+                  <div key={req.id} className="border border-white/20 rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="text-lg font-medium text-gray-900">{req.name}</h3>
+                        <h3 className="text-lg font-medium text-white">{req.name}</h3>
                         {req.description && (
-                          <p className="mt-1 text-sm text-gray-600">{req.description}</p>
+                          <p className="mt-1 text-sm text-slate-300">{req.description}</p>
                         )}
                         <div className="mt-2 flex flex-wrap gap-4">
                           {req.required_hours && (
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-slate-300">
                               <span className="font-medium">Required Hours:</span> {req.required_hours}
                             </div>
                           )}
                           {req.frequency && (
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-slate-300">
                               <span className="font-medium">Frequency:</span>{' '}
                               {req.frequency.replace('_', ' ')}
                             </div>
                           )}
                           {req.due_date && (
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-slate-300">
                               <span className="font-medium">Due Date:</span> {formatDate(req.due_date)}
                             </div>
                           )}
@@ -281,7 +281,7 @@ export default function TrainingDashboardPage() {
                         <button className="text-sm text-blue-600 hover:text-blue-900 mr-3">
                           Edit
                         </button>
-                        <button className="text-sm text-gray-600 hover:text-gray-900">
+                        <button className="text-sm text-slate-300 hover:text-white">
                           View Progress
                         </button>
                       </div>
@@ -289,7 +289,7 @@ export default function TrainingDashboardPage() {
                   </div>
                 ))}
                 {requirements.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-slate-400">
                     No requirements set for {currentYear}. Add a new requirement to get started.
                   </div>
                 )}
@@ -300,41 +300,41 @@ export default function TrainingDashboardPage() {
           {/* Expiring Certifications Tab */}
           {activeTab === 'certifications' && (
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              <h2 className="text-lg font-semibold text-white mb-4">
                 Certifications Expiring Within 90 Days
               </h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-white/10">
+                  <thead className="bg-slate-900/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Member
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Course
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Cert Number
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Expiration Date
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Days Remaining
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="divide-y divide-white/10">
                     {expiringCerts.map((cert) => {
                       const expStatus = cert.expiration_date
                         ? getExpirationStatus(cert.expiration_date)
                         : null;
                       return (
-                        <tr key={cert.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <tr key={cert.id} className="hover:bg-white/5">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                             <Link
                               to={`/members/${cert.user_id}`}
                               className="text-blue-600 hover:text-blue-900"
@@ -343,15 +343,15 @@ export default function TrainingDashboardPage() {
                             </Link>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{cert.course_name}</div>
+                            <div className="text-sm font-medium text-white">{cert.course_name}</div>
                             {cert.course_code && (
-                              <div className="text-sm text-gray-500">{cert.course_code}</div>
+                              <div className="text-sm text-slate-400">{cert.course_code}</div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                             {cert.certification_number || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                             {formatDate(cert.expiration_date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -374,7 +374,7 @@ export default function TrainingDashboardPage() {
                   </tbody>
                 </table>
                 {expiringCerts.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-slate-400">
                     No certifications expiring in the next 90 days.
                   </div>
                 )}

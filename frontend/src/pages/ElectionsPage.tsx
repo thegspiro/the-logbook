@@ -66,6 +66,16 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  // Format a Date as a local datetime-local string (YYYY-MM-DDTHH:MM)
+  const formatLocalDateTime = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const handleStartDateChange = (startDate: string) => {
     setFormData({ ...formData, start_date: startDate });
 
@@ -74,8 +84,7 @@ export const ElectionsPage: React.FC = () => {
       const start = new Date(startDate);
       const end = new Date(start);
       end.setHours(23, 59, 0, 0);
-      const endDateString = end.toISOString().slice(0, 16);
-      setFormData({ ...formData, start_date: startDate, end_date: endDateString });
+      setFormData({ ...formData, start_date: startDate, end_date: formatLocalDateTime(end) });
     }
   };
 
@@ -87,8 +96,7 @@ export const ElectionsPage: React.FC = () => {
 
     const start = new Date(formData.start_date);
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-    const endDateString = end.toISOString().slice(0, 16);
-    setFormData({ ...formData, end_date: endDateString });
+    setFormData({ ...formData, end_date: formatLocalDateTime(end) });
   };
 
   const setEndOfDay = () => {
@@ -100,8 +108,7 @@ export const ElectionsPage: React.FC = () => {
     const start = new Date(formData.start_date);
     const end = new Date(start);
     end.setHours(23, 59, 0, 0);
-    const endDateString = end.toISOString().slice(0, 16);
-    setFormData({ ...formData, end_date: endDateString });
+    setFormData({ ...formData, end_date: formatLocalDateTime(end) });
   };
 
   const handleCreateElection = async (e: React.FormEvent) => {
@@ -177,20 +184,23 @@ export const ElectionsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-          <div className="text-gray-500">Loading elections...</div>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
+            <div className="text-slate-400">Loading elections...</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
+    <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Elections</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <h2 className="text-2xl font-bold text-white">Elections</h2>
+          <p className="mt-1 text-sm text-slate-400">
             Manage elections and view results
           </p>
         </div>
@@ -208,8 +218,8 @@ export const ElectionsPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <p className="text-sm text-red-300">{error}</p>
         </div>
       )}
 
@@ -221,7 +231,7 @@ export const ElectionsPage: React.FC = () => {
             className={`px-4 py-2 rounded-md text-sm font-medium ${
               statusFilter === status
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-white/10 text-slate-300 hover:bg-white/20'
             }`}
           >
             {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -229,18 +239,18 @@ export const ElectionsPage: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+      <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-md">
         {filteredElections.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500">No elections found</p>
+            <p className="text-slate-400">No elections found</p>
           </div>
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-white/10">
             {filteredElections.map((election) => (
               <li key={election.id}>
                 <Link
                   to={`/elections/${election.id}`}
-                  className="block hover:bg-gray-50 transition"
+                  className="block hover:bg-white/5 transition"
                 >
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
@@ -259,9 +269,9 @@ export const ElectionsPage: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="mt-2 flex items-center text-sm text-gray-500">
+                        <div className="mt-2 flex items-center text-sm text-slate-400">
                           <svg
-                            className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400"
+                            className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-500"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -279,13 +289,13 @@ export const ElectionsPage: React.FC = () => {
                           </span>
                         </div>
                         {election.positions && election.positions.length > 0 && (
-                          <div className="mt-2 flex items-center text-sm text-gray-500">
+                          <div className="mt-2 flex items-center text-sm text-slate-400">
                             <span className="font-medium mr-2">Positions:</span>
                             {election.positions.join(', ')}
                           </div>
                         )}
                         {election.total_votes !== undefined && (
-                          <div className="mt-2 text-sm text-gray-500">
+                          <div className="mt-2 text-sm text-slate-400">
                             {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'} cast
                           </div>
                         )}
@@ -307,21 +317,21 @@ export const ElectionsPage: React.FC = () => {
           aria-labelledby="create-election-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="create-election-title" className="text-lg font-medium text-gray-900">Create New Election</h3>
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="create-election-title" className="text-lg font-medium text-white">Create New Election</h3>
             </div>
 
             <form onSubmit={handleCreateElection} className="px-6 py-4">
               {createError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
-                  <p className="text-sm text-red-700">{createError}</p>
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                  <p className="text-sm text-red-300">{createError}</p>
                 </div>
               )}
 
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="election-title" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="election-title" className="block text-sm font-medium text-slate-200">
                     Title <span aria-hidden="true">*</span>
                   </label>
                   <input
@@ -331,12 +341,12 @@ export const ElectionsPage: React.FC = () => {
                     aria-required="true"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="election-description" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="election-description" className="block text-sm font-medium text-slate-200">
                     Description
                   </label>
                   <textarea
@@ -344,13 +354,13 @@ export const ElectionsPage: React.FC = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="election-start-date" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="election-start-date" className="block text-sm font-medium text-slate-200">
                       Start Date & Time <span aria-hidden="true">*</span>
                     </label>
                     <input
@@ -360,12 +370,12 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.start_date}
                       onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="election-end-date" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="election-end-date" className="block text-sm font-medium text-slate-200">
                       End Date & Time <span aria-hidden="true">*</span>
                     </label>
                     <input
@@ -375,31 +385,31 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.end_date}
                       onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
 
                     {formData.start_date && (
                       <div className="mt-2">
-                        <p className="text-xs text-gray-500 mb-2">Quick duration:</p>
+                        <p className="text-xs text-slate-400 mb-2">Quick duration:</p>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => setDuration(1)}
-                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                            className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                           >
                             1 Hour
                           </button>
                           <button
                             type="button"
                             onClick={() => setDuration(2)}
-                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                            className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                           >
                             2 Hours
                           </button>
                           <button
                             type="button"
                             onClick={() => setDuration(4)}
-                            className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                            className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                           >
                             4 Hours
                           </button>
@@ -417,7 +427,7 @@ export const ElectionsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="election-position-input" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="election-position-input" className="block text-sm font-medium text-slate-200 mb-2">
                     Positions
                   </label>
                   <div className="flex space-x-2">
@@ -429,7 +439,7 @@ export const ElectionsPage: React.FC = () => {
                       onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPosition())}
                       placeholder="e.g., Chief, President"
                       aria-label="Position name"
-                      className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -463,14 +473,14 @@ export const ElectionsPage: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="election-voting-method" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="election-voting-method" className="block text-sm font-medium text-slate-200">
                       Voting Method
                     </label>
                     <select
                       id="election-voting-method"
                       value={formData.voting_method}
                       onChange={(e) => setFormData({ ...formData, voting_method: e.target.value as VotingMethod })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="simple_majority">Simple Majority</option>
                       <option value="ranked_choice">Ranked Choice</option>
@@ -480,14 +490,14 @@ export const ElectionsPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label htmlFor="election-victory-condition" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="election-victory-condition" className="block text-sm font-medium text-slate-200">
                       Victory Condition
                     </label>
                     <select
                       id="election-victory-condition"
                       value={formData.victory_condition}
                       onChange={(e) => setFormData({ ...formData, victory_condition: e.target.value as VictoryCondition })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="most_votes">Most Votes (Plurality)</option>
                       <option value="majority">Majority (&gt;50%)</option>
@@ -500,7 +510,7 @@ export const ElectionsPage: React.FC = () => {
                 {formData.victory_condition === 'threshold' && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="election-num-threshold" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="election-num-threshold" className="block text-sm font-medium text-slate-200">
                         Numerical Threshold
                       </label>
                       <input
@@ -511,13 +521,13 @@ export const ElectionsPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, victory_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
                         placeholder="e.g., 10 votes required"
                         aria-label="Numerical threshold"
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
-                      <p className="mt-1 text-xs text-gray-500">Minimum votes needed to win</p>
+                      <p className="mt-1 text-xs text-slate-400">Minimum votes needed to win</p>
                     </div>
 
                     <div>
-                      <label htmlFor="election-pct-threshold" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="election-pct-threshold" className="block text-sm font-medium text-slate-200">
                         Percentage Threshold
                       </label>
                       <input
@@ -529,16 +539,16 @@ export const ElectionsPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : undefined })}
                         placeholder="e.g., 60%"
                         aria-label="Percentage threshold"
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
-                      <p className="mt-1 text-xs text-gray-500">Percentage of votes needed to win</p>
+                      <p className="mt-1 text-xs text-slate-400">Percentage of votes needed to win</p>
                     </div>
                   </div>
                 )}
 
                 {formData.victory_condition === 'supermajority' && (
                   <div>
-                    <label htmlFor="election-supermajority-pct" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="election-supermajority-pct" className="block text-sm font-medium text-slate-200">
                       Supermajority Percentage (default: 67%)
                     </label>
                     <input
@@ -548,46 +558,46 @@ export const ElectionsPage: React.FC = () => {
                       max="100"
                       value={formData.victory_percentage || 67}
                       onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : 67 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <p className="mt-1 text-xs text-gray-500">Percentage of votes needed (typically 67% for 2/3 majority)</p>
+                    <p className="mt-1 text-xs text-slate-400">Percentage of votes needed (typically 67% for 2/3 majority)</p>
                   </div>
                 )}
 
-                <div className="border-t border-gray-200 pt-4">
+                <div className="border-t border-white/20 pt-4">
                   <label className="flex items-center mb-3">
                     <input
                       type="checkbox"
                       id="election-enable-runoffs"
                       checked={formData.enable_runoffs}
                       onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                     />
-                    <span className="ml-2 text-sm font-medium text-gray-700">Enable Automatic Runoffs</span>
+                    <span className="ml-2 text-sm font-medium text-slate-200">Enable Automatic Runoffs</span>
                   </label>
 
                   {formData.enable_runoffs && (
-                    <div className="ml-6 space-y-3 bg-gray-50 p-3 rounded">
+                    <div className="ml-6 space-y-3 bg-white/5 p-3 rounded">
                       <div>
-                        <label htmlFor="election-runoff-type" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="election-runoff-type" className="block text-sm font-medium text-slate-200">
                           Runoff Type
                         </label>
                         <select
                           id="election-runoff-type"
                           value={formData.runoff_type}
                           onChange={(e) => setFormData({ ...formData, runoff_type: e.target.value })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="top_two">Top Two (top 2 candidates advance)</option>
                           <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
                         </select>
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-slate-400">
                           How to handle runoffs when no candidate meets victory condition
                         </p>
                       </div>
 
                       <div>
-                        <label htmlFor="election-max-runoff-rounds" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="election-max-runoff-rounds" className="block text-sm font-medium text-slate-200">
                           Maximum Runoff Rounds
                         </label>
                         <input
@@ -597,9 +607,9 @@ export const ElectionsPage: React.FC = () => {
                           max="10"
                           value={formData.max_runoff_rounds}
                           onChange={(e) => setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
-                        <p className="mt-1 text-xs text-gray-500">Maximum number of runoff rounds before declaring winner</p>
+                        <p className="mt-1 text-xs text-slate-400">Maximum number of runoff rounds before declaring winner</p>
                       </div>
                     </div>
                   )}
@@ -614,9 +624,9 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, anonymous_voting: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Anonymous Voting</span>
+                    <span className="ml-2 text-sm text-slate-200">Anonymous Voting</span>
                   </label>
 
                   <label className="flex items-center">
@@ -627,9 +637,9 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, allow_write_ins: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Allow Write-in Candidates</span>
+                    <span className="ml-2 text-sm text-slate-200">Allow Write-in Candidates</span>
                   </label>
 
                   <label className="flex items-center">
@@ -640,9 +650,9 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, results_visible_immediately: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
                     />
-                    <span className="ml-2 text-sm text-gray-700">Show Results Immediately</span>
+                    <span className="ml-2 text-sm text-slate-200">Show Results Immediately</span>
                   </label>
                 </div>
               </div>
@@ -651,7 +661,7 @@ export const ElectionsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
                 >
                   Cancel
                 </button>
@@ -666,6 +676,7 @@ export const ElectionsPage: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 };
