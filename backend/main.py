@@ -201,7 +201,10 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
 INITIAL_SQL_REVISION = '20260118_0001'
 
 # Tables created by the initial SQL that need to be dropped during fast-path
-# so they can be recreated from current model definitions (which have the latest schema)
+# so they can be recreated from current model definitions (which have the latest schema).
+# Note: The fast-path now dynamically drops ALL tables in the database instead of
+# relying on this list, which avoids conflicts with leftover tables from previous
+# failed boots. This constant is kept for documentation purposes only.
 INITIAL_SQL_TABLES = [
     'audit_log_checkpoints', 'audit_logs', 'sessions',
     'user_roles', 'roles', 'users', 'organizations'
@@ -271,15 +274,22 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
     _import_all_models()
     from app.core.database import Base
 
-    # 2. Drop tables from initial SQL so create_all() can recreate them
-    #    with the latest schema (the initial SQL tables may have outdated columns
-    #    since subsequent migrations ALTER them)
-    logger.info("Dropping initial SQL tables for recreation with latest schema...")
+    # 2. Drop ALL existing tables so create_all() starts from a clean slate.
+    #    This handles both the initial SQL tables AND any leftover tables from
+    #    a previous failed boot (e.g., a partial create_all() that crashed).
+    #    We keep alembic_version since command.stamp() manages it.
+    logger.info("Dropping all existing tables for clean recreation...")
     with engine.begin() as conn:
         conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-        for table_name in INITIAL_SQL_TABLES:
+        result = conn.execute(text("SHOW TABLES"))
+        existing_tables = [row[0] for row in result]
+        for table_name in existing_tables:
+            if table_name == "alembic_version":
+                continue
             conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
+            logger.debug(f"Dropped table: {table_name}")
         conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+    logger.info(f"Dropped {len(existing_tables)} existing tables")
 
     # 3. Create ALL tables from current model definitions
     #    This handles ~90% of tables in one fast batch operation
