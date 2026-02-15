@@ -736,12 +736,12 @@ docker-compose up -d
 
 ## Docker Issues
 
-### Issue: MariaDB image missing
-**Error:** `No such image: mariadb:10.11`
+### Issue: MySQL image missing
+**Error:** `No such image: mysql:8.0`
 
 **Fix:**
 ```bash
-docker pull mariadb:10.11
+docker pull mysql:8.0
 ```
 
 ### Issue: npm not found in container
