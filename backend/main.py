@@ -145,47 +145,54 @@ def timeout_context(seconds: int, operation_name: str = "Operation"):
 
 def validate_schema(engine) -> tuple[bool, list[str]]:
     """
-    Validate that critical database schema elements exist.
+    Validate that all expected database tables exist.
+
+    Dynamically derives the expected table list from:
+    - Base.metadata (all SQLAlchemy model tables)
+    - MIGRATION_ONLY_TABLES (tables created by migration files without models)
+
+    Also spot-checks columns on critical tables to catch schema drift.
     Returns (is_valid, list_of_errors).
     """
-    from sqlalchemy import text, inspect
+    from sqlalchemy import inspect
 
     errors = []
 
-    # Critical tables and their required columns
-    required_schema = {
-        "organizations": [
-            "id", "name", "slug", "organization_type", "timezone",
-            "identifier_type", "active", "created_at"
-        ],
-        "users": [
-            "id", "organization_id", "username", "email", "password_hash",
-            "status", "created_at"
-        ],
-        "roles": [
-            "id", "organization_id", "name", "slug", "permissions", "created_at"
-        ],
-        "onboarding_status": [
-            "id", "is_completed", "current_step", "created_at"
-        ],
-        "onboarding_sessions": [
-            "id", "session_id", "data", "expires_at"
-        ],
-    }
-
     try:
+        _import_all_models()
+        from app.core.database import Base
+
         inspector = inspect(engine)
-        existing_tables = inspector.get_table_names()
+        existing_tables = set(inspector.get_table_names())
 
-        for table_name, required_columns in required_schema.items():
+        # 1. Check all model-based tables exist
+        expected_model_tables = set(Base.metadata.tables.keys())
+        missing_model = expected_model_tables - existing_tables
+        if missing_model:
+            errors.append(
+                f"Missing {len(missing_model)} model-based table(s): "
+                + ", ".join(sorted(missing_model)[:10])
+                + (f" ... and {len(missing_model) - 10} more" if len(missing_model) > 10 else "")
+            )
+
+        # 2. Check migration-only tables exist
+        missing_migration = set(MIGRATION_ONLY_TABLES) - existing_tables
+        if missing_migration:
+            errors.append(
+                f"Missing migration-only table(s): {', '.join(sorted(missing_migration))}"
+            )
+
+        # 3. Spot-check columns on critical tables (catches schema drift)
+        critical_columns = {
+            "organizations": ["id", "name", "slug", "active", "created_at"],
+            "users": ["id", "organization_id", "username", "email", "password_hash", "status"],
+            "roles": ["id", "organization_id", "name", "slug", "permissions"],
+            "onboarding_sessions": ["id", "session_id", "data", "expires_at"],
+        }
+        for table_name, required_columns in critical_columns.items():
             if table_name not in existing_tables:
-                errors.append(f"Missing table: {table_name}")
-                continue
-
-            # Get existing columns
+                continue  # Already reported as missing above
             columns = {col["name"] for col in inspector.get_columns(table_name)}
-
-            # Check for missing columns
             missing_cols = [col for col in required_columns if col not in columns]
             if missing_cols:
                 errors.append(
@@ -263,15 +270,8 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
 # The revision stamped by the initial SQL schema (001_initial_schema.sql)
 INITIAL_SQL_REVISION = '20260118_0001'
 
-# Tables created by the initial SQL that need to be dropped during fast-path
-# so they can be recreated from current model definitions (which have the latest schema).
-# Note: The fast-path now dynamically drops ALL tables in the database instead of
-# relying on this list, which avoids conflicts with leftover tables from previous
-# failed boots. This constant is kept for documentation purposes only.
-INITIAL_SQL_TABLES = [
-    'audit_log_checkpoints', 'audit_logs', 'sessions',
-    'user_roles', 'roles', 'users', 'organizations'
-]
+# The init SQL now only creates alembic_version (no application tables).
+# The fast-path drops all non-alembic tables and creates everything fresh.
 
 # Migration files that create tables without corresponding SQLAlchemy models.
 # These must be run explicitly during fast-path initialization since
@@ -279,6 +279,15 @@ INITIAL_SQL_TABLES = [
 MIGRATION_ONLY_FILES = [
     '20260201_0016_create_compliance_tables.py',
     '20260201_0017_create_fundraising_tables.py',
+]
+
+# Tables created by migration-only files (used by validate_schema to check completeness).
+MIGRATION_ONLY_TABLES = [
+    # compliance module (20260201_0016)
+    'compliance_policies', 'policy_acknowledgments', 'compliance_checklists',
+    'checklist_submissions', 'compliance_incidents',
+    # fundraising module (20260201_0017)
+    'fundraising_campaigns', 'donors', 'donations', 'pledges', 'fundraising_events',
 ]
 
 # Migration file that seeds initial apparatus system data
@@ -375,9 +384,16 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
             #    checkfirst=False skips 100+ existence-check round-trips since
             #    we just dropped everything. FK_CHECKS=0 (set above) skips FK
             #    validation during CREATE TABLE.
-            logger.info("Creating all tables from model definitions...")
-            Base.metadata.create_all(conn, checkfirst=False)
-            logger.info("Model-based tables created")
+            #    Iterates sorted_tables individually for progress logging so
+            #    slow environments don't look hung during long create runs.
+            sorted_tables = Base.metadata.sorted_tables
+            total_tables = len(sorted_tables)
+            logger.info(f"Creating {total_tables} tables from model definitions...")
+            for i, table in enumerate(sorted_tables, 1):
+                table.create(conn, checkfirst=False)
+                if i % 25 == 0 or i == total_tables:
+                    logger.info(f"  Tables created: {i}/{total_tables}")
+            logger.info(f"All {total_tables} model-based tables created")
 
             # 4. Create tables that only exist in migration files (no SQLAlchemy models).
             #    Reuses the same connection to avoid pool overhead.
