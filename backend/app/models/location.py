@@ -33,7 +33,7 @@ class Location(Base):
     __tablename__ = "locations"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
 
     # Location details
     name = Column(String(200), nullable=False)  # e.g., "Main Meeting Hall", "Conference Room A"

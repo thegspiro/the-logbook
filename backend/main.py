@@ -283,13 +283,15 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
         conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
         result = conn.execute(text("SHOW TABLES"))
         existing_tables = [row[0] for row in result]
+        dropped = 0
         for table_name in existing_tables:
             if table_name == "alembic_version":
                 continue
             conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
             logger.debug(f"Dropped table: {table_name}")
+            dropped += 1
         conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-    logger.info(f"Dropped {len(existing_tables)} existing tables")
+    logger.info(f"Dropped {dropped} existing tables")
 
     # 3. Create ALL tables from current model definitions
     #    This handles ~90% of tables in one fast batch operation

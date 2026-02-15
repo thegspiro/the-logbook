@@ -266,7 +266,7 @@ class Facility(Base):
     status_changed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Archive (soft-delete)
-    is_archived = Column(Boolean, default=False, nullable=False, index=True)
+    is_archived = Column(Boolean, default=False, nullable=False)
     archived_at = Column(DateTime(timezone=True), nullable=True)
     archived_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

@@ -218,10 +218,10 @@ class PublicPortalAccessLog(Base):
     referer = Column(String(500), nullable=True)
 
     # Timestamp of the request
-    timestamp = Column(String(26), nullable=False, default=lambda: datetime.utcnow().isoformat(), index=True)
+    timestamp = Column(String(26), nullable=False, default=lambda: datetime.utcnow().isoformat())
 
     # Security flags
-    flagged_suspicious = Column(Boolean, default=False, nullable=False, index=True)
+    flagged_suspicious = Column(Boolean, default=False, nullable=False)
     flag_reason = Column(Text, nullable=True)
 
     # Relationships
