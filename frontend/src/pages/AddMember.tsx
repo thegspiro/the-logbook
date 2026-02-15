@@ -183,7 +183,7 @@ const AddMember: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
         <div className="max-w-4xl mx-auto">

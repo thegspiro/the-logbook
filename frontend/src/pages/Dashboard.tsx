@@ -50,16 +50,15 @@ const Dashboard: React.FC = () => {
       const data = await dashboardService.getStats();
       setStats(data);
     } catch (error) {
-      // Fallback to default values if API fails
+      // Fallback to zeroed values if API fails — avoid showing fake counts
       setStats({
-        total_members: 1,
-        active_members: 1,
+        total_members: 0,
+        active_members: 0,
         total_documents: 0,
-        setup_percentage: 100,
+        setup_percentage: 0,
         recent_events_count: 0,
         pending_tasks_count: 0,
       });
-      // Don't show error toast for stats - use fallback values silently
     } finally {
       setLoadingStats(false);
     }
@@ -90,7 +89,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}

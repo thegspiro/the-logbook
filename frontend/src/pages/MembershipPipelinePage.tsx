@@ -147,7 +147,7 @@ const MembershipPipelinePage: React.FC = () => {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -155,7 +155,7 @@ const MembershipPipelinePage: React.FC = () => {
             <ClipboardList className="h-7 w-7 text-red-500" />
             Membership Pipeline
           </h1>
-          <p className="text-gray-400 mt-1">
+          <p className="text-slate-400 mt-1">
             Track and manage prospective members through the application process
           </p>
         </div>
@@ -184,7 +184,7 @@ const MembershipPipelinePage: React.FC = () => {
       {/* Pipeline Selector & Search */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-400" />
+          <Filter className="h-4 w-4 text-slate-400" />
           <select
             value={selectedPipelineId || ''}
             onChange={e => setSelectedPipelineId(e.target.value)}
@@ -198,24 +198,24 @@ const MembershipPipelinePage: React.FC = () => {
           </select>
         </div>
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             placeholder="Search prospects..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-10 pr-4 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
         </div>
         <button
           onClick={fetchKanbanBoard}
-          className="p-2 text-gray-400 hover:text-white transition-colors"
+          className="p-2 text-slate-400 hover:text-white transition-colors"
           title="Refresh"
         >
           <RefreshCw className="h-4 w-4" />
         </button>
         {kanbanBoard && (
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-slate-400">
             {kanbanBoard.total_prospects} prospect{kanbanBoard.total_prospects !== 1 ? 's' : ''}
           </span>
         )}
@@ -231,9 +231,9 @@ const MembershipPipelinePage: React.FC = () => {
       {/* Empty state */}
       {!loading && pipelines.length === 0 && (
         <div className="text-center py-16 bg-slate-800/50 rounded-xl border border-slate-700">
-          <ClipboardList className="h-16 w-16 mx-auto text-gray-600 mb-4" />
+          <ClipboardList className="h-16 w-16 mx-auto text-slate-500 mb-4" />
           <h3 className="text-xl font-medium text-white mb-2">No Pipelines Configured</h3>
-          <p className="text-gray-400 mb-6 max-w-md mx-auto">
+          <p className="text-slate-400 mb-6 max-w-md mx-auto">
             Set up a membership pipeline to start tracking prospective members through your application process.
           </p>
           {canManage && (
@@ -297,7 +297,7 @@ const MembershipPipelinePage: React.FC = () => {
               {/* Prospect Cards */}
               <div className="p-2 space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto">
                 {column.prospects.length === 0 && (
-                  <div className="text-center py-8 text-gray-600 text-sm">
+                  <div className="text-center py-8 text-slate-500 text-sm">
                     No prospects at this step
                   </div>
                 )}
@@ -317,18 +317,18 @@ const MembershipPipelinePage: React.FC = () => {
                     </div>
                     <div className="space-y-1">
                       {prospect.email && (
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
                           <Mail className="h-3 w-3" />
                           <span className="truncate">{prospect.email}</span>
                         </div>
                       )}
                       {prospect.phone && (
-                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
                           <Phone className="h-3 w-3" />
                           <span>{prospect.phone}</span>
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
                         <Calendar className="h-3 w-3" />
                         <span>{new Date(prospect.created_at).toLocaleDateString()}</span>
                       </div>
@@ -360,7 +360,7 @@ const MembershipPipelinePage: React.FC = () => {
           <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Add Prospective Member</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -427,7 +427,7 @@ const MembershipPipelinePage: React.FC = () => {
                   value={addFormData.referral_source || ''}
                   onChange={e => setAddFormData(prev => ({ ...prev, referral_source: e.target.value }))}
                   placeholder="e.g., Website, Community Event, Referral"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">

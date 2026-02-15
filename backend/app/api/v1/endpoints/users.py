@@ -6,6 +6,7 @@ Endpoints for user management and listing.
 
 from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -55,23 +56,28 @@ async def list_users(
     user_service = UserService(db)
     org_service = OrganizationService(db)
 
-    # Get organization settings
-    settings = await org_service.get_organization_settings(current_user.organization_id)
-
-    # Check if contact info visibility is enabled
-    include_contact_info = settings.contact_info_visibility.enabled
+    # Get organization settings — if this fails, still return users without
+    # contact info rather than returning a 500 that hides the member list.
+    include_contact_info = False
+    contact_settings = None
+    try:
+        org_settings = await org_service.get_organization_settings(current_user.organization_id)
+        include_contact_info = org_settings.contact_info_visibility.enabled
+        contact_settings = {
+            "contact_info_visibility": {
+                "show_email": org_settings.contact_info_visibility.show_email,
+                "show_phone": org_settings.contact_info_visibility.show_phone,
+                "show_mobile": org_settings.contact_info_visibility.show_mobile,
+            }
+        }
+    except Exception as e:
+        logger.warning(f"Failed to load organization settings, returning users without contact info: {e}")
 
     # Get users with conditional contact info
     users = await user_service.get_users_for_organization(
         organization_id=current_user.organization_id,
         include_contact_info=include_contact_info,
-        contact_settings={
-            "contact_info_visibility": {
-                "show_email": settings.contact_info_visibility.show_email,
-                "show_phone": settings.contact_info_visibility.show_phone,
-                "show_mobile": settings.contact_info_visibility.show_mobile,
-            }
-        }
+        contact_settings=contact_settings,
     )
 
     return users

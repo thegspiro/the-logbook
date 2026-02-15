@@ -238,18 +238,18 @@ const PipelineSettingsPage: React.FC = () => {
   const customPipelines = pipelines.filter(p => !p.is_template);
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <Link to="/membership-pipeline" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-2">
+          <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-2">
             <ArrowLeft className="h-4 w-4" /> Back to Pipeline Board
           </Link>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
             <Settings className="h-7 w-7 text-red-500" />
             Pipeline Settings
           </h1>
-          <p className="text-gray-400 mt-1">
+          <p className="text-slate-400 mt-1">
             Configure membership pipelines and customize steps for your department
           </p>
         </div>
@@ -292,7 +292,7 @@ const PipelineSettingsPage: React.FC = () => {
           {/* Templates */}
           {templates.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-2">Templates</h3>
+              <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">Templates</h3>
               <div className="space-y-2">
                 {templates.map(p => (
                   <div
@@ -308,13 +308,13 @@ const PipelineSettingsPage: React.FC = () => {
                       <span className="font-medium text-white text-sm">{p.name}</span>
                       <button
                         onClick={e => { e.stopPropagation(); handleDuplicate(p.id, p.name); }}
-                        className="p-1 text-gray-500 hover:text-white transition-colors"
+                        className="p-1 text-slate-400 hover:text-white transition-colors"
                         title="Use as template"
                       >
                         <Copy className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
                       <span>{p.step_count || 0} steps</span>
                       <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full">template</span>
                     </div>
@@ -326,12 +326,12 @@ const PipelineSettingsPage: React.FC = () => {
 
           {/* Custom Pipelines */}
           <div>
-            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-2">Your Pipelines</h3>
+            <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">Your Pipelines</h3>
             {customPipelines.length === 0 ? (
               <div className="text-center py-8 bg-slate-800/50 rounded-xl border border-slate-700">
-                <FileText className="h-8 w-8 mx-auto text-gray-600 mb-2" />
-                <p className="text-sm text-gray-500">No custom pipelines yet</p>
-                <p className="text-xs text-gray-600 mt-1">Create one or duplicate a template</p>
+                <FileText className="h-8 w-8 mx-auto text-slate-500 mb-2" />
+                <p className="text-sm text-slate-400">No custom pipelines yet</p>
+                <p className="text-xs text-slate-500 mt-1">Create one or duplicate a template</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -352,13 +352,13 @@ const PipelineSettingsPage: React.FC = () => {
                       </div>
                       <button
                         onClick={e => { e.stopPropagation(); handleDeletePipeline(p.id); }}
-                        className="p-1 text-gray-500 hover:text-red-400 transition-colors"
+                        className="p-1 text-slate-400 hover:text-red-400 transition-colors"
                         title="Delete pipeline"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
                       <span>{p.step_count || 0} steps</span>
                       <span>{p.prospect_count || 0} prospects</span>
                       {p.auto_transfer_on_approval && (
@@ -376,8 +376,8 @@ const PipelineSettingsPage: React.FC = () => {
         <div className="lg:col-span-2">
           {!selectedPipeline ? (
             <div className="text-center py-16 bg-slate-800/50 rounded-xl border border-slate-700">
-              <Settings className="h-12 w-12 mx-auto text-gray-600 mb-3" />
-              <p className="text-gray-400">Select a pipeline to configure its steps</p>
+              <Settings className="h-12 w-12 mx-auto text-slate-500 mb-3" />
+              <p className="text-slate-400">Select a pipeline to configure its steps</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -385,7 +385,7 @@ const PipelineSettingsPage: React.FC = () => {
               <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
                 <h2 className="text-lg font-semibold text-white mb-4">{selectedPipeline.name}</h2>
                 {selectedPipeline.description && (
-                  <p className="text-sm text-gray-400 mb-4">{selectedPipeline.description}</p>
+                  <p className="text-sm text-slate-400 mb-4">{selectedPipeline.description}</p>
                 )}
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -427,7 +427,7 @@ const PipelineSettingsPage: React.FC = () => {
                 </div>
 
                 {selectedPipeline.steps.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 text-sm">
+                  <div className="text-center py-8 text-slate-400 text-sm">
                     No steps configured. Add steps to define the prospect journey.
                   </div>
                 ) : (
@@ -445,14 +445,14 @@ const PipelineSettingsPage: React.FC = () => {
                               <button
                                 onClick={() => handleMoveStep(idx, 'up')}
                                 disabled={idx === 0}
-                                className="p-0.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
+                                className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
                               >
                                 <ChevronUp className="h-3 w-3" />
                               </button>
                               <button
                                 onClick={() => handleMoveStep(idx, 'down')}
                                 disabled={idx === selectedPipeline.steps.length - 1}
-                                className="p-0.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
+                                className="p-0.5 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
                               >
                                 <ChevronDown className="h-3 w-3" />
                               </button>
@@ -485,13 +485,13 @@ const PipelineSettingsPage: React.FC = () => {
                                 {step.step_type}
                               </span>
                               {step.action_type && (
-                                <span className="flex items-center gap-1 text-xs text-gray-500">
+                                <span className="flex items-center gap-1 text-xs text-slate-400">
                                   {getActionTypeIcon(step.action_type)}
                                   {step.action_type.replace(/_/g, ' ')}
                                 </span>
                               )}
                               {step.description && (
-                                <span className="text-xs text-gray-600 truncate">{step.description}</span>
+                                <span className="text-xs text-slate-500 truncate">{step.description}</span>
                               )}
                             </div>
                           </div>
@@ -501,7 +501,7 @@ const PipelineSettingsPage: React.FC = () => {
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => handleDeleteStep(step.id)}
-                                className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
+                                className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
                                 title="Remove step"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -524,7 +524,7 @@ const PipelineSettingsPage: React.FC = () => {
           <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Create Pipeline</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -540,7 +540,7 @@ const PipelineSettingsPage: React.FC = () => {
                   value={createFormData.name}
                   onChange={e => setCreateFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Standard Membership Pipeline"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -598,7 +598,7 @@ const PipelineSettingsPage: React.FC = () => {
           <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Add Pipeline Step</h2>
-              <button onClick={() => setShowAddStepModal(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowAddStepModal(false)} className="text-slate-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -611,7 +611,7 @@ const PipelineSettingsPage: React.FC = () => {
                   value={stepFormData.name}
                   onChange={e => setStepFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Background Check Complete"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -634,7 +634,7 @@ const PipelineSettingsPage: React.FC = () => {
                       className={`p-3 rounded-lg border text-center transition-colors ${
                         stepFormData.step_type === type
                           ? 'border-red-500 bg-red-500/10 text-white'
-                          : 'border-slate-600 bg-slate-700/50 text-gray-400 hover:border-slate-500'
+                          : 'border-slate-600 bg-slate-700/50 text-slate-400 hover:border-slate-500'
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1">

@@ -290,7 +290,7 @@ const PipelineDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
           <p className="text-gray-400 mt-4">Loading pipeline...</p>
@@ -305,7 +305,7 @@ const PipelineDetailPage: React.FC = () => {
   const requiredReqs = programReqs.filter((r) => r.is_required).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-8">

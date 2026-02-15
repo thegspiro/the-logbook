@@ -204,7 +204,7 @@ const InventoryPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+      <div className="min-h-screen">
         <main className="max-w-7xl mx-auto px-6 py-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
@@ -216,7 +216,7 @@ const InventoryPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">

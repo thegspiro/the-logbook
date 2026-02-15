@@ -137,14 +137,14 @@ const IntegrationsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-white animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">

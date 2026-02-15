@@ -331,9 +331,11 @@ export const ElectionDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-          <div className="text-gray-500">Loading election...</div>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
+            <div className="text-slate-400">Loading election...</div>
+          </div>
         </div>
       </div>
     );
@@ -341,9 +343,11 @@ export const ElectionDetailPage: React.FC = () => {
 
   if (error || !election) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700">{error || 'Election not found'}</p>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+            <p className="text-sm text-red-300">{error || 'Election not found'}</p>
+          </div>
         </div>
       </div>
     );
@@ -354,6 +358,7 @@ export const ElectionDetailPage: React.FC = () => {
   const isActiveOrCompleted = election.status === 'open' || election.status === 'closed';
 
   return (
+    <div className="min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-6">
@@ -365,7 +370,7 @@ export const ElectionDetailPage: React.FC = () => {
         <div className="flex justify-between items-start">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-2xl font-bold text-gray-900">{election.title}</h2>
+              <h2 className="text-2xl font-bold text-white">{election.title}</h2>
               {election.is_runoff && (
                 <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">
                   Runoff Round {election.runoff_round}
@@ -381,7 +386,7 @@ export const ElectionDetailPage: React.FC = () => {
               </Link>
             )}
             {election.description && (
-              <p className="mt-2 text-gray-600">{election.description}</p>
+              <p className="mt-2 text-slate-300">{election.description}</p>
             )}
           </div>
           <span
@@ -395,23 +400,23 @@ export const ElectionDetailPage: React.FC = () => {
       </div>
 
       {/* Election Info */}
-      <div className="bg-white shadow rounded-lg p-6 mb-6">
+      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <div className="text-sm text-gray-500">Start Date</div>
-            <div className="mt-1 text-sm font-medium text-gray-900">
+            <div className="text-sm text-slate-400">Start Date</div>
+            <div className="mt-1 text-sm font-medium text-white">
               {formatDate(election.start_date)}
             </div>
           </div>
           <div>
-            <div className="text-sm text-gray-500">End Date</div>
-            <div className="mt-1 text-sm font-medium text-gray-900">
+            <div className="text-sm text-slate-400">End Date</div>
+            <div className="mt-1 text-sm font-medium text-white">
               {formatDate(election.end_date)}
             </div>
           </div>
           {election.positions && election.positions.length > 0 && (
             <div className="col-span-2">
-              <div className="text-sm text-gray-500">Positions</div>
+              <div className="text-sm text-slate-400">Positions</div>
               <div className="mt-1 flex flex-wrap gap-2">
                 {election.positions.map((position) => (
                   <span
@@ -425,14 +430,14 @@ export const ElectionDetailPage: React.FC = () => {
             </div>
           )}
           <div>
-            <div className="text-sm text-gray-500">Voting Method</div>
-            <div className="mt-1 text-sm font-medium text-gray-900">
+            <div className="text-sm text-slate-400">Voting Method</div>
+            <div className="mt-1 text-sm font-medium text-white">
               {election.voting_method.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
             </div>
           </div>
           <div>
-            <div className="text-sm text-gray-500">Anonymous Voting</div>
-            <div className="mt-1 text-sm font-medium text-gray-900">
+            <div className="text-sm text-slate-400">Anonymous Voting</div>
+            <div className="mt-1 text-sm font-medium text-white">
               {election.anonymous_voting ? 'Yes' : 'No'}
             </div>
           </div>
@@ -440,7 +445,7 @@ export const ElectionDetailPage: React.FC = () => {
 
         {/* Secretary Controls */}
         {canManage && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-6 pt-6 border-t border-white/20">
             <div className="flex flex-wrap gap-3">
               {election.status === 'draft' && (
                 <button
@@ -520,7 +525,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {election.email_sent && (
-                <div className="flex items-center text-sm text-gray-600">
+                <div className="flex items-center text-sm text-slate-300">
                   <svg className="h-5 w-5 mr-1 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
@@ -578,13 +583,13 @@ export const ElectionDetailPage: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={() => setShowResults(!showResults)}
-            className="w-full bg-white shadow rounded-lg p-4 flex items-center justify-between hover:bg-gray-50"
+            className="w-full bg-white/10 backdrop-blur-sm shadow rounded-lg p-4 flex items-center justify-between hover:bg-white/5"
           >
-            <span className="text-lg font-medium text-gray-900">
+            <span className="text-lg font-medium text-white">
               {showResults ? 'Hide Results' : 'View Results'}
             </span>
             <svg
-              className={`h-6 w-6 text-gray-400 transform transition-transform ${
+              className={`h-6 w-6 text-slate-400 transform transition-transform ${
                 showResults ? 'rotate-180' : ''
               }`}
               fill="none"
@@ -605,8 +610,8 @@ export const ElectionDetailPage: React.FC = () => {
 
       {/* Message if results not available */}
       {!resultsAvailable && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-700">
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+          <p className="text-sm text-blue-300">
             Results will be available when the election is closed
             {canManage && ' or when you enable "Show Results to Voters"'}.
           </p>
@@ -625,13 +630,13 @@ export const ElectionDetailPage: React.FC = () => {
                 handleLoadForensics();
               }
             }}
-            className="w-full bg-white shadow rounded-lg p-4 flex items-center justify-between hover:bg-gray-50"
+            className="w-full bg-white/10 backdrop-blur-sm shadow rounded-lg p-4 flex items-center justify-between hover:bg-white/5"
           >
-            <span className="text-lg font-medium text-gray-900">
+            <span className="text-lg font-medium text-white">
               Forensics &amp; Integrity
             </span>
             <svg
-              className={`h-6 w-6 text-gray-400 transform transition-transform ${
+              className={`h-6 w-6 text-slate-400 transform transition-transform ${
                 showForensics ? 'rotate-180' : ''
               }`}
               fill="none"
@@ -644,11 +649,11 @@ export const ElectionDetailPage: React.FC = () => {
           </button>
 
           {showForensics && (
-            <div className="bg-white shadow rounded-lg mt-2 p-6 space-y-6">
+            <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg mt-2 p-6 space-y-6">
               {/* Integrity Check */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-md font-semibold text-gray-900">Vote Integrity Check</h3>
+                  <h3 className="text-md font-semibold text-white">Vote Integrity Check</h3>
                   <button
                     onClick={handleRunIntegrityCheck}
                     disabled={loadingIntegrity}
@@ -661,46 +666,46 @@ export const ElectionDetailPage: React.FC = () => {
                 {integrityResult && (
                   <div className={`border rounded-lg p-4 ${
                     integrityResult.integrity_status === 'PASS'
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-red-50 border-red-200'
+                      ? 'bg-green-500/10 border-green-500/30'
+                      : 'bg-red-500/10 border-red-500/30'
                   }`}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`text-lg font-bold ${
-                        integrityResult.integrity_status === 'PASS' ? 'text-green-700' : 'text-red-700'
+                        integrityResult.integrity_status === 'PASS' ? 'text-green-300' : 'text-red-300'
                       }`}>
                         {integrityResult.integrity_status === 'PASS' ? 'PASS' : 'FAIL'}
                       </span>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-slate-300">
                         ({integrityResult.valid_signatures}/{integrityResult.total_votes} valid signatures)
                       </span>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
-                        <span className="text-gray-500">Total Votes:</span>{' '}
-                        <span className="font-medium">{integrityResult.total_votes}</span>
+                        <span className="text-slate-400">Total Votes:</span>{' '}
+                        <span className="font-medium text-white">{integrityResult.total_votes}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Valid:</span>{' '}
-                        <span className="font-medium text-green-700">{integrityResult.valid_signatures}</span>
+                        <span className="text-slate-400">Valid:</span>{' '}
+                        <span className="font-medium text-green-300">{integrityResult.valid_signatures}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Unsigned:</span>{' '}
-                        <span className="font-medium text-yellow-700">{integrityResult.unsigned_votes}</span>
+                        <span className="text-slate-400">Unsigned:</span>{' '}
+                        <span className="font-medium text-yellow-300">{integrityResult.unsigned_votes}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Tampered:</span>{' '}
-                        <span className={`font-medium ${integrityResult.tampered_votes > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                        <span className="text-slate-400">Tampered:</span>{' '}
+                        <span className={`font-medium ${integrityResult.tampered_votes > 0 ? 'text-red-300' : 'text-green-300'}`}>
                           {integrityResult.tampered_votes}
                         </span>
                       </div>
                     </div>
                     {integrityResult.tampered_vote_ids.length > 0 && (
-                      <div className="mt-3 p-3 bg-red-100 rounded">
-                        <p className="text-sm font-semibold text-red-800 mb-1">Tampered Vote IDs:</p>
+                      <div className="mt-3 p-3 bg-red-500/20 rounded">
+                        <p className="text-sm font-semibold text-red-300 mb-1">Tampered Vote IDs:</p>
                         <div className="space-y-1">
                           {integrityResult.tampered_vote_ids.map(id => (
                             <div key={id} className="flex items-center gap-2">
-                              <code className="text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">{id}</code>
+                              <code className="text-xs text-red-300 bg-red-500/10 px-2 py-0.5 rounded">{id}</code>
                               <button
                                 onClick={() => setVoidVoteId(id)}
                                 className="text-xs text-red-600 underline hover:text-red-800"
@@ -717,9 +722,9 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
 
               {/* Void Vote Form */}
-              <div className="border-t pt-4">
-                <h3 className="text-md font-semibold text-gray-900 mb-3">Void a Vote</h3>
-                <p className="text-sm text-gray-500 mb-3">
+              <div className="border-t border-white/20 pt-4">
+                <h3 className="text-md font-semibold text-white mb-3">Void a Vote</h3>
+                <p className="text-sm text-slate-400 mb-3">
                   Soft-deletes a vote with full audit trail. The vote is preserved but excluded from results.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -729,7 +734,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setVoidVoteId(e.target.value)}
                     placeholder="Vote ID (UUID)"
                     aria-label="Vote ID (UUID)"
-                    className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="flex-1 bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-sm text-white focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
                   <input
                     type="text"
@@ -737,7 +742,7 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setVoidVoteReason(e.target.value)}
                     placeholder="Reason for voiding"
                     aria-label="Reason for voiding"
-                    className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="flex-1 bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-sm text-white focus:outline-none focus:ring-red-500 focus:border-red-500"
                   />
                   <button
                     onClick={handleVoidVote}
@@ -751,30 +756,30 @@ export const ElectionDetailPage: React.FC = () => {
 
               {/* Forensics Report Detail */}
               {loadingForensics && (
-                <div className="text-center text-gray-500 py-4" role="status" aria-live="polite">Loading forensics report...</div>
+                <div className="text-center text-slate-400 py-4" role="status" aria-live="polite">Loading forensics report...</div>
               )}
 
               {forensicsReport && (
                 <>
                   {/* Deleted Votes */}
-                  <div className="border-t pt-4">
-                    <h3 className="text-md font-semibold text-gray-900 mb-2">
+                  <div className="border-t border-white/20 pt-4">
+                    <h3 className="text-md font-semibold text-white mb-2">
                       Voided Votes ({forensicsReport.deleted_votes.count})
                     </h3>
                     {forensicsReport.deleted_votes.count === 0 ? (
-                      <p className="text-sm text-gray-500">No votes have been voided.</p>
+                      <p className="text-sm text-slate-400">No votes have been voided.</p>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="min-w-full text-sm" aria-label="Voided votes">
-                          <thead className="bg-gray-50">
+                          <thead className="bg-slate-900/50">
                             <tr>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Vote ID</th>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Position</th>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Deleted At</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Vote ID</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Position</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Reason</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Deleted At</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
+                          <tbody className="divide-y divide-white/10">
                             {forensicsReport.deleted_votes.records.map(v => (
                               <tr key={v.vote_id}>
                                 <td className="px-3 py-2 font-mono text-xs">{v.vote_id.slice(0, 8)}...</td>
@@ -791,15 +796,15 @@ export const ElectionDetailPage: React.FC = () => {
 
                   {/* Anomaly Detection */}
                   {Object.keys(forensicsReport.anomaly_detection.suspicious_ips).length > 0 && (
-                    <div className="border-t pt-4">
-                      <h3 className="text-md font-semibold text-red-700 mb-2">
+                    <div className="border-t border-white/20 pt-4">
+                      <h3 className="text-md font-semibold text-red-300 mb-2">
                         Suspicious IP Addresses
                       </h3>
-                      <div className="bg-red-50 border border-red-200 rounded p-3">
+                      <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
                         {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
                           <div key={ip} className="flex justify-between text-sm py-1">
-                            <code className="text-red-700">{ip}</code>
-                            <span className="font-semibold text-red-800">{count} votes</span>
+                            <code className="text-red-300">{ip}</code>
+                            <span className="font-semibold text-red-300">{count} votes</span>
                           </div>
                         ))}
                       </div>
@@ -808,15 +813,15 @@ export const ElectionDetailPage: React.FC = () => {
 
                   {/* Voting Timeline */}
                   {Object.keys(forensicsReport.voting_timeline).length > 0 && (
-                    <div className="border-t pt-4">
-                      <h3 className="text-md font-semibold text-gray-900 mb-2">Voting Timeline</h3>
+                    <div className="border-t border-white/20 pt-4">
+                      <h3 className="text-md font-semibold text-white mb-2">Voting Timeline</h3>
                       <div className="space-y-1">
                         {Object.entries(forensicsReport.voting_timeline)
                           .sort(([a], [b]) => a.localeCompare(b))
                           .map(([hour, count]) => (
                             <div key={hour} className="flex items-center gap-3 text-sm">
-                              <span className="text-gray-500 w-40 font-mono">{hour}</span>
-                              <div className="flex-1 bg-gray-200 rounded-full h-4">
+                              <span className="text-slate-400 w-40 font-mono">{hour}</span>
+                              <div className="flex-1 bg-white/10 rounded-full h-4">
                                 <div
                                   className="bg-blue-600 rounded-full h-4"
                                   style={{
@@ -827,7 +832,7 @@ export const ElectionDetailPage: React.FC = () => {
                                   }}
                                 />
                               </div>
-                              <span className="text-gray-700 font-medium w-8 text-right">{count}</span>
+                              <span className="text-slate-200 font-medium w-8 text-right">{count}</span>
                             </div>
                           ))}
                       </div>
@@ -835,20 +840,20 @@ export const ElectionDetailPage: React.FC = () => {
                   )}
 
                   {/* Token Summary */}
-                  <div className="border-t pt-4">
-                    <h3 className="text-md font-semibold text-gray-900 mb-2">Ballot Tokens</h3>
+                  <div className="border-t border-white/20 pt-4">
+                    <h3 className="text-md font-semibold text-white mb-2">Ballot Tokens</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                      <div className="bg-gray-50 rounded p-3">
-                        <div className="text-gray-500">Issued</div>
-                        <div className="text-xl font-semibold">{forensicsReport.voting_tokens.total_issued}</div>
+                      <div className="bg-white/5 rounded p-3">
+                        <div className="text-slate-400">Issued</div>
+                        <div className="text-xl font-semibold text-white">{forensicsReport.voting_tokens.total_issued}</div>
                       </div>
-                      <div className="bg-gray-50 rounded p-3">
-                        <div className="text-gray-500">Used</div>
-                        <div className="text-xl font-semibold">{forensicsReport.voting_tokens.total_used}</div>
+                      <div className="bg-white/5 rounded p-3">
+                        <div className="text-slate-400">Used</div>
+                        <div className="text-xl font-semibold text-white">{forensicsReport.voting_tokens.total_used}</div>
                       </div>
-                      <div className="bg-gray-50 rounded p-3">
-                        <div className="text-gray-500">Unused</div>
-                        <div className="text-xl font-semibold">
+                      <div className="bg-white/5 rounded p-3">
+                        <div className="text-slate-400">Unused</div>
+                        <div className="text-xl font-semibold text-white">
                           {forensicsReport.voting_tokens.total_issued - forensicsReport.voting_tokens.total_used}
                         </div>
                       </div>
@@ -856,26 +861,26 @@ export const ElectionDetailPage: React.FC = () => {
                   </div>
 
                   {/* Audit Log Summary */}
-                  <div className="border-t pt-4">
-                    <h3 className="text-md font-semibold text-gray-900 mb-2">
+                  <div className="border-t border-white/20 pt-4">
+                    <h3 className="text-md font-semibold text-white mb-2">
                       Audit Log ({forensicsReport.audit_log.total_entries} entries)
                     </h3>
                     {forensicsReport.audit_log.entries.length === 0 ? (
-                      <p className="text-sm text-gray-500">No audit entries.</p>
+                      <p className="text-sm text-slate-400">No audit entries.</p>
                     ) : (
                       <div className="max-h-64 overflow-y-auto">
                         <table className="min-w-full text-sm" aria-label="Audit log entries">
-                          <thead className="bg-gray-50 sticky top-0">
+                          <thead className="bg-slate-900/50 sticky top-0">
                             <tr>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Time</th>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Event</th>
-                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Severity</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Time</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Event</th>
+                              <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-400">Severity</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
+                          <tbody className="divide-y divide-white/10">
                             {forensicsReport.audit_log.entries.slice(0, 50).map((entry, i) => (
                               <tr key={entry.id || i}>
-                                <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
+                                <td className="px-3 py-2 text-xs text-slate-400 whitespace-nowrap">
                                   {entry.timestamp ? formatDate(entry.timestamp) : '—'}
                                 </td>
                                 <td className="px-3 py-2 text-xs">{entry.event_type}</td>
@@ -896,7 +901,7 @@ export const ElectionDetailPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="border-t pt-3">
+                  <div className="border-t border-white/20 pt-3">
                     <button
                       onClick={handleLoadForensics}
                       disabled={loadingForensics}
@@ -925,17 +930,17 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="send-email-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowSendEmailModal(false); setSendEmailError(null); } }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="send-email-modal-title" className="text-lg font-medium text-gray-900">
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="send-email-modal-title" className="text-lg font-medium text-white">
                 {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
               </h3>
             </div>
 
             <div className="px-6 py-4">
               {election.email_sent && (
-                <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded p-3">
-                  <p className="text-sm text-yellow-800">
+                <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
+                  <p className="text-sm text-yellow-300">
                     Ballot emails were previously sent{election.email_sent_at ? ` on ${formatDate(election.email_sent_at)}` : ''}.
                     Sending again will generate new voting tokens for all eligible voters.
                   </p>
@@ -943,19 +948,19 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {sendEmailError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
-                  <p className="text-sm text-red-700">{sendEmailError}</p>
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                  <p className="text-sm text-red-300">{sendEmailError}</p>
                 </div>
               )}
 
               <div className="space-y-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-300">
                   This will send ballot emails with unique voting links to all eligible voters.
                 </p>
 
                 <div>
-                  <label htmlFor="ballot-email-subject" className="block text-sm font-medium text-gray-700">
-                    Custom Subject Line <span className="text-xs text-gray-400">(optional)</span>
+                  <label htmlFor="ballot-email-subject" className="block text-sm font-medium text-slate-200">
+                    Custom Subject Line <span className="text-xs text-slate-500">(optional)</span>
                   </label>
                   <input
                     type="text"
@@ -964,13 +969,13 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setEmailSubject(e.target.value)}
                     placeholder={`Vote Now: ${election.title}`}
                     aria-label="Custom subject line"
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="ballot-email-message" className="block text-sm font-medium text-gray-700">
-                    Additional Message <span className="text-xs text-gray-400">(optional)</span>
+                  <label htmlFor="ballot-email-message" className="block text-sm font-medium text-slate-200">
+                    Additional Message <span className="text-xs text-slate-500">(optional)</span>
                   </label>
                   <textarea
                     id="ballot-email-message"
@@ -979,7 +984,7 @@ export const ElectionDetailPage: React.FC = () => {
                     rows={3}
                     placeholder="Include any additional instructions or context for voters..."
                     aria-label="Additional message"
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -994,7 +999,7 @@ export const ElectionDetailPage: React.FC = () => {
                     setSendEmailError(null);
                   }}
                   disabled={isSendingEmails}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1021,9 +1026,9 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="delete-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowDeleteModal(false); setDeleteReason(''); setDeleteError(null); } }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-            <div className={`px-6 py-4 border-b ${isDraft ? 'border-gray-200' : 'border-red-300 bg-red-50'}`}>
-              <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-gray-900' : 'text-red-900'}`}>
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full">
+            <div className={`px-6 py-4 border-b ${isDraft ? 'border-white/20' : 'border-red-500/30 bg-red-500/10'}`}>
+              <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-white' : 'text-red-300'}`}>
                 {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
               </h3>
             </div>
@@ -1031,7 +1036,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="px-6 py-4">
               {/* Critical warning for non-draft elections */}
               {!isDraft && (
-                <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-4" role="alert">
+                <div className="bg-red-500/10 border-l-4 border-red-600 p-4 mb-4" role="alert">
                   <div className="flex">
                     <div className="flex-shrink-0">
                       <svg className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -1039,10 +1044,10 @@ export const ElectionDetailPage: React.FC = () => {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <h3 className="text-sm font-bold text-red-800">
+                      <h3 className="text-sm font-bold text-red-300">
                         CRITICAL: This is a destructive, irreversible action
                       </h3>
-                      <div className="mt-2 text-sm text-red-700">
+                      <div className="mt-2 text-sm text-red-300">
                         <p>Deleting this {election.status.toUpperCase()} election will:</p>
                         <ul className="list-disc list-inside mt-1 space-y-1">
                           <li><strong>Permanently destroy</strong> the election and all associated data</li>
@@ -1059,14 +1064,14 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {isDraft && (
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-slate-300 mb-4">
                   Are you sure you want to delete this draft election? This action cannot be undone.
                 </p>
               )}
 
               {deleteError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
-                  <p className="text-sm text-red-700">{deleteError}</p>
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                  <p className="text-sm text-red-300">{deleteError}</p>
                 </div>
               )}
 
@@ -1074,17 +1079,17 @@ export const ElectionDetailPage: React.FC = () => {
               {!isDraft && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-slate-200">
                       Current Status
                     </label>
-                    <div className="mt-1 text-sm font-semibold text-red-600">
+                    <div className="mt-1 text-sm font-semibold text-red-400">
                       {election.status.toUpperCase()}
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="delete-election-reason" className="block text-sm font-medium text-gray-700">
-                      Reason for Deletion <span aria-hidden="true">*</span> <span className="text-xs text-gray-500">(minimum 10 characters)</span>
+                    <label htmlFor="delete-election-reason" className="block text-sm font-medium text-slate-200">
+                      Reason for Deletion <span aria-hidden="true">*</span> <span className="text-xs text-slate-400">(minimum 10 characters)</span>
                     </label>
                     <textarea
                       id="delete-election-reason"
@@ -1092,11 +1097,11 @@ export const ElectionDetailPage: React.FC = () => {
                       onChange={(e) => setDeleteReason(e.target.value)}
                       rows={4}
                       placeholder="Provide a detailed reason why this active election must be deleted..."
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-red-500 focus:border-red-500"
+                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-red-500 focus:border-red-500"
                       required
                       aria-required="true"
                     />
-                    <p className="mt-1 text-xs text-red-600">
+                    <p className="mt-1 text-xs text-red-400">
                       This reason will be emailed to ALL leadership members and permanently logged in the audit trail.
                     </p>
                   </div>
@@ -1112,7 +1117,7 @@ export const ElectionDetailPage: React.FC = () => {
                     setDeleteError(null);
                   }}
                   disabled={isDeleting}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1147,30 +1152,30 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="extend-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowExtendModal(false); setNewEndDate(''); setExtendError(null); } }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="extend-election-modal-title" className="text-lg font-medium text-gray-900">Extend Election Time</h3>
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="extend-election-modal-title" className="text-lg font-medium text-white">Extend Election Time</h3>
             </div>
 
             <div className="px-6 py-4">
               {extendError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
-                  <p className="text-sm text-red-700">{extendError}</p>
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                  <p className="text-sm text-red-300">{extendError}</p>
                 </div>
               )}
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-slate-200">
                     Current End Time
                   </label>
-                  <div className="mt-1 text-sm text-gray-900">
+                  <div className="mt-1 text-sm text-white">
                     {formatDate(election.end_date)}
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="extend-new-end-time" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="extend-new-end-time" className="block text-sm font-medium text-slate-200">
                     New End Time
                   </label>
                   <input
@@ -1178,30 +1183,30 @@ export const ElectionDetailPage: React.FC = () => {
                     id="extend-new-end-time"
                     value={newEndDate}
                     onChange={(e) => setNewEndDate(e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
 
                   <div className="mt-2">
-                    <p className="text-xs text-gray-500 mb-2">Quick extend:</p>
+                    <p className="text-xs text-slate-400 mb-2">Quick extend:</p>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => extendByHours(1)}
-                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                        className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                       >
                         +1 Hour
                       </button>
                       <button
                         type="button"
                         onClick={() => extendByHours(2)}
-                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                        className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                       >
                         +2 Hours
                       </button>
                       <button
                         type="button"
                         onClick={() => extendByHours(4)}
-                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                        className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
                       >
                         +4 Hours
                       </button>
@@ -1225,7 +1230,7 @@ export const ElectionDetailPage: React.FC = () => {
                     setNewEndDate('');
                     setExtendError(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
                 >
                   Cancel
                 </button>
@@ -1251,14 +1256,14 @@ export const ElectionDetailPage: React.FC = () => {
           aria-labelledby="rollback-election-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRollbackModal(false); setRollbackReason(''); setRollbackError(null); } }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 id="rollback-election-modal-title" className="text-lg font-medium text-gray-900">Rollback Election</h3>
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="rollback-election-modal-title" className="text-lg font-medium text-white">Rollback Election</h3>
             </div>
 
             <div className="px-6 py-4">
               {/* Warning Message */}
-              <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4">
+              <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 mb-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -1266,10 +1271,10 @@ export const ElectionDetailPage: React.FC = () => {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-orange-800">
+                    <h3 className="text-sm font-medium text-orange-300">
                       This action requires careful consideration
                     </h3>
-                    <div className="mt-2 text-sm text-orange-700">
+                    <div className="mt-2 text-sm text-orange-300">
                       <p>Rolling back this election will:</p>
                       <ul className="list-disc list-inside mt-1 space-y-1">
                         <li>Change the election status from <strong>{election.status.toUpperCase()}</strong> to <strong>{election.status === 'closed' ? 'OPEN' : 'DRAFT'}</strong></li>
@@ -1283,23 +1288,23 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
 
               {rollbackError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded p-3" role="alert">
-                  <p className="text-sm text-red-700">{rollbackError}</p>
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
+                  <p className="text-sm text-red-300">{rollbackError}</p>
                 </div>
               )}
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-slate-200">
                     Current Status
                   </label>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">
+                  <div className="mt-1 text-sm font-semibold text-white">
                     {election.status.toUpperCase()}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-slate-200">
                     New Status After Rollback
                   </label>
                   <div className="mt-1 text-sm font-semibold text-green-600">
@@ -1308,8 +1313,8 @@ export const ElectionDetailPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="rollback-reason" className="block text-sm font-medium text-gray-700">
-                    Reason for Rollback <span aria-hidden="true">*</span> <span className="text-xs text-gray-500">(minimum 10 characters)</span>
+                  <label htmlFor="rollback-reason" className="block text-sm font-medium text-slate-200">
+                    Reason for Rollback <span aria-hidden="true">*</span> <span className="text-xs text-slate-400">(minimum 10 characters)</span>
                   </label>
                   <textarea
                     id="rollback-reason"
@@ -1317,11 +1322,11 @@ export const ElectionDetailPage: React.FC = () => {
                     onChange={(e) => setRollbackReason(e.target.value)}
                     rows={4}
                     placeholder="Example: Vote counting error discovered, need to recount all ballots..."
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-orange-500 focus:border-orange-500"
                     required
                     aria-required="true"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-slate-400">
                     This reason will be sent to all leadership members and logged in the audit trail.
                   </p>
                 </div>
@@ -1336,7 +1341,7 @@ export const ElectionDetailPage: React.FC = () => {
                     setRollbackError(null);
                   }}
                   disabled={isRollingBack}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1353,6 +1358,7 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 };
