@@ -257,7 +257,7 @@ class CountryBlockRule(Base):
     country_name = Column(String(100))
 
     # Rule status
-    is_blocked = Column(Boolean, default=True, index=True)
+    is_blocked = Column(Boolean, default=True)
 
     # Reason and documentation
     reason = Column(Text, nullable=False)

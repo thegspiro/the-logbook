@@ -415,7 +415,7 @@ class Apparatus(Base):
     # ===========================================
     # Sale/Disposal Information
     # ===========================================
-    is_archived = Column(Boolean, default=False, nullable=False, index=True)  # Moved to "Previously Owned"
+    is_archived = Column(Boolean, default=False, nullable=False)  # Moved to "Previously Owned"
     archived_at = Column(DateTime(timezone=True), nullable=True)
     archived_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

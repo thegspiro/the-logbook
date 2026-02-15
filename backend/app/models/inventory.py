@@ -184,11 +184,11 @@ class InventoryItem(Base):
 
     # Maintenance
     last_inspection_date = Column(Date)
-    next_inspection_due = Column(Date, index=True)
+    next_inspection_due = Column(Date)
     inspection_interval_days = Column(Integer)  # How often to inspect
 
     # Assignment (current assignment if any)
-    assigned_to_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    assigned_to_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
     assigned_date = Column(DateTime(timezone=True))
 
     # Additional Data
