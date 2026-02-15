@@ -456,15 +456,14 @@ def run_migrations():
             "TO FIX: docker compose down -v && docker compose up --build"
         )
         logger.error(error_msg)
-        startup_status.add_error("Schema validation failed - database reset required")
-        startup_status.phase = "error"
-        startup_status.message = "Database schema invalid - see logs for fix instructions"
 
         if schema_was_stamped:
             logger.critical(
                 "CRITICAL: Schema stamped to head but validation failed. "
                 "Database must be reset with 'docker compose down -v'"
             )
+
+        raise RuntimeError(error_msg)
     else:
         logger.info("Database schema validated successfully")
 
