@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import { isValidImageFile } from '../utils/validation';
 import { useOnboardingSession } from '../hooks/useOnboardingSession';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { useApiRequest, useUnsavedChanges, useFormChanged } from '../hooks';
 import {
   ProgressIndicator,
@@ -671,10 +672,10 @@ const OrganizationSetup: React.FC = () => {
 
       // Navigate to next step (navigation choice)
       navigate('/onboarding/navigation-choice');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to save organization:', err);
       // Show the actual error message from the backend (includes validation details)
-      const errorMessage = err?.message || 'Failed to save organization. Please try again.';
+      const errorMessage = getErrorMessage(err, 'Failed to save organization. Please try again.');
       toast.error(errorMessage);
     } finally {
       setIsSaving(false);

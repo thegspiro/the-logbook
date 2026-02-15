@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService } from '../services/api';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -164,8 +165,8 @@ const AddMember: React.FC = () => {
 
       toast.success('Member added successfully!');
       navigate('/members');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 'Failed to add member. Please try again.';
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
       toast.error(errorMessage);
       setIsSaving(false);
     }

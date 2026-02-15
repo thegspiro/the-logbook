@@ -7,6 +7,7 @@ import { isValidPort, isValidEmail } from '../utils/validation';
 import { ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 interface EmailConfig {
   // Gmail/Google Workspace
@@ -137,9 +138,9 @@ const EmailConfiguration: React.FC = () => {
       } else {
         toast.error(response.data?.message || 'Connection test failed');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestingConnection(false);
-      const errorMessage = err.message || 'Failed to test email connection';
+      const errorMessage = getErrorMessage(err, 'Failed to test email connection');
       toast.error(errorMessage);
     }
   };

@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '../services/api-client';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 interface OrganizationData {
   name: string;
@@ -98,8 +99,8 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
       setError('Failed to start session');
       setIsLoading(false);
       return false;
-    } catch (err: any) {
-      setError(err.message || 'Failed to initialize session');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to initialize session'));
       setIsLoading(false);
       return false;
     }
@@ -132,8 +133,8 @@ export const useOnboardingSession = (): UseOnboardingSessionReturn => {
       }
 
       setIsLoading(false);
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to save organization';
+    } catch (err: unknown) {
+      const errorMessage = getErrorMessage(err, 'Failed to save organization');
       setError(errorMessage);
       setIsLoading(false);
       throw new Error(errorMessage);

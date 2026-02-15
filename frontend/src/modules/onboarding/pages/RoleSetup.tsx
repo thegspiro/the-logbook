@@ -29,6 +29,7 @@ import { ProgressIndicator, BackButton, AutoSaveNotification } from '../componen
 import { useOnboardingStore } from '../store';
 import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
 import { apiClient } from '../services/api-client';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 /**
  * Build permission categories dynamically from the module registry.
@@ -573,9 +574,9 @@ const RoleSetup: React.FC = () => {
         `Roles configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
       );
       navigate('/onboarding/modules');
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Show specific error message from backend
-      const errorMessage = error?.message || error?.toString() || 'Failed to save role configuration. Please try again.';
+      const errorMessage = getErrorMessage(error, 'Failed to save role configuration. Please try again.');
       toast.error(errorMessage);
     } finally {
       setIsSaving(false);
