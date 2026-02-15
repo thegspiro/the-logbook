@@ -24,6 +24,7 @@ import {
   Loader2,
   Shield,
   Send,
+  BarChart3,
 } from 'lucide-react';
 import { trainingModuleConfigService } from '../services/api';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
@@ -300,21 +301,39 @@ const MyTrainingPage: React.FC = () => {
       {/* Overview Tab */}
       {activeTab === 'overview' && data && (
         <div className="space-y-6">
-          {/* Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {v?.show_training_hours && data.hours_summary && (
-              <>
-                <StatCard icon={Clock} label="Total Hours" value={data.hours_summary.total_hours} color="text-blue-400" />
-                <StatCard icon={FileText} label="Records" value={data.hours_summary.total_records} />
-              </>
-            )}
-            {v?.show_shift_stats && data.shift_stats && (
-              <>
-                <StatCard icon={ClipboardList} label="Shifts" value={data.shift_stats.total_shifts} color="text-purple-400" />
-                <StatCard icon={Star} label="Avg Rating" value={data.shift_stats.avg_rating ?? '-'} color="text-yellow-400" />
-              </>
-            )}
+          {/* Core Stats Row (always visible) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <StatCard
+              icon={GraduationCap}
+              label="Completed Courses"
+              value={data.hours_summary?.completed_courses ?? 0}
+              color="text-green-400"
+            />
+            <StatCard
+              icon={Clock}
+              label="Completed Hours"
+              value={data.hours_summary?.total_hours ?? 0}
+              color="text-blue-400"
+            />
+            <StatCard
+              icon={BarChart3}
+              label="Annual Requirements"
+              value={
+                data.requirements_summary?.avg_compliance != null
+                  ? `${data.requirements_summary.avg_compliance}%`
+                  : 'N/A'
+              }
+              color="text-yellow-400"
+            />
           </div>
+
+          {/* Additional Stats Row */}
+          {v?.show_shift_stats && data.shift_stats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard icon={ClipboardList} label="Shifts" value={data.shift_stats.total_shifts} color="text-purple-400" />
+              <StatCard icon={Star} label="Avg Rating" value={data.shift_stats.avg_rating ?? '-'} color="text-yellow-400" />
+            </div>
+          )}
 
           {/* Certifications */}
           {v?.show_certification_status && data.certifications && data.certifications.length > 0 && (
@@ -514,13 +533,11 @@ const MyTrainingPage: React.FC = () => {
             </Section>
           )}
 
-          {/* Empty State */}
-          {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && (
-            <div className="text-center py-12 bg-white/5 border border-white/10 rounded-lg">
-              <GraduationCap className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">No Training Data Yet</h3>
+          {/* Empty State (only for detailed sections, stats always show above) */}
+          {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && !data.certifications?.length && (
+            <div className="text-center py-8 bg-white/5 border border-white/10 rounded-lg">
               <p className="text-slate-400 mb-4">
-                Your training records, certifications, and shift reports will appear here as they are added.
+                No detailed training records yet. Submit external training to get started.
               </p>
               <button
                 onClick={() => navigate('/training/submit')}

@@ -17,6 +17,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.models.user import User, UserStatus
 from app.models.training import (
     TrainingRecord, TrainingStatus,
+    TrainingRequirement, RequirementFrequency,
     ProgramEnrollment, RequirementProgress,
     ShiftCompletionReport, TrainingSubmission,
     SubmissionStatus,
@@ -120,24 +121,97 @@ async def get_my_training_summary(
             for r in records
         ]
 
-    # --- Training Hours Summary ---
-    if is_officer or visibility.get("show_training_hours", True):
-        hours_result = await db.execute(
-            select(
-                func.count(TrainingRecord.id),
-                func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
-            )
+    # --- Training Hours Summary (always returned for core stats) ---
+    hours_result = await db.execute(
+        select(
+            func.count(TrainingRecord.id),
+            func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
+        )
+        .where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id == user_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+        )
+    )
+    row = hours_result.one()
+    result["hours_summary"] = {
+        "total_records": row[0],
+        "total_hours": float(row[1]),
+        "completed_courses": row[0],
+    }
+
+    # --- Annual Requirements Summary (always returned for core stats) ---
+    req_result = await db.execute(
+        select(TrainingRequirement)
+        .where(
+            TrainingRequirement.organization_id == org_id,
+            TrainingRequirement.active == True,
+            TrainingRequirement.frequency == RequirementFrequency.ANNUAL,
+        )
+    )
+    all_requirements = req_result.scalars().all()
+
+    # Filter to requirements applicable to this user
+    user_role_ids: List[str] = []
+    try:
+        if current_user.roles:
+            user_role_ids = [str(r.id) for r in current_user.roles]
+    except Exception:
+        pass
+
+    applicable: List[Any] = []
+    for req in all_requirements:
+        if req.applies_to_all:
+            applicable.append(req)
+        elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
+            applicable.append(req)
+
+    # Check progress for each applicable annual requirement
+    today = date.today()
+    current_year = today.year
+    met_count = 0
+    total_progress_pct = 0.0
+
+    for req in applicable:
+        start_date = date(req.year, 1, 1) if req.year else date(current_year, 1, 1)
+        end_date = date(req.year, 12, 31) if req.year else date(current_year, 12, 31)
+
+        req_hours_query = (
+            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0))
             .where(
                 TrainingRecord.organization_id == org_id,
                 TrainingRecord.user_id == user_id,
                 TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date >= start_date,
+                TrainingRecord.completion_date <= end_date,
             )
         )
-        row = hours_result.one()
-        result["hours_summary"] = {
-            "total_records": row[0],
-            "total_hours": float(row[1]),
-        }
+        if req.training_type:
+            req_hours_query = req_hours_query.where(
+                TrainingRecord.training_type == req.training_type
+            )
+
+        req_hours_result = await db.execute(req_hours_query)
+        completed_hours = float(req_hours_result.scalar() or 0)
+
+        required = req.required_hours or 0
+        if required > 0:
+            pct = min(completed_hours / required * 100, 100)
+        else:
+            pct = 100.0
+
+        total_progress_pct += pct
+        if pct >= 100:
+            met_count += 1
+
+    total_reqs = len(applicable)
+    avg_compliance = round(total_progress_pct / total_reqs, 1) if total_reqs > 0 else None
+
+    result["requirements_summary"] = {
+        "total_requirements": total_reqs,
+        "met_requirements": met_count,
+        "avg_compliance": avg_compliance,
+    }
 
     # --- Certification Status ---
     if is_officer or visibility.get("show_certification_status", True):
