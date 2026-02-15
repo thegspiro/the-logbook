@@ -329,133 +329,144 @@ def run_migrations():
 
     startup_status.set_phase("migrations", "Preparing database migrations...")
 
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+
+    script_dir = ScriptDirectory.from_config(alembic_cfg)
+    all_revisions = list(script_dir.walk_revisions())
+    total_migrations = len(all_revisions)
+    startup_status.migrations_total = total_migrations
+
+    head_revision = script_dir.get_current_head()
+    engine = create_engine(settings.SYNC_DATABASE_URL)
+
+    # Determine current database revision
+    current_rev = None
     try:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
-        alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+        with engine.connect() as conn:
+            result = conn.execute(text(
+                "SELECT version_num FROM alembic_version LIMIT 1"
+            ))
+            row = result.fetchone()
+            if row:
+                current_rev = row[0]
+    except Exception:
+        pass  # Table doesn't exist yet
 
-        script_dir = ScriptDirectory.from_config(alembic_cfg)
-        all_revisions = list(script_dir.walk_revisions())
-        total_migrations = len(all_revisions)
-        startup_status.migrations_total = total_migrations
+    # Fast exit: already at head - nothing to do
+    if current_rev == head_revision:
+        startup_status.migrations_completed = total_migrations
+        startup_status.set_phase("migrations", "Database schema is up to date")
+        logger.info("Database schema is already up to date")
+        return
 
-        head_revision = script_dir.get_current_head()
-        engine = create_engine(settings.SYNC_DATABASE_URL)
-
-        # Determine current database revision
-        current_rev = None
+    # Check for revision mismatch (renamed migration files)
+    if current_rev and current_rev != INITIAL_SQL_REVISION:
         try:
-            with engine.connect() as conn:
-                result = conn.execute(text(
-                    "SELECT version_num FROM alembic_version LIMIT 1"
-                ))
-                row = result.fetchone()
-                if row:
-                    current_rev = row[0]
+            script_dir.get_revision(current_rev)
         except Exception:
-            pass  # Table doesn't exist yet
-
-        # Fast exit: already at head - nothing to do
-        if current_rev == head_revision:
-            startup_status.migrations_completed = total_migrations
-            startup_status.set_phase("migrations", "Database schema is up to date")
-            logger.info("Database schema is already up to date")
-            return
-
-        # Check for revision mismatch (renamed migration files)
-        if current_rev and current_rev != INITIAL_SQL_REVISION:
-            try:
-                script_dir.get_revision(current_rev)
-            except Exception:
-                startup_status.set_phase("migrations", "Fixing migration version mismatch...")
-                logger.warning(
-                    f"Migration revision '{current_rev}' not found. "
-                    "Clearing invalid version..."
-                )
-                with engine.connect() as conn:
-                    conn.execute(text("DELETE FROM alembic_version"))
-                    conn.commit()
-                current_rev = None
-                logger.info("Cleared invalid migration version")
-
-        # === FAST-PATH: Fresh database initialization ===
-        # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
-        # Instead of running 39+ individual migrations (~20 min), create all
-        # tables from model definitions in one batch (seconds).
-        if current_rev == INITIAL_SQL_REVISION or current_rev is None:
-            _fast_path_init(engine, alembic_cfg, base_dir)
-            startup_status.migrations_completed = total_migrations
-            startup_status.set_phase("migrations", "Database initialization complete")
-            return
-
-        # === NORMAL PATH: Run pending Alembic migrations ===
-        # For existing installations being upgraded
-        startup_status.set_phase("migrations", "Running database migrations...")
-        logger.info("Running database migrations...")
-
-        schema_was_stamped = False
-
-        try:
-            with timeout_context(1800, "Database migrations"):
-                command.upgrade(alembic_cfg, "head")
-
-            startup_status.migrations_completed = total_migrations
-            startup_status.set_phase("migrations", "Database migrations complete")
-            logger.info("Database migrations complete")
-        except TimeoutError as timeout_error:
-            logger.error(f"{timeout_error}")
-            startup_status.add_error(str(timeout_error))
-            startup_status.phase = "error"
-            startup_status.message = "Database migrations timed out"
-            raise RuntimeError(
-                "Database migrations timed out after 30 minutes. "
-                "Check database logs for locked tables or stuck queries."
+            startup_status.set_phase("migrations", "Fixing migration version mismatch...")
+            logger.warning(
+                f"Migration revision '{current_rev}' not found. "
+                "Clearing invalid version..."
             )
-        except Exception as upgrade_error:
-            error_str = str(upgrade_error).lower()
-            if "already exists" in error_str or "duplicate" in error_str:
-                logger.warning(
-                    f"Migration failed ({upgrade_error}). Stamping to head..."
-                )
-                try:
-                    command.stamp(alembic_cfg, "head")
-                    schema_was_stamped = True
-                    startup_status.migrations_completed = total_migrations
-                    logger.info("Stamped database to head")
-                except Exception as stamp_error:
-                    logger.warning(f"Could not stamp database: {stamp_error}")
-                    startup_status.add_error(f"Migration stamp failed: {stamp_error}")
-            else:
-                startup_status.add_error(f"Migration failed: {upgrade_error}")
-                raise
+            with engine.connect() as conn:
+                conn.execute(text("DELETE FROM alembic_version"))
+                conn.commit()
+            current_rev = None
+            logger.info("Cleared invalid migration version")
 
-        # Validate schema after migrations
+    # === FAST-PATH: Fresh database initialization ===
+    # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
+    # Instead of running 39+ individual migrations (~20 min), create all
+    # tables from model definitions in one batch (seconds).
+    # NOTE: NOT wrapped in forgiving try/except - if table creation fails,
+    # the app MUST crash. Running without tables causes 500 errors everywhere.
+    if current_rev == INITIAL_SQL_REVISION or current_rev is None:
+        _fast_path_init(engine, alembic_cfg, base_dir)
+        startup_status.migrations_completed = total_migrations
         startup_status.set_phase("migrations", "Validating database schema...")
-        schema_valid, schema_errors = validate_schema(engine)
 
+        # Validate schema after fast-path init
+        schema_valid, schema_errors = validate_schema(engine)
         if not schema_valid:
             error_msg = (
-                "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
-                "The database schema does not match the expected structure.\n\n"
+                "DATABASE SCHEMA INCONSISTENCY DETECTED after fast-path init!\n"
                 "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
                 "TO FIX: docker compose down -v && docker compose up --build"
             )
             logger.error(error_msg)
-            startup_status.add_error("Schema validation failed - database reset required")
-            startup_status.phase = "error"
-            startup_status.message = "Database schema invalid - see logs for fix instructions"
+            raise RuntimeError(error_msg)
 
-            if schema_was_stamped:
-                logger.critical(
-                    "CRITICAL: Schema stamped to head but validation failed. "
-                    "Database must be reset with 'docker compose down -v'"
-                )
+        logger.info("Database schema validated successfully")
+        startup_status.set_phase("migrations", "Database initialization complete")
+        return
+
+    # === NORMAL PATH: Run pending Alembic migrations ===
+    # For existing installations being upgraded
+    startup_status.set_phase("migrations", "Running database migrations...")
+    logger.info("Running database migrations...")
+
+    schema_was_stamped = False
+
+    try:
+        with timeout_context(1800, "Database migrations"):
+            command.upgrade(alembic_cfg, "head")
+
+        startup_status.migrations_completed = total_migrations
+        startup_status.set_phase("migrations", "Database migrations complete")
+        logger.info("Database migrations complete")
+    except TimeoutError as timeout_error:
+        logger.error(f"{timeout_error}")
+        startup_status.add_error(str(timeout_error))
+        startup_status.phase = "error"
+        startup_status.message = "Database migrations timed out"
+        raise RuntimeError(
+            "Database migrations timed out after 30 minutes. "
+            "Check database logs for locked tables or stuck queries."
+        )
+    except Exception as upgrade_error:
+        error_str = str(upgrade_error).lower()
+        if "already exists" in error_str or "duplicate" in error_str:
+            logger.warning(
+                f"Migration failed ({upgrade_error}). Stamping to head..."
+            )
+            try:
+                command.stamp(alembic_cfg, "head")
+                schema_was_stamped = True
+                startup_status.migrations_completed = total_migrations
+                logger.info("Stamped database to head")
+            except Exception as stamp_error:
+                logger.warning(f"Could not stamp database: {stamp_error}")
+                startup_status.add_error(f"Migration stamp failed: {stamp_error}")
         else:
-            logger.info("Database schema validated successfully")
+            startup_status.add_error(f"Migration failed: {upgrade_error}")
+            raise
 
-    except Exception as e:
-        logger.warning(f"Migration warning: {e}")
-        startup_status.add_error(f"Migration warning: {e}")
+    # Validate schema after migrations
+    startup_status.set_phase("migrations", "Validating database schema...")
+    schema_valid, schema_errors = validate_schema(engine)
+
+    if not schema_valid:
+        error_msg = (
+            "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
+            "The database schema does not match the expected structure.\n\n"
+            "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
+            "TO FIX: docker compose down -v && docker compose up --build"
+        )
+        logger.error(error_msg)
+        startup_status.add_error("Schema validation failed - database reset required")
+        startup_status.phase = "error"
+        startup_status.message = "Database schema invalid - see logs for fix instructions"
+
+        if schema_was_stamped:
+            logger.critical(
+                "CRITICAL: Schema stamped to head but validation failed. "
+                "Database must be reset with 'docker compose down -v'"
+            )
+    else:
+        logger.info("Database schema validated successfully")
 
 
 def validate_security_configuration():
