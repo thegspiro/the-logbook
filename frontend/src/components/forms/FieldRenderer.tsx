@@ -6,12 +6,139 @@
  *
  * Supports all 16 field types: text, textarea, email, phone, number,
  * date, time, datetime, select, multiselect, checkbox, radio,
- * file (stub), signature (stub), section_header, member_lookup.
+ * file, signature, section_header, member_lookup.
  */
-import { useState } from 'react';
-import { Search, User } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Search, User, Upload, FileText, X, Trash2 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { MemberLookupResult } from '../../services/api';
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+interface SignaturePadProps {
+  value: string;
+  onChange: (dataUrl: string) => void;
+  isDark: boolean;
+  inputClass: string;
+  disabled: boolean;
+}
+
+function SignaturePad({ value, onChange, isDark, inputClass, disabled }: SignaturePadProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
+
+  const getPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }, []);
+
+  const startDrawing = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    isDrawingRef.current = true;
+    const pt = getPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(pt.x, pt.y);
+  }, [disabled, getPoint]);
+
+  const draw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawingRef.current || disabled) return;
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const pt = getPoint(e);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.stroke();
+  }, [disabled, getPoint]);
+
+  const stopDrawing = useCallback(() => {
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      onChange(canvas.toDataURL('image/png'));
+    }
+  }, [onChange]);
+
+  // Initialize canvas styles and restore previous signature
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.strokeStyle = isDark ? '#e2e8f0' : '#1f2937';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (value) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = value;
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    onChange('');
+  };
+
+  return (
+    <div>
+      <div className={`${inputClass} relative p-0 overflow-hidden`}>
+        <canvas
+          ref={canvasRef}
+          width={560}
+          height={160}
+          className="w-full h-40 cursor-crosshair touch-none"
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+        />
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+          Draw your signature above
+        </p>
+        {value && (
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={disabled}
+            className={`text-xs flex items-center gap-1 ${isDark ? 'text-slate-400 hover:text-red-400' : 'text-gray-500 hover:text-red-500'} disabled:opacity-50`}
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export interface FieldDefinition {
   id: string;
@@ -314,18 +441,96 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
           </div>
         );
 
-      case 'file':
+      case 'file': {
+        let fileInfo: { name: string; size: number; type: string } | null = null;
+        if (value) {
+          try { fileInfo = JSON.parse(value); } catch { /* invalid stored value */ }
+        }
+
+        const handleFileSelect = (file: File) => {
+          if (file.size > MAX_FILE_SIZE) {
+            return; // silently reject; the error prop can be set by the parent
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            onChange(field.id, JSON.stringify({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              data: reader.result as string,
+            }));
+          };
+          reader.readAsDataURL(file);
+        };
+
+        const handleDrop = (e: React.DragEvent) => {
+          e.preventDefault();
+          if (disabled) return;
+          const file = e.dataTransfer.files[0];
+          if (file) handleFileSelect(file);
+        };
+
+        if (fileInfo) {
+          return (
+            <div className={`${inputClass} flex items-center justify-between py-3`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-pink-400' : 'text-blue-500'}`} />
+                <span className="text-sm truncate">{fileInfo.name}</span>
+                <span className={`text-xs flex-shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                  ({formatFileSize(fileInfo.size)})
+                </span>
+              </div>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => onChange(field.id, '')}
+                  className={`flex-shrink-0 ml-2 ${isDark ? 'text-slate-400 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          );
+        }
+
+        const fileInputId = `file-input-${field.id}`;
         return (
-          <div className={`${inputClass} flex items-center justify-center py-6 border-dashed`}>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>File upload coming soon</p>
-          </div>
+          <label
+            htmlFor={fileInputId}
+            className={`${inputClass} flex flex-col items-center justify-center py-6 border-dashed cursor-pointer`}
+            onDragOver={(e) => { e.preventDefault(); }}
+            onDrop={handleDrop}
+          >
+            <Upload className={`w-6 h-6 mb-2 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
+            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Click to upload or drag and drop
+            </p>
+            <p className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              Max file size: {formatFileSize(MAX_FILE_SIZE)}
+            </p>
+            <input
+              id={fileInputId}
+              type="file"
+              className="hidden"
+              disabled={disabled}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileSelect(file);
+              }}
+            />
+          </label>
         );
+      }
 
       case 'signature':
         return (
-          <div className={`${inputClass} flex items-center justify-center py-8 border-dashed`}>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Signature capture coming soon</p>
-          </div>
+          <SignaturePad
+            value={value}
+            onChange={(dataUrl) => onChange(field.id, dataUrl)}
+            isDark={isDark}
+            inputClass={inputClass}
+            disabled={disabled}
+          />
         );
 
       default:

@@ -632,8 +632,30 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
                 f"Path={request.url.path}"
             )
 
-            # TODO: Also log to database asynchronously
-            # This should use a background task or queue
+            # Log to database asynchronously for audit trail
+            try:
+                from app.core.database import async_session_factory
+                from app.core.audit import log_audit_event
+
+                async with async_session_factory() as db:
+                    await log_audit_event(
+                        db=db,
+                        event_type="security.ip_blocked",
+                        event_category="security",
+                        severity="critical",
+                        event_data={
+                            "ip_address": client_ip,
+                            "country_code": geo_info.get("country_code", "unknown"),
+                            "reason": reason,
+                            "path": str(request.url.path),
+                            "method": request.method,
+                            "user_agent": request.headers.get("user-agent", ""),
+                        },
+                        ip_address=client_ip,
+                    )
+                    await db.commit()
+            except Exception as db_err:
+                logger.error(f"Failed to write blocked attempt to database: {db_err}")
 
         except Exception as e:
             from loguru import logger

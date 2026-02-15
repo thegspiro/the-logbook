@@ -60,28 +60,29 @@ def hash_password(password: str) -> str:
     return password_hasher.hash(password)
 
 
-def verify_password(password: str, hashed_password: str) -> bool:
+def verify_password(password: str, hashed_password: str) -> tuple[bool, str | None]:
     """
-    Verify a password against its hash
+    Verify a password against its hash and rehash if parameters have changed.
 
     Args:
         password: Plain text password to verify
         hashed_password: Previously hashed password
 
     Returns:
-        True if password matches, False otherwise
+        Tuple of (matches, new_hash) where new_hash is a rehashed password
+        if the current hash uses outdated parameters, or None otherwise.
     """
     try:
         password_hasher.verify(hashed_password, password)
 
-        # Check if password needs rehashing (if parameters changed)
+        # Rehash if argon2 parameters have changed since this hash was created
+        new_hash = None
         if password_hasher.check_needs_rehash(hashed_password):
-            # Note: In production, you should rehash the password here
-            pass
+            new_hash = password_hasher.hash(password)
 
-        return True
+        return True, new_hash
     except (VerifyMismatchError, VerificationError, InvalidHash):
-        return False
+        return False, None
 
 
 def validate_password_strength(password: str) -> tuple[bool, str | None]:
