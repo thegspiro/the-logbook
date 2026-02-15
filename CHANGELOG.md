@@ -48,6 +48,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VotingToken model crash fix**: Same issue — `token` column had `index=True` plus an explicit `Index("ix_voting_tokens_token", ...)` in `__table_args__`, causing startup failure after locations table was fixed
 - **Redundant index cleanup**: Removed `index=True` from 5 additional columns across `apparatus.py`, `facilities.py`, `inventory.py`, `ip_security.py`, and `public_portal.py` that had redundant (but differently-named) explicit indexes in `__table_args__`, preventing double-indexing
 - **Fast-path init log accuracy**: Fixed dropped table count in `_fast_path_init()` to exclude the skipped `alembic_version` table
+### Fixed - Docker & Deployment (2026-02-15)
+
+#### Database Consistency
+- **Unified database engine**: All standard deployments (main, Unraid, build-from-source) now use MySQL 8.0. MariaDB is reserved exclusively for ARM/Raspberry Pi via the `docker-compose.arm.yml` override
+- **Unraid compose files**: Changed `unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml` from `mariadb:10.11` to `mysql:8.0` with proper MySQL 8.0 healthchecks and command flags
+- **Minimal profile**: Removed MariaDB image override from `docker-compose.minimal.yml` — now uses the base MySQL image with resource-constrained settings
+- **Healthcheck improvements**: Unraid compose files now use robust two-step healthcheck (ping + SELECT 1) with `start_period: 60s` matching the main compose pattern
+
+#### Unraid Deployment
+- **Updated all Unraid documentation** (UNRAID-INSTALLATION.md, README.md, QUICK-START-UPDATED.md, DOCKER-COMPOSE-SETUP.md, BUILD-FROM-SOURCE-ON-UNRAID.md): Replaced MariaDB references with MySQL, corrected container names to `logbook-db`
+- **XML template**: Updated `the-logbook.xml` to reference MySQL, removed hardcoded 192.168.1.10 IP addresses from DB_HOST and REDIS_HOST defaults
+- **Build-from-source**: Fixed frontend `VITE_API_URL` from absolute URL to `/api/v1` for proper nginx proxying
+
+#### Wiki Documentation
+- **Updated 8 wiki files**: Replaced MariaDB references with MySQL 8.0 across Deployment-Guide, Deployment-Unraid, Development-Backend, Home, Installation, Quick-Reference, Troubleshooting, and Unraid-Quick-Start wiki pages
+
+#### New Features
+- **AWS deployment guide** (`docs/deployment/aws.md`): Comprehensive guide covering EC2 simple deployment, EC2 + RDS + ElastiCache production setup, security groups, VPC networking, S3 backups, CloudWatch monitoring, cost estimation, and troubleshooting
+- **Docker build verification script** (`scripts/verify-docker-build.sh`): 40-check validation covering Docker Compose config, Dockerfile validation, TypeScript compilation, Python syntax, database consistency, environment config, and service naming
+- **Proxmox deployment guide** (`docs/deployment/proxmox.md`): Complete guide for LXC and VM deployment on Proxmox VE with Docker, including networking, backups, reverse proxy, and migration from Unraid
+- **Synology NAS deployment guide** (`docs/deployment/synology.md`): Complete guide for deploying on Synology NAS via Docker Compose SSH or Container Manager UI, including DSM reverse proxy with SSL, Hyper Backup integration, port conflict resolution, and resource management
+- **Fixed dangling references**: Removed references to non-existent `deploy/aws/` CloudFormation templates and `infrastructure/terraform/providers/aws/` directory, replaced with links to the new AWS deployment guide
+
+### Fixed - TypeScript Build Errors (2026-02-15)
+
+- **useTraining.ts**: Fixed `getStatistics` and `getProgress` method names to match actual `trainingService` API (`getUserStats`, `getRequirementProgress`)
+- **PipelineDetailPage.tsx**: Extended `ProgramDetails` interface to accept `ProgramWithDetails` fields
+- **ReportsPage.tsx**: Fixed `unknown` not assignable to `ReactNode` by using `!!` boolean coercion
+- **ShiftReportPage.tsx**: Fixed `program_name` property access to `program?.name`
+- **DocumentsPage.tsx**: Added missing `Upload` import from lucide-react
+- **membership/types/index.ts**: Removed duplicate `User` import
+- **election.ts**: Removed duplicate `ballot_items` property from `ElectionUpdate` interface
+- Full `tsc --noEmit` now passes clean with zero errors
 
 ### Fixed - Codebase Quality & Error Handling (2026-02-15)
 
