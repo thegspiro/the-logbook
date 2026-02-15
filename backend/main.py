@@ -384,7 +384,8 @@ def run_migrations():
     # NOTE: NOT wrapped in forgiving try/except - if table creation fails,
     # the app MUST crash. Running without tables causes 500 errors everywhere.
     if current_rev == INITIAL_SQL_REVISION or current_rev is None:
-        _fast_path_init(engine, alembic_cfg, base_dir)
+        with timeout_context(600, "Fast-path database initialization"):
+            _fast_path_init(engine, alembic_cfg, base_dir)
         startup_status.migrations_completed = total_migrations
         startup_status.set_phase("migrations", "Validating database schema...")
 
