@@ -469,7 +469,7 @@ export const authService = {
    * Request password reset (sends email with reset link)
    */
   async requestPasswordReset(data: PasswordResetRequest): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/password-reset/request', data);
+    const response = await api.post<{ message: string }>('/auth/forgot-password', data);
     return response.data;
   },
 
@@ -477,7 +477,7 @@ export const authService = {
    * Confirm password reset with token
    */
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/password-reset/confirm', data);
+    const response = await api.post<{ message: string }>('/auth/reset-password', data);
     return response.data;
   },
 
@@ -1249,8 +1249,8 @@ export const electionService = {
    * Get ballot templates
    */
   async getBallotTemplates(): Promise<import('../types/election').BallotTemplate[]> {
-    const response = await api.get<import('../types/election').BallotTemplate[]>('/elections/ballot-templates');
-    return response.data;
+    const response = await api.get<{ templates: import('../types/election').BallotTemplate[] }>('/elections/templates/ballot-items');
+    return response.data.templates;
   },
 
   /**
@@ -1265,7 +1265,7 @@ export const electionService = {
    * Check in an attendee at an election meeting
    */
   async checkInAttendee(electionId: string, userId: string): Promise<import('../types/election').AttendeeCheckInResponse> {
-    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees/${userId}/check-in`);
+    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees`, { user_id: userId });
     return response.data;
   },
 
@@ -1280,7 +1280,7 @@ export const electionService = {
    * Get ballot by voting token (public/anonymous access)
    */
   async getBallotByToken(token: string): Promise<import('../types/election').Election> {
-    const response = await api.get<import('../types/election').Election>(`/elections/ballot/${token}`);
+    const response = await api.get<import('../types/election').Election>('/elections/ballot', { params: { token } });
     return response.data;
   },
 
@@ -1296,7 +1296,7 @@ export const electionService = {
    * Submit a ballot using a voting token
    */
   async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
-    const response = await api.post<import('../types/election').BallotSubmissionResponse>(`/elections/ballot/${token}/submit`, { votes });
+    const response = await api.post<import('../types/election').BallotSubmissionResponse>('/elections/ballot/vote/bulk', { votes }, { params: { token } });
     return response.data;
   },
 
@@ -1320,7 +1320,7 @@ export const electionService = {
    * Soft-delete (void) a vote
    */
   async softDeleteVote(electionId: string, voteId: string, reason: string): Promise<void> {
-    await api.delete(`/elections/${electionId}/votes/${voteId}`, { data: { reason } });
+    await api.delete(`/elections/${electionId}/votes/${voteId}`, { params: { reason } });
   },
 };
 
@@ -1697,13 +1697,13 @@ export const inventoryService = {
     return response.data;
   },
 
-  async checkoutItem(data: { item_id: string; user_id: string; due_date?: string; notes?: string }): Promise<{ id: string }> {
+  async checkoutItem(data: { item_id: string; user_id: string; expected_return_at?: string; checkout_reason?: string }): Promise<{ id: string }> {
     const response = await api.post<{ id: string }>('/inventory/checkout', data);
     return response.data;
   },
 
-  async checkInItem(checkoutId: string): Promise<void> {
-    await api.post(`/inventory/checkout/${checkoutId}/checkin`);
+  async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
+    await api.post(`/inventory/checkout/${checkoutId}/checkin`, { return_condition: returnCondition, damage_notes: damageNotes });
   },
 
   async getActiveCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
@@ -2031,7 +2031,7 @@ export const formsService = {
    * Reorder form fields
    */
   async reorderFields(formId: string, fieldIds: string[]): Promise<void> {
-    await api.post(`/forms/${formId}/fields/reorder`, { field_ids: fieldIds });
+    await api.post(`/forms/${formId}/fields/reorder`, fieldIds);
   },
 };
 
@@ -2278,63 +2278,63 @@ export const meetingsService = {
   },
 };
 
-// Minutes Detail Service — wraps meetings API with minutes-specific method names
+// Minutes Detail Service — uses the /minutes-records API
 // Used by MinutesDetailPage for full minutes CRUD, motions, action items, and workflow
 export const minutesService = {
   async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`);
+    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`);
     return response.data;
   },
 
   async updateMinutes(minutesId: string, data: Record<string, unknown>): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.patch<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`, data);
+    const response = await api.put<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`, data);
     return response.data;
   },
 
   async deleteMinutes(minutesId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}`);
+    await api.delete(`/minutes-records/${minutesId}`);
   },
 
   async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/meetings/${minutesId}/publish`);
+    await api.post(`/minutes-records/${minutesId}/publish`);
   },
 
   async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/submit`);
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/submit`);
     return response.data;
   },
 
   async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/approve`);
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/approve`);
     return response.data;
   },
 
   async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/reject`, { reason });
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/reject`, { reason });
     return response.data;
   },
 
   async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
-    const response = await api.post<import('../types/minutes').Motion>(`/meetings/${minutesId}/motions`, data);
+    const response = await api.post<import('../types/minutes').Motion>(`/minutes-records/${minutesId}/motions`, data);
     return response.data;
   },
 
   async deleteMotion(minutesId: string, motionId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}/motions/${motionId}`);
+    await api.delete(`/minutes-records/${minutesId}/motions/${motionId}`);
   },
 
   async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.post<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items`, data);
+    const response = await api.post<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items`, data);
     return response.data;
   },
 
   async updateActionItem(minutesId: string, itemId: string, data: Record<string, unknown>): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.patch<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items/${itemId}`, data);
+    const response = await api.put<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items/${itemId}`, data);
     return response.data;
   },
 
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}/action-items/${itemId}`);
+    await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
   },
 };
 
@@ -2756,49 +2756,82 @@ export const securityService = {
 // Training Sessions Service
 // ============================================
 
-export interface TrainingSession {
+export interface TrainingSessionResponse {
   id: string;
   organization_id: string;
   event_id: string;
   course_id?: string;
+  category_id?: string;
+  program_id?: string;
+  phase_id?: string;
+  requirement_id?: string;
   course_name: string;
   course_code?: string;
   training_type: string;
   credit_hours: number;
   instructor?: string;
-  max_participants?: number;
-  status: string;
+  issues_certification: boolean;
+  certification_number_prefix?: string;
+  issuing_agency?: string;
+  expiration_months?: number;
+  auto_create_records: boolean;
+  require_completion_confirmation: boolean;
+  approval_required: boolean;
+  approval_deadline_days: number;
+  is_finalized: boolean;
+  finalized_at?: string;
+  finalized_by?: string;
   created_at: string;
   updated_at: string;
+  created_by?: string;
 }
 
 export interface TrainingSessionCreate {
   title: string;
   description?: string;
+  location_id?: string;
+  location?: string;
+  location_details?: string;
+  start_datetime: string;
+  end_datetime: string;
+  requires_rsvp?: boolean;
+  rsvp_deadline?: string;
+  max_attendees?: number;
+  is_mandatory?: boolean;
+  eligible_roles?: string[];
+  check_in_window_type?: string;
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
+  use_existing_course?: boolean;
   course_id?: string;
-  course_name: string;
+  category_id?: string;
+  program_id?: string;
+  phase_id?: string;
+  requirement_id?: string;
+  course_name?: string;
+  course_code?: string;
   training_type: string;
   credit_hours: number;
   instructor?: string;
-  max_participants?: number;
-  start_time: string;
-  end_time: string;
-  location?: string;
+  issues_certification?: boolean;
+  certification_number_prefix?: string;
+  issuing_agency?: string;
+  expiration_months?: number;
+  auto_create_records?: boolean;
+  require_completion_confirmation?: boolean;
+  approval_required?: boolean;
+  approval_deadline_days?: number;
 }
 
 export const trainingSessionService = {
-  async getSessions(params?: { skip?: number; limit?: number; status?: string }): Promise<TrainingSession[]> {
-    const response = await api.get<TrainingSession[]>('/training/sessions', { params });
+  async getCalendar(params?: { start_after?: string; start_before?: string; training_type?: string; include_finalized?: boolean }): Promise<TrainingSessionResponse[]> {
+    const response = await api.get<TrainingSessionResponse[]>('/training/sessions/calendar', { params });
     return response.data;
   },
 
-  async getSession(sessionId: string): Promise<TrainingSession> {
-    const response = await api.get<TrainingSession>(`/training/sessions/${sessionId}`);
-    return response.data;
-  },
-
-  async createSession(data: TrainingSessionCreate): Promise<TrainingSession> {
-    const response = await api.post<TrainingSession>('/training/sessions', data);
+  async createSession(data: TrainingSessionCreate): Promise<TrainingSessionResponse> {
+    const response = await api.post<TrainingSessionResponse>('/training/sessions', data);
     return response.data;
   },
 
