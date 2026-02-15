@@ -784,3 +784,90 @@ def _build_action_item_response(item) -> ActionItemResponse:
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
+
+
+# ============================================
+# Quorum Endpoints
+# ============================================
+
+@router.get("/{minutes_id}/quorum")
+async def get_quorum_status(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Calculate and return current quorum status for a meeting.
+
+    Quorum rules come from the organization's `settings.quorum_config`
+    but can be overridden per-meeting via `quorum_type` and
+    `quorum_threshold` on the meeting record.
+
+    Requires `minutes.manage` permission.
+    """
+    from app.services.quorum_service import QuorumService
+    service = QuorumService(db)
+    result = await service.update_quorum_on_checkin(
+        minutes_id, current_user.organization_id
+    )
+    return result
+
+
+@router.patch("/{minutes_id}/quorum-config")
+async def set_meeting_quorum_config(
+    minutes_id: str,
+    quorum_type: str,
+    quorum_threshold: float,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Override the quorum configuration for a specific meeting.
+
+    - **quorum_type**: `"count"` (absolute headcount) or `"percentage"` (of active members)
+    - **quorum_threshold**: the required value (e.g. 10 for count, 50.0 for percentage)
+
+    This is meeting-specific and does not change the org-level default.
+
+    Requires `minutes.manage` permission.
+    """
+    from sqlalchemy import select as sa_select
+    from app.models.minute import MeetingMinutes
+
+    if quorum_type not in ("count", "percentage"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="quorum_type must be 'count' or 'percentage'",
+        )
+    if quorum_threshold <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="quorum_threshold must be positive",
+        )
+
+    result = await db.execute(
+        sa_select(MeetingMinutes)
+        .where(MeetingMinutes.id == minutes_id)
+        .where(MeetingMinutes.organization_id == current_user.organization_id)
+    )
+    minutes = result.scalar_one_or_none()
+    if not minutes:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+
+    minutes.quorum_type = quorum_type
+    minutes.quorum_threshold = quorum_threshold
+    await db.commit()
+
+    # Recalculate immediately
+    from app.services.quorum_service import QuorumService
+    service = QuorumService(db)
+    quorum_result = await service.update_quorum_on_checkin(
+        minutes_id, current_user.organization_id
+    )
+
+    return {
+        "success": True,
+        "quorum_type": quorum_type,
+        "quorum_threshold": quorum_threshold,
+        **quorum_result,
+    }

@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID, uuid4
 import secrets
 import string
+from loguru import logger
 
 from app.models.membership_pipeline import (
     MembershipPipeline,
@@ -25,7 +26,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
     PipelineStepType,
 )
-from app.models.user import User, generate_uuid
+from app.models.user import User, UserStatus, generate_uuid
 
 
 class MembershipPipelineService:
@@ -343,6 +344,55 @@ class MembershipPipelineService:
         result = await self.db.execute(query)
         return result.scalars().first()
 
+    async def check_existing_members(
+        self,
+        organization_id: str,
+        email: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Check if an email or name matches any existing users in the organization,
+        including archived members. Returns a list of matches with their status
+        so leadership can decide whether to reactivate instead of creating new.
+        """
+        from sqlalchemy import or_
+
+        conditions = [
+            User.organization_id == organization_id,
+            User.deleted_at.is_(None),
+        ]
+
+        # Match by email or by first+last name
+        match_conditions = [func.lower(User.email) == email.lower()]
+        if first_name and last_name:
+            match_conditions.append(
+                and_(
+                    func.lower(User.first_name) == first_name.lower(),
+                    func.lower(User.last_name) == last_name.lower(),
+                )
+            )
+
+        conditions.append(or_(*match_conditions))
+
+        result = await self.db.execute(
+            select(User).where(*conditions)
+        )
+        matches = result.scalars().all()
+
+        return [
+            {
+                "user_id": str(m.id),
+                "name": m.full_name,
+                "email": m.email,
+                "status": m.status.value if hasattr(m.status, 'value') else str(m.status),
+                "badge_number": m.badge_number,
+                "archived_at": m.archived_at.isoformat() if m.archived_at else None,
+                "match_type": "email" if m.email and m.email.lower() == email.lower() else "name",
+            }
+            for m in matches
+        ]
+
     async def create_prospect(
         self,
         organization_id: str,
@@ -602,6 +652,44 @@ class MembershipPipelineService:
         role_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
+
+        # Check for existing users with the same email (prevents duplicates)
+        existing_matches = await self.check_existing_members(
+            organization_id=prospect.organization_id,
+            email=prospect.email,
+            first_name=prospect.first_name,
+            last_name=prospect.last_name,
+        )
+        if existing_matches:
+            archived = [m for m in existing_matches if m["status"] == "archived"]
+            active_or_other = [m for m in existing_matches if m["status"] != "archived"]
+
+            if archived:
+                # Archived member found — recommend reactivation
+                match = archived[0]
+                return {
+                    "success": False,
+                    "existing_member_match": match,
+                    "message": (
+                        f"A previously archived member matches this prospect: "
+                        f"{match['name']} ({match['email']}). "
+                        f"Use POST /api/v1/users/{match['user_id']}/reactivate "
+                        f"to restore their account instead of creating a duplicate."
+                    ),
+                }
+            elif active_or_other:
+                # Active or other status — block duplicate
+                match = active_or_other[0]
+                return {
+                    "success": False,
+                    "existing_member_match": match,
+                    "message": (
+                        f"A member with this email already exists: "
+                        f"{match['name']} (status: {match['status']}). "
+                        f"Cannot create a duplicate user record."
+                    ),
+                }
+
         if not username:
             username = self._generate_username(prospect.first_name, prospect.last_name)
 
@@ -639,12 +727,111 @@ class MembershipPipelineService:
 
         await self.db.flush()
 
+        # Auto-enroll into probationary training pipeline if one exists
+        enrollment_result = await self._auto_enroll_probationary(
+            user_id=user_id,
+            organization_id=prospect.organization_id,
+            enrolled_by=transferred_by,
+        )
+
+        result_msg = f"Prospect {prospect.full_name} transferred to membership as {username}"
+        if enrollment_result:
+            result_msg += f". Auto-enrolled in training program: {enrollment_result['program_name']}"
+
         return {
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
-            "message": f"Prospect {prospect.full_name} transferred to membership as {username}",
+            "message": result_msg,
+            "auto_enrollment": enrollment_result,
         }
+
+    async def _auto_enroll_probationary(
+        self,
+        user_id: str,
+        organization_id: str,
+        enrolled_by: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Auto-enroll a newly converted member into the organization's
+        default probationary training program if one exists.
+
+        The org setting `auto_enroll_program_id` in `settings.training` points
+        to the default probationary training program. If not set, looks for a
+        program with "probationary" in the name.
+        """
+        try:
+            from app.models.training import TrainingProgram, ProgramEnrollment, EnrollmentStatus
+            from app.models.user import Organization
+
+            # Check org settings for auto-enroll program
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return None
+
+            training_settings = (org.settings or {}).get("training", {})
+            auto_program_id = training_settings.get("auto_enroll_program_id")
+
+            if auto_program_id:
+                program_result = await self.db.execute(
+                    select(TrainingProgram).where(
+                        TrainingProgram.id == auto_program_id,
+                        TrainingProgram.organization_id == organization_id,
+                    )
+                )
+                program = program_result.scalar_one_or_none()
+            else:
+                # Look for a program with "probationary" in the name
+                program_result = await self.db.execute(
+                    select(TrainingProgram).where(
+                        TrainingProgram.organization_id == organization_id,
+                        TrainingProgram.name.ilike("%probationary%"),
+                        TrainingProgram.active == True,
+                    ).limit(1)
+                )
+                program = program_result.scalar_one_or_none()
+
+            if not program:
+                return None
+
+            # Check if already enrolled
+            existing = await self.db.execute(
+                select(ProgramEnrollment).where(
+                    ProgramEnrollment.user_id == user_id,
+                    ProgramEnrollment.program_id == str(program.id),
+                    ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                )
+            )
+            if existing.scalar_one_or_none():
+                return None  # Already enrolled
+
+            enrollment = ProgramEnrollment(
+                organization_id=organization_id,
+                user_id=user_id,
+                program_id=str(program.id),
+                enrolled_by=enrolled_by,
+                status=EnrollmentStatus.ACTIVE,
+            )
+            self.db.add(enrollment)
+            await self.db.flush()
+
+            logger.info(
+                f"Auto-enrolled user {user_id} in probationary program "
+                f"'{program.name}' (program_id={program.id})"
+            )
+
+            return {
+                "enrollment_id": str(enrollment.id),
+                "program_id": str(program.id),
+                "program_name": program.name,
+            }
+
+        except Exception as e:
+            logger.error(f"Auto-enrollment failed for user {user_id}: {e}")
+            return None
 
     def _generate_username(self, first_name: str, last_name: str) -> str:
         """Generate a username from first and last name"""

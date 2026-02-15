@@ -16,6 +16,7 @@ class TrainingSessionCreate(BaseModel):
     # Event details
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
+    location_id: Optional[UUID] = Field(None, description="Location ID for double-booking prevention")
     location: Optional[str] = Field(None, max_length=300)
     location_details: Optional[str] = None
     start_datetime: datetime

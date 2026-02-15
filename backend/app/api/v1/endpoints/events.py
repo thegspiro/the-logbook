@@ -97,6 +97,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
 @router.get("", response_model=List[EventListItem])
 async def list_events(
     event_type: Optional[str] = None,
+    exclude_event_types: Optional[str] = None,
     start_after: Optional[datetime] = None,
     start_before: Optional[datetime] = None,
     include_cancelled: bool = False,
@@ -108,12 +109,22 @@ async def list_events(
     """
     List all events with optional filtering
 
+    Use `exclude_event_types` (comma-separated) to hide certain event types.
+    Hall coordinators can use `exclude_event_types=training` to see only
+    non-training events while double-booking prevention still applies.
+
     **Authentication required**
     """
+    # Parse comma-separated exclude list
+    exclude_list = None
+    if exclude_event_types:
+        exclude_list = [t.strip() for t in exclude_event_types.split(",") if t.strip()]
+
     service = EventService(db)
     events = await service.list_events(
         organization_id=current_user.organization_id,
         event_type=event_type,
+        exclude_event_types=exclude_list,
         start_after=start_after,
         start_before=start_before,
         include_cancelled=include_cancelled,

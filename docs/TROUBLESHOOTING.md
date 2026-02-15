@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-14 (includes events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-14 (includes shift module enhancements: templates, patterns, assignments, swaps, time-off, calls, reports; facilities module: building management, maintenance, utilities, keys, rooms, compliance; plus meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -22,9 +22,10 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 10. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
 11. [Documents Module Issues](#documents-module-issues)
 12. [Events Module Issues](#events-module-issues)
-13. [TypeScript Build Issues](#typescript-build-issues)
-14. [Error Message Reference](#error-message-reference)
-15. [Getting Help](#getting-help)
+13. [Facilities Module](#facilities-module)
+14. [TypeScript Build Issues](#typescript-build-issues)
+15. [Error Message Reference](#error-message-reference)
+16. [Getting Help](#getting-help)
 
 ---
 
@@ -1081,10 +1082,10 @@ Meetings follow a status workflow: **draft** -> **approved** -> **archived**
 
 ### Overview
 
-The Scheduling module manages shift creation, week/month calendar views, and attendance tracking per shift.
+The Scheduling module provides full shift management including shift creation, templates, recurring patterns, duty roster assignments, swap requests, time-off tracking, call recording, and reporting.
 
 **API Endpoints**: `/api/v1/scheduling/`
-**Permissions**: `scheduling.view` (read), `scheduling.manage` (create/edit/delete)
+**Permissions**: `scheduling.view` (read), `scheduling.manage` (create/edit/delete), `scheduling.assign` (assign members), `scheduling.swap` (swap requests), `scheduling.report` (reports/analytics)
 
 ### Common Issues
 
@@ -1113,7 +1114,7 @@ docker exec the-logbook-backend-1 alembic upgrade head
 **Message**: `"Unable to create the shift. Please check your input and try again."`
 
 **Causes**:
-1. Missing required fields (title, shift_date, start_time, end_time)
+1. Missing required fields (shift_date, start_time)
 2. End time before start time
 3. Missing `scheduling.manage` permission
 
@@ -1136,6 +1137,243 @@ docker exec the-logbook-backend-1 alembic upgrade head
 - Navigate to the correct week using the calendar navigation
 - Check that shifts have been created for the current week
 - Verify shift dates are correct in the database
+
+---
+
+#### Shift Template: Not Appearing in Template List
+
+**Symptoms**: Created a template but it doesn't show up when listing templates
+
+**Causes**:
+1. Template marked as inactive (`is_active = false`)
+2. The `active_only` query parameter defaults to `true`
+
+**Solutions**:
+- Check the template's `is_active` status
+- To see all templates including inactive: `GET /api/v1/scheduling/templates?active_only=false`
+- Update the template: `PATCH /api/v1/scheduling/templates/{id}` with `{"is_active": true}`
+
+---
+
+#### Shift Pattern: Auto-Generation Not Creating Shifts
+
+**Symptoms**: `POST /api/v1/scheduling/patterns/{id}/generate` returns 0 shifts
+
+**Causes**:
+1. Start date is after end date
+2. Pattern has no template linked (`template_id` is null)
+3. For WEEKLY patterns: `schedule_config.weekdays` doesn't include any days in the range
+4. For PLATOON patterns: `days_on` and `days_off` not configured
+5. Pattern is inactive
+
+**Solutions**:
+- Verify the pattern has a valid `template_id`
+- For weekly patterns, ensure `schedule_config` includes `{"weekdays": [0, 1, 2, 3, 4]}` (Mon-Fri)
+- For platoon patterns, set `rotation_days`, `days_on`, and `days_off`
+- Check that the date range in the generation request covers at least one matching day
+
+---
+
+#### Shift Assignment: Member Can't Confirm
+
+**Symptoms**: Member gets an error when trying to confirm their shift assignment
+
+**Causes**:
+1. The logged-in user doesn't match the assignment's `user_id`
+2. Assignment has already been confirmed or declined
+
+**Solutions**:
+- Members can only confirm their own assignments
+- Check the current `assignment_status` — only `assigned` status can be confirmed
+
+---
+
+#### Shift Swap: Request Denied Unexpectedly
+
+**Symptoms**: Swap request was denied even though both members agreed
+
+**Causes**:
+1. An officer must review and approve swap requests — member-to-member agreement is not sufficient
+2. The reviewer may have added notes explaining the denial
+
+**Solutions**:
+- Check `reviewer_notes` on the swap request for the reason
+- Ensure the request was reviewed by someone with `scheduling.manage` permission
+- Submit a new request if the original was denied in error
+
+---
+
+#### Time-Off: Request Not Showing in Availability
+
+**Symptoms**: Submitted a time-off request but `GET /availability` doesn't show it
+
+**Causes**:
+1. Time-off request is still `pending` — only `approved` requests appear in availability
+2. Date range doesn't overlap with the time-off dates
+
+**Solutions**:
+- Have an officer approve the time-off request: `POST /api/v1/scheduling/time-off/{id}/review`
+- Verify the availability query date range overlaps with the time-off dates
+
+---
+
+#### Shift Calls: Not Linked to Correct Shift
+
+**Symptoms**: Call records appear under the wrong shift
+
+**Causes**:
+1. Wrong `shift_id` provided when creating the call
+
+**Solutions**:
+- Verify the shift ID before creating a call: `GET /api/v1/scheduling/shifts` to list shifts by date
+- Update the call if needed: `PATCH /api/v1/scheduling/calls/{id}`
+
+---
+
+#### Reports: Member Hours Showing Zero
+
+**Symptoms**: Member hours report shows 0 hours for members who worked shifts
+
+**Causes**:
+1. Members have attendance records but no `checked_out_at` time (duration not calculated)
+2. Date range doesn't cover the shift dates
+
+**Solutions**:
+- Ensure attendance records have both `checked_in_at` and `checked_out_at` — duration is auto-calculated from these
+- Expand the date range in the report query
+
+---
+
+#### Scheduling: Permission Denied for Assignment
+
+**Symptoms**: User gets 403 when trying to assign members to shifts
+
+**Causes**:
+1. User has `scheduling.manage` but not `scheduling.assign`
+2. The `scheduling.assign` permission is separate from general manage
+
+**Solutions**:
+- Grant the user the `scheduling.assign` permission
+- Officers, chiefs, and the Scheduling Officer role have this by default
+
+---
+
+## Facilities Module
+
+### Overview
+
+The Facilities module manages buildings, stations, and properties including maintenance scheduling, utility tracking, key/access management, room inventory, emergency contacts, capital projects, insurance policies, occupant assignments, and compliance checklists.
+
+**API Endpoints**: `/api/v1/facilities/`
+**Permissions**: `facilities.view` (read), `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance` (log maintenance), `facilities.manage` (full access)
+
+### Common Issues
+
+#### Error: Unable to load facilities
+
+**Message**: `"Unable to load facilities. Please check your connection and try again."`
+
+**Causes**:
+1. Network connectivity issue
+2. Migration not applied (facilities tables don't exist)
+3. Facilities module not enabled during onboarding
+
+**Solutions**:
+```bash
+# Run migrations
+docker exec the-logbook-backend-1 alembic upgrade head
+
+# Verify the facilities tables exist
+docker exec the-logbook-db-1 mysql -u root -p the_logbook -e "SHOW TABLES LIKE 'facilit%';"
+```
+
+---
+
+#### Facility Types/Statuses Empty
+
+**Symptoms**: No facility types or statuses available when creating a facility
+
+**Causes**:
+1. Seed migration `20260214_2000` not applied
+2. Organization-specific types not yet created (system defaults have `organization_id = NULL`)
+
+**Solutions**:
+```bash
+# Run seed migration
+docker exec the-logbook-backend-1 alembic upgrade head
+```
+- System defaults (10 types, 6 statuses, 20 maintenance types) are seeded automatically
+- Organizations can create additional custom types
+
+---
+
+#### Maintenance Scheduling: No Default Types
+
+**Symptoms**: No maintenance types available when logging maintenance
+
+**Causes**:
+1. Seed migration not applied
+
+**Solutions**:
+- Run `alembic upgrade head` — migration `20260214_2000` seeds 20 default maintenance types (HVAC, generator, fire alarm, sprinkler, elevator, bay door, etc.) with recommended scheduling intervals
+
+---
+
+#### Utility Readings: Can't Add Meter Reading
+
+**Symptoms**: Error when adding a utility reading
+
+**Causes**:
+1. No utility account exists for the facility
+2. Missing `facilities.maintenance` permission
+
+**Solutions**:
+- First create a utility account: `POST /api/v1/facilities/{id}/utility-accounts`
+- Then add readings: `POST /api/v1/facilities/{id}/utility-accounts/{account_id}/readings`
+- Ensure user has `facilities.maintenance` permission
+
+---
+
+#### Key/Access: Member Not Found for Assignment
+
+**Symptoms**: Can't assign an access key to a member
+
+**Causes**:
+1. The `assigned_to` field expects a valid user ID
+2. The user must be in the same organization
+
+**Solutions**:
+- Verify the user ID: `GET /api/v1/users` to list organization members
+- Use the correct `user_id` in the `assigned_to` field
+
+---
+
+#### Compliance Checklist: Items Not Saving
+
+**Symptoms**: Compliance checklist items aren't persisting
+
+**Causes**:
+1. Must create the checklist first, then add items to it
+2. Missing `facilities.edit` permission
+
+**Solutions**:
+- Create checklist: `POST /api/v1/facilities/{id}/compliance-checklists`
+- Then add items: `POST /api/v1/facilities/{id}/compliance-checklists/{checklist_id}/items`
+
+---
+
+#### Facilities Manager Role: Missing Permissions
+
+**Symptoms**: Facilities Manager can view but can't edit or log maintenance
+
+**Causes**:
+1. The Facilities Manager role intentionally excludes `facilities.delete` and `facilities.manage`
+2. It includes: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.maintenance`
+
+**Solutions**:
+- This is by design — the role is for day-to-day management, not full admin
+- For full access, assign the Chief, President, or Assistant Chief role
+- Or create a custom role with all 6 facilities permissions
 
 ---
 
@@ -1277,6 +1515,351 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 
 **Tip**: Use `GET /api/v1/users/{user_id}/property-return-report` to preview the report without changing the member's status. This is useful for reviewing assigned items and values before performing the actual drop.
 
+**For full configuration documentation, see [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md).**
+
+#### Membership Tier: Member Not Auto-Advancing
+
+**Symptoms**: A member has enough years of service but is still at a lower tier
+
+**Causes**:
+1. `auto_advance` is disabled in the membership tier settings
+2. The member's `hire_date` is not set on their profile
+3. The `advance-membership-tiers` endpoint hasn't been called
+4. The member is not in `active` or `probationary` status
+
+**Solutions**:
+- Call `POST /api/v1/users/advance-membership-tiers` to trigger a batch scan
+- Check `Organization Settings > membership_tiers > auto_advance` is `true`
+- Ensure the member's profile has a `hire_date` value
+- Manually promote: `PATCH /api/v1/users/{user_id}/membership-type` with the target tier
+
+#### Voting: Granting a Member an Override to Vote
+
+**Scenario**: A member is blocked from voting (due to tier or attendance) but leadership wants to allow them to vote anyway
+
+**Solution**:
+1. An officer with `elections.manage` permission calls `POST /api/v1/elections/{election_id}/voter-overrides` with the member's `user_id` and a `reason`
+2. The override is recorded with the granting officer's name, timestamp, and reason
+3. The member can now vote in that election — tier and attendance checks are skipped
+4. To revoke before they vote: `DELETE /api/v1/elections/{election_id}/voter-overrides/{user_id}`
+5. View all overrides: `GET /api/v1/elections/{election_id}/voter-overrides`
+
+**Note**: Overrides do NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
+
+#### Meeting: Secretary Attendance Dashboard
+
+**Scenario**: The secretary needs an overview of all members' meeting attendance, voting eligibility, and waiver status.
+
+**Endpoint**: `GET /api/v1/meetings/attendance/dashboard`
+
+**Parameters**:
+- `period_months`: Look-back period (default 12)
+- `meeting_type`: Filter by type (e.g. `business` for business meetings only)
+
+**Returns per member**: `attendance_pct`, `meetings_attended`, `meetings_waived`, `meetings_absent`, `membership_tier`, `voting_eligible`, `voting_blocked_reason`
+
+**Summary block**: Average attendance, voting eligible count, members blocked by attendance.
+
+#### Meeting: Granting an Attendance Waiver
+
+**Scenario**: A member can't make a meeting and the secretary/president/chief wants to excuse them so their attendance percentage isn't penalized, but they also cannot vote in that meeting.
+
+**Steps**:
+1. Call `POST /api/v1/meetings/{meeting_id}/attendance-waiver` with `user_id` and `reason`
+2. The member is marked as excused with a waiver
+3. This meeting is excluded from the member's attendance percentage calculation
+4. The member cannot vote in elections associated with this meeting
+5. View all waivers: `GET /api/v1/meetings/{meeting_id}/attendance-waivers`
+
+**Note**: Waivers are logged as `meeting_attendance_waiver_granted` audit events with `warning` severity.
+
+#### Training: Auto-Enrollment on Member Conversion
+
+**Scenario**: A prospective member has been approved and converted to a full member — they should be automatically enrolled in the probationary training program.
+
+**How It Works**:
+1. When `transfer_to_membership()` is called (from the prospective member pipeline), the system looks for the org's default probationary program
+2. First checks `organization.settings.training.auto_enroll_program_id` for an explicitly configured program
+3. Falls back to any active training program with "probationary" in the name
+4. Creates an active `ProgramEnrollment` automatically
+
+**Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/enrollments?user_id={id}&program_id={id}`.
+
+**Not working?** Check that:
+- A training program exists with "probationary" in the name (or set `auto_enroll_program_id` in org settings)
+- The program is `active = true`
+
+#### Training: Incident-Based Requirements (Calls, Shifts, Hours)
+
+**Scenario**: A department requires driver candidates to respond to 15 calls (10 transports), complete 5 shifts, with specific call type tracking.
+
+**Configuration** (set on `TrainingRequirement`):
+- `requirement_type`: `"calls"`, `"shifts"`, or `"hours"`
+- `required_calls`: Total number of calls required (e.g. 15)
+- `required_call_types`: Specific types to count (e.g. `["transport", "cardiac", "trauma"]`)
+- `required_shifts`: Number of shifts required (e.g. 5)
+- `required_hours`: Total hours (e.g. 40)
+
+**Tracking**: Shift completion reports (`POST /api/v1/training/shift-reports`) auto-update requirement progress:
+- SHIFTS: +1 per shift report
+- CALLS: Counts matching call types from the report's `call_types` array
+- HOURS: Adds `hours_on_shift` from the report
+
+**Call type totals**: View `progress_notes.call_type_totals` on the requirement progress record for a breakdown by type.
+
+#### Scheduled Tasks: Setting Up the Cron
+
+**Scenario**: The system needs daily cert alerts, weekly struggling member checks, and monthly tier advancement.
+
+**Recommended crontab**:
+```
+# Daily at 6:00 AM — cert expiration alerts
+0 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=cert_expiration_alerts
+
+# Weekly Monday 7:00 AM — struggling member detection
+0 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=struggling_member_check
+
+# Weekly Monday 7:30 AM — enrollment deadline warnings
+30 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=enrollment_deadline_warnings
+
+# Monthly 1st at 8:00 AM — membership tier auto-advance
+0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
+```
+
+**Manual trigger**: Any task can be run on-demand via the same endpoint.
+
+**View tasks**: `GET /api/v1/scheduled/tasks` lists all tasks with their schedules.
+
+#### Membership: Editing Tier Requirements
+
+**Scenario**: The training officer or secretary needs to change the meeting attendance percentage required for voting eligibility, or adjust tier benefits.
+
+**Steps**:
+1. View current config: `GET /api/v1/users/membership-tiers/config`
+2. Update config: `PUT /api/v1/users/membership-tiers/config` with the full tier list
+3. Each tier has `benefits` with: `voting_eligible`, `voting_requires_meeting_attendance`, `voting_min_attendance_pct`, `voting_attendance_period_months`, `training_exempt`, `training_exempt_types`, `can_hold_office`
+
+**Example**: To require 60% attendance over 6 months for active members to vote:
+```json
+{
+  "benefits": {
+    "voting_requires_meeting_attendance": true,
+    "voting_min_attendance_pct": 60.0,
+    "voting_attendance_period_months": 6
+  }
+}
+```
+
+#### Voting: Setting Up Proxy Voting
+
+**Scenario**: A member cannot attend the meeting but the department allows proxy voting — another member should be able to vote on their behalf.
+
+**Prerequisites**: Proxy voting must be enabled for the organization. Set `organization.settings.proxy_voting.enabled = true` via org settings. This is a department-level decision and is disabled by default.
+
+**Steps**:
+1. An officer with `elections.manage` permission calls `POST /api/v1/elections/{election_id}/proxy-authorizations` with:
+   - `delegating_user_id`: the absent member
+   - `proxy_user_id`: the member who will vote on their behalf
+   - `proxy_type`: `"single_election"` (one-time) or `"regular"` (standing proxy)
+   - `reason`: why the proxy is being authorized
+2. The authorization is recorded with both member names, the authorizing officer, and a timestamp
+3. When ballot emails are sent, the proxy holder is automatically CC'd on the absent member's ballot notification
+4. The proxy casts the vote via `POST /api/v1/elections/{election_id}/proxy-vote` with their `proxy_authorization_id`
+5. The system checks the *delegating* member's eligibility and applies double-vote prevention against them
+6. The hash trail shows: `is_proxy_vote=true`, who physically voted (`proxy_voter_id`), and on whose behalf (`proxy_delegating_user_id`)
+7. To revoke before voting: `DELETE /api/v1/elections/{election_id}/proxy-authorizations/{id}`
+8. View all authorizations: `GET /api/v1/elections/{election_id}/proxy-authorizations`
+
+**Note**: A proxy authorization cannot be revoked after the proxy has cast the vote. The vote itself must be soft-deleted first. Proxy voting does NOT bypass the election's `eligible_voters` whitelist, position-specific role requirements, or double-vote prevention.
+
+#### Voting: Bulk Voter Overrides
+
+**Scenario**: The Secretary needs to grant voting overrides to multiple members at once (e.g., for a special election where several excused members were approved by board vote).
+
+**Steps**:
+1. Call `POST /api/v1/elections/{election_id}/voter-overrides/bulk` with:
+   - `user_ids`: list of member UUIDs to override
+   - `reason`: explanation for the bulk override (10–500 characters)
+2. Each member is individually logged with `warning` severity in the audit trail
+3. A summary audit event captures the full batch with all user IDs and the officer who granted them
+4. Members who already have an override are skipped (no duplicates)
+
+**Note**: Bulk overrides follow the same scope rules as individual overrides — they bypass tier/attendance checks only, NOT eligible_voters lists, role requirements, or double-vote prevention.
+
+#### Meeting: Configuring Quorum
+
+**Scenario**: The department wants quorum enforcement for meetings — the system should show whether enough members are present.
+
+**Organization-Level Configuration**:
+Set `organization.settings.quorum_config`:
+```json
+{
+  "enabled": true,
+  "type": "percentage",
+  "threshold": 50.0
+}
+```
+- `type`: `"percentage"` (of active members) or `"count"` (absolute number required)
+- `threshold`: the value (e.g., 50.0 for 50% or 10 for 10 members)
+
+**Per-Meeting Override**:
+Use `PATCH /api/v1/minutes/{minutes_id}/quorum-config` to set `quorum_type` and `quorum_threshold` on a specific meeting, overriding the org default.
+
+**Checking Quorum**:
+- `GET /api/v1/minutes/{minutes_id}/quorum` returns `quorum_met`, `present_count`, `required_count`, and a description
+- Quorum recalculates automatically when attendees are marked present or removed
+
+**Common Issue**: Quorum says 0 present — ensure attendees have `present: true` in the meeting's attendee list.
+
+#### Meeting: Quorum Not Updating After Check-In
+
+**Symptoms**: Members are checking in but quorum still shows 0 present.
+
+**Causes**:
+1. Attendees are added to the meeting but not marked as `present: true`
+2. The org quorum config has `enabled: false`
+
+**Solutions**:
+- Verify the meeting's `attendees` JSON array — each entry should have `"present": true`
+- Check `Organization Settings > quorum_config > enabled` is `true`
+- If using per-meeting override, verify both `quorum_type` and `quorum_threshold` are set on the meeting
+
+#### Training: Configuring Peer Skill Evaluation Sign-Offs
+
+**Scenario**: The training officer wants to control who can sign off on skill evaluations — for example, only the shift leader can evaluate Attendant in Charge (AIC) skills, while only a driver trainer can evaluate driver trainees.
+
+**Configuration** (set by training officer or chief on each SkillEvaluation record):
+
+**Role-based** (`allowed_evaluators` JSON):
+```json
+{"type": "roles", "roles": ["shift_leader", "driver_trainer"]}
+```
+Only users with one of these roles can sign off on this skill.
+
+**User-specific**:
+```json
+{"type": "specific_users", "user_ids": ["uuid1", "uuid2"]}
+```
+Only explicitly named users can evaluate.
+
+**Default** (set to `null`): Any user with `training.manage` permission can sign off.
+
+**Checking Permission**:
+- `POST /api/v1/training/skill-evaluations/{skill_id}/check-evaluator` — returns whether the current user is authorized
+
+#### Training: Certification Expiration Alert Pipeline
+
+**Scenario**: Members with expiring certifications should receive tiered reminders, and training/compliance officers should be CC'd on escalating notifications when members are non-responsive.
+
+**Alert Tiers**:
+| Days Before Expiry | Alert Level | CC Recipients |
+|---|---|---|
+| 90 days | First notice | Member only |
+| 60 days | Second notice | Member only |
+| 30 days | Urgent | Member + Training officers |
+| 7 days | Final warning | Member + Training + Compliance officers |
+| Expired | Escalation | Member + Training + Compliance + Chief |
+
+**Triggering Alerts**:
+- `POST /api/v1/training/certifications/process-alerts` — designed to be called by a daily cron job
+- Each tier is tracked per-record (`alert_90_sent_at`, etc.) — idempotent, won't re-send
+
+**Common Issue**: No alerts being sent — verify that training records have an `expiration_date` set and that the email service is configured.
+
+#### Training: Using the Competency Matrix Dashboard
+
+**Scenario**: Training officers need an at-a-glance view of department readiness — who is current, who is expiring soon, and where the gaps are.
+
+**Endpoint**: `GET /api/v1/training/competency-matrix`
+
+**Returns**: A matrix of members vs. requirements with status for each cell:
+- **current** (green): Active and not expiring soon
+- **expiring_soon** (yellow): Expires within 90 days
+- **expired** (red): Past expiration date
+- **not_started** (gray): No record on file
+
+**Filtering**:
+- `requirement_ids`: comma-separated list to focus on specific requirements
+- `user_ids`: comma-separated list to focus on specific members
+
+**Summary Block** includes `readiness_percentage` — the percentage of all member/requirement cells that are `current` or `expiring_soon`.
+
+#### Training: Calendar Integration & Double-Booking Prevention
+
+**Scenario**: Training sessions should appear on the organization calendar and prevent double-booking at the same location.
+
+**Creating a Training Session with Location**:
+- Include `location_id` in the `POST /api/v1/training-sessions` request
+- The system checks for overlapping events at that location before creating the training event
+- If a conflict exists, the request returns `400` with the conflicting event name(s)
+
+**Calendar View**:
+- `GET /api/v1/training-sessions/calendar` — returns all training sessions with their linked Event data (dates, times, locations)
+- Supports `start_after`, `start_before`, and `training_type` filters
+
+**Hall Coordinator Separation**:
+- Hall coordinators who manage facility bookings can use `GET /api/v1/events?exclude_event_types=training` to see only non-training events
+- Double-booking prevention still applies across ALL event types — training sessions booked at a location will block other events from booking the same slot
+
+#### Voting: Member Blocked Due to Meeting Attendance
+
+**Symptoms**: An active member gets "attendance below minimum" when trying to vote
+
+**Causes**:
+1. The member's tier has `voting_requires_meeting_attendance: true` with a minimum percentage
+2. The member hasn't attended enough meetings in the look-back period
+3. Meeting attendance was not recorded (member was present but not marked)
+
+**Solutions**:
+- Check the member's tier in `Organization Settings > membership_tiers > tiers` — look at `benefits.voting_min_attendance_pct`
+- Verify meeting attendance records: ensure the member is marked `present: true` in meeting attendee records
+- Adjust the look-back period (`voting_attendance_period_months`) or lower the minimum if the policy was set too aggressively
+- Alternatively, promote the member to a tier without attendance requirements
+
+#### Training: Life Member Still Showing Pending Requirements
+
+**Symptoms**: A life member is flagged for incomplete training requirements
+
+**Causes**:
+1. The member's `membership_type` hasn't been updated to the exempt tier
+2. The tier's `training_exempt` setting is not enabled
+3. Auto-advancement hasn't been triggered
+
+**Solutions**:
+- Verify the member's tier: check `membership_type` on their profile
+- Check `Organization Settings > membership_tiers > tiers` — the life tier should have `benefits.training_exempt: true`
+- Run `POST /api/v1/users/advance-membership-tiers` or manually update via `PATCH /api/v1/users/{user_id}/membership-type`
+
+#### Drop Notification: CC Recipients Not Receiving Email
+
+**Symptoms**: Leadership or quartermaster didn't receive a copy of the drop notification
+
+**Causes**:
+1. The CC roles are not configured in organization settings
+2. The user with that role has no email address
+3. Email sending is disabled for the organization
+
+**Solutions**:
+- Check `Organization Settings > member_drop_notifications > cc_roles` — default is `["admin", "quartermaster", "chief"]`
+- Add specific emails to `cc_emails` list for users who should always receive copies
+- Verify email service is enabled: `Organization Settings > email_service > enabled`
+
+#### Drop Notification: Personal Email Not Included
+
+**Symptoms**: The drop notification was only sent to the department email, not the member's personal email
+
+**Causes**:
+1. The member has no `personal_email` on file
+2. The `include_personal_email` setting is disabled
+
+**Solutions**:
+- Ensure the member's profile has a `personal_email` value set
+- Check `Organization Settings > member_drop_notifications > include_personal_email` is `true`
+
+#### Drop Notification: Customizing the Email Template
+
+**Tip**: The drop notification uses the `MEMBER_DROPPED` email template. Edit it at **Settings > Email Templates** to customize the subject, body, and styling. Available template variables: `{{member_name}}`, `{{organization_name}}`, `{{drop_type_display}}`, `{{reason}}`, `{{effective_date}}`, `{{return_deadline}}`, `{{item_count}}`, `{{total_value}}`, `{{performed_by_name}}`, `{{performed_by_title}}`.
+
 #### Property Return Reminders: 30-Day or 90-Day Not Sending
 
 **Symptoms**: A member was dropped more than 30 days ago but no reminder was sent
@@ -1305,6 +1888,46 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 - Unassign items: `POST /api/v1/inventory/items/{item_id}/unassign`
 - Check in items: `POST /api/v1/inventory/checkout/{checkout_id}/checkin`
 - Once all items are returned in the system, the member will no longer appear on the overdue list and no further reminders will be sent
+- Once all items are returned, the member is automatically archived (see below)
+
+#### Member Not Auto-Archived After Returning All Items
+
+**Symptoms**: A dropped member returned all items but is still in `dropped_voluntary` or `dropped_involuntary` status
+
+**Causes**:
+1. Items were returned physically but not processed through the system (unassign / check-in)
+2. There is still an active `ItemAssignment` or unreturned `CheckOutRecord` for the member
+3. The member was not in a dropped status when items were returned
+
+**Solutions**:
+- Verify all items are unassigned: check `GET /api/v1/inventory/users/{user_id}/assignments?active_only=true`
+- Verify all checkouts are returned: check active checkouts for the user
+- Manually archive the member: `POST /api/v1/users/{user_id}/archive`
+
+#### Prospect Creation or Transfer Blocked by Archived Member Match
+
+**Symptoms**: Creating a prospect or transferring to membership returns 409 Conflict
+
+**Causes**:
+1. The prospect's email matches an archived (or active) member in the system
+
+**Solutions**:
+- If the person is a returning member: use `POST /api/v1/users/{user_id}/reactivate` to restore their archived profile
+- If it's a genuinely different person who happens to share the email: update the archived member's email first, then retry
+- Use `POST /api/v1/membership-pipeline/prospects/check-existing?email=...` to preview matches before creating
+
+#### Cannot Reactivate Member
+
+**Symptoms**: Reactivation endpoint returns an error
+
+**Causes**:
+1. Member is not in `archived` status (only archived members can be reactivated)
+2. Member was soft-deleted (`deleted_at` is set)
+
+**Solutions**:
+- Verify the member's current status — only `archived` members can be reactivated
+- If the member is still in a dropped status, archive them first, then reactivate
+- If the member was soft-deleted, this requires direct database intervention
 
 ---
 
@@ -2220,6 +2843,11 @@ If you find new `as any` assertions, replace them with proper types following th
 ---
 
 ## Version History
+
+**v1.8** - 2026-02-14
+- Expanded Scheduling module section with 10 new troubleshooting entries (templates, patterns, assignments, swaps, time-off, calls, reports, permissions)
+- Added Facilities module troubleshooting section (7 new entries covering facility creation, types/statuses, maintenance, utilities, keys, compliance, permissions)
+- Updated permissions reference for new scheduling permissions (assign, swap, report)
 
 **v1.7** - 2026-02-14
 - Added events module troubleshooting section (6 new entries)

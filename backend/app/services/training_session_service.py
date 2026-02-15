@@ -16,9 +16,11 @@ from app.models.event import Event, EventRSVP, EventType, CheckInWindowType
 from app.models.training import (
     TrainingSession, TrainingCourse, TrainingApproval, ApprovalStatus,
     TrainingType, TrainingRecord, ProgramEnrollment, RequirementProgress,
+    EnrollmentStatus,
 )
 from app.models.user import User, Role
 from app.schemas.training_session import TrainingSessionCreate, AttendeeApprovalData
+from app.services.location_service import LocationService
 from app.core.config import settings
 
 
@@ -74,12 +76,29 @@ class TrainingSessionService:
             course_code = session_data.course_code
             course_id = None
 
+        # Check for location double-booking
+        if session_data.location_id:
+            location_service = LocationService(self.db)
+            overlapping = await location_service.check_overlapping_events(
+                location_id=session_data.location_id,
+                organization_id=str(organization_id),
+                start_datetime=session_data.start_datetime,
+                end_datetime=session_data.end_datetime,
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                return None, (
+                    f"Location is already booked during this time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
         # Create Event
         event = Event(
             organization_id=organization_id,
             title=session_data.title,
             description=session_data.description,
             event_type=EventType.TRAINING,
+            location_id=session_data.location_id,
             location=session_data.location,
             location_details=session_data.location_details,
             start_datetime=session_data.start_datetime,
@@ -520,8 +539,8 @@ class TrainingSessionService:
                 )
                 rsvp = rsvp_result.scalar_one_or_none()
 
-                if rsvp and rsvp.check_in_at and rsvp.check_out_at:
-                    duration = rsvp.check_out_at - rsvp.check_in_at
+                if rsvp and rsvp.checked_in_at and rsvp.checked_out_at:
+                    duration = rsvp.checked_out_at - rsvp.checked_in_at
                     hours_completed = duration.total_seconds() / 3600.0
                 else:
                     # Fall back to session credit hours
@@ -553,7 +572,7 @@ class TrainingSessionService:
                     course_id=str(training_session.course_id) if training_session.course_id else None,
                     course_name=training_session.course_name,
                     course_code=training_session.course.code if training_session.course else None,
-                    training_type=training_session.training_type or TrainingType.IN_SERVICE,
+                    training_type=training_session.training_type or TrainingType.CONTINUING_EDUCATION,
                     scheduled_date=event.start_datetime.date(),
                     completion_date=event.start_datetime.date(),
                     hours_completed=hours_completed,
@@ -588,8 +607,7 @@ class TrainingSessionService:
         a program is finalized. Finds the active enrollment and matching
         requirement progress record, then increments the progress value.
         """
-        import logging
-        logger = logging.getLogger(__name__)
+        from loguru import logger
 
         try:
             # Find the member's active enrollment in this program
@@ -597,7 +615,7 @@ class TrainingSessionService:
                 select(ProgramEnrollment)
                 .where(ProgramEnrollment.user_id == user_id)
                 .where(ProgramEnrollment.program_id == program_id)
-                .where(ProgramEnrollment.status == "active")
+                .where(ProgramEnrollment.status == EnrollmentStatus.ACTIVE)
             )
             enrollment = enrollment_result.scalar_one_or_none()
 

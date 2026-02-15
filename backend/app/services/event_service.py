@@ -127,6 +127,7 @@ class EventService:
         self,
         organization_id: UUID,
         event_type: Optional[str] = None,
+        exclude_event_types: Optional[List[str]] = None,
         start_after: Optional[datetime] = None,
         start_before: Optional[datetime] = None,
         include_cancelled: bool = False,
@@ -142,6 +143,9 @@ class EventService:
 
         if event_type:
             query = query.where(Event.event_type == event_type)
+
+        if exclude_event_types:
+            query = query.where(Event.event_type.notin_(exclude_event_types))
 
         if not include_cancelled:
             query = query.where(Event.is_cancelled == False)
@@ -393,6 +397,7 @@ class EventService:
         else:
             # Create new RSVP
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 **rsvp_data.model_dump()
@@ -523,6 +528,7 @@ class EventService:
         else:
             # Create new RSVP
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 status=RSVPStatus(status),
@@ -662,6 +668,7 @@ class EventService:
         if not rsvp:
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 status=RSVPStatus.GOING,
@@ -971,6 +978,7 @@ class EventService:
 
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
+                organization_id=organization_id,
                 event_id=event_id,
                 user_id=user_id,
                 status=RSVPStatus.GOING,

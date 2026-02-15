@@ -5,7 +5,7 @@ Request and response schemas for organization-related endpoints.
 """
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from uuid import UUID
 from enum import Enum
@@ -79,6 +79,155 @@ class EmailServiceSettings(BaseModel):
     from_email: Optional[str] = Field(None, description="From email address")
     from_name: Optional[str] = Field(None, description="From name")
     use_tls: bool = Field(default=True, description="Use TLS encryption")
+
+
+class MemberDropNotificationSettings(BaseModel):
+    """
+    Configuration for notifications sent when a member is dropped.
+
+    Controls message recipients, CC behavior, and whether the member's
+    personal email is included in drop/property-return notifications.
+    """
+    cc_roles: List[str] = Field(
+        default_factory=lambda: ["admin", "quartermaster", "chief"],
+        description="Role names whose holders are automatically CC'd on drop notifications",
+    )
+    cc_emails: List[str] = Field(
+        default_factory=list,
+        description="Additional static email addresses always CC'd on drop notifications",
+    )
+    include_personal_email: bool = Field(
+        default=True,
+        description="Also send the drop notification to the member's personal email (if on file)",
+    )
+    use_custom_template: bool = Field(
+        default=False,
+        description="Use the MEMBER_DROPPED email template instead of the default property return letter",
+    )
+
+
+class MembershipTierBenefits(BaseModel):
+    """Benefits granted at a specific membership tier."""
+    training_exempt: bool = Field(
+        default=False,
+        description="Exempt members at this tier from all training requirements",
+    )
+    training_exempt_types: List[str] = Field(
+        default_factory=list,
+        description="If not fully exempt, exempt only these requirement types (e.g. ['continuing_education'])",
+    )
+    voting_eligible: bool = Field(
+        default=True,
+        description="Whether members at this tier can vote in elections",
+    )
+    voting_requires_meeting_attendance: bool = Field(
+        default=False,
+        description="Require a minimum meeting attendance percentage to vote",
+    )
+    voting_min_attendance_pct: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum meeting attendance percentage required to vote (0-100)",
+    )
+    voting_attendance_period_months: int = Field(
+        default=12,
+        ge=1,
+        le=60,
+        description="Look-back window (in months) for calculating meeting attendance",
+    )
+    can_hold_office: bool = Field(
+        default=True,
+        description="Whether members at this tier are eligible to hold elected office",
+    )
+    custom_benefits: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extensible key-value map for department-specific benefits",
+    )
+
+
+class MembershipTier(BaseModel):
+    """A single membership tier (e.g. Probationary, Active, Life)."""
+    id: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Machine-readable identifier (e.g. 'probationary', 'life')",
+    )
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Display name (e.g. 'Life Member')",
+    )
+    years_required: int = Field(
+        default=0,
+        ge=0,
+        description="Minimum years of service (from hire_date) to reach this tier",
+    )
+    sort_order: int = Field(
+        default=0,
+        description="Display and progression order (lower = earlier tier)",
+    )
+    benefits: MembershipTierBenefits = Field(
+        default_factory=MembershipTierBenefits,
+        description="Benefits granted to members at this tier",
+    )
+
+
+class MembershipTierSettings(BaseModel):
+    """
+    Organization-level membership tier configuration.
+
+    Defines the tiers a member progresses through based on years of service,
+    the benefits at each tier, and whether auto-advancement is enabled.
+    """
+    auto_advance: bool = Field(
+        default=True,
+        description="Automatically advance members to higher tiers when they meet the years-of-service threshold",
+    )
+    tiers: List[MembershipTier] = Field(
+        default_factory=lambda: [
+            MembershipTier(
+                id="probationary",
+                name="Probationary",
+                years_required=0,
+                sort_order=0,
+                benefits=MembershipTierBenefits(
+                    voting_eligible=False,
+                    can_hold_office=False,
+                ),
+            ),
+            MembershipTier(
+                id="active",
+                name="Active Member",
+                years_required=1,
+                sort_order=1,
+                benefits=MembershipTierBenefits(
+                    voting_requires_meeting_attendance=True,
+                    voting_min_attendance_pct=50.0,
+                    voting_attendance_period_months=12,
+                ),
+            ),
+            MembershipTier(
+                id="senior",
+                name="Senior Member",
+                years_required=10,
+                sort_order=2,
+                benefits=MembershipTierBenefits(),
+            ),
+            MembershipTier(
+                id="life",
+                name="Life Member",
+                years_required=20,
+                sort_order=3,
+                benefits=MembershipTierBenefits(
+                    training_exempt=True,
+                ),
+            ),
+        ],
+        description="Ordered list of membership tiers",
+    )
 
 
 class ITTeamMember(BaseModel):
@@ -198,6 +347,14 @@ class OrganizationSettings(BaseModel):
         default_factory=ITTeamSettings,
         description="IT team members and backup access configuration"
     )
+    member_drop_notifications: MemberDropNotificationSettings = Field(
+        default_factory=MemberDropNotificationSettings,
+        description="Configuration for drop/separation notifications (CC, personal email, template)",
+    )
+    membership_tiers: MembershipTierSettings = Field(
+        default_factory=MembershipTierSettings,
+        description="Membership tier definitions, years-of-service thresholds, and tier benefits",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -231,6 +388,8 @@ class OrganizationSettingsUpdate(BaseModel):
     auth: Optional[AuthSettings] = None
     modules: Optional[ModuleSettingsUpdate] = None
     it_team: Optional[ITTeamSettings] = None
+    member_drop_notifications: Optional[MemberDropNotificationSettings] = None
+    membership_tiers: Optional[MembershipTierSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')

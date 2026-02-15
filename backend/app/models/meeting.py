@@ -115,6 +115,7 @@ class MeetingAttendee(Base):
     __tablename__ = "meeting_attendees"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     meeting_id = Column(String(36), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
@@ -122,16 +123,23 @@ class MeetingAttendee(Base):
     present = Column(Boolean, default=True)
     excused = Column(Boolean, default=False)
 
+    # Waiver — excuses the member from attendance % penalty (can't vote in this meeting)
+    waiver_reason = Column(Text)
+    waiver_granted_by = Column(String(36), ForeignKey("users.id"))
+    waiver_granted_at = Column(DateTime(timezone=True))
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     meeting = relationship("Meeting", back_populates="attendees")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    waiver_grantor = relationship("User", foreign_keys=[waiver_granted_by])
 
     __table_args__ = (
         Index("idx_meeting_attendees_meeting", "meeting_id"),
         Index("idx_meeting_attendees_user", "user_id"),
+        Index("idx_meeting_attendees_organization", "organization_id"),
     )
 
     def __repr__(self):

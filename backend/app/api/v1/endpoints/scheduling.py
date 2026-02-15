@@ -23,6 +23,28 @@ from app.schemas.scheduling import (
     ShiftAttendanceUpdate,
     ShiftAttendanceResponse,
     SchedulingSummary,
+    ShiftCallCreate,
+    ShiftCallUpdate,
+    ShiftCallResponse,
+    ShiftTemplateCreate,
+    ShiftTemplateUpdate,
+    ShiftTemplateResponse,
+    ShiftPatternCreate,
+    ShiftPatternUpdate,
+    ShiftPatternResponse,
+    GenerateShiftsRequest,
+    ShiftAssignmentCreate,
+    ShiftAssignmentUpdate,
+    ShiftAssignmentResponse,
+    ShiftSwapRequestCreate,
+    ShiftSwapReview,
+    ShiftSwapRequestResponse,
+    SwapRequestStatus,
+    ShiftTimeOffCreate,
+    ShiftTimeOffUpdate,
+    ShiftTimeOffReview,
+    ShiftTimeOffResponse,
+    TimeOffStatus,
 )
 from app.services.scheduling_service import SchedulingService
 from app.api.dependencies import get_current_user, require_permission
@@ -46,8 +68,11 @@ async def list_shifts(
     """List shifts with optional date filtering"""
     service = SchedulingService(db)
 
-    start = date.fromisoformat(start_date) if start_date else None
-    end = date.fromisoformat(end_date) if end_date else None
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
     shifts, total = await service.get_shifts(
         current_user.organization_id,
@@ -176,7 +201,7 @@ async def update_attendance(
     """Update an attendance record"""
     service = SchedulingService(db)
     result, error = await service.update_attendance(
-        attendance_id, attendance.model_dump(exclude_none=True)
+        attendance_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to update attendance. {error}")
@@ -191,7 +216,7 @@ async def remove_attendance(
 ):
     """Remove an attendance record"""
     service = SchedulingService(db)
-    success, error = await service.remove_attendance(attendance_id)
+    success, error = await service.remove_attendance(attendance_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Unable to remove attendance. {error}")
 
@@ -208,7 +233,10 @@ async def get_week_calendar(
 ):
     """Get shifts for a specific week"""
     service = SchedulingService(db)
-    start = date.fromisoformat(week_start) if week_start else (date.today() - timedelta(days=date.today().weekday()))
+    try:
+        start = date.fromisoformat(week_start) if week_start else (date.today() - timedelta(days=date.today().weekday()))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     shifts = await service.get_week_shifts(current_user.organization_id, start)
     return shifts
 
@@ -216,7 +244,7 @@ async def get_week_calendar(
 @router.get("/calendar/month", response_model=list[ShiftResponse])
 async def get_month_calendar(
     year: Optional[int] = None,
-    month: Optional[int] = None,
+    month: Optional[int] = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.view")),
 ):
@@ -241,3 +269,674 @@ async def get_scheduling_summary(
     """Get scheduling module summary statistics"""
     service = SchedulingService(db)
     return await service.get_summary(current_user.organization_id)
+
+
+# ============================================
+# Shift Call Endpoints
+# ============================================
+
+@router.post("/shifts/{shift_id}/calls", response_model=ShiftCallResponse, status_code=status.HTTP_201_CREATED)
+async def create_call(
+    shift_id: UUID,
+    call: ShiftCallCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Create a call record for a shift"""
+    service = SchedulingService(db)
+    call_data = call.model_dump(exclude_none=True)
+    call_data.pop("shift_id", None)
+    result, error = await service.create_shift_call(
+        current_user.organization_id, shift_id, call_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to create call. {error}")
+    return result
+
+
+@router.get("/shifts/{shift_id}/calls", response_model=list[ShiftCallResponse])
+async def list_shift_calls(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """List all calls for a shift"""
+    service = SchedulingService(db)
+    calls = await service.get_shift_calls(shift_id, current_user.organization_id)
+    return calls
+
+
+@router.get("/calls/{call_id}", response_model=ShiftCallResponse)
+async def get_call(
+    call_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Get a specific call by ID"""
+    service = SchedulingService(db)
+    call = await service.get_shift_call_by_id(call_id, current_user.organization_id)
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    return call
+
+
+@router.patch("/calls/{call_id}", response_model=ShiftCallResponse)
+async def update_call(
+    call_id: UUID,
+    call: ShiftCallUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Update a call record"""
+    service = SchedulingService(db)
+    update_data = call.model_dump(exclude_none=True)
+    result, error = await service.update_shift_call(
+        call_id, current_user.organization_id, update_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to update call. {error}")
+    return result
+
+
+@router.delete("/calls/{call_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_call(
+    call_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Delete a call record"""
+    service = SchedulingService(db)
+    success, error = await service.delete_shift_call(call_id, current_user.organization_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Unable to delete call. {error}")
+
+
+# ============================================
+# Shift Template Endpoints
+# ============================================
+
+@router.get("/templates", response_model=list[ShiftTemplateResponse])
+async def list_templates(
+    active_only: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """List shift templates"""
+    service = SchedulingService(db)
+    templates = await service.get_templates(
+        current_user.organization_id, active_only=active_only
+    )
+    return templates
+
+
+@router.post("/templates", response_model=ShiftTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def create_template(
+    template: ShiftTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Create a shift template"""
+    service = SchedulingService(db)
+    template_data = template.model_dump(exclude_none=True)
+    result, error = await service.create_template(
+        current_user.organization_id, template_data, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to create template. {error}")
+    return result
+
+
+@router.get("/templates/{template_id}", response_model=ShiftTemplateResponse)
+async def get_template(
+    template_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Get a shift template by ID"""
+    service = SchedulingService(db)
+    template = await service.get_template_by_id(template_id, current_user.organization_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
+@router.patch("/templates/{template_id}", response_model=ShiftTemplateResponse)
+async def update_template(
+    template_id: UUID,
+    template: ShiftTemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Update a shift template"""
+    service = SchedulingService(db)
+    update_data = template.model_dump(exclude_none=True)
+    result, error = await service.update_template(
+        template_id, current_user.organization_id, update_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to update template. {error}")
+    return result
+
+
+@router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template(
+    template_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Delete a shift template"""
+    service = SchedulingService(db)
+    success, error = await service.delete_template(template_id, current_user.organization_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Unable to delete template. {error}")
+
+
+# ============================================
+# Shift Pattern Endpoints
+# ============================================
+
+@router.get("/patterns", response_model=list[ShiftPatternResponse])
+async def list_patterns(
+    active_only: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """List shift patterns"""
+    service = SchedulingService(db)
+    patterns = await service.get_patterns(
+        current_user.organization_id, active_only=active_only
+    )
+    return patterns
+
+
+@router.post("/patterns", response_model=ShiftPatternResponse, status_code=status.HTTP_201_CREATED)
+async def create_pattern(
+    pattern: ShiftPatternCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Create a shift pattern"""
+    service = SchedulingService(db)
+    pattern_data = pattern.model_dump(exclude_none=True)
+    result, error = await service.create_pattern(
+        current_user.organization_id, pattern_data, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to create pattern. {error}")
+    return result
+
+
+@router.get("/patterns/{pattern_id}", response_model=ShiftPatternResponse)
+async def get_pattern(
+    pattern_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Get a shift pattern by ID"""
+    service = SchedulingService(db)
+    pattern = await service.get_pattern_by_id(pattern_id, current_user.organization_id)
+    if not pattern:
+        raise HTTPException(status_code=404, detail="Pattern not found")
+    return pattern
+
+
+@router.patch("/patterns/{pattern_id}", response_model=ShiftPatternResponse)
+async def update_pattern(
+    pattern_id: UUID,
+    pattern: ShiftPatternUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Update a shift pattern"""
+    service = SchedulingService(db)
+    update_data = pattern.model_dump(exclude_none=True)
+    result, error = await service.update_pattern(
+        pattern_id, current_user.organization_id, update_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to update pattern. {error}")
+    return result
+
+
+@router.delete("/patterns/{pattern_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pattern(
+    pattern_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Delete a shift pattern"""
+    service = SchedulingService(db)
+    success, error = await service.delete_pattern(pattern_id, current_user.organization_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Unable to delete pattern. {error}")
+
+
+@router.post("/patterns/{pattern_id}/generate")
+async def generate_shifts_from_pattern(
+    pattern_id: UUID,
+    request: GenerateShiftsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Generate shifts from a pattern for a date range"""
+    service = SchedulingService(db)
+    result, error = await service.generate_shifts_from_pattern(
+        pattern_id,
+        current_user.organization_id,
+        request.start_date,
+        request.end_date,
+        current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to generate shifts. {error}")
+    return {"shifts_created": len(result), "shifts": result}
+
+
+# ============================================
+# Shift Assignment Endpoints
+# ============================================
+
+@router.get("/shifts/{shift_id}/assignments", response_model=list[ShiftAssignmentResponse])
+async def list_shift_assignments(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """List all assignments for a shift"""
+    service = SchedulingService(db)
+    assignments = await service.get_shift_assignments(shift_id, current_user.organization_id)
+    return assignments
+
+
+@router.post("/shifts/{shift_id}/assignments", response_model=ShiftAssignmentResponse, status_code=status.HTTP_201_CREATED)
+async def create_assignment(
+    shift_id: UUID,
+    assignment: ShiftAssignmentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.assign")),
+):
+    """Create a shift assignment"""
+    service = SchedulingService(db)
+    assignment_data = assignment.model_dump(exclude_none=True)
+    result, error = await service.create_assignment(
+        current_user.organization_id, shift_id, assignment_data, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to create assignment. {error}")
+    return result
+
+
+@router.patch("/assignments/{assignment_id}", response_model=ShiftAssignmentResponse)
+async def update_assignment(
+    assignment_id: UUID,
+    assignment: ShiftAssignmentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.assign")),
+):
+    """Update a shift assignment"""
+    service = SchedulingService(db)
+    update_data = assignment.model_dump(exclude_none=True)
+    result, error = await service.update_assignment(
+        assignment_id, current_user.organization_id, update_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to update assignment. {error}")
+    return result
+
+
+@router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_assignment(
+    assignment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.assign")),
+):
+    """Delete a shift assignment"""
+    service = SchedulingService(db)
+    success, error = await service.delete_assignment(assignment_id, current_user.organization_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Unable to delete assignment. {error}")
+
+
+@router.post("/assignments/{assignment_id}/confirm", response_model=ShiftAssignmentResponse)
+async def confirm_assignment(
+    assignment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Confirm own shift assignment"""
+    service = SchedulingService(db)
+    result, error = await service.confirm_assignment(
+        assignment_id, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to confirm assignment. {error}")
+    return result
+
+
+# ============================================
+# Shift Swap Request Endpoints
+# ============================================
+
+@router.get("/swap-requests", response_model=list[ShiftSwapRequestResponse])
+async def list_swap_requests(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """List shift swap requests"""
+    service = SchedulingService(db)
+    swap_status = None
+    if status_filter:
+        try:
+            swap_status = SwapRequestStatus(status_filter)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+    requests, total = await service.get_swap_requests(
+        current_user.organization_id,
+        status=swap_status,
+        skip=skip,
+        limit=limit,
+    )
+    return requests
+
+
+@router.post("/swap-requests", response_model=ShiftSwapRequestResponse, status_code=status.HTTP_201_CREATED)
+async def create_swap_request(
+    swap_request: ShiftSwapRequestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Create a shift swap request"""
+    service = SchedulingService(db)
+    request_data = swap_request.model_dump(exclude_none=True)
+    result, error = await service.create_swap_request(
+        current_user.organization_id, current_user.id, request_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to create swap request. {error}")
+    return result
+
+
+@router.get("/swap-requests/{request_id}", response_model=ShiftSwapRequestResponse)
+async def get_swap_request(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Get a specific swap request"""
+    service = SchedulingService(db)
+    swap_request = await service.get_swap_request_by_id(request_id, current_user.organization_id)
+    if not swap_request:
+        raise HTTPException(status_code=404, detail="Swap request not found")
+    return swap_request
+
+
+@router.post("/swap-requests/{request_id}/review", response_model=ShiftSwapRequestResponse)
+async def review_swap_request(
+    request_id: UUID,
+    review: ShiftSwapReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Review (approve/deny) a shift swap request"""
+    service = SchedulingService(db)
+    result, error = await service.review_swap_request(
+        request_id, current_user.organization_id, current_user.id,
+        review.status, review.reviewer_notes
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to review swap request. {error}")
+    return result
+
+
+@router.post("/swap-requests/{request_id}/cancel", response_model=ShiftSwapRequestResponse)
+async def cancel_swap_request(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Cancel own shift swap request"""
+    service = SchedulingService(db)
+    result, error = await service.cancel_swap_request(
+        request_id, current_user.organization_id, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to cancel swap request. {error}")
+    return result
+
+
+# ============================================
+# Time-Off Endpoints
+# ============================================
+
+@router.get("/time-off", response_model=list[ShiftTimeOffResponse])
+async def list_time_off_requests(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    user_id: Optional[UUID] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """List time-off requests"""
+    service = SchedulingService(db)
+    time_off_status = None
+    if status_filter:
+        try:
+            time_off_status = TimeOffStatus(status_filter)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+    requests, total = await service.get_time_off_requests(
+        current_user.organization_id,
+        status=time_off_status,
+        user_id=user_id,
+        skip=skip,
+        limit=limit,
+    )
+    return requests
+
+
+@router.post("/time-off", response_model=ShiftTimeOffResponse, status_code=status.HTTP_201_CREATED)
+async def create_time_off_request(
+    time_off: ShiftTimeOffCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Create a time-off request"""
+    service = SchedulingService(db)
+    time_off_data = time_off.model_dump(exclude_none=True)
+    result, error = await service.create_time_off(
+        current_user.organization_id, current_user.id, time_off_data
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to create time-off request. {error}")
+    return result
+
+
+@router.get("/time-off/{time_off_id}", response_model=ShiftTimeOffResponse)
+async def get_time_off_request(
+    time_off_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Get a specific time-off request"""
+    service = SchedulingService(db)
+    time_off = await service.get_time_off_by_id(time_off_id, current_user.organization_id)
+    if not time_off:
+        raise HTTPException(status_code=404, detail="Time-off request not found")
+    return time_off
+
+
+@router.post("/time-off/{time_off_id}/review", response_model=ShiftTimeOffResponse)
+async def review_time_off_request(
+    time_off_id: UUID,
+    review: ShiftTimeOffReview,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Review (approve/deny) a time-off request"""
+    service = SchedulingService(db)
+    result, error = await service.review_time_off(
+        time_off_id, current_user.organization_id, current_user.id,
+        review.status, review.reviewer_notes
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to review time-off request. {error}")
+    return result
+
+
+@router.post("/time-off/{time_off_id}/cancel", response_model=ShiftTimeOffResponse)
+async def cancel_time_off_request(
+    time_off_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.swap")),
+):
+    """Cancel own time-off request"""
+    service = SchedulingService(db)
+    result, error = await service.cancel_time_off(
+        time_off_id, current_user.organization_id, current_user.id
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=f"Unable to cancel time-off request. {error}")
+    return result
+
+
+@router.get("/availability")
+async def get_member_availability(
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.assign")),
+):
+    """Get member availability for a date range"""
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    availability = await service.get_availability(
+        current_user.organization_id, start, end
+    )
+    return availability
+
+
+# ============================================
+# Personal Shift Endpoints
+# ============================================
+
+@router.get("/my-shifts")
+async def get_my_shifts(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current user's shifts"""
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    shifts, total = await service.get_my_shifts(
+        current_user.id,
+        current_user.organization_id,
+        start_date=start,
+        end_date=end,
+        skip=skip,
+        limit=limit,
+    )
+    return {"shifts": shifts, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
+async def get_my_assignments(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current user's shift assignments"""
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    assignments = await service.get_user_assignments(
+        current_user.id,
+        current_user.organization_id,
+        start_date=start,
+        end_date=end,
+    )
+    return assignments
+
+
+# ============================================
+# Report Endpoints
+# ============================================
+
+@router.get("/reports/member-hours")
+async def get_member_hours_report(
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.report")),
+):
+    """Get member hours report for a date range"""
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    report = await service.get_member_hours_report(
+        current_user.organization_id, start, end
+    )
+    return report
+
+
+@router.get("/reports/coverage")
+async def get_coverage_report(
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.report")),
+):
+    """Get shift coverage report for a date range"""
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    report = await service.get_shift_coverage_report(
+        current_user.organization_id, start, end
+    )
+    return report
+
+
+@router.get("/reports/call-volume")
+async def get_call_volume_report(
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    group_by: str = Query("day", regex="^(day|week|month)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.report")),
+):
+    """Get call volume report for a date range"""
+    service = SchedulingService(db)
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    report = await service.get_call_volume_report(
+        current_user.organization_id, start, end, group_by=group_by
+    )
+    return report

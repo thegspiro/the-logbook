@@ -7,11 +7,319 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Shift Module Enhancement: Full Scheduling System (2026-02-14)
+
+#### Shift Templates & Recurring Patterns
+- **Shift templates**: `POST /api/v1/scheduling/templates` — define reusable shift definitions (Day Shift, Night Shift, Weekend Duty) with start/end times, duration, positions, min staffing, and calendar color
+- **Shift patterns**: `POST /api/v1/scheduling/patterns` — create recurring schedules with support for four pattern types: `daily`, `weekly`, `platoon` (A/B/C rotation), and `custom`
+- **Auto-generation**: `POST /api/v1/scheduling/patterns/{id}/generate` — generates shifts for a date range from a pattern template, with automatic assignment creation for pre-assigned members
+- **Template CRUD**: Full create/read/update/delete for shift templates with active/inactive toggle
+
+#### Duty Roster & Shift Assignments
+- **Assign members**: `POST /api/v1/scheduling/shifts/{id}/assignments` — assign members to shifts with position designation (officer, driver, firefighter, EMS, captain, lieutenant, probationary, volunteer)
+- **Confirm/decline**: `POST /api/v1/scheduling/assignments/{id}/confirm` — members confirm their own shift assignments
+- **Assignment statuses**: `assigned`, `confirmed`, `declined`, `no_show`
+- **My assignments**: `GET /api/v1/scheduling/my-assignments` — personal view of upcoming shift assignments
+
+#### Shift Swap Requests
+- **Request swap**: `POST /api/v1/scheduling/swap-requests` — members request to swap shifts, optionally targeting a specific shift or member
+- **Officer review**: `POST /api/v1/scheduling/swap-requests/{id}/review` — approve or deny swap requests with notes
+- **Cancel request**: `POST /api/v1/scheduling/swap-requests/{id}/cancel` — requestor can cancel pending requests
+- **Status tracking**: `pending`, `approved`, `denied`, `cancelled` with full audit trail
+
+#### Time-Off / Unavailability
+- **Request time off**: `POST /api/v1/scheduling/time-off` — members submit time-off requests with date range and reason
+- **Officer review**: `POST /api/v1/scheduling/time-off/{id}/review` — approve or deny with notes
+- **Availability check**: `GET /api/v1/scheduling/availability` — view which members have approved time off in a date range, for scheduling decisions
+- **Cancel request**: `POST /api/v1/scheduling/time-off/{id}/cancel` — cancel pending requests
+
+#### Shift Call Recording
+- **Record calls**: `POST /api/v1/scheduling/shifts/{id}/calls` — log incidents/calls during shifts with incident number, type, dispatch/on-scene/cleared times, responding members
+- **Call details**: Track `cancelled_en_route`, `medical_refusal`, and per-call responding member list
+- **Call CRUD**: Full create/read/update/delete for shift call records
+
+#### Shift Reporting & Analytics
+- **Member hours report**: `GET /api/v1/scheduling/reports/member-hours` — per-member shift count and total hours for a date range
+- **Coverage report**: `GET /api/v1/scheduling/reports/coverage` — daily staffing levels showing assigned vs. confirmed vs. minimum required
+- **Call volume report**: `GET /api/v1/scheduling/reports/call-volume` — call counts by type with average response times, groupable by day/week/month
+- **My shifts**: `GET /api/v1/scheduling/my-shifts` — personal shift history and upcoming assignments
+
+#### New Permissions & Roles
+- **`scheduling.assign`**: Assign members to shifts (officers and above)
+- **`scheduling.swap`**: Request and manage shift swaps (all members)
+- **`scheduling.report`**: View shift reports and analytics (officers and above)
+- **Scheduling Officer role**: New system role with full scheduling permissions for dedicated scheduling coordinators
+
+#### New Models
+- `ShiftTemplate` — reusable shift definitions with positions and min staffing
+- `ShiftPattern` — recurring schedule definitions with platoon rotation support
+- `ShiftAssignment` — duty roster assignments with position and confirmation status
+- `ShiftSwapRequest` — swap request workflow with officer review
+- `ShiftTimeOff` — time-off request workflow with approval
+- **Migration**: `20260214_2200` creates 5 new tables with indexes
+
+### Added - Facilities Module: Building & Property Management (2026-02-14)
+
+#### Core Facilities Management
+- **Facility CRUD**: Create, edit, archive facilities with types, statuses, addresses, GPS coordinates, year built, square footage
+- **Facility types**: 10 default types (Fire Station, EMS Station, Training Center, Administrative Office, Meeting Hall, Storage Building, Maintenance Shop, Communications Center, Community Center, Other)
+- **Facility statuses**: 6 default statuses with color coding (Operational, Under Renovation, Under Construction, Temporarily Closed, Decommissioned, Other)
+- **Photos & documents**: Attach photos and documents to facilities with metadata
+- **Systems tracking**: Track building systems (HVAC, electrical, plumbing, etc.) with install dates and warranty info
+
+#### Facility Maintenance
+- **Maintenance scheduling**: `POST /api/v1/facilities/{id}/maintenance` — log maintenance records with type, priority, scheduling, and cost tracking
+- **20 default maintenance types**: HVAC, Generator, Fire Alarm, Sprinkler, Roof, Elevator, Bay Door, Pest Control, and more with recommended frequencies
+- **Inspections**: Track facility inspections with pass/fail, findings, and follow-up
+
+#### Extended Facilities Features
+- **Utility tracking**: Track utility accounts (electric, gas, water, sewer, internet, phone, trash) with billing cycles and meter readings
+- **Key & access management**: Track physical keys, key fobs, access cards, codes, and gate remotes with assignment to members
+- **Room/space inventory**: Catalog rooms with type, capacity, equipment, and availability
+- **Emergency contacts & shutoffs**: Record emergency contacts by type (fire, police, utility, building) and shutoff locations (water, gas, electric, HVAC, sprinkler)
+- **Capital improvement projects**: Track renovation/construction/equipment projects with budget, timeline, and contractor info
+- **Insurance policies**: Manage building, liability, flood, earthquake, and equipment policies with coverage amounts and renewal dates
+- **Occupant/unit assignments**: Track tenant/unit assignments for multi-use facilities
+- **ADA/compliance checklists**: Create compliance checklists (ADA, fire code, building code, OSHA, environmental) with individual checklist items and due dates
+
+#### Permissions & Roles
+- **6 permissions**: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance`, `facilities.manage`
+- **Facilities Manager role**: System role with VIEW, CREATE, EDIT, MAINTENANCE permissions for day-to-day building management
+- **Onboarding integration**: Facilities module added to onboarding available modules list
+
+#### Seed Data & Migration
+- **Migration**: `20260214_1900` creates 9 core facility tables; `20260214_2100` creates 11 extended feature tables
+- **Seed migration**: `20260214_2000` seeds default facility types, statuses, and maintenance types
+
+### Added - Apparatus Module Hardening (2026-02-14)
+
+#### Security & Quality Improvements
+- **Tenant isolation**: All queries filter by `organization_id` — no cross-organization data leakage
+- **Pagination**: All list endpoints support `skip`/`limit` with total count
+- **Error handling**: Consistent error responses with proper HTTP status codes
+- **Soft-delete**: `is_archived`/`archived_at`/`archived_by` pattern for apparatus records
+- **Historic repair entries**: Maintenance records support attachments and repair history
+
+### Added - Secretary Attendance Dashboard & Meeting Waivers (2026-02-14)
+
+#### Secretary Attendance Dashboard
+- **Attendance dashboard**: `GET /api/v1/meetings/attendance/dashboard` — secretary/leadership view showing every active member's meeting attendance %, meetings attended, waived, absent, membership tier, and voting eligibility
+- **Period filtering**: `period_months` parameter for configurable look-back window (default 12 months)
+- **Meeting type filter**: Optionally filter by meeting type (e.g. `business` only)
+- **Voting eligibility**: Shows whether each member is eligible to vote and the reason if blocked (tier restrictions or attendance below minimum)
+
+#### Meeting Attendance Waivers
+- **Grant waiver**: `POST /api/v1/meetings/{meeting_id}/attendance-waiver` — secretary, president, or chief excuses a member from a meeting
+- **Waiver effect**: The member cannot vote in this meeting, but their attendance percentage is not penalized
+- **Attendance calculation updated**: Waived meetings are excluded from both numerator and denominator of the attendance percentage
+- **List waivers**: `GET /api/v1/meetings/{meeting_id}/attendance-waivers` — view all waivers for a meeting
+- **Audit trail**: Every waiver is logged as `meeting_attendance_waiver_granted` with `warning` severity
+- **Migration**: `20260214_1300` adds `waiver_reason`, `waiver_granted_by`, `waiver_granted_at` to meeting_attendees
+
+### Added - Auto-Enrollment on Prospective Member Conversion (2026-02-14)
+
+#### Probationary Training Pipeline Auto-Enrollment
+- **Auto-enroll on transfer**: When a prospective member is converted to a full member, they are automatically enrolled in the organization's default probationary training program
+- **Program detection**: Looks for `settings.training.auto_enroll_program_id` first, then falls back to any active program with "probationary" in the name
+- **Manual enrollment**: `POST /api/v1/training/enrollments` — training officer can enroll any member into any training pipeline (probationary, driver training, AIC, etc.)
+- **Administrative conversion**: Works for both prospective→operational and administrative→operational conversions
+- **Transfer response**: Includes `auto_enrollment` field showing the program enrolled into
+
+### Added - Incident-Based Training Progress Tracking (2026-02-14)
+
+#### Call Type Tracking in Shift Completion Reports
+- **Call type matching**: When a requirement specifies `required_call_types` (e.g. `["transport", "cardiac"]`), shift completion reports now count only calls matching those types
+- **Call type running totals**: `progress_notes.call_type_totals` tracks per-type counts (e.g. `{"transport": 8, "cardiac": 3}`)
+- **Call type history**: `progress_notes.call_type_history` records each shift report's matching types and counts
+- **Customizable by training officer**: Requirements can specify minimum calls by type (e.g. 15 total calls, 10 transports, 5 shifts) via `required_calls`, `required_call_types`, `required_shifts`, `required_hours` on `TrainingRequirement`
+
+### Added - Scheduled Tasks / Cron Configuration (2026-02-14)
+
+#### Cron Task Runner
+- **List tasks**: `GET /api/v1/scheduled/tasks` — lists all available scheduled tasks with recommended cron schedules
+- **Run task**: `POST /api/v1/scheduled/run-task?task={task_id}` — manually trigger any scheduled task
+- **Recommended schedule**:
+  - **Daily 6:00 AM**: `cert_expiration_alerts` — tiered certification expiration reminders
+  - **Weekly Monday 7:00 AM**: `struggling_member_check` — detect members falling behind
+  - **Weekly Monday 7:30 AM**: `enrollment_deadline_warnings` — warn approaching deadlines
+  - **Monthly 1st 8:00 AM**: `membership_tier_advance` — auto-advance membership tiers
+
+### Added - Struggling Member Detection & Notifications (2026-02-14)
+
+#### Pipeline Progress Monitoring
+- **Behind-pace detection**: Flags members who have used >50% of their enrollment time but completed <25% of requirements
+- **Deadline approaching**: Flags members within 30 days of deadline at <75% completion (critical if within 7 days)
+- **Stalled requirements**: Detects requirements with no progress updates in 30+ days
+- **Auto-notification**: Training officers receive in-app alerts about struggling members (critical/warning severity)
+- **Deadline warnings**: Automatic warnings at 30, 14, and 7 days before enrollment deadline
+- **Large department support**: Proactively surfaces struggling members who might otherwise go unnoticed
+
+### Added - Membership Stage Requirements Editor (2026-02-14)
+
+#### Tier Configuration Management
+- **Get config**: `GET /api/v1/users/membership-tiers/config` — view current tier configuration
+- **Update config**: `PUT /api/v1/users/membership-tiers/config` — training/compliance/secretary can edit membership requirements for each stage
+- **Configurable per-tier settings**: voting eligibility, meeting attendance % required for voting, training exemptions, office-holding eligibility, years-of-service for auto-advancement
+- **Validation**: Ensures all tiers have `id` and `name`, attendance percentages are 0-100
+- **Audit trail**: Config changes logged as `membership_tier_config_updated` with `warning` severity
+
+### Added - Training Calendar Integration & Double-Booking Prevention (2026-02-14)
+
+#### Training Session Calendar View
+- **Calendar endpoint**: `GET /api/v1/training-sessions/calendar` — returns training sessions with linked Event data (dates, times, locations, training metadata) for calendar display
+- **Date range filtering**: `start_after` / `start_before` query parameters for fetching sessions in a date window
+- **Training type filter**: Filter calendar by `training_type` (certification, continuing_education, etc.)
+- **Double-booking prevention**: Training sessions with a `location_id` are checked against the organization's event calendar — prevents scheduling a training session at a location already booked by another event
+- **Shared calendar**: Training events appear on the organization-wide event calendar alongside all other events
+- **Hall coordinator filtering**: `GET /api/v1/events?exclude_event_types=training` — hall coordinators can hide training events from their view while double-booking prevention still applies across all event types
+- **`location_id` field**: Added to `TrainingSessionCreate` schema for location-aware training sessions
+- **Event relationship**: Explicit `event` and `course` relationships added to `TrainingSession` model for eager loading
+
+### Added - Competency Matrix / Heat Map Dashboard (2026-02-14)
+
+#### Department Readiness Dashboard
+- **Competency matrix**: `GET /api/v1/training/competency-matrix` — generates a member vs. requirement matrix showing certification/training status for every member
+- **Color-coded statuses**: `current` (green), `expiring_soon` (yellow, within 90 days), `expired` (red), `not_started` (gray)
+- **Readiness percentage**: Summary block with total members, requirements, and overall department readiness score
+- **Filterable**: Optional `requirement_ids` and `user_ids` query parameters to focus on specific requirements or members
+- **Gap identification**: Helps training officers identify where gaps exist and create targeted training plans
+
+### Added - Certification Expiration Alert Pipeline (2026-02-14)
+
+#### Tiered Expiration Reminders
+- **Process alerts**: `POST /api/v1/training/certifications/process-alerts` — scans all certification records and sends tiered reminders
+- **Four tiers**: 90-day, 60-day, 30-day, and 7-day warnings before expiration
+- **Escalation**: Expired certifications trigger an escalation email CC'd to training officer, compliance officer, and chief
+- **CC on escalation**: 30-day → training officers CC'd; 7-day → training + compliance officers; expired → + chief officer
+- **Idempotent**: Each tier is tracked per-record (`alert_90_sent_at`, `alert_60_sent_at`, etc.) — will not re-send
+- **Alert tracking columns**: `alert_90_sent_at`, `alert_60_sent_at`, `alert_30_sent_at`, `alert_7_sent_at`, `escalation_sent_at` on training_records
+
+### Added - Peer Skill Evaluation Sign-Offs (2026-02-14)
+
+#### Configurable Evaluator Permissions
+- **Check evaluator**: `POST /api/v1/training/skill-evaluations/{skill_id}/check-evaluator` — verifies whether the current user is authorized to sign off on a skill
+- **Role-based**: `allowed_evaluators.type = "roles"` — e.g. only `shift_leader` can sign off on AIC skills, `driver_trainer` for driver trainees
+- **User-specific**: `allowed_evaluators.type = "specific_users"` — explicitly named users who may evaluate
+- **Default fallback**: `null` → any user with `training.manage` permission can sign off
+- **Training officer configurable**: Training officer or chief sets the `allowed_evaluators` JSON on each `SkillEvaluation` record
+- **`allowed_evaluators` column**: New JSON column on skill_evaluations table
+
+### Added - Meeting Quorum Enforcement (2026-02-14)
+
+#### Organization-Configurable Quorum
+- **Get quorum status**: `GET /api/v1/minutes/{minutes_id}/quorum` — calculates and returns current quorum status for a meeting
+- **Configure quorum**: `PATCH /api/v1/minutes/{minutes_id}/quorum-config` — set per-meeting quorum type and threshold
+- **Organization defaults**: `organization.settings.quorum_config` — default quorum rules applied to all meetings (type: "count" or "percentage", threshold value)
+- **Check-in driven**: Quorum is calculated from attendees marked `present: true` in the meeting's attendee list
+- **Per-meeting override**: Individual meetings can override the org default with `quorum_type` and `quorum_threshold` columns
+- **Auto-update**: `update_quorum_on_checkin()` recalculates quorum each time an attendee checks in or is removed
+- **`quorum_threshold`/`quorum_type` columns**: New columns on meeting_minutes table
+
+### Added - Bulk Voter Override for Elections (2026-02-14)
+
+#### Secretary Bulk Override
+- **Bulk override**: `POST /api/v1/elections/{election_id}/voter-overrides/bulk` — secretary can grant voting overrides to multiple members in a single request
+- **Reason required**: A reason (10–500 characters) is required for every bulk override
+- **Enhanced audit logging**: Each override is individually logged with `warning` severity, and a summary audit event captures the full batch with all user IDs
+- **Existing override protection**: Members who already have an override are skipped (not duplicated)
+
+### Added - Migration 20260214_1200 (2026-02-14)
+
+#### Schema Changes
+- `meeting_minutes.quorum_threshold` (Float, nullable) — configurable quorum threshold per meeting
+- `meeting_minutes.quorum_type` (String(20), nullable) — "count" or "percentage"
+- `skill_evaluations.allowed_evaluators` (JSON, nullable) — configurable evaluator permissions
+- `training_records.alert_90_sent_at` through `alert_7_sent_at` (DateTime, nullable) — certification alert tracking
+- `training_records.escalation_sent_at` (DateTime, nullable) — escalation alert tracking
+
+### Added - Proxy Voting for Elections (2026-02-14)
+
+#### Proxy Voting System
+- **Organization opt-in**: Proxy voting is a department choice — enabled via `organization.settings.proxy_voting.enabled`; disabled by default
+- **Authorize a proxy**: `POST /api/v1/elections/{election_id}/proxy-authorizations` — secretary designates one member to vote on behalf of another, with a reason
+- **Proxy types**: `single_election` (one-time for this election) or `regular` (standing proxy, noted for reference)
+- **Cast proxy vote**: `POST /api/v1/elections/{election_id}/proxy-vote` — the designated proxy casts a vote; eligibility and double-vote prevention apply to the *delegating* (absent) member
+- **Hash trail**: Each proxy vote records `is_proxy_vote=true`, `proxy_voter_id` (who physically voted), `proxy_delegating_user_id` (on whose behalf), and `proxy_authorization_id`; the `voter_hash` identifies the delegating member so the audit trail shows who voted on whose behalf
+- **Ballot email CC**: When ballot emails are sent, the proxy holder is automatically CC'd on the delegating member's ballot notification
+- **List authorizations**: `GET /api/v1/elections/{election_id}/proxy-authorizations` — view all active and revoked authorizations
+- **Revoke authorization**: `DELETE /api/v1/elections/{election_id}/proxy-authorizations/{id}` — revoke before the proxy votes; cannot revoke after the vote is cast
+- **Forensics integration**: The election forensics report includes a `proxy_voting` section with all authorizations and proxy votes cast
+- **Full audit trail**: `proxy_authorization_granted`, `proxy_authorization_revoked`, `proxy_vote_cast`, and `proxy_vote_double_attempt` audit events
+- **`proxy_authorizations` column**: New JSON column on the elections table
+- **Vote columns**: `is_proxy_vote`, `proxy_voter_id`, `proxy_authorization_id`, `proxy_delegating_user_id` added to votes table
+- **Migration**: `20260214_1100` adds proxy voting columns
+
+### Added - Secretary Voter Override for Elections (2026-02-14)
+
+#### Voter Eligibility Overrides
+- **Secretary override**: `POST /api/v1/elections/{election_id}/voter-overrides` — grants a member voting rights for a specific election, bypassing tier-based and meeting attendance restrictions
+- **Reason required**: Every override must include a reason (e.g. "Excused absence approved by board vote")
+- **Full audit trail**: Each override records the member, reason, granting officer name, and timestamp; logged as a `voter_override_granted` audit event with `warning` severity
+- **List overrides**: `GET /api/v1/elections/{election_id}/voter-overrides` — view all overrides for an election
+- **Remove override**: `DELETE /api/v1/elections/{election_id}/voter-overrides/{user_id}` — revoke an override before the member votes
+- **Scope**: Overrides skip tier voting eligibility and attendance percentage checks only; they do NOT bypass election-level eligible_voters lists, position-specific role requirements, or double-vote prevention
+- **`voter_overrides` column**: New JSON column on the elections table
+- **Migration**: `20260214_1000` adds `voter_overrides` column to elections table
+
+### Added - Membership Tiers, Voting Attendance Rules & Training Exemptions (2026-02-14)
+
+#### Membership Tier System
+- **Configurable membership tiers**: Organization settings > `membership_tiers` defines an ordered list of tiers (default: Probationary, Active, Senior, Life) with years-of-service thresholds
+- **Tier benefits per level**: Each tier can grant `training_exempt`, selective `training_exempt_types`, `voting_eligible`, `voting_requires_meeting_attendance` with configurable `voting_min_attendance_pct` and look-back `voting_attendance_period_months`, `can_hold_office`, and extensible `custom_benefits`
+- **`membership_type` field on User**: Stores the member's current tier (e.g. `"probationary"`, `"life"`); defaults to `"active"`
+- **Manual tier change**: `PATCH /api/v1/users/{user_id}/membership-type` — leadership can promote/adjust a member's tier with a reason
+- **Auto-advancement**: `POST /api/v1/users/advance-membership-tiers` — batch-advance all eligible members based on years of service from `hire_date`; idempotent, designed for periodic triggering
+
+#### Voting Eligibility — Meeting Attendance
+- **Tier-based voting rules**: The election system now checks the member's tier benefits before allowing votes; probationary members (default config) cannot vote
+- **Attendance-gated voting**: If a tier has `voting_requires_meeting_attendance: true`, the system calculates the member's meeting attendance percentage over the configured look-back period and rejects the vote if below the minimum (e.g. 50% over 12 months)
+- **Attendance calculation**: Uses the `MeetingAttendee` model — counts meetings marked present vs. total meetings in the organization during the period
+
+#### Training Exemptions
+- **Tier-based exemptions**: Members at a tier with `training_exempt: true` (e.g. Life Members) have all requirements treated as met in compliance checks
+- **Selective exemptions**: `training_exempt_types` allows exempting only specific requirement types (e.g. `["continuing_education"]`) while keeping others enforced
+
+#### Migration
+- `20260214_0900` adds `membership_type` (VARCHAR 50, default "active") and `membership_type_changed_at` columns to users table
+
+### Added - Configurable Drop Notification Messages (2026-02-14)
+
+#### Email Template & Recipient Configuration
+- **Default MEMBER_DROPPED email template**: Auto-created for each organization with template variables (`{{member_name}}`, `{{reason}}`, `{{item_count}}`, etc.) — fully editable via the Email Templates settings page
+- **CC/BCC support**: `EmailService.send_email()` now supports `cc_emails` and `bcc_emails` parameters
+- **Configurable CC recipients**: Organization settings > `member_drop_notifications.cc_roles` controls which roles are CC'd (default: admin, quartermaster, chief)
+- **Static CC emails**: `member_drop_notifications.cc_emails` allows adding extra email addresses always CC'd on drop notifications
+- **Personal email support**: New `personal_email` field on user profiles for post-separation contact; `member_drop_notifications.include_personal_email` controls whether it receives the drop notification (default: true)
+- **Template variable reference**: 10 available variables for the member_dropped template type, documented in the template editor
+- **Migration**: `20260214_0800` adds `personal_email` column to users table
+
+### Added - Member Archive & Reactivation (2026-02-14)
+
+#### Member Archiving Lifecycle
+- **New `archived` status**: Added to UserStatus enum — represents a dropped member who has returned all property
+- **Auto-archive on last item return**: When a dropped member returns their last assigned/checked-out item, they are automatically transitioned to `archived` status
+- **Manual archive endpoint**: `POST /api/v1/users/{user_id}/archive` — allows leadership to archive a dropped member manually (e.g. items written off)
+- **Reactivation endpoint**: `POST /api/v1/users/{user_id}/reactivate` — restores an archived member to `active` status when they rejoin the department
+- **Archived members list**: `GET /api/v1/users/archived` — lists all archived members for legal requests or reactivation lookup
+- **Audit trail**: All archive/reactivation events logged with full event data
+- **Admin notification**: Admins, quartermasters, and chiefs notified by email when auto-archive occurs
+- **`archived_at` column**: Tracks the exact timestamp of archiving on the user record
+- **Profile preservation**: Archived members' full profile, training history, and inventory records remain accessible
+- **Migration**: `20260214_0700` adds `archived` enum value and `archived_at` column
+
+#### Duplicate Member Prevention
+- **Prospect creation check**: Creating a prospect with an email matching an archived member returns 409 with reactivation guidance
+- **Prospect transfer check**: Transferring a prospect to membership is blocked if email matches any existing user (archived or active), with clear messaging about reactivation
+- **Admin user creation check**: Creating a member via admin endpoint returns 409 with match details and reactivation URL if email matches an archived member
+- **Pre-submission lookup**: `POST /api/v1/membership-pipeline/prospects/check-existing` — checks email and name against all existing members before prospect entry
+- **Match types**: Cross-references by email (exact) and by first+last name (case-insensitive)
+
 ### Added - Property Return Report & Member Drop Statuses (2026-02-14)
 
 #### Member Drop Statuses
 - **New UserStatus values**: `dropped_voluntary` and `dropped_involuntary` added to the UserStatus enum
 - **Status change endpoint**: `PATCH /api/v1/users/{user_id}/status` with `members.manage` permission
+- **Drop reason in notification**: The `reason` field provided by leadership is now included in the property return letter sent to the dropped member (both HTML and plain text versions)
 - **Audit logging**: All status changes logged with severity `warning` for drops
 - **Migration**: `20260214_0500` adds new enum values to users, email_templates, and notification_rules tables
 

@@ -39,6 +39,7 @@ class UserStatus(str, enum.Enum):
     RETIRED = "retired"
     DROPPED_VOLUNTARY = "dropped_voluntary"
     DROPPED_INVOLUNTARY = "dropped_involuntary"
+    ARCHIVED = "archived"
 
 
 class OrganizationType(str, enum.Enum):
@@ -159,6 +160,7 @@ class User(Base):
     # Basic Info
     username = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, index=True)
+    personal_email = Column(String(255))  # Personal/home email for post-separation contact
     password_hash = Column(String(255))
     first_name = Column(String(100))
     middle_name = Column(String(100))
@@ -191,10 +193,15 @@ class User(Base):
     # Format: {"email": true, "sms": false, "push": true, "digest": "daily", ...}
     notification_preferences = Column(JSON, default=dict)
 
+    # Membership
+    membership_type = Column(String(50), default="active")  # Org-defined tier: probationary, active, senior, life, etc.
+    membership_type_changed_at = Column(DateTime(timezone=True))  # When membership tier last changed
+
     # Status
     status = Column(Enum(UserStatus, values_callable=lambda x: [e.value for e in x]), default=UserStatus.ACTIVE, index=True)
     status_changed_at = Column(DateTime(timezone=True))  # When status last changed (used for drop-date tracking)
     status_change_reason = Column(Text)  # Reason for the last status change
+    archived_at = Column(DateTime(timezone=True))  # When the member was archived (after all property returned)
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime(timezone=True))
 

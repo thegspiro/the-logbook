@@ -112,14 +112,30 @@ async def create_member(
             detail="Username already exists"
         )
 
-    # Check if email already exists
+    # Check if email already exists (including archived members)
     result = await db.execute(
         select(User)
         .where(User.email == user_data.email)
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
     )
-    if result.scalar_one_or_none():
+    existing_user = result.scalar_one_or_none()
+    if existing_user:
+        if existing_user.status == UserStatus.ARCHIVED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": (
+                        f"An archived member with this email already exists: "
+                        f"{existing_user.full_name}. Use the reactivation endpoint "
+                        f"to restore their account instead of creating a duplicate."
+                    ),
+                    "existing_user_id": str(existing_user.id),
+                    "existing_member_name": existing_user.full_name,
+                    "existing_status": existing_user.status.value,
+                    "reactivate_url": f"/api/v1/users/{existing_user.id}/reactivate",
+                },
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already exists"

@@ -253,3 +253,110 @@ async def get_meetings_summary(
     """Get meetings module summary statistics"""
     service = MeetingsService(db)
     return await service.get_summary(current_user.organization_id)
+
+
+# ============================================
+# Attendance Dashboard & Waivers
+# ============================================
+
+@router.get("/attendance/dashboard")
+async def get_attendance_dashboard(
+    period_months: int = Query(default=12, ge=1, le=60, description="Look-back period in months"),
+    meeting_type: Optional[str] = Query(None, description="Filter by meeting type (e.g. 'business')"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    Secretary attendance dashboard.
+
+    Shows every active member's meeting attendance percentage, meetings attended,
+    waived, absent counts, membership tier, and voting eligibility status.
+    This data point feeds into annual membership requirements.
+
+    **Requires permission: meetings.manage**
+    """
+    from app.services.attendance_dashboard_service import AttendanceDashboardService
+    service = AttendanceDashboardService(db)
+    return await service.get_dashboard(
+        organization_id=current_user.organization_id,
+        period_months=period_months,
+        meeting_type=meeting_type,
+    )
+
+
+@router.post("/{meeting_id}/attendance-waiver")
+async def grant_attendance_waiver(
+    meeting_id: UUID,
+    user_id: UUID = Query(..., description="Member to grant the waiver to"),
+    reason: str = Query(..., min_length=5, max_length=500, description="Reason for the waiver"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    Grant a meeting attendance waiver to a member.
+
+    The member will not be able to vote in this meeting, but their attendance
+    percentage will not be penalized. Only secretary, president, and chief
+    (via meetings.manage) can grant waivers.
+
+    **Requires permission: meetings.manage**
+    """
+    from app.services.attendance_dashboard_service import AttendanceDashboardService
+    from app.core.audit import log_audit_event
+
+    # Verify the meeting belongs to this org
+    from app.models.meeting import Meeting
+    from sqlalchemy import select
+    result = await db.execute(
+        select(Meeting)
+        .where(Meeting.id == str(meeting_id))
+        .where(Meeting.organization_id == str(current_user.organization_id))
+    )
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+
+    service = AttendanceDashboardService(db)
+    waiver = await service.grant_waiver(
+        meeting_id=str(meeting_id),
+        user_id=str(user_id),
+        organization_id=str(current_user.organization_id),
+        granted_by=str(current_user.id),
+        reason=reason,
+    )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_attendance_waiver_granted",
+        event_category="meetings",
+        severity="warning",
+        event_data={
+            "meeting_id": str(meeting_id),
+            "meeting_title": meeting.title,
+            "user_id": str(user_id),
+            "reason": reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return waiver
+
+
+@router.get("/{meeting_id}/attendance-waivers")
+async def list_attendance_waivers(
+    meeting_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    List all attendance waivers for a meeting.
+
+    **Requires permission: meetings.manage**
+    """
+    from app.services.attendance_dashboard_service import AttendanceDashboardService
+    service = AttendanceDashboardService(db)
+    return await service.list_waivers(
+        meeting_id=str(meeting_id),
+        organization_id=str(current_user.organization_id),
+    )

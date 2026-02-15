@@ -4,14 +4,19 @@ Training Session API Endpoints
 Endpoints for creating and managing training sessions and approvals.
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional, List
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
 from app.models.user import User
+from app.models.training import TrainingSession
+from app.models.event import Event
 from app.schemas.training_session import (
     TrainingSessionCreate,
     TrainingSessionResponse,
@@ -217,4 +222,79 @@ async def submit_training_approval(
     return {
         "message": "Training approval submitted successfully",
         "status": "approved",
+    }
+
+
+@router.get("/calendar")
+async def list_training_sessions_calendar(
+    start_after: Optional[datetime] = Query(None, description="Filter sessions starting after this datetime"),
+    start_before: Optional[datetime] = Query(None, description="Filter sessions starting before this datetime"),
+    training_type: Optional[str] = Query(None, description="Filter by training type"),
+    include_finalized: bool = Query(True, description="Include finalized sessions"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List training sessions with calendar-relevant event data.
+
+    Returns training sessions joined with their linked Events so the calendar
+    can display dates, times, locations, and training metadata together.
+
+    Training events show on the organization calendar alongside other events
+    but can be filtered by hall coordinators via the events endpoint's
+    `exclude_event_types=training` parameter.
+
+    **Authentication required**
+    """
+    query = (
+        select(TrainingSession)
+        .join(Event, TrainingSession.event_id == Event.id)
+        .where(TrainingSession.organization_id == str(current_user.organization_id))
+        .where(Event.is_cancelled == False)
+        .options(selectinload(TrainingSession.event))
+    )
+
+    if start_after:
+        query = query.where(Event.start_datetime >= start_after)
+    if start_before:
+        query = query.where(Event.start_datetime <= start_before)
+    if training_type:
+        query = query.where(TrainingSession.training_type == training_type)
+    if not include_finalized:
+        query = query.where(TrainingSession.is_finalized == False)
+
+    query = query.order_by(Event.start_datetime)
+
+    result = await db.execute(query)
+    sessions = list(result.scalars().all())
+
+    calendar_items = []
+    for session in sessions:
+        event = session.event
+        if not event:
+            continue
+
+        calendar_items.append({
+            "session_id": str(session.id),
+            "event_id": str(session.event_id),
+            "title": event.title,
+            "course_name": session.course_name,
+            "course_code": session.course_code,
+            "training_type": session.training_type.value if session.training_type else None,
+            "credit_hours": session.credit_hours,
+            "instructor": session.instructor,
+            "start_datetime": event.start_datetime.isoformat() if event.start_datetime else None,
+            "end_datetime": event.end_datetime.isoformat() if event.end_datetime else None,
+            "location": event.location,
+            "location_id": str(event.location_id) if event.location_id else None,
+            "is_mandatory": event.is_mandatory,
+            "is_finalized": session.is_finalized,
+            "issues_certification": session.issues_certification,
+            "requires_rsvp": event.requires_rsvp,
+            "max_attendees": event.max_attendees,
+        })
+
+    return {
+        "count": len(calendar_items),
+        "sessions": calendar_items,
     }

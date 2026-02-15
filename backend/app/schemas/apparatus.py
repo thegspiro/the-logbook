@@ -648,6 +648,17 @@ class ApparatusMaintenanceTypeResponse(ApparatusMaintenanceTypeBase):
 
 
 # =============================================================================
+# Shared Attachment Schema
+# =============================================================================
+
+class FileAttachment(BaseModel):
+    """Attachment reference for files (photos, PDFs, email exports, etc.)"""
+    file_path: str
+    file_name: str
+    mime_type: Optional[str] = None
+
+
+# =============================================================================
 # Apparatus Maintenance Record Schemas
 # =============================================================================
 
@@ -655,6 +666,8 @@ class ApparatusMaintenanceBase(BaseModel):
     """Base maintenance record schema"""
     apparatus_id: str = Field(..., description="Apparatus ID")
     maintenance_type_id: str = Field(..., description="Maintenance type ID")
+    component_id: Optional[str] = Field(None, description="Component this maintenance targets")
+    service_provider_id: Optional[str] = Field(None, description="Service provider who performed the work")
 
     scheduled_date: Optional[date] = None
     due_date: Optional[date] = None
@@ -678,15 +691,34 @@ class ApparatusMaintenanceBase(BaseModel):
 
     notes: Optional[str] = None
 
+    # Attachments (photos, invoices, email chains, etc.)
+    attachments: Optional[List[FileAttachment]] = None
+
 
 class ApparatusMaintenanceCreate(ApparatusMaintenanceBase):
     """Schema for creating maintenance record"""
     is_completed: bool = Field(default=False)
 
+    # Historic entry support — for back-dating records entered during onboarding
+    is_historic: bool = Field(
+        default=False,
+        description="True when entering a past repair that happened before system adoption",
+    )
+    occurred_date: Optional[date] = Field(
+        None,
+        description="Actual date the work was performed (required when is_historic=True)",
+    )
+    historic_source: Optional[str] = Field(
+        None, max_length=200,
+        description='Where the data came from, e.g. "Paper logbook", "Vendor invoice"',
+    )
+
 
 class ApparatusMaintenanceUpdate(BaseModel):
     """Schema for updating maintenance record"""
     maintenance_type_id: Optional[str] = None
+    component_id: Optional[str] = None
+    service_provider_id: Optional[str] = None
 
     scheduled_date: Optional[date] = None
     due_date: Optional[date] = None
@@ -712,6 +744,13 @@ class ApparatusMaintenanceUpdate(BaseModel):
 
     notes: Optional[str] = None
 
+    # Attachments
+    attachments: Optional[List[FileAttachment]] = None
+
+    # Historic fields (allow correction after creation)
+    occurred_date: Optional[date] = None
+    historic_source: Optional[str] = Field(None, max_length=200)
+
 
 class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
     """Schema for maintenance record response"""
@@ -723,6 +762,11 @@ class ApparatusMaintenanceResponse(ApparatusMaintenanceBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    # Historic entry info
+    is_historic: bool = False
+    occurred_date: Optional[date] = None
+    historic_source: Optional[str] = None
 
     # Nested info
     maintenance_type: Optional[ApparatusMaintenanceTypeResponse] = None
@@ -1071,5 +1115,456 @@ class ApparatusMaintenanceDue(BaseModel):
     due_mileage: Optional[int] = None
     due_hours: Optional[Decimal] = None
     is_overdue: bool
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+# =============================================================================
+# NFPA Compliance Schemas
+# =============================================================================
+
+class ComplianceStatusEnum(str, Enum):
+    COMPLIANT = "compliant"
+    NON_COMPLIANT = "non_compliant"
+    PENDING = "pending"
+    EXEMPT = "exempt"
+
+
+class ApparatusNFPAComplianceBase(BaseModel):
+    """Base NFPA compliance schema"""
+    apparatus_id: str = Field(..., description="Apparatus ID")
+    standard_code: str = Field(..., min_length=1, max_length=50, description="NFPA standard code (e.g., 'NFPA 1911')")
+    section_reference: str = Field(..., min_length=1, max_length=100, description="Section reference (e.g., 'Section 5.2.1')")
+    requirement_description: str = Field(..., min_length=1, description="Description of the requirement")
+    is_compliant: bool = Field(default=False)
+    compliance_status: ComplianceStatusEnum = Field(default=ComplianceStatusEnum.PENDING)
+    last_checked_date: Optional[date] = None
+    next_due_date: Optional[date] = None
+    notes: Optional[str] = None
+    exemption_reason: Optional[str] = None
+
+
+class ApparatusNFPAComplianceCreate(ApparatusNFPAComplianceBase):
+    """Schema for creating NFPA compliance record"""
+    pass
+
+
+class ApparatusNFPAComplianceUpdate(BaseModel):
+    """Schema for updating NFPA compliance record"""
+    standard_code: Optional[str] = Field(None, min_length=1, max_length=50)
+    section_reference: Optional[str] = Field(None, min_length=1, max_length=100)
+    requirement_description: Optional[str] = None
+    is_compliant: Optional[bool] = None
+    compliance_status: Optional[ComplianceStatusEnum] = None
+    last_checked_date: Optional[date] = None
+    next_due_date: Optional[date] = None
+    notes: Optional[str] = None
+    exemption_reason: Optional[str] = None
+
+
+class ApparatusNFPAComplianceResponse(ApparatusNFPAComplianceBase):
+    """Schema for NFPA compliance response"""
+    id: str
+    organization_id: str
+    last_checked_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Report Config Schemas
+# =============================================================================
+
+class ScheduleFrequencyEnum(str, Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
+class ReportTypeEnum(str, Enum):
+    FLEET_STATUS = "fleet_status"
+    MAINTENANCE = "maintenance"
+    COST_ANALYSIS = "cost_analysis"
+    CUSTOM = "custom"
+
+
+class OutputFormatEnum(str, Enum):
+    PDF = "pdf"
+    CSV = "csv"
+    EXCEL = "excel"
+
+
+class ApparatusReportConfigBase(BaseModel):
+    """Base report config schema"""
+    name: str = Field(..., min_length=1, max_length=200, description="Report name")
+    description: Optional[str] = None
+    report_type: ReportTypeEnum = Field(..., description="Report type")
+
+    # Schedule
+    is_scheduled: bool = Field(default=False)
+    schedule_frequency: Optional[ScheduleFrequencyEnum] = None
+    schedule_day: Optional[int] = Field(None, ge=1, le=31, description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)")
+
+    # Data Range
+    data_range_type: Optional[str] = Field(None, max_length=50)
+    data_range_days: Optional[int] = Field(None, ge=1)
+
+    # Filters
+    include_apparatus_ids: Optional[List[str]] = None
+    include_type_ids: Optional[List[str]] = None
+    include_status_ids: Optional[List[str]] = None
+    include_archived: bool = Field(default=False)
+
+    # Report Fields
+    fields_to_include: Optional[List[str]] = None
+    group_by: Optional[str] = Field(None, max_length=100)
+    sort_by: Optional[str] = Field(None, max_length=100)
+    sort_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
+
+    # Output
+    output_format: OutputFormatEnum = Field(default=OutputFormatEnum.PDF)
+
+    # Recipients
+    email_recipients: Optional[List[str]] = None
+
+    is_active: bool = Field(default=True)
+
+
+class ApparatusReportConfigCreate(ApparatusReportConfigBase):
+    """Schema for creating report config"""
+    pass
+
+
+class ApparatusReportConfigUpdate(BaseModel):
+    """Schema for updating report config"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    report_type: Optional[ReportTypeEnum] = None
+
+    is_scheduled: Optional[bool] = None
+    schedule_frequency: Optional[ScheduleFrequencyEnum] = None
+    schedule_day: Optional[int] = Field(None, ge=1, le=31, description="For weekly: day of week (1=Mon..7=Sun); for monthly: day of month (1-31)")
+
+    data_range_type: Optional[str] = Field(None, max_length=50)
+    data_range_days: Optional[int] = Field(None, ge=1)
+
+    include_apparatus_ids: Optional[List[str]] = None
+    include_type_ids: Optional[List[str]] = None
+    include_status_ids: Optional[List[str]] = None
+    include_archived: Optional[bool] = None
+
+    fields_to_include: Optional[List[str]] = None
+    group_by: Optional[str] = Field(None, max_length=100)
+    sort_by: Optional[str] = Field(None, max_length=100)
+    sort_direction: Optional[str] = Field(None, pattern="^(asc|desc)$")
+
+    output_format: Optional[OutputFormatEnum] = None
+
+    email_recipients: Optional[List[str]] = None
+
+    is_active: Optional[bool] = None
+
+
+class ApparatusReportConfigResponse(ApparatusReportConfigBase):
+    """Schema for report config response"""
+    id: str
+    organization_id: str
+    next_run_date: Optional[datetime] = None
+    last_run_date: Optional[datetime] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Service Provider Schemas
+# =============================================================================
+
+class ComponentTypeEnum(str, Enum):
+    ENGINE = "engine"
+    PUMP = "pump"
+    AERIAL = "aerial"
+    CHASSIS = "chassis"
+    DRIVETRAIN = "drivetrain"
+    BRAKES = "brakes"
+    ELECTRICAL = "electrical"
+    HYDRAULIC = "hydraulic"
+    BODY = "body"
+    CAB = "cab"
+    TANK = "tank"
+    FOAM_SYSTEM = "foam_system"
+    COOLING = "cooling"
+    EXHAUST = "exhaust"
+    LIGHTING = "lighting"
+    COMMUNICATIONS = "communications"
+    SAFETY_EQUIPMENT = "safety_equipment"
+    HVAC = "hvac"
+    TIRES_WHEELS = "tires_wheels"
+    OTHER = "other"
+
+
+class ComponentConditionEnum(str, Enum):
+    EXCELLENT = "excellent"
+    GOOD = "good"
+    FAIR = "fair"
+    POOR = "poor"
+    CRITICAL = "critical"
+
+
+class NoteTypeEnum(str, Enum):
+    OBSERVATION = "observation"
+    REPAIR = "repair"
+    ISSUE = "issue"
+    INSPECTION = "inspection"
+    UPDATE = "update"
+
+
+class NoteSeverityEnum(str, Enum):
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class NoteStatusEnum(str, Enum):
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    DEFERRED = "deferred"
+
+
+class ApparatusServiceProviderBase(BaseModel):
+    """Base service provider schema"""
+    name: str = Field(..., min_length=1, max_length=200)
+    company_name: Optional[str] = Field(None, max_length=200)
+    contact_name: Optional[str] = Field(None, max_length=200)
+
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    address: Optional[str] = None
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=50)
+    zip_code: Optional[str] = Field(None, max_length=20)
+    website: Optional[str] = Field(None, max_length=300, pattern=r"^https?://")
+
+    specialties: Optional[List[ComponentTypeEnum]] = None
+    certifications: Optional[List[str]] = None
+    is_emergency_service: bool = Field(default=False)
+
+    license_number: Optional[str] = Field(None, max_length=100)
+    insurance_info: Optional[str] = None
+    tax_id: Optional[str] = Field(None, max_length=50)
+
+    is_preferred: bool = Field(default=False)
+    rating: Optional[int] = Field(None, ge=1, le=5)
+
+    notes: Optional[str] = None
+    contract_info: Optional[str] = None
+    is_active: bool = Field(default=True)
+
+
+class ApparatusServiceProviderCreate(ApparatusServiceProviderBase):
+    """Schema for creating service provider"""
+    pass
+
+
+class ApparatusServiceProviderUpdate(BaseModel):
+    """Schema for updating service provider"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    company_name: Optional[str] = Field(None, max_length=200)
+    contact_name: Optional[str] = Field(None, max_length=200)
+
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, max_length=200)
+    address: Optional[str] = None
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=50)
+    zip_code: Optional[str] = Field(None, max_length=20)
+    website: Optional[str] = Field(None, max_length=300)
+
+    specialties: Optional[List[ComponentTypeEnum]] = None
+    certifications: Optional[List[str]] = None
+    is_emergency_service: Optional[bool] = None
+
+    license_number: Optional[str] = Field(None, max_length=100)
+    insurance_info: Optional[str] = None
+    tax_id: Optional[str] = Field(None, max_length=50)
+
+    is_preferred: Optional[bool] = None
+    rating: Optional[int] = Field(None, ge=1, le=5)
+
+    notes: Optional[str] = None
+    contract_info: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ApparatusServiceProviderResponse(ApparatusServiceProviderBase):
+    """Schema for service provider response"""
+    id: str
+    organization_id: str
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Component Schemas
+# =============================================================================
+
+class ApparatusComponentBase(BaseModel):
+    """Base component schema"""
+    apparatus_id: str = Field(..., description="Apparatus ID")
+    name: str = Field(..., min_length=1, max_length=200, description="Component name")
+    component_type: ComponentTypeEnum = Field(default=ComponentTypeEnum.OTHER)
+    description: Optional[str] = None
+
+    manufacturer: Optional[str] = Field(None, max_length=200)
+    model_number: Optional[str] = Field(None, max_length=100)
+    serial_number: Optional[str] = Field(None, max_length=100)
+
+    install_date: Optional[date] = None
+    warranty_expiration: Optional[date] = None
+    expected_life_years: Optional[int] = Field(None, ge=0)
+
+    condition: ComponentConditionEnum = Field(default=ComponentConditionEnum.GOOD)
+    last_serviced_date: Optional[date] = None
+    last_inspected_date: Optional[date] = None
+
+    notes: Optional[str] = None
+    sort_order: int = Field(default=0, ge=0)
+    is_active: bool = Field(default=True)
+
+
+class ApparatusComponentCreate(ApparatusComponentBase):
+    """Schema for creating component"""
+    pass
+
+
+class ApparatusComponentUpdate(BaseModel):
+    """Schema for updating component"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    component_type: Optional[ComponentTypeEnum] = None
+    description: Optional[str] = None
+
+    manufacturer: Optional[str] = Field(None, max_length=200)
+    model_number: Optional[str] = Field(None, max_length=100)
+    serial_number: Optional[str] = Field(None, max_length=100)
+
+    install_date: Optional[date] = None
+    warranty_expiration: Optional[date] = None
+    expected_life_years: Optional[int] = Field(None, ge=0)
+
+    condition: Optional[ComponentConditionEnum] = None
+    last_serviced_date: Optional[date] = None
+    last_inspected_date: Optional[date] = None
+
+    notes: Optional[str] = None
+    sort_order: Optional[int] = Field(None, ge=0)
+    is_active: Optional[bool] = None
+
+
+class ApparatusComponentResponse(ApparatusComponentBase):
+    """Schema for component response"""
+    id: str
+    organization_id: str
+    apparatus_id: str
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Component Note Schemas
+# =============================================================================
+
+# NoteAttachment is defined earlier as FileAttachment
+NoteAttachment = FileAttachment
+
+
+class ApparatusComponentNoteBase(BaseModel):
+    """Base component note schema"""
+    component_id: str = Field(..., description="Component ID")
+    apparatus_id: str = Field(..., description="Apparatus ID")
+
+    title: str = Field(..., min_length=1, max_length=300)
+    description: str = Field(..., min_length=1)
+    note_type: NoteTypeEnum = Field(default=NoteTypeEnum.OBSERVATION)
+    severity: NoteSeverityEnum = Field(default=NoteSeverityEnum.INFO)
+    status: NoteStatusEnum = Field(default=NoteStatusEnum.OPEN)
+
+    service_provider_id: Optional[str] = Field(None, description="Service provider")
+
+    estimated_cost: Optional[Decimal] = Field(None, ge=0)
+    actual_cost: Optional[Decimal] = Field(None, ge=0)
+
+    resolution_notes: Optional[str] = None
+    attachments: Optional[List[NoteAttachment]] = None
+    tags: Optional[List[str]] = None
+
+
+class ApparatusComponentNoteCreate(ApparatusComponentNoteBase):
+    """Schema for creating component note"""
+    pass
+
+
+class ApparatusComponentNoteUpdate(BaseModel):
+    """Schema for updating component note"""
+    title: Optional[str] = Field(None, min_length=1, max_length=300)
+    description: Optional[str] = None
+    note_type: Optional[NoteTypeEnum] = None
+    severity: Optional[NoteSeverityEnum] = None
+    status: Optional[NoteStatusEnum] = None
+
+    service_provider_id: Optional[str] = None
+
+    estimated_cost: Optional[Decimal] = Field(None, ge=0)
+    actual_cost: Optional[Decimal] = Field(None, ge=0)
+
+    resolution_notes: Optional[str] = None
+    attachments: Optional[List[NoteAttachment]] = None
+    tags: Optional[List[str]] = None
+
+
+class ApparatusComponentNoteResponse(ApparatusComponentNoteBase):
+    """Schema for component note response"""
+    id: str
+    organization_id: str
+    created_by: Optional[str] = None
+    reported_by: Optional[str] = None
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
+# Service Report Schema (compiled report for service techs)
+# =============================================================================
+
+class ApparatusServiceReport(BaseModel):
+    """Compiled service report for a vehicle or specific component area"""
+    apparatus: ApparatusResponse
+    components: List[ApparatusComponentResponse]
+    open_issues: List[ApparatusComponentNoteResponse]
+    recent_maintenance: List[ApparatusMaintenanceResponse]
+    service_providers: List[ApparatusServiceProviderResponse]
+    generated_at: datetime
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)

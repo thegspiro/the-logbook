@@ -30,6 +30,7 @@ class PermissionCategory(str, Enum):
     FORMS = "forms"
     DOCUMENTS = "documents"
     APPARATUS = "apparatus"
+    FACILITIES = "facilities"
     ANALYTICS = "analytics"
     INTEGRATIONS = "integrations"
     NOTIFICATIONS = "notifications"
@@ -100,6 +101,9 @@ COMPLIANCE_MANAGE = Permission("compliance.manage", "Manage compliance records",
 # Scheduling
 SCHEDULING_VIEW = Permission("scheduling.view", "View schedules", PermissionCategory.SCHEDULING)
 SCHEDULING_MANAGE = Permission("scheduling.manage", "Manage schedules", PermissionCategory.SCHEDULING)
+SCHEDULING_ASSIGN = Permission("scheduling.assign", "Assign members to shifts", PermissionCategory.SCHEDULING)
+SCHEDULING_SWAP = Permission("scheduling.swap", "Request and manage shift swaps", PermissionCategory.SCHEDULING)
+SCHEDULING_REPORT = Permission("scheduling.report", "View shift reports and analytics", PermissionCategory.SCHEDULING)
 
 # Inventory
 INVENTORY_VIEW = Permission("inventory.view", "View inventory", PermissionCategory.INVENTORY)
@@ -151,7 +155,20 @@ DOCUMENTS_VIEW = Permission("documents.view", "View documents", PermissionCatego
 DOCUMENTS_MANAGE = Permission("documents.manage", "Manage documents and folders", PermissionCategory.DOCUMENTS)
 
 # Apparatus
-APPARATUS_MANAGE = Permission("apparatus.manage", "Manage apparatus and fleet", PermissionCategory.APPARATUS)
+APPARATUS_VIEW = Permission("apparatus.view", "View apparatus and fleet information", PermissionCategory.APPARATUS)
+APPARATUS_CREATE = Permission("apparatus.create", "Create new apparatus records", PermissionCategory.APPARATUS)
+APPARATUS_EDIT = Permission("apparatus.edit", "Edit apparatus records", PermissionCategory.APPARATUS)
+APPARATUS_DELETE = Permission("apparatus.delete", "Delete apparatus records", PermissionCategory.APPARATUS)
+APPARATUS_MAINTENANCE = Permission("apparatus.maintenance", "Log and manage maintenance records", PermissionCategory.APPARATUS)
+APPARATUS_MANAGE = Permission("apparatus.manage", "Full apparatus and fleet management", PermissionCategory.APPARATUS)
+
+# Facilities
+FACILITIES_VIEW = Permission("facilities.view", "View facilities and buildings", PermissionCategory.FACILITIES)
+FACILITIES_CREATE = Permission("facilities.create", "Create new facility records", PermissionCategory.FACILITIES)
+FACILITIES_EDIT = Permission("facilities.edit", "Edit facility records", PermissionCategory.FACILITIES)
+FACILITIES_DELETE = Permission("facilities.delete", "Delete facility records", PermissionCategory.FACILITIES)
+FACILITIES_MAINTENANCE = Permission("facilities.maintenance", "Log and manage facility maintenance", PermissionCategory.FACILITIES)
+FACILITIES_MANAGE = Permission("facilities.manage", "Full facility management", PermissionCategory.FACILITIES)
 
 # Analytics
 ANALYTICS_VIEW = Permission("analytics.view", "View analytics and dashboards", PermissionCategory.ANALYTICS)
@@ -212,6 +229,9 @@ ALL_PERMISSIONS: List[Permission] = [
     COMPLIANCE_MANAGE,
     SCHEDULING_VIEW,
     SCHEDULING_MANAGE,
+    SCHEDULING_ASSIGN,
+    SCHEDULING_SWAP,
+    SCHEDULING_REPORT,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
     MEETINGS_VIEW,
@@ -253,7 +273,20 @@ ALL_PERMISSIONS: List[Permission] = [
     DOCUMENTS_MANAGE,
 
     # Apparatus
+    APPARATUS_VIEW,
+    APPARATUS_CREATE,
+    APPARATUS_EDIT,
+    APPARATUS_DELETE,
+    APPARATUS_MAINTENANCE,
     APPARATUS_MANAGE,
+
+    # Facilities
+    FACILITIES_VIEW,
+    FACILITIES_CREATE,
+    FACILITIES_EDIT,
+    FACILITIES_DELETE,
+    FACILITIES_MAINTENANCE,
+    FACILITIES_MANAGE,
 
     # Analytics
     ANALYTICS_VIEW,
@@ -348,6 +381,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -372,7 +408,18 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
             ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_VIEW.name,
@@ -405,6 +452,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -424,7 +474,18 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
             ANALYTICS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
@@ -463,6 +524,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_MANAGE.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -487,7 +551,18 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_DELETE.name,
+            APPARATUS_MAINTENANCE.name,
             APPARATUS_MANAGE.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_DELETE.name,
+            FACILITIES_MAINTENANCE.name,
+            FACILITIES_MANAGE.name,
             ANALYTICS_VIEW.name,
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_VIEW.name,
@@ -518,6 +593,8 @@ DEFAULT_ROLES = {
             MINUTES_VIEW.name,
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
         ],
@@ -538,6 +615,8 @@ DEFAULT_ROLES = {
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             COMPLIANCE_VIEW.name,  # To see equipment certifications
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
         ],
     },
     "secretary": {
@@ -573,6 +652,8 @@ DEFAULT_ROLES = {
             MINUTES_MANAGE.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
             MEMBERS_CREATE.name,
@@ -613,11 +694,14 @@ DEFAULT_ROLES = {
             TRAINING_VIEW.name,
             COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
+            SCHEDULING_SWAP.name,
             MEETINGS_VIEW.name,
             EVENTS_VIEW.name,
             FORMS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -636,6 +720,8 @@ DEFAULT_ROLES = {
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
             COMPLIANCE_VIEW.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
@@ -707,6 +793,9 @@ DEFAULT_ROLES = {
             COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             INVENTORY_VIEW.name,
             INVENTORY_MANAGE.name,
             MEETINGS_VIEW.name,
@@ -717,6 +806,8 @@ DEFAULT_ROLES = {
             LOCATIONS_VIEW.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
+            APPARATUS_VIEW.name,
+            FACILITIES_VIEW.name,
         ],
     },
     "apparatus_manager": {
@@ -734,6 +825,10 @@ DEFAULT_ROLES = {
             INVENTORY_MANAGE.name,
             COMPLIANCE_VIEW.name,
             LOCATIONS_VIEW.name,
+            APPARATUS_VIEW.name,
+            APPARATUS_CREATE.name,
+            APPARATUS_EDIT.name,
+            APPARATUS_MAINTENANCE.name,
         ],
     },
     "membership_coordinator": {
@@ -773,6 +868,46 @@ DEFAULT_ROLES = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             LOCATIONS_VIEW.name,
+        ],
+    },
+    "facilities_manager": {
+        "name": "Facilities Manager",
+        "slug": "facilities_manager",
+        "description": "Day-to-day building management, maintenance logging, and inspections",
+        "is_system": True,
+        "priority": 50,
+        "permissions": [
+            USERS_VIEW.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            INVENTORY_VIEW.name,
+            INVENTORY_MANAGE.name,
+            COMPLIANCE_VIEW.name,
+            LOCATIONS_VIEW.name,
+            FACILITIES_VIEW.name,
+            FACILITIES_CREATE.name,
+            FACILITIES_EDIT.name,
+            FACILITIES_MAINTENANCE.name,
+        ],
+    },
+    "scheduling_officer": {
+        "name": "Scheduling Officer",
+        "slug": "scheduling_officer",
+        "description": "Manages shift schedules, duty rosters, and staffing assignments",
+        "is_system": True,
+        "priority": 55,
+        "permissions": [
+            USERS_VIEW.name,
+            USERS_VIEW_CONTACT.name,
+            MEMBERS_VIEW.name,
+            ROLES_VIEW.name,
+            ORGANIZATION_VIEW.name,
+            SCHEDULING_VIEW.name,
+            SCHEDULING_MANAGE.name,
+            SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
         ],
     },
 }

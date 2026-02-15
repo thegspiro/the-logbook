@@ -10,6 +10,7 @@ from sqlalchemy import (
     Text,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Enum as SQLEnum,
@@ -207,6 +208,13 @@ class MeetingMinutes(Base):
     attendees = Column(JSON, nullable=True)
     quorum_met = Column(Boolean, nullable=True)
     quorum_count = Column(Integer, nullable=True)
+
+    # Quorum configuration for this meeting
+    # quorum_type: "count" (absolute headcount) or "percentage" (of active members)
+    # quorum_threshold: the required value (e.g. 10 members or 50.0 percent)
+    # These default from org settings but can be overridden per-meeting.
+    quorum_type = Column(String(20), nullable=True)  # "count" or "percentage"
+    quorum_threshold = Column(Float, nullable=True)
 
     # Dynamic content sections: JSON array of {order, key, title, content}
     # When present, this is the authoritative source for content.

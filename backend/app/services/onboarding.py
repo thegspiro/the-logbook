@@ -559,7 +559,7 @@ class OnboardingService:
             # Core modules (always enabled)
             *core_modules,
             # Operations modules
-            "training", "inventory", "scheduling", "apparatus",
+            "training", "inventory", "scheduling", "apparatus", "facilities",
             # Governance modules
             "elections", "minutes", "reports",
             # Communication modules

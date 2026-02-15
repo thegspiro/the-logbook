@@ -123,6 +123,21 @@ class Election(Base):
     #           "checked_in_by": "user-456"}]
     attendees = Column(JSON, nullable=True)
 
+    # Voter eligibility overrides — secretary can grant voting rights
+    # Format: [{"user_id": "abc-123", "reason": "Excused absence approved",
+    #           "overridden_by": "user-456", "overridden_by_name": "Jane Smith",
+    #           "overridden_at": "2026-02-14T10:00:00"}]
+    voter_overrides = Column(JSON, nullable=True)
+
+    # Proxy voting authorizations — secretary can allow one member to vote on behalf of another
+    # Format: [{"id": "auth-uuid", "delegating_user_id": "abc-123", "delegating_user_name": "John Doe",
+    #           "proxy_user_id": "def-456", "proxy_user_name": "Jane Smith",
+    #           "proxy_type": "single_election",  # "single_election" or "regular"
+    #           "reason": "Cannot attend — authorized by board",
+    #           "authorized_by": "user-789", "authorized_by_name": "Secretary Name",
+    #           "authorized_at": "2026-02-14T10:00:00", "revoked_at": null}]
+    proxy_authorizations = Column(JSON, nullable=True)
+
     # Rollback audit trail
     rollback_history = Column(JSON, nullable=True)
     # Format: [{"timestamp": "2024-01-19T10:00:00", "performed_by": "user_id",
@@ -196,6 +211,7 @@ class VotingToken(Base):
     __tablename__ = "voting_tokens"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Secure token for ballot access (sent via email)
@@ -226,6 +242,7 @@ class VotingToken(Base):
         Index("ix_voting_tokens_election_id", "election_id"),
         Index("ix_voting_tokens_token", "token"),
         Index("ix_voting_tokens_voter_hash", "voter_hash"),
+        Index("ix_voting_tokens_organization_id", "organization_id"),
     )
 
 
@@ -255,6 +272,12 @@ class Vote(Base):
     # Cryptographic signature for tampering detection
     # HMAC-SHA256(election_id:candidate_id:voter_hash:voted_at, VOTE_SIGNING_KEY)
     vote_signature = Column(String(128), nullable=True)
+
+    # Proxy voting — tracks when a vote is cast on behalf of another member
+    is_proxy_vote = Column(Boolean, nullable=False, default=False)
+    proxy_voter_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # The person who physically voted
+    proxy_authorization_id = Column(String(36), nullable=True)  # References proxy_authorizations[].id on Election
+    proxy_delegating_user_id = Column(String(36), nullable=True)  # The absent member on whose behalf the vote is cast
 
     # IP and user agent for audit (not shown to users)
     ip_address = Column(String(45), nullable=True)

@@ -1258,3 +1258,442 @@ async def remove_attendee(
         )
 
     return {"success": True, "message": "Attendee removed"}
+
+
+# ==================== Voter Eligibility Overrides ====================
+
+
+from pydantic import BaseModel as _PydanticBase, Field as _Field
+from typing import Optional as _Opt
+
+
+class VoterOverrideRequest(_PydanticBase):
+    """Request to grant a member voting rights despite tier/attendance restrictions."""
+    user_id: UUID
+    reason: str = _Field(..., min_length=1, max_length=500, description="Why this member is being allowed to vote")
+
+
+@router.post("/{election_id}/voter-overrides", status_code=status.HTTP_201_CREATED)
+async def add_voter_override(
+    election_id: UUID,
+    body: VoterOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Grant a member voting rights for this election, bypassing tier-based
+    and meeting attendance restrictions.
+
+    The override is recorded with a reason and the identity of the officer
+    who granted it.  This does NOT bypass election-level eligible_voters
+    lists, position-specific role requirements, or double-vote prevention.
+
+    Requires `elections.manage` permission.
+    """
+    # Load the election
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    # Verify the target user exists in the same org
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(body.user_id))
+        .where(User.organization_id == current_user.organization_id)
+    )
+    target_user = user_result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    overrides = election.voter_overrides or []
+
+    # Prevent duplicate overrides for the same user
+    if any(o.get("user_id") == str(body.user_id) for o in overrides):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{target_user.full_name} already has a voting override for this election",
+        )
+
+    override_record = {
+        "user_id": str(body.user_id),
+        "member_name": target_user.full_name,
+        "reason": body.reason,
+        "overridden_by": str(current_user.id),
+        "overridden_by_name": current_user.full_name,
+        "overridden_at": datetime.utcnow().isoformat(),
+    }
+    overrides.append(override_record)
+    election.voter_overrides = overrides
+
+    await db.commit()
+
+    # Audit log
+    await log_audit_event(
+        db=db,
+        event_type="voter_override_granted",
+        event_category="elections",
+        severity="warning",
+        event_data={
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "target_user_id": str(body.user_id),
+            "member_name": target_user.full_name,
+            "reason": body.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    logger.info(
+        f"Voter override granted | election={election_id} "
+        f"member={body.user_id} ({target_user.full_name}) by={current_user.id} reason={body.reason!r}"
+    )
+
+    return override_record
+
+
+@router.get("/{election_id}/voter-overrides")
+async def list_voter_overrides(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    List all voter eligibility overrides for an election.
+
+    Requires `elections.manage` permission.
+    """
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    return {
+        "election_id": str(election_id),
+        "election_title": election.title,
+        "overrides": election.voter_overrides or [],
+    }
+
+
+@router.delete("/{election_id}/voter-overrides/{user_id}", status_code=status.HTTP_200_OK)
+async def remove_voter_override(
+    election_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Remove a voter eligibility override for a member.
+
+    Requires `elections.manage` permission.
+    """
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    overrides = election.voter_overrides or []
+    original_len = len(overrides)
+    overrides = [o for o in overrides if o.get("user_id") != str(user_id)]
+
+    if len(overrides) == original_len:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No override found for this member in this election",
+        )
+
+    election.voter_overrides = overrides
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="voter_override_removed",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election_id),
+            "target_user_id": str(user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"success": True, "message": "Voter override removed"}
+
+
+class BulkVoterOverrideRequest(_PydanticBase):
+    """Bulk grant voting overrides for multiple members at once."""
+    user_ids: list
+    reason: str = _Field(..., min_length=10, max_length=500, description="Shared reason for all overrides (e.g. 'Shift B excused due to weather emergency')")
+
+
+@router.post("/{election_id}/voter-overrides/bulk", status_code=status.HTTP_201_CREATED)
+async def bulk_add_voter_overrides(
+    election_id: UUID,
+    body: BulkVoterOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Grant voting overrides to multiple members at once.
+
+    Useful when an entire shift or group missed a meeting due to
+    a weather event or operational commitment.  Each override uses
+    the same reason.  Already-overridden members are skipped.
+
+    Creates an enhanced audit trail with `bulk_voter_override_granted`
+    event and `warning` severity logging all affected members.
+
+    Requires `elections.manage` permission.
+    """
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == current_user.organization_id)
+    )
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    overrides = election.voter_overrides or []
+    existing_ids = {o.get("user_id") for o in overrides}
+
+    added = []
+    skipped = []
+
+    for uid in body.user_ids:
+        uid_str = str(uid)
+        if uid_str in existing_ids:
+            skipped.append(uid_str)
+            continue
+
+        user_result = await db.execute(
+            select(User)
+            .where(User.id == uid_str)
+            .where(User.organization_id == current_user.organization_id)
+        )
+        target_user = user_result.scalar_one_or_none()
+        if not target_user:
+            skipped.append(uid_str)
+            continue
+
+        override_record = {
+            "user_id": uid_str,
+            "member_name": target_user.full_name,
+            "reason": body.reason,
+            "overridden_by": str(current_user.id),
+            "overridden_by_name": current_user.full_name,
+            "overridden_at": datetime.utcnow().isoformat(),
+        }
+        overrides.append(override_record)
+        existing_ids.add(uid_str)
+        added.append({"user_id": uid_str, "name": target_user.full_name})
+
+    election.voter_overrides = overrides
+    await db.commit()
+
+    # Enhanced audit trail for bulk operation
+    await log_audit_event(
+        db=db,
+        event_type="bulk_voter_override_granted",
+        event_category="elections",
+        severity="warning",
+        event_data={
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "reason": body.reason,
+            "members_added": [m["name"] for m in added],
+            "members_added_count": len(added),
+            "members_skipped_count": len(skipped),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    logger.warning(
+        f"BULK voter override granted | election={election_id} "
+        f"added={len(added)} skipped={len(skipped)} by={current_user.id} "
+        f"reason={body.reason!r}"
+    )
+
+    return {
+        "success": True,
+        "added": added,
+        "added_count": len(added),
+        "skipped_count": len(skipped),
+        "message": f"{len(added)} override(s) granted, {len(skipped)} skipped (already overridden or not found)",
+    }
+
+
+# ==================== Proxy Voting ====================
+
+
+from app.schemas.election import (
+    ProxyAuthorizationCreate,
+    ProxyAuthorizationListResponse,
+    ProxyVoteCreate,
+)
+
+
+@router.post("/{election_id}/proxy-authorizations", status_code=status.HTTP_201_CREATED)
+async def add_proxy_authorization(
+    election_id: UUID,
+    body: ProxyAuthorizationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Authorize one member to vote on behalf of another (proxy voting).
+
+    The organization must have proxy voting enabled in its settings
+    (`settings.proxy_voting.enabled = true`).  The secretary chooses
+    the proxy type:
+
+    - **single_election**: one-time proxy for this election only
+    - **regular**: standing proxy (noted for reference; enforcement is
+      per-election since each election stores its own authorizations)
+
+    When ballot emails are sent, the proxy holder is automatically CC'd
+    on the delegating member's ballot notification.
+
+    Requires `elections.manage` permission.
+    """
+    service = ElectionService(db)
+    auth_record, error = await service.add_proxy_authorization(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        delegating_user_id=body.delegating_user_id,
+        proxy_user_id=body.proxy_user_id,
+        proxy_type=body.proxy_type,
+        reason=body.reason,
+        authorized_by=current_user.id,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return auth_record
+
+
+@router.get("/{election_id}/proxy-authorizations", response_model=ProxyAuthorizationListResponse)
+async def list_proxy_authorizations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    List all proxy voting authorizations for an election.
+
+    Includes both active and revoked authorizations.  The response
+    also indicates whether proxy voting is enabled at the org level.
+
+    Requires `elections.manage` permission.
+    """
+    service = ElectionService(db)
+    result = await service.get_proxy_authorizations(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+    )
+
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+
+    return result
+
+
+@router.delete("/{election_id}/proxy-authorizations/{authorization_id}", status_code=status.HTTP_200_OK)
+async def revoke_proxy_authorization(
+    election_id: UUID,
+    authorization_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Revoke a proxy voting authorization.
+
+    Cannot revoke if the proxy has already cast a vote using this
+    authorization — the vote must be soft-deleted first.
+
+    Requires `elections.manage` permission.
+    """
+    service = ElectionService(db)
+    success, error = await service.revoke_proxy_authorization(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        authorization_id=authorization_id,
+        revoked_by=current_user.id,
+    )
+
+    if error:
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in error.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=error)
+
+    return {"success": True, "message": "Proxy authorization revoked"}
+
+
+@router.post("/{election_id}/proxy-vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
+async def cast_proxy_vote(
+    election_id: UUID,
+    vote: ProxyVoteCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cast a vote on behalf of another member using a proxy authorization.
+
+    The current user must be the designated proxy in the authorization.
+    The vote is recorded under the *delegating* member's identity (for
+    eligibility and double-vote prevention), with full audit metadata
+    showing who physically cast the proxy vote.
+
+    The hash trail records:
+    - `voter_id` / `voter_hash`: the delegating (absent) member
+    - `proxy_voter_id`: the proxy who physically voted
+    - `proxy_authorization_id`: the authorization used
+    - `is_proxy_vote`: true
+
+    **Authentication required**
+    """
+    if vote.election_id != election_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Election ID mismatch",
+        )
+
+    service = ElectionService(db)
+    new_vote, error = await service.cast_proxy_vote(
+        proxy_user_id=current_user.id,
+        election_id=election_id,
+        candidate_id=vote.candidate_id,
+        proxy_authorization_id=vote.proxy_authorization_id,
+        position=vote.position,
+        organization_id=current_user.organization_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        vote_rank=vote.vote_rank,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return new_vote

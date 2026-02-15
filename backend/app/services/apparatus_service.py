@@ -6,7 +6,7 @@ Business logic for apparatus/vehicle management.
 
 from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
@@ -28,6 +28,9 @@ from app.models.apparatus import (
     ApparatusStatusHistory,
     ApparatusNFPACompliance,
     ApparatusReportConfig,
+    ApparatusServiceProvider,
+    ApparatusComponent,
+    ApparatusComponentNote,
     DefaultApparatusType,
     DefaultApparatusStatus,
 )
@@ -201,10 +204,11 @@ class ApparatusService:
         if apparatus_type.is_system:
             raise ValueError("Cannot delete system apparatus types")
 
-        # Check if any apparatus uses this type
+        # Check if any apparatus in this organization uses this type
         result = await self.db.execute(
             select(func.count(Apparatus.id))
             .where(Apparatus.apparatus_type_id == type_id)
+            .where(Apparatus.organization_id == organization_id)
         )
         count = result.scalar()
         if count > 0:
@@ -350,6 +354,7 @@ class ApparatusService:
         result = await self.db.execute(
             select(func.count(Apparatus.id))
             .where(Apparatus.status_id == status_id)
+            .where(Apparatus.organization_id == organization_id)
         )
         count = result.scalar()
         if count > 0:
@@ -987,6 +992,7 @@ class ApparatusService:
         result = await self.db.execute(
             select(func.count(ApparatusMaintenance.id))
             .where(ApparatusMaintenance.maintenance_type_id == type_id)
+            .where(ApparatusMaintenance.organization_id == organization_id)
         )
         count = result.scalar()
         if count > 0:
@@ -1007,7 +1013,7 @@ class ApparatusService:
         organization_id: str,
         created_by: str,
     ) -> ApparatusMaintenance:
-        """Create maintenance record"""
+        """Create maintenance record (current or historic)"""
         # Verify apparatus
         apparatus = await self.get_apparatus(maintenance_data.apparatus_id, organization_id, include_relations=False)
         if not apparatus:
@@ -1018,14 +1024,27 @@ class ApparatusService:
         if not maint_type:
             raise ValueError("Invalid maintenance type")
 
+        # Validate historic entries
+        if maintenance_data.is_historic and not maintenance_data.occurred_date:
+            raise ValueError("occurred_date is required for historic entries")
+
+        dump = maintenance_data.model_dump()
+        # Convert attachment models to dicts for JSON storage
+        if dump.get("attachments"):
+            dump["attachments"] = [
+                a if isinstance(a, dict) else a for a in dump["attachments"]
+            ]
+
         maintenance = ApparatusMaintenance(
             organization_id=organization_id,
             created_by=created_by,
-            **maintenance_data.model_dump()
+            **dump,
         )
 
-        # Check if overdue
-        if maintenance.due_date and maintenance.due_date < date.today() and not maintenance.is_completed:
+        # For historic records that are already completed, don't flag as overdue
+        if maintenance.is_historic and maintenance.is_completed:
+            maintenance.is_overdue = False
+        elif maintenance.due_date and maintenance.due_date < date.today() and not maintenance.is_completed:
             maintenance.is_overdue = True
 
         self.db.add(maintenance)
@@ -1053,6 +1072,9 @@ class ApparatusService:
         maintenance_type_id: Optional[str] = None,
         is_completed: Optional[bool] = None,
         is_overdue: Optional[bool] = None,
+        is_historic: Optional[bool] = None,
+        occurred_after: Optional[date] = None,
+        occurred_before: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[ApparatusMaintenance]:
@@ -1067,6 +1089,12 @@ class ApparatusService:
             conditions.append(ApparatusMaintenance.is_completed == is_completed)
         if is_overdue is not None:
             conditions.append(ApparatusMaintenance.is_overdue == is_overdue)
+        if is_historic is not None:
+            conditions.append(ApparatusMaintenance.is_historic == is_historic)
+        if occurred_after:
+            conditions.append(ApparatusMaintenance.occurred_date >= occurred_after)
+        if occurred_before:
+            conditions.append(ApparatusMaintenance.occurred_date <= occurred_before)
 
         query = (
             select(ApparatusMaintenance)
@@ -1093,6 +1121,12 @@ class ApparatusService:
             return None
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
+
+        # Convert attachment models to dicts for JSON storage
+        if "attachments" in update_data and update_data["attachments"]:
+            update_data["attachments"] = [
+                a if isinstance(a, dict) else a for a in update_data["attachments"]
+            ]
 
         # Handle completion
         if "is_completed" in update_data and update_data["is_completed"] and not maintenance.is_completed:
@@ -1255,11 +1289,12 @@ class ApparatusService:
         created_by: str,
     ) -> ApparatusOperator:
         """Create operator certification"""
-        # Check if already exists
+        # Check if already exists within this organization
         result = await self.db.execute(
             select(ApparatusOperator)
             .where(ApparatusOperator.apparatus_id == operator_data.apparatus_id)
             .where(ApparatusOperator.user_id == operator_data.user_id)
+            .where(ApparatusOperator.organization_id == organization_id)
         )
         if result.scalar_one_or_none():
             raise ValueError("Operator already assigned to this apparatus")
@@ -1282,6 +1317,8 @@ class ApparatusService:
         apparatus_id: Optional[str] = None,
         user_id: Optional[str] = None,
         is_active: Optional[bool] = True,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusOperator]:
         """List operators"""
         conditions = [ApparatusOperator.organization_id == organization_id]
@@ -1297,6 +1334,8 @@ class ApparatusService:
             select(ApparatusOperator)
             .where(and_(*conditions))
             .options(selectinload(ApparatusOperator.user))
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
@@ -1373,6 +1412,8 @@ class ApparatusService:
         organization_id: str,
         apparatus_id: Optional[str] = None,
         is_present: Optional[bool] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[ApparatusEquipment]:
         """List equipment"""
         conditions = [ApparatusEquipment.organization_id == organization_id]
@@ -1386,6 +1427,8 @@ class ApparatusService:
             select(ApparatusEquipment)
             .where(and_(*conditions))
             .order_by(ApparatusEquipment.name)
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
@@ -1445,16 +1488,12 @@ class ApparatusService:
         uploaded_by: str,
     ) -> ApparatusPhoto:
         """Create photo"""
-        # If setting as primary, unset other primary photos
+        # If setting as primary, unset other primary photos for this apparatus
         if photo_data.is_primary:
-            await self.db.execute(
-                select(ApparatusPhoto)
-                .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
-                .where(ApparatusPhoto.is_primary == True)
-            )
             result = await self.db.execute(
                 select(ApparatusPhoto)
                 .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
+                .where(ApparatusPhoto.organization_id == organization_id)
                 .where(ApparatusPhoto.is_primary == True)
             )
             for photo in result.scalars().all():
@@ -1653,4 +1692,568 @@ class ApparatusService:
             "registrations_expiring_soon": reg_expiring,
             "inspections_expiring_soon": insp_expiring,
             "insurance_expiring_soon": ins_expiring,
+        }
+
+    # ========================================================================
+    # NFPA Compliance
+    # ========================================================================
+
+    async def list_nfpa_compliance(
+        self,
+        organization_id: UUID,
+        apparatus_id: Optional[str] = None,
+        compliance_status: Optional[str] = None,
+    ) -> List[ApparatusNFPACompliance]:
+        """List NFPA compliance records"""
+        query = select(ApparatusNFPACompliance).where(
+            ApparatusNFPACompliance.organization_id == organization_id
+        )
+        if apparatus_id:
+            query = query.where(ApparatusNFPACompliance.apparatus_id == apparatus_id)
+        if compliance_status:
+            query = query.where(ApparatusNFPACompliance.compliance_status == compliance_status)
+
+        query = query.order_by(ApparatusNFPACompliance.next_due_date.asc().nullslast())
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_nfpa_compliance(
+        self, compliance_id: str, organization_id: UUID
+    ) -> Optional[ApparatusNFPACompliance]:
+        """Get a specific NFPA compliance record"""
+        result = await self.db.execute(
+            select(ApparatusNFPACompliance)
+            .where(ApparatusNFPACompliance.id == compliance_id)
+            .where(ApparatusNFPACompliance.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_nfpa_compliance(
+        self, compliance_data, organization_id: UUID, checked_by: UUID = None,
+    ) -> ApparatusNFPACompliance:
+        """Create an NFPA compliance record"""
+        # Verify apparatus exists and belongs to org
+        apparatus = await self.get_apparatus(
+            apparatus_id=compliance_data.apparatus_id,
+            organization_id=organization_id,
+        )
+        if not apparatus:
+            raise ValueError("Apparatus not found")
+
+        record = ApparatusNFPACompliance(
+            organization_id=organization_id,
+            last_checked_by=checked_by,
+            **compliance_data.model_dump(),
+        )
+        self.db.add(record)
+        await self.db.commit()
+        await self.db.refresh(record)
+        return record
+
+    async def update_nfpa_compliance(
+        self, compliance_id: str, compliance_data, organization_id: UUID, checked_by: UUID = None,
+    ) -> Optional[ApparatusNFPACompliance]:
+        """Update an NFPA compliance record"""
+        record = await self.get_nfpa_compliance(compliance_id, organization_id)
+        if not record:
+            return None
+
+        update_data = compliance_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(record, field, value)
+
+        if checked_by:
+            record.last_checked_by = checked_by
+
+        await self.db.commit()
+        await self.db.refresh(record)
+        return record
+
+    async def delete_nfpa_compliance(
+        self, compliance_id: str, organization_id: UUID
+    ) -> bool:
+        """Delete an NFPA compliance record"""
+        record = await self.get_nfpa_compliance(compliance_id, organization_id)
+        if not record:
+            return False
+
+        await self.db.delete(record)
+        await self.db.commit()
+        return True
+
+    # ========================================================================
+    # Report Configs
+    # ========================================================================
+
+    async def list_report_configs(
+        self,
+        organization_id: UUID,
+        is_active: Optional[bool] = None,
+        report_type: Optional[str] = None,
+    ) -> List[ApparatusReportConfig]:
+        """List report configurations"""
+        query = select(ApparatusReportConfig).where(
+            ApparatusReportConfig.organization_id == organization_id
+        )
+        if is_active is not None:
+            query = query.where(ApparatusReportConfig.is_active == is_active)
+        if report_type:
+            query = query.where(ApparatusReportConfig.report_type == report_type)
+
+        query = query.order_by(ApparatusReportConfig.name)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_report_config(
+        self, config_id: str, organization_id: UUID
+    ) -> Optional[ApparatusReportConfig]:
+        """Get a specific report config"""
+        result = await self.db.execute(
+            select(ApparatusReportConfig)
+            .where(ApparatusReportConfig.id == config_id)
+            .where(ApparatusReportConfig.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_report_config(
+        self, config_data, organization_id: UUID, created_by: UUID = None,
+    ) -> ApparatusReportConfig:
+        """Create a report config"""
+        config = ApparatusReportConfig(
+            organization_id=organization_id,
+            created_by=created_by,
+            **config_data.model_dump(),
+        )
+        self.db.add(config)
+        await self.db.commit()
+        await self.db.refresh(config)
+        return config
+
+    async def update_report_config(
+        self, config_id: str, config_data, organization_id: UUID,
+    ) -> Optional[ApparatusReportConfig]:
+        """Update a report config"""
+        config = await self.get_report_config(config_id, organization_id)
+        if not config:
+            return None
+
+        update_data = config_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(config, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(config)
+        return config
+
+    async def delete_report_config(
+        self, config_id: str, organization_id: UUID
+    ) -> bool:
+        """Delete a report config"""
+        config = await self.get_report_config(config_id, organization_id)
+        if not config:
+            return False
+
+        await self.db.delete(config)
+        await self.db.commit()
+        return True
+
+    # ========================================================================
+    # Service Providers
+    # ========================================================================
+
+    async def list_service_providers(
+        self, organization_id: UUID, is_active: Optional[bool] = None,
+        specialty: Optional[str] = None, is_preferred: Optional[bool] = None,
+        skip: int = 0, limit: int = 100,
+    ) -> List[ApparatusServiceProvider]:
+        """List service providers"""
+        query = select(ApparatusServiceProvider).where(
+            ApparatusServiceProvider.organization_id == organization_id
+        )
+        if is_active is not None:
+            query = query.where(ApparatusServiceProvider.is_active == is_active)
+        if is_preferred is not None:
+            query = query.where(ApparatusServiceProvider.is_preferred == is_preferred)
+
+        query = query.order_by(
+            ApparatusServiceProvider.is_preferred.desc(),
+            ApparatusServiceProvider.name,
+        ).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_service_provider(
+        self, provider_id: str, organization_id: UUID
+    ) -> Optional[ApparatusServiceProvider]:
+        """Get a specific service provider"""
+        result = await self.db.execute(
+            select(ApparatusServiceProvider)
+            .where(ApparatusServiceProvider.id == provider_id)
+            .where(ApparatusServiceProvider.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_service_provider(
+        self, provider_data, organization_id: UUID, created_by: UUID = None,
+    ) -> ApparatusServiceProvider:
+        """Create a service provider"""
+        provider = ApparatusServiceProvider(
+            organization_id=organization_id,
+            created_by=created_by,
+            **provider_data.model_dump(),
+        )
+        self.db.add(provider)
+        await self.db.commit()
+        await self.db.refresh(provider)
+        return provider
+
+    async def update_service_provider(
+        self, provider_id: str, provider_data, organization_id: UUID,
+    ) -> Optional[ApparatusServiceProvider]:
+        """Update a service provider"""
+        provider = await self.get_service_provider(provider_id, organization_id)
+        if not provider:
+            return None
+
+        update_data = provider_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(provider, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(provider)
+        return provider
+
+    async def archive_service_provider(
+        self, provider_id: str, organization_id: UUID, archived_by: str
+    ) -> Optional[ApparatusServiceProvider]:
+        """Archive a service provider (soft-delete for compliance).
+
+        Providers are never hard-deleted so their records remain available
+        for historical compliance checks and audit trails.
+        """
+        provider = await self.get_service_provider(provider_id, organization_id)
+        if not provider:
+            return None
+
+        provider.is_active = False
+        provider.archived_at = datetime.utcnow()
+        provider.archived_by = archived_by
+        await self.db.commit()
+        await self.db.refresh(provider)
+        return provider
+
+    async def restore_service_provider(
+        self, provider_id: str, organization_id: UUID
+    ) -> Optional[ApparatusServiceProvider]:
+        """Restore an archived service provider back to active status."""
+        provider = await self.get_service_provider(provider_id, organization_id)
+        if not provider:
+            return None
+
+        provider.is_active = True
+        provider.archived_at = None
+        provider.archived_by = None
+        await self.db.commit()
+        await self.db.refresh(provider)
+        return provider
+
+    # ========================================================================
+    # Components
+    # ========================================================================
+
+    async def list_components(
+        self, organization_id: UUID, apparatus_id: Optional[str] = None,
+        component_type: Optional[str] = None, is_active: Optional[bool] = None,
+        skip: int = 0, limit: int = 100,
+    ) -> List[ApparatusComponent]:
+        """List apparatus components"""
+        query = select(ApparatusComponent).where(
+            ApparatusComponent.organization_id == organization_id
+        )
+        if apparatus_id:
+            query = query.where(ApparatusComponent.apparatus_id == apparatus_id)
+        if component_type:
+            query = query.where(ApparatusComponent.component_type == component_type)
+        if is_active is not None:
+            query = query.where(ApparatusComponent.is_active == is_active)
+
+        query = query.order_by(
+            ApparatusComponent.sort_order, ApparatusComponent.name,
+        ).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_component(
+        self, component_id: str, organization_id: UUID
+    ) -> Optional[ApparatusComponent]:
+        """Get a specific component"""
+        result = await self.db.execute(
+            select(ApparatusComponent)
+            .where(ApparatusComponent.id == component_id)
+            .where(ApparatusComponent.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_component(
+        self, component_data, organization_id: UUID, created_by: UUID = None,
+    ) -> ApparatusComponent:
+        """Create a component"""
+        apparatus = await self.get_apparatus(
+            apparatus_id=component_data.apparatus_id,
+            organization_id=organization_id,
+        )
+        if not apparatus:
+            raise ValueError("Apparatus not found")
+
+        component = ApparatusComponent(
+            organization_id=organization_id,
+            created_by=created_by,
+            **component_data.model_dump(),
+        )
+        self.db.add(component)
+        await self.db.commit()
+        await self.db.refresh(component)
+        return component
+
+    async def update_component(
+        self, component_id: str, component_data, organization_id: UUID,
+    ) -> Optional[ApparatusComponent]:
+        """Update a component"""
+        component = await self.get_component(component_id, organization_id)
+        if not component:
+            return None
+
+        update_data = component_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(component, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(component)
+        return component
+
+    async def delete_component(
+        self, component_id: str, organization_id: UUID,
+        archived_by: UUID = None,
+    ) -> bool:
+        """Soft-delete (archive) a component"""
+        component = await self.get_component(component_id, organization_id)
+        if not component:
+            return False
+
+        component.is_active = False
+        component.archived_at = datetime.now(tz=timezone.utc)
+        component.archived_by = archived_by
+        await self.db.commit()
+        return True
+
+    # ========================================================================
+    # Component Notes
+    # ========================================================================
+
+    async def list_component_notes(
+        self, organization_id: UUID, apparatus_id: Optional[str] = None,
+        component_id: Optional[str] = None, note_status: Optional[str] = None,
+        severity: Optional[str] = None, note_type: Optional[str] = None,
+        service_provider_id: Optional[str] = None,
+        skip: int = 0, limit: int = 100,
+    ) -> List[ApparatusComponentNote]:
+        """List component notes with filtering"""
+        query = select(ApparatusComponentNote).where(
+            ApparatusComponentNote.organization_id == organization_id
+        )
+        if apparatus_id:
+            query = query.where(ApparatusComponentNote.apparatus_id == apparatus_id)
+        if component_id:
+            query = query.where(ApparatusComponentNote.component_id == component_id)
+        if note_status:
+            query = query.where(ApparatusComponentNote.status == note_status)
+        if severity:
+            query = query.where(ApparatusComponentNote.severity == severity)
+        if note_type:
+            query = query.where(ApparatusComponentNote.note_type == note_type)
+        if service_provider_id:
+            query = query.where(ApparatusComponentNote.service_provider_id == service_provider_id)
+
+        query = query.order_by(
+            ApparatusComponentNote.created_at.desc(),
+        ).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_component_note(
+        self, note_id: str, organization_id: UUID
+    ) -> Optional[ApparatusComponentNote]:
+        """Get a specific component note"""
+        result = await self.db.execute(
+            select(ApparatusComponentNote)
+            .where(ApparatusComponentNote.id == note_id)
+            .where(ApparatusComponentNote.organization_id == organization_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_component_note(
+        self, note_data, organization_id: UUID,
+        created_by: UUID = None, reported_by: UUID = None,
+    ) -> ApparatusComponentNote:
+        """Create a component note"""
+        component = await self.get_component(note_data.component_id, organization_id)
+        if not component:
+            raise ValueError("Component not found")
+
+        dump = note_data.model_dump()
+        # Convert attachment models to dicts for JSON storage
+        if dump.get("attachments"):
+            dump["attachments"] = [a if isinstance(a, dict) else a for a in dump["attachments"]]
+
+        note = ApparatusComponentNote(
+            organization_id=organization_id,
+            created_by=created_by,
+            reported_by=reported_by or created_by,
+            **dump,
+        )
+        self.db.add(note)
+        await self.db.commit()
+        await self.db.refresh(note)
+        return note
+
+    async def update_component_note(
+        self, note_id: str, note_data, organization_id: UUID,
+        resolved_by: UUID = None,
+    ) -> Optional[ApparatusComponentNote]:
+        """Update a component note"""
+        note = await self.get_component_note(note_id, organization_id)
+        if not note:
+            return None
+
+        update_data = note_data.model_dump(exclude_unset=True)
+
+        # Track resolution
+        if update_data.get("status") == "resolved" and note.status != "resolved":
+            note.resolved_by = resolved_by
+            note.resolved_at = datetime.utcnow()
+
+        # Convert attachment models to dicts for JSON storage
+        if update_data.get("attachments"):
+            update_data["attachments"] = [
+                a if isinstance(a, dict) else a for a in update_data["attachments"]
+            ]
+
+        for field, value in update_data.items():
+            setattr(note, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(note)
+        return note
+
+    async def delete_component_note(
+        self, note_id: str, organization_id: UUID
+    ) -> bool:
+        """Delete a component note"""
+        note = await self.get_component_note(note_id, organization_id)
+        if not note:
+            return False
+
+        await self.db.delete(note)
+        await self.db.commit()
+        return True
+
+    # ========================================================================
+    # Service Report Generation
+    # ========================================================================
+
+    async def generate_service_report(
+        self, apparatus_id: str, organization_id: UUID,
+        component_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate a compiled service report for an apparatus, optionally
+        scoped to specific components. Includes all relevant data a
+        service technician would need.
+        """
+        # Get the apparatus
+        apparatus = await self.get_apparatus(apparatus_id, organization_id)
+        if not apparatus:
+            raise ValueError("Apparatus not found")
+
+        # Get components (all or filtered)
+        components_query = select(ApparatusComponent).where(
+            ApparatusComponent.organization_id == organization_id,
+            ApparatusComponent.apparatus_id == apparatus_id,
+            ApparatusComponent.is_active == True,
+        )
+        if component_ids:
+            components_query = components_query.where(
+                ApparatusComponent.id.in_(component_ids)
+            )
+        components_query = components_query.order_by(ApparatusComponent.sort_order)
+        components_result = await self.db.execute(components_query)
+        components = components_result.scalars().all()
+
+        resolved_component_ids = [c.id for c in components] if component_ids else None
+
+        # Get open issues for these components
+        notes_query = select(ApparatusComponentNote).where(
+            ApparatusComponentNote.organization_id == organization_id,
+            ApparatusComponentNote.apparatus_id == apparatus_id,
+            ApparatusComponentNote.status.in_(["open", "in_progress"]),
+        )
+        if resolved_component_ids:
+            notes_query = notes_query.where(
+                ApparatusComponentNote.component_id.in_(resolved_component_ids)
+            )
+        notes_query = notes_query.order_by(
+            ApparatusComponentNote.severity.desc(),
+            ApparatusComponentNote.created_at.desc(),
+        )
+        notes_result = await self.db.execute(notes_query)
+        open_issues = notes_result.scalars().all()
+
+        # Get recent maintenance (last 12 months)
+        cutoff = date.today() - timedelta(days=365)
+        maint_query = select(ApparatusMaintenance).where(
+            ApparatusMaintenance.organization_id == organization_id,
+            ApparatusMaintenance.apparatus_id == apparatus_id,
+        ).options(selectinload(ApparatusMaintenance.maintenance_type))
+        if resolved_component_ids:
+            maint_query = maint_query.where(
+                or_(
+                    ApparatusMaintenance.component_id.in_(resolved_component_ids),
+                    ApparatusMaintenance.component_id.is_(None),
+                )
+            )
+        maint_query = maint_query.where(
+            or_(
+                ApparatusMaintenance.created_at >= cutoff,
+                ApparatusMaintenance.is_completed == False,
+            )
+        ).order_by(ApparatusMaintenance.created_at.desc())
+        maint_result = await self.db.execute(maint_query)
+        recent_maintenance = maint_result.scalars().all()
+
+        # Collect unique service provider IDs from maintenance + notes
+        provider_ids = set()
+        for m in recent_maintenance:
+            if m.service_provider_id:
+                provider_ids.add(m.service_provider_id)
+        for n in open_issues:
+            if n.service_provider_id:
+                provider_ids.add(n.service_provider_id)
+
+        providers = []
+        if provider_ids:
+            providers_result = await self.db.execute(
+                select(ApparatusServiceProvider).where(
+                    ApparatusServiceProvider.id.in_(provider_ids),
+                    ApparatusServiceProvider.organization_id == organization_id,
+                )
+            )
+            providers = providers_result.scalars().all()
+
+        return {
+            "apparatus": apparatus,
+            "components": components,
+            "open_issues": open_issues,
+            "recent_maintenance": recent_maintenance,
+            "service_providers": providers,
+            "generated_at": datetime.now(tz=timezone.utc),
         }

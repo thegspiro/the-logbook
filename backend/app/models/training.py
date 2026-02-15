@@ -254,6 +254,13 @@ class TrainingRecord(Base):
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references
 
+    # Certification expiration alert tracking — records when each tier was sent
+    alert_90_sent_at = Column(DateTime, nullable=True)
+    alert_60_sent_at = Column(DateTime, nullable=True)
+    alert_30_sent_at = Column(DateTime, nullable=True)
+    alert_7_sent_at = Column(DateTime, nullable=True)
+    escalation_sent_at = Column(DateTime, nullable=True)  # CC to training/compliance officers
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -408,6 +415,10 @@ class TrainingSession(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String(36), ForeignKey("users.id"))
+
+    # Relationships
+    event = relationship("Event", foreign_keys=[event_id], lazy="select")
+    course = relationship("TrainingCourse", foreign_keys=[course_id], lazy="select")
 
     __table_args__ = (
         Index('idx_training_session_event', 'event_id'),
@@ -782,6 +793,12 @@ class SkillEvaluation(Base):
 
     # Linked Programs
     required_for_programs = Column(JSON)  # Program IDs that require this skill
+
+    # Configurable evaluator permissions — training officer/chief sets who may sign off
+    # Format: {"type": "roles", "roles": ["shift_leader", "driver_trainer"]}
+    #      or {"type": "specific_users", "user_ids": ["uuid1", "uuid2"]}
+    #      or null → any user with training.manage permission
+    allowed_evaluators = Column(JSON, nullable=True)
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -1522,3 +1539,264 @@ class ShiftCall(Base):
 
     def __repr__(self):
         return f"<ShiftCall(incident={self.incident_number}, type={self.incident_type})>"
+
+
+# ============================================
+# Shift Scheduling Enums
+# ============================================
+
+class ShiftPosition(str, enum.Enum):
+    """Position/role within a shift"""
+    OFFICER = "officer"
+    DRIVER = "driver"
+    FIREFIGHTER = "firefighter"
+    EMS = "ems"
+    CAPTAIN = "captain"
+    LIEUTENANT = "lieutenant"
+    PROBATIONARY = "probationary"
+    VOLUNTEER = "volunteer"
+    OTHER = "other"
+
+
+class AssignmentStatus(str, enum.Enum):
+    """Status of a shift assignment"""
+    ASSIGNED = "assigned"
+    CONFIRMED = "confirmed"
+    DECLINED = "declined"
+    NO_SHOW = "no_show"
+
+
+class SwapRequestStatus(str, enum.Enum):
+    """Status of a shift swap request"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    CANCELLED = "cancelled"
+
+
+class TimeOffStatus(str, enum.Enum):
+    """Status of a time-off request"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    CANCELLED = "cancelled"
+
+
+class PatternType(str, enum.Enum):
+    """Type of shift pattern/rotation"""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    PLATOON = "platoon"
+    CUSTOM = "custom"
+
+
+# ============================================
+# Shift Template
+# ============================================
+
+class ShiftTemplate(Base):
+    """
+    Reusable shift template for quick shift creation.
+    E.g., "Day Shift", "Night Shift", "Weekend Duty"
+    """
+
+    __tablename__ = "shift_templates"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    start_time_of_day = Column(String(5), nullable=False)  # "07:00" HH:MM format
+    end_time_of_day = Column(String(5), nullable=False)    # "19:00"
+    duration_hours = Column(Float, nullable=False)          # 12.0
+    color = Column(String(7))                               # Hex color for calendar display
+
+    # Staffing
+    positions = Column(JSON)  # [{"position": "officer", "count": 1}, {"position": "firefighter", "count": 3}]
+    min_staffing = Column(Integer, default=1)
+
+    # Defaults
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        Index('idx_shift_template_org', 'organization_id'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftTemplate(name={self.name}, duration={self.duration_hours}h)>"
+
+
+# ============================================
+# Shift Pattern (Recurring Schedules)
+# ============================================
+
+class ShiftPattern(Base):
+    """
+    Recurring shift pattern for automatic schedule generation.
+    Supports platoon rotations, weekly schedules, etc.
+    """
+
+    __tablename__ = "shift_patterns"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    pattern_type = Column(Enum(PatternType), nullable=False, default=PatternType.WEEKLY)
+
+    # Pattern definition
+    template_id = Column(String(36), ForeignKey("shift_templates.id", ondelete="SET NULL"))
+    rotation_days = Column(Integer)          # Days in the rotation cycle (e.g., 3 for platoon A/B/C)
+    days_on = Column(Integer)                # Days on duty per cycle
+    days_off = Column(Integer)               # Days off per cycle
+    schedule_config = Column(JSON)           # Flexible config: {"platoons": ["A","B","C"], "weekdays": [0,1,2,3,4]}
+
+    # Active period
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date)                  # Null = indefinite
+
+    # Members assigned to this pattern
+    assigned_members = Column(JSON)  # [{"user_id": "...", "platoon": "A", "position": "firefighter"}]
+
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        Index('idx_shift_pattern_org', 'organization_id'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftPattern(name={self.name}, type={self.pattern_type})>"
+
+
+# ============================================
+# Shift Assignment (Duty Roster)
+# ============================================
+
+class ShiftAssignment(Base):
+    """
+    Assigns a specific member to a specific shift with a designated position.
+    """
+
+    __tablename__ = "shift_assignments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    position = Column(Enum(ShiftPosition), nullable=False, default=ShiftPosition.FIREFIGHTER)
+    assignment_status = Column(Enum(AssignmentStatus), nullable=False, default=AssignmentStatus.ASSIGNED)
+
+    # Tracking
+    assigned_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    confirmed_at = Column(DateTime(timezone=True))
+    notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_shift_assign_shift', 'shift_id'),
+        Index('idx_shift_assign_user', 'user_id'),
+        Index('idx_shift_assign_org', 'organization_id'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftAssignment(shift={self.shift_id}, user={self.user_id}, position={self.position})>"
+
+
+# ============================================
+# Shift Swap Request
+# ============================================
+
+class ShiftSwapRequest(Base):
+    """
+    Request to swap shifts between two members.
+    """
+
+    __tablename__ = "shift_swap_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # The member requesting the swap
+    requesting_user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # The shift they want to give up
+    offering_shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="CASCADE"), nullable=False)
+    # The shift they want to pick up (optional — can be open request)
+    requesting_shift_id = Column(String(36), ForeignKey("shifts.id", ondelete="SET NULL"))
+    # The member they want to swap with (optional — can be open request)
+    target_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+
+    status = Column(Enum(SwapRequestStatus), nullable=False, default=SwapRequestStatus.PENDING)
+    reason = Column(Text)
+
+    # Review
+    reviewed_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at = Column(DateTime(timezone=True))
+    reviewer_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_swap_req_org', 'organization_id'),
+        Index('idx_swap_req_user', 'requesting_user_id'),
+        Index('idx_swap_req_status', 'status'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftSwapRequest(user={self.requesting_user_id}, status={self.status})>"
+
+
+# ============================================
+# Shift Time-Off Request
+# ============================================
+
+class ShiftTimeOff(Base):
+    """
+    Member request for time off / unavailability.
+    """
+
+    __tablename__ = "shift_time_off"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    reason = Column(Text)
+
+    status = Column(Enum(TimeOffStatus), nullable=False, default=TimeOffStatus.PENDING)
+    approved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    approved_at = Column(DateTime(timezone=True))
+    reviewer_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_timeoff_org', 'organization_id'),
+        Index('idx_timeoff_user', 'user_id'),
+        Index('idx_timeoff_dates', 'start_date', 'end_date'),
+    )
+
+    def __repr__(self):
+        return f"<ShiftTimeOff(user={self.user_id}, {self.start_date} - {self.end_date})>"

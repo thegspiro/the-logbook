@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-14 with inventory/property return reports, training module, events module, TypeScript fixes, security hardening
+   - **Updated**: 2026-02-14 with drop notification configuration, inventory/property return reports, training module, events module, TypeScript fixes, security hardening
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -109,6 +109,15 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Registry support (NFPA, NREMT, Pro Board)
     - API reference and database schema for all training tables
 
+11. **[DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md)** (New 2026-02-14)
+    - Configurable drop/separation notification messages
+    - Organization-level settings: CC roles, static CC emails, personal email toggle
+    - Default MEMBER_DROPPED email template with 10 template variables
+    - CC/BCC support in EmailService for all outbound emails
+    - Personal email field on user profiles for post-separation contact
+    - Template editing via Settings > Email Templates
+    - API reference for organization settings and email template endpoints
+
 11. **Documents Module**
     - Document storage with folder hierarchy (create, browse, upload, delete)
     - File metadata tracking (size, MIME type, upload date)
@@ -123,14 +132,39 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - API endpoints: 12 endpoints for meeting CRUD, attendees, action items, summary
     - Permissions: `meetings.view`, `meetings.manage`
 
-12. **Scheduling Module**
-    - Shift creation and management with position types
+12. **Scheduling Module** (Enhanced 2026-02-14)
+    - Shift creation, templates, and recurring patterns (daily/weekly/platoon/custom)
+    - Auto-generation of shifts from patterns with pre-assigned members
+    - Duty roster: assign members to shifts with position and confirm/decline workflow
+    - Shift swap requests with officer approval workflow
+    - Time-off requests with approval and member availability checking
+    - Shift call recording with incident details and responding members
     - Week and month calendar views with real shift data
-    - Attendance tracking per shift
-    - API endpoints: 10 endpoints for shift CRUD, attendance, calendar views, summary
-    - Permissions: `scheduling.view`, `scheduling.manage`
+    - Attendance tracking per shift with check-in/check-out
+    - Reports: member hours, shift coverage, call volume analysis
+    - Personal views: my-shifts, my-assignments
+    - API endpoints: 49 endpoints for shifts, templates, patterns, assignments, swaps, time-off, calls, reports
+    - Permissions: `scheduling.view`, `scheduling.manage`, `scheduling.assign`, `scheduling.swap`, `scheduling.report`
+    - Roles: Scheduling Officer with full scheduling access
 
-13. **Reports Module** (Updated 2026-02-14)
+13. **Facilities Module** (New 2026-02-14)
+    - Building and property management with types, statuses, addresses, GPS, and photos
+    - Maintenance scheduling with 20 default maintenance types and recommended frequencies
+    - Facility inspections with pass/fail tracking and follow-up
+    - Utility tracking: accounts and meter readings for electric, gas, water, sewer, internet, phone, trash
+    - Key & access management: keys, fobs, cards, codes with member assignment
+    - Room/space inventory with type, capacity, and equipment tracking
+    - Emergency contacts & shutoff locations by category
+    - Capital improvement projects with budget, timeline, and contractor tracking
+    - Insurance policies: building, liability, flood, earthquake, equipment with coverage and renewal tracking
+    - Occupant/unit assignments for multi-use facilities
+    - ADA/compliance checklists with individual items and due dates
+    - Seed data: 10 facility types, 6 statuses, 20 maintenance types
+    - API endpoints: full CRUD for 14 entity types under `/api/v1/facilities/`
+    - Permissions: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance`, `facilities.manage`
+    - Roles: Facilities Manager for day-to-day building management
+
+14. **Reports Module** (Updated 2026-02-14)
     - Report generation: member roster, training summary, event attendance, training progress, annual training
     - Data aggregation from members, training records, events, shift reports, and pipeline enrollments
     - Customizable reporting period with date range picker (This Year, Last Year, Last 90 Days, Custom)
@@ -152,7 +186,8 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - Recurring events with daily/weekly/monthly/yearly patterns
     - Event templates for reusable configurations
     - Attachment upload, download, and delete
-    - Location booking prevention (double-booking protection)
+    - Location booking prevention (double-booking protection across all event types including training)
+    - `exclude_event_types` filter for hall coordinators to hide training events from their view
     - RSVP overrides for admin flexibility
     - Organization timezone support in date formatting
     - QR code check-in, self-check-in pages, analytics
@@ -284,8 +319,35 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 | Documents / file management | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#documents-module) |
 | Meeting minutes / action items | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meetings--minutes-module) |
 | Shift scheduling / calendar | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduling-module) |
+| Shift templates / patterns | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-template-not-appearing-in-template-list) |
+| Shift assignments / duty roster | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-assignment-member-cant-confirm) |
+| Shift swap requests | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#shift-swap-request-denied-unexpectedly) |
+| Time-off / availability | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#time-off-request-not-showing-in-availability) |
+| Facilities / building management | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#facilities-module) |
+| Facility maintenance | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#maintenance-scheduling-no-default-types) |
+| Facility compliance / ADA | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#compliance-checklist-items-not-saving) |
 | Reports / data export | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#reports-module) |
 | Notification rules / alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#notifications-module) |
+| Membership tiers / life member | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-tier-member-not-auto-advancing) |
+| Voter override (secretary) | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-granting-a-member-an-override-to-vote) |
+| Proxy voting setup | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-setting-up-proxy-voting) |
+| Secretary attendance dashboard | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-secretary-attendance-dashboard) |
+| Meeting attendance waivers | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-granting-an-attendance-waiver) |
+| Auto-enrollment on conversion | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-auto-enrollment-on-member-conversion) |
+| Incident-based requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-incident-based-requirements-calls-shifts-hours) |
+| Scheduled tasks / cron setup | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#scheduled-tasks-setting-up-the-cron) |
+| Membership tier config editor | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#membership-editing-tier-requirements) |
+| Bulk voter overrides | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-bulk-voter-overrides) |
+| Meeting quorum config | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum) |
+| Peer skill eval sign-offs | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs) |
+| Cert expiration alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline) |
+| Competency matrix dashboard | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard) |
+| Training calendar / booking | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention) |
+| Voting attendance requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance) |
+| Training exemptions by tier | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements) |
+| Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
+| Email templates / customization | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management) |
+| Personal email / post-separation | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email) |
 | Prospective members pipeline | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md) |
 | Inactivity timeouts / purging | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system) |
 | Meeting minutes / templates | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) |
@@ -371,7 +433,7 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.7 | 2026-02-14 | Current |
+| TROUBLESHOOTING.md | 1.8 | 2026-02-14 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
@@ -386,6 +448,7 @@ docker-compose ps
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
 | ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
+| DROP_NOTIFICATIONS.md | 1.0 | 2026-02-14 | Current |
 | TYPESCRIPT_SAFEGUARDS.md | 1.1 | 2026-02-14 | Current |
 
 ---
@@ -415,6 +478,119 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-14 - Shift Module Enhancement & Facilities Module
+
+**What Changed**:
+- **Shift Module Enhanced**: Added shift templates, recurring patterns (daily/weekly/platoon/custom), duty roster assignments, shift swap requests, time-off tracking, shift call recording, and reporting/analytics
+- **5 New Shift Tables**: `shift_templates`, `shift_patterns`, `shift_assignments`, `shift_swap_requests`, `shift_time_off`
+- **3 New Scheduling Permissions**: `scheduling.assign`, `scheduling.swap`, `scheduling.report`
+- **Scheduling Officer Role**: New system role for dedicated scheduling coordinators
+- **Facilities Module**: Complete building/property management with maintenance, utilities, keys, rooms, emergency contacts, capital projects, insurance, occupants, compliance checklists
+- **Facilities Extended**: 11 additional tables for utility tracking, access keys, rooms, emergency contacts, shutoff locations, capital projects, insurance policies, occupants, compliance
+- **Seed Data**: 10 facility types, 6 statuses, 20 maintenance types seeded automatically
+- **Facilities Manager Role**: System role for day-to-day building management
+- **Apparatus Hardened**: Tenant isolation, pagination, soft-delete, historic repair entries
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) v1.8 — Scheduling module expanded (10 new entries), Facilities module added (7 entries)
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog for shift enhancement, facilities, and apparatus hardening
+
+---
+
+### 2026-02-14 - Attendance Dashboard, Auto-Enrollment, Incident Tracking, Cron & Tier Editor
+
+**What Changed**:
+- **Secretary Attendance Dashboard**: `GET /api/v1/meetings/attendance/dashboard` shows per-member meeting attendance %, waiver counts, voting eligibility, and tier info
+- **Meeting Attendance Waivers**: Secretary/president/chief can excuse members from meetings — attendance % not penalized, but member can't vote in that meeting
+- **Auto-Enrollment on Conversion**: Prospective members automatically enrolled in probationary training program when converted; training officer can enroll anyone via `POST /api/v1/training/enrollments`
+- **Incident-Based Tracking**: Shift completion reports now match call types against `required_call_types` on requirements; tracks per-type running totals in `progress_notes`
+- **Scheduled Tasks/Cron**: `GET/POST /api/v1/scheduled/tasks` for listing and triggering cron tasks (daily cert alerts, weekly struggling member checks, monthly tier advance)
+- **Struggling Member Detection**: Flags members behind pace, approaching deadlines, or with stalled requirements; sends training officer notifications
+- **Membership Tier Config Editor**: `GET/PUT /api/v1/users/membership-tiers/config` for editing tier benefits (attendance %, voting, training exemptions)
+- **Migration**: `20260214_1300` adds waiver fields to meeting_attendees
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Dashboard, waivers, auto-enrollment, incident tracking, cron, tier config
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
+
+### 2026-02-14 - Training Module Enhancements (Calendar, Competency Matrix, Alerts, Peer Eval)
+
+**What Changed**:
+- **Training Calendar Integration**: Training sessions now appear on the organization calendar via linked Events; new `GET /api/v1/training-sessions/calendar` endpoint returns sessions with dates, times, locations
+- **Double-Booking Prevention**: Training sessions with a `location_id` are checked against all other events — prevents scheduling conflicts across training and non-training events
+- **Hall Coordinator Filtering**: `GET /api/v1/events?exclude_event_types=training` lets hall coordinators hide training events from their view while booking prevention remains organization-wide
+- **Competency Matrix Dashboard**: `GET /api/v1/training/competency-matrix` generates a member vs. requirement heat map (current/expiring_soon/expired/not_started) with readiness percentage
+- **Certification Expiration Alerts**: Tiered pipeline (90/60/30/7 days + expired escalation) with CC to training officer, compliance officer, and chief on escalating notifications
+- **Peer Skill Evaluation Sign-Offs**: Training officer can configure who signs off on each skill — role-based (`shift_leader`, `driver_trainer`) or user-specific — with permission check endpoint
+- **Meeting Quorum Enforcement**: Org-configurable quorum (count or percentage) with per-meeting override; auto-recalculates when attendees check in
+- **Bulk Voter Overrides**: `POST /api/v1/elections/{election_id}/voter-overrides/bulk` — secretary can grant overrides to multiple members with enhanced audit logging
+- **Migration**: `20260214_1200` adds quorum columns, allowed_evaluators, and cert alert tracking columns
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Quorum, peer eval, cert alerts, competency matrix, calendar/booking, bulk override troubleshooting
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog for all 7 features
+
+---
+
+### 2026-02-14 - Proxy Voting for Elections
+
+**What Changed**:
+- **Organization Opt-In**: Proxy voting is a department choice — enable via `settings.proxy_voting.enabled`; disabled by default
+- **Proxy Authorization**: Secretary can designate one member to vote on behalf of another with `single_election` or `regular` proxy type
+- **Proxy Vote Casting**: Proxy casts a vote; eligibility and double-vote prevention apply to the *delegating* (absent) member
+- **Hash Trail**: Each proxy vote records who physically voted (`proxy_voter_id`) and on whose behalf (`proxy_delegating_user_id`) — full forensic traceability
+- **Ballot Email CC**: When ballot emails are sent, the proxy holder is automatically CC'd on the delegating member's notification
+- **Forensics**: Election forensics report includes `proxy_voting` section with all authorizations and proxy votes
+- **Migration**: `20260214_1100` adds `proxy_authorizations` column and vote proxy fields
+
+---
+
+### 2026-02-14 - Secretary Voter Override for Elections
+
+**What Changed**:
+- **Voter Override Endpoint**: Secretary/elections manager can grant a member voting rights for a specific election, bypassing tier and attendance restrictions
+- **Audit Trail**: Each override records the reason, granting officer, and timestamp; logged with `warning` severity
+- **Override Management**: List all overrides, revoke an override before the member votes
+- **Scope**: Overrides skip tier/attendance checks only — NOT eligible_voters lists, role requirements, or double-vote prevention
+- **Migration**: `20260214_1000` adds `voter_overrides` column to elections table
+
+---
+
+### 2026-02-14 - Membership Tiers, Voting Attendance Rules & Training Exemptions
+
+**What Changed**:
+- **Membership Tier System**: Organizations can define ordered tiers (Probationary, Active, Senior, Life) with years-of-service thresholds and per-tier benefits
+- **Tier Benefits**: Training exemptions (full or by type), voting eligibility rules, meeting attendance requirements for voting, office-holding eligibility
+- **Manual + Auto Advancement**: Leadership can change a member's tier directly, or trigger batch auto-advancement based on years of service
+- **Voting Attendance Gating**: Election system enforces minimum meeting attendance percentage per tier before allowing votes
+- **Training Exemptions**: Members at exempt tiers (e.g. Life Members) have all training requirements treated as met
+- **Migration**: `20260214_0900` adds `membership_type` and `membership_type_changed_at` to users table
+
+**Updated Documentation**:
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Tier advancement, voting attendance, training exemption troubleshooting
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
+
+### 2026-02-14 - Configurable Drop Notifications & Email Template Settings
+
+**What Changed**:
+- **Configurable Drop Notifications**: Drop/separation notification messages are now fully configurable per organization
+- **CC Recipient Settings**: Organization settings control which roles (admin, quartermaster, chief by default) and static email addresses are CC'd on every drop notification
+- **Personal Email Field**: Members can now have a `personal_email` for post-separation contact; configurable whether it receives the drop notification
+- **Default MEMBER_DROPPED Template**: Auto-created for each org with 10 template variables; fully editable via Settings > Email Templates
+- **CC/BCC Support**: `EmailService.send_email()` now supports `cc_emails` and `bcc_emails` parameters for all outbound emails
+- **Migration**: `20260214_0800` adds `personal_email` column to users table
+
+**New Documentation**:
+- Created [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) — Complete configuration guide, template variables, API reference
+- Updated [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — CC recipients, personal email, and template customization troubleshooting
+- Updated [CHANGELOG.md](../CHANGELOG.md) — Full feature changelog
+
+---
 
 ### 2026-02-14 - Events Module, TypeScript Quality & Backend Fixes
 

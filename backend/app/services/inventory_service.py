@@ -297,6 +297,9 @@ class InventoryService:
             if not item.assigned_to_user_id:
                 return False, "Item is not currently assigned"
 
+            # Capture user_id before clearing assignment (needed for auto-archive check)
+            previous_user_id = str(item.assigned_to_user_id)
+
             # Update current active assignment
             result = await self.db.execute(
                 select(ItemAssignment)
@@ -322,6 +325,11 @@ class InventoryService:
                 item.condition = return_condition
 
             await self.db.commit()
+
+            # Check if the dropped member should be auto-archived
+            from app.services.member_archive_service import check_and_auto_archive
+            await check_and_auto_archive(self.db, previous_user_id, str(organization_id))
+
             return True, None
         except Exception as e:
             await self.db.rollback()
@@ -415,6 +423,9 @@ class InventoryService:
             if checkout.is_returned:
                 return False, "Item already checked in"
 
+            # Capture user_id before marking returned (needed for auto-archive check)
+            checkout_user_id = str(checkout.user_id)
+
             # Update checkout record
             checkout.checked_in_at = datetime.now()
             checkout.checked_in_by = checked_in_by
@@ -429,6 +440,11 @@ class InventoryService:
             item.condition = return_condition
 
             await self.db.commit()
+
+            # Check if the dropped member should be auto-archived
+            from app.services.member_archive_service import check_and_auto_archive
+            await check_and_auto_archive(self.db, checkout_user_id, str(organization_id))
+
             return True, None
         except Exception as e:
             await self.db.rollback()

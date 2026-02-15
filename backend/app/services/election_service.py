@@ -414,6 +414,64 @@ class ElectionService:
                 reason="User not found",
             )
 
+        # ---- Secretary voter override ----
+        # If the secretary (or elections manager) has granted this member an
+        # override for this election, skip all tier and attendance checks.
+        _has_override = False
+        if election.voter_overrides:
+            _has_override = any(
+                o.get("user_id") == str(user_id)
+                for o in election.voter_overrides
+            )
+
+        # ---- Membership tier voting rules ----
+        # Look up the member's tier in org settings and enforce voting_eligible
+        # and meeting attendance requirements.
+        # (Skipped entirely when the member has a secretary override.)
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        if org and not _has_override:
+            tier_config = (org.settings or {}).get("membership_tiers", {})
+            tiers = tier_config.get("tiers", [])
+            member_tier_id = getattr(user, "membership_type", None) or "active"
+            tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+            if tier_def:
+                benefits = tier_def.get("benefits", {})
+                # Check basic voting eligibility for this tier
+                if not benefits.get("voting_eligible", True):
+                    return VoterEligibility(
+                        is_eligible=False,
+                        has_voted=False,
+                        positions_voted=[],
+                        positions_remaining=[],
+                        reason=f"Members at the '{tier_def.get('name', member_tier_id)}' tier are not eligible to vote",
+                    )
+                # Check meeting attendance requirement
+                if benefits.get("voting_requires_meeting_attendance", False):
+                    min_pct = benefits.get("voting_min_attendance_pct", 0.0)
+                    period = benefits.get("voting_attendance_period_months", 12)
+                    if min_pct > 0:
+                        from app.services.membership_tier_service import MembershipTierService
+                        tier_svc = MembershipTierService(self.db)
+                        actual_pct = await tier_svc.get_meeting_attendance_pct(
+                            user_id=str(user_id),
+                            organization_id=str(organization_id),
+                            period_months=period,
+                        )
+                        if actual_pct < min_pct:
+                            return VoterEligibility(
+                                is_eligible=False,
+                                has_voted=False,
+                                positions_voted=[],
+                                positions_remaining=[],
+                                reason=(
+                                    f"Your meeting attendance is {actual_pct:.1f}% over the last "
+                                    f"{period} months, below the {min_pct:.0f}% minimum required to vote"
+                                ),
+                            )
+
         # Check position-specific eligibility (if checking for a specific position)
         if position and election.position_eligibility:
             position_rules = election.position_eligibility.get(position)
@@ -893,6 +951,20 @@ class ElectionService:
             "title": election.title,
         })
 
+        # 7. Proxy voting summary
+        proxy_votes = [v for v in active_votes if v.is_proxy_vote]
+        proxy_vote_records = [
+            {
+                "vote_id": str(v.id),
+                "position": v.position,
+                "proxy_voter_id": v.proxy_voter_id,
+                "delegating_user_id": v.proxy_delegating_user_id,
+                "authorization_id": v.proxy_authorization_id,
+                "voted_at": v.voted_at.isoformat() if v.voted_at else None,
+            }
+            for v in proxy_votes
+        ]
+
         return {
             "election_id": str(election_id),
             "election_title": election.title,
@@ -924,6 +996,12 @@ class ElectionService:
             "anomaly_detection": {
                 "suspicious_ips": suspicious_ips,
                 "ip_vote_distribution": ip_vote_counts,
+            },
+
+            "proxy_voting": {
+                "authorizations": election.proxy_authorizations or [],
+                "total_proxy_votes": len(proxy_vote_records),
+                "proxy_votes": proxy_vote_records,
             },
 
             "voting_timeline": voting_timeline,
@@ -1938,8 +2016,8 @@ Best regards,
         return sent_count
 
     async def _generate_voting_token(
-        self, user_id: UUID, election_id: UUID, election_end_date: datetime,
-        anonymity_salt: str = "",
+        self, user_id: UUID, election_id: UUID, organization_id: UUID,
+        election_end_date: datetime, anonymity_salt: str = "",
     ) -> VotingToken:
         """
         Generate a secure voting token for a user-election pair
@@ -1947,6 +2025,7 @@ Best regards,
         Args:
             user_id: User ID (for hashing, not stored directly)
             election_id: Election ID
+            organization_id: Organization ID for tenant isolation
             election_end_date: Election end date (token expires after this)
             anonymity_salt: Per-election salt for voter anonymity
 
@@ -1965,6 +2044,7 @@ Best regards,
 
         voting_token = VotingToken(
             id=uuid4(),
+            organization_id=organization_id,
             election_id=election_id,
             token=token,
             voter_hash=voter_hash,
@@ -1975,6 +2055,332 @@ Best regards,
 
         self.db.add(voting_token)
         return voting_token
+
+    # ------------------------------------------------------------------
+    # Proxy voting
+    # ------------------------------------------------------------------
+
+    def _is_proxy_voting_enabled(self, organization: "Organization") -> bool:
+        """Check if the organization has opted in to proxy voting."""
+        return (organization.settings or {}).get("proxy_voting", {}).get("enabled", False)
+
+    async def add_proxy_authorization(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        delegating_user_id: UUID,
+        proxy_user_id: UUID,
+        proxy_type: str,
+        reason: str,
+        authorized_by: UUID,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        Authorize one member to vote on behalf of another.
+
+        Returns: (authorization_record, error_message)
+        """
+        # Load election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+
+        # Check org-level proxy voting setting
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        if not org or not self._is_proxy_voting_enabled(org):
+            return None, "Proxy voting is not enabled for this organization"
+
+        # Cannot be your own proxy
+        if str(delegating_user_id) == str(proxy_user_id):
+            return None, "A member cannot be their own proxy"
+
+        # Verify both users exist in the same org
+        for uid, label in [(delegating_user_id, "Delegating member"), (proxy_user_id, "Proxy member")]:
+            u_result = await self.db.execute(
+                select(User).where(User.id == uid).where(User.organization_id == organization_id)
+            )
+            if not u_result.scalar_one_or_none():
+                return None, f"{label} not found"
+
+        delegating_result = await self.db.execute(select(User).where(User.id == delegating_user_id))
+        delegating_user = delegating_result.scalar_one()
+        proxy_result = await self.db.execute(select(User).where(User.id == proxy_user_id))
+        proxy_user = proxy_result.scalar_one()
+        auth_result = await self.db.execute(select(User).where(User.id == authorized_by))
+        authorizer = auth_result.scalar_one()
+
+        authorizations = election.proxy_authorizations or []
+
+        # Prevent duplicate active authorization for the same delegating member
+        for auth in authorizations:
+            if auth.get("delegating_user_id") == str(delegating_user_id) and not auth.get("revoked_at"):
+                return None, f"{delegating_user.full_name} already has an active proxy authorization for this election"
+
+        auth_record = {
+            "id": str(uuid4()),
+            "delegating_user_id": str(delegating_user_id),
+            "delegating_user_name": delegating_user.full_name,
+            "proxy_user_id": str(proxy_user_id),
+            "proxy_user_name": proxy_user.full_name,
+            "proxy_type": proxy_type,
+            "reason": reason,
+            "authorized_by": str(authorized_by),
+            "authorized_by_name": authorizer.full_name,
+            "authorized_at": datetime.utcnow().isoformat(),
+            "revoked_at": None,
+        }
+        authorizations.append(auth_record)
+        election.proxy_authorizations = authorizations
+
+        await self.db.commit()
+
+        await self._audit("proxy_authorization_granted", {
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "delegating_user_id": str(delegating_user_id),
+            "delegating_user_name": delegating_user.full_name,
+            "proxy_user_id": str(proxy_user_id),
+            "proxy_user_name": proxy_user.full_name,
+            "proxy_type": proxy_type,
+            "reason": reason,
+        }, severity="warning", user_id=str(authorized_by))
+
+        logger.info(
+            f"Proxy authorization granted | election={election_id} "
+            f"delegating={delegating_user_id} ({delegating_user.full_name}) "
+            f"proxy={proxy_user_id} ({proxy_user.full_name}) "
+            f"type={proxy_type} by={authorized_by}"
+        )
+
+        return auth_record, None
+
+    async def revoke_proxy_authorization(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        authorization_id: str,
+        revoked_by: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """Revoke a proxy authorization. Cannot revoke if the proxy vote has already been cast."""
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return False, "Election not found"
+
+        authorizations = election.proxy_authorizations or []
+        found = False
+        for auth in authorizations:
+            if auth.get("id") == authorization_id:
+                if auth.get("revoked_at"):
+                    return False, "This proxy authorization has already been revoked"
+                # Check if a proxy vote has already been cast using this authorization
+                vote_result = await self.db.execute(
+                    select(Vote)
+                    .where(Vote.election_id == election_id)
+                    .where(Vote.proxy_authorization_id == authorization_id)
+                    .where(Vote.deleted_at.is_(None))
+                )
+                if vote_result.scalar_one_or_none():
+                    return False, "Cannot revoke — the proxy has already cast a vote using this authorization"
+
+                auth["revoked_at"] = datetime.utcnow().isoformat()
+                found = True
+                break
+
+        if not found:
+            return False, "Proxy authorization not found"
+
+        election.proxy_authorizations = authorizations
+        await self.db.commit()
+
+        await self._audit("proxy_authorization_revoked", {
+            "election_id": str(election_id),
+            "authorization_id": authorization_id,
+        }, severity="info", user_id=str(revoked_by))
+
+        return True, None
+
+    async def get_proxy_authorizations(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Optional[Dict]:
+        """Return all proxy authorizations for an election plus the org-level enabled flag."""
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        enabled = self._is_proxy_voting_enabled(org) if org else False
+
+        return {
+            "election_id": str(election_id),
+            "election_title": election.title,
+            "proxy_voting_enabled": enabled,
+            "authorizations": election.proxy_authorizations or [],
+        }
+
+    def _get_active_proxy_authorizations_for_user(
+        self, proxy_user_id: str, election: Election
+    ) -> List[Dict]:
+        """Return all active (non-revoked) proxy authorizations where this user is the proxy."""
+        auths = election.proxy_authorizations or []
+        return [
+            a for a in auths
+            if a.get("proxy_user_id") == proxy_user_id and not a.get("revoked_at")
+        ]
+
+    async def cast_proxy_vote(
+        self,
+        proxy_user_id: UUID,
+        election_id: UUID,
+        candidate_id: UUID,
+        proxy_authorization_id: str,
+        position: Optional[str],
+        organization_id: UUID,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        vote_rank: Optional[int] = None,
+    ) -> Tuple[Optional[Vote], Optional[str]]:
+        """
+        Cast a vote on behalf of another member using a proxy authorization.
+
+        The vote records:
+        - voter_id / voter_hash: identifies the *delegating* member (the absent voter)
+        - proxy_voter_id: the person physically voting
+        - proxy_authorization_id: the authorization that permits this
+        - is_proxy_vote: True
+
+        This means the delegating member's eligibility is checked (not the proxy's),
+        and double-vote prevention applies to the delegating member.
+        """
+        # Load election
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == election_id)
+            .where(Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+
+        # Check org-level proxy setting
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        org = org_result.scalar_one_or_none()
+        if not org or not self._is_proxy_voting_enabled(org):
+            return None, "Proxy voting is not enabled for this organization"
+
+        # Locate the authorization
+        auths = election.proxy_authorizations or []
+        auth = next((a for a in auths if a.get("id") == proxy_authorization_id), None)
+        if not auth:
+            return None, "Proxy authorization not found"
+        if auth.get("revoked_at"):
+            return None, "This proxy authorization has been revoked"
+        if auth.get("proxy_user_id") != str(proxy_user_id):
+            return None, "You are not the designated proxy for this authorization"
+
+        delegating_user_id = UUID(auth["delegating_user_id"])
+
+        # Check the *delegating* member's eligibility (they are the voter of record)
+        eligibility = await self.check_voter_eligibility(
+            delegating_user_id, election_id, organization_id, position
+        )
+        if not eligibility.is_eligible:
+            return None, f"Delegating member is not eligible: {eligibility.reason}"
+
+        if position and position in eligibility.positions_voted:
+            return None, f"Delegating member has already voted for {position}"
+        if not election.positions and eligibility.has_voted:
+            return None, "Delegating member has already voted in this election"
+
+        # Verify candidate
+        candidate_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.id == candidate_id)
+            .where(Candidate.election_id == election_id)
+        )
+        candidate = candidate_result.scalar_one_or_none()
+        if not candidate:
+            return None, "Candidate not found"
+        if not candidate.accepted and not candidate.is_write_in:
+            return None, "Candidate has not accepted nomination"
+        if position and candidate.position != position:
+            return None, "Candidate is not running for this position"
+
+        # Create the vote as the delegating member, with proxy metadata
+        vote = Vote(
+            election_id=election_id,
+            candidate_id=candidate_id,
+            voter_id=delegating_user_id if not election.anonymous_voting else None,
+            voter_hash=self._generate_voter_hash(
+                delegating_user_id, election_id, election.voter_anonymity_salt or ""
+            ) if election.anonymous_voting else None,
+            position=position,
+            vote_rank=vote_rank,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            voted_at=datetime.utcnow(),
+            is_proxy_vote=True,
+            proxy_voter_id=str(proxy_user_id),
+            proxy_authorization_id=proxy_authorization_id,
+            proxy_delegating_user_id=str(delegating_user_id),
+        )
+        vote.vote_signature = self._sign_vote(vote)
+        self.db.add(vote)
+
+        try:
+            await self.db.commit()
+            await self.db.refresh(vote)
+        except IntegrityError:
+            await self.db.rollback()
+            logger.warning(
+                f"Proxy double-vote attempt blocked | election={election_id} "
+                f"delegating={delegating_user_id} proxy={proxy_user_id}"
+            )
+            await self._audit("proxy_vote_double_attempt", {
+                "election_id": str(election_id),
+                "delegating_user_id": str(delegating_user_id),
+                "proxy_user_id": str(proxy_user_id),
+                "authorization_id": proxy_authorization_id,
+            }, severity="warning", user_id=str(proxy_user_id), ip_address=ip_address)
+            return None, "Database integrity check: the delegating member has already voted"
+
+        logger.info(
+            f"Proxy vote cast | election={election_id} position={position} "
+            f"delegating={delegating_user_id} proxy={proxy_user_id} "
+            f"auth={proxy_authorization_id} vote_id={vote.id}"
+        )
+        await self._audit("proxy_vote_cast", {
+            "election_id": str(election_id),
+            "vote_id": str(vote.id),
+            "position": position,
+            "delegating_user_id": str(delegating_user_id),
+            "proxy_user_id": str(proxy_user_id),
+            "authorization_id": proxy_authorization_id,
+            "anonymous": election.anonymous_voting,
+        }, severity="info", user_id=str(proxy_user_id), ip_address=ip_address)
+
+        return vote, None
 
     async def send_ballot_emails(
         self,
@@ -2036,6 +2442,21 @@ Best regards,
         # Initialize email service with organization settings
         email_service = EmailService(organization)
 
+        # Build a lookup of delegating_user_id -> proxy user email
+        # so we can CC the proxy holder on ballot notifications
+        proxy_cc_map: Dict[str, str] = {}
+        for auth in (election.proxy_authorizations or []):
+            if not auth.get("revoked_at"):
+                proxy_uid = auth.get("proxy_user_id")
+                delegating_uid = auth.get("delegating_user_id")
+                if proxy_uid and delegating_uid:
+                    proxy_u_result = await self.db.execute(
+                        select(User).where(User.id == proxy_uid)
+                    )
+                    proxy_u = proxy_u_result.scalar_one_or_none()
+                    if proxy_u:
+                        proxy_cc_map[delegating_uid] = proxy_u.email
+
         # Send individual ballot emails with unique tokens
         success_count = 0
         failed_count = 0
@@ -2045,12 +2466,16 @@ Best regards,
             voting_token = await self._generate_voting_token(
                 user_id=recipient.id,
                 election_id=election_id,
+                organization_id=organization_id,
                 election_end_date=election.end_date,
                 anonymity_salt=election.voter_anonymity_salt or "",
             )
 
             # Build unique ballot URL with token
             ballot_url = f"{base_ballot_url}?token={voting_token.token}" if base_ballot_url else None
+
+            # If this voter has a proxy, CC the proxy holder
+            cc_email = proxy_cc_map.get(str(recipient.id))
 
             sent = await email_service.send_ballot_notification(
                 to_email=recipient.email,
@@ -2059,6 +2484,7 @@ Best regards,
                 ballot_url=ballot_url,
                 meeting_date=election.meeting_date,
                 custom_message=message,
+                cc_emails=[cc_email] if cc_email else None,
             )
 
             if sent:

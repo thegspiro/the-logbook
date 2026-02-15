@@ -138,6 +138,7 @@ async def change_member_status(
             performed_by=str(current_user.id),
             return_deadline_days=request.return_deadline_days,
             custom_instructions=request.custom_instructions,
+            reason=request.reason,
         )
 
         response.property_return_report = {
@@ -158,12 +159,42 @@ async def change_member_status(
         if doc:
             response.document_id = str(doc.id)
 
-        # Email the report to the member
+        # Email the report to the member (with configurable CC and personal email)
         if request.send_property_return_email and member.email:
             org_result = await db.execute(
                 select(Organization).where(Organization.id == current_user.organization_id)
             )
             organization = org_result.scalar_one_or_none()
+
+            # Load drop notification settings from organization
+            org_settings = (organization.settings or {}) if organization else {}
+            drop_notif_config = org_settings.get("member_drop_notifications", {})
+            cc_role_names = drop_notif_config.get("cc_roles", ["admin", "quartermaster", "chief"])
+            cc_static_emails = drop_notif_config.get("cc_emails", [])
+            include_personal = drop_notif_config.get("include_personal_email", True)
+
+            # Build CC list from roles
+            cc_emails = list(cc_static_emails)  # start with static list
+            if cc_role_names:
+                cc_users_result = await db.execute(
+                    select(User).where(
+                        User.organization_id == current_user.organization_id,
+                        User.status == UserStatus.ACTIVE,
+                        User.deleted_at.is_(None),
+                    ).options(selectinload(User.roles))
+                )
+                cc_users = cc_users_result.scalars().all()
+                for u in cc_users:
+                    role_names = [r.name for r in (u.roles or [])]
+                    if any(r in role_names for r in cc_role_names):
+                        if u.email and u.email not in cc_emails and u.id != str(user_id):
+                            cc_emails.append(u.email)
+
+            # Build recipient list — primary email + optionally personal email
+            to_emails = [member.email]
+            if include_personal and getattr(member, 'personal_email', None):
+                if member.personal_email not in to_emails:
+                    to_emails.append(member.personal_email)
 
             async def _send_report():
                 try:
@@ -171,8 +202,11 @@ async def change_member_status(
                     email_svc = EmailService(organization)
                     org_name = organization.name if organization else "Department"
                     subject = f"Notice of Department Property Return — {org_name}"
+                    reason_line = ""
+                    if report_data.get("reason"):
+                        reason_line = f"Reason: {report_data['reason']}\n\n"
                     await email_svc.send_email(
-                        to_emails=[member.email],
+                        to_emails=to_emails,
                         subject=subject,
                         html_body=html_content,
                         text_body=(
@@ -180,6 +214,7 @@ async def change_member_status(
                             f"Dear {member.full_name},\n\n"
                             f"Your membership status with {org_name} has been changed to "
                             f"{report_data['drop_type_display']} effective {report_data['effective_date']}.\n\n"
+                            f"{reason_line}"
                             f"You have {report_data['item_count']} department item(s) "
                             f"valued at ${report_data['total_value']:,.2f} that must be returned "
                             f"by {report_data['return_deadline']}.\n\n"
@@ -190,6 +225,7 @@ async def change_member_status(
                             f"{report_data['performed_by_title']}\n"
                             f"{org_name}"
                         ),
+                        cc_emails=cc_emails if cc_emails else None,
                     )
                 except Exception as e:
                     from loguru import logger
@@ -297,4 +333,386 @@ async def get_overdue_property_returns(
         "organization_id": str(current_user.organization_id),
         "overdue_count": len(overdue_list),
         "members": overdue_list,
+    }
+
+
+# ==================== Member Archive & Reactivation ====================
+
+
+class ArchiveMemberRequest(BaseModel):
+    """Request body for manually archiving a dropped member."""
+    reason: Optional[str] = Field(None, description="Reason for archiving")
+
+
+class ReactivateMemberRequest(BaseModel):
+    """Request body for reactivating an archived member."""
+    reason: Optional[str] = Field(None, description="Reason for reactivation")
+
+
+@router.post("/{user_id}/archive")
+async def archive_member(
+    user_id: UUID,
+    request: ArchiveMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Manually archive a dropped member.
+
+    Members are automatically archived when they return all outstanding
+    items. This endpoint allows leadership to manually archive a dropped
+    member (e.g. items were written off, or the member had no items).
+
+    Only members with a dropped status (`dropped_voluntary` or
+    `dropped_involuntary`) can be archived. Use the reactivation
+    endpoint to restore an archived member.
+
+    Requires `members.manage` permission.
+    """
+    from datetime import datetime as dt
+
+    # Load the target member
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found",
+        )
+
+    if member.status not in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only dropped members can be archived. Current status: {member.status.value}",
+        )
+
+    previous_status = member.status.value
+    now = dt.utcnow()
+    member.status = UserStatus.ARCHIVED
+    member.archived_at = now
+    member.status_changed_at = now
+    member.status_change_reason = request.reason or "Manually archived by leadership"
+    await db.commit()
+
+    # Audit log
+    await log_audit_event(
+        db=db,
+        event_type="member_archived",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "member_name": member.full_name,
+            "previous_status": previous_status,
+            "new_status": UserStatus.ARCHIVED.value,
+            "reason": request.reason or "Manually archived by leadership",
+            "archived_by": str(current_user.id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "user_id": str(user_id),
+        "member_name": member.full_name,
+        "previous_status": previous_status,
+        "new_status": UserStatus.ARCHIVED.value,
+        "archived_at": now.isoformat(),
+    }
+
+
+@router.post("/{user_id}/reactivate")
+async def reactivate_member(
+    user_id: UUID,
+    request: ReactivateMemberRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Reactivate an archived member, restoring them to ACTIVE status.
+
+    Use this when a former member returns to the department and needs
+    their account restored. The member's full profile history is
+    preserved during archiving, so all prior data is still accessible.
+
+    Requires `members.manage` permission.
+    """
+    from app.services.member_archive_service import reactivate_member as do_reactivate
+
+    try:
+        result = await do_reactivate(
+            db=db,
+            user_id=str(user_id),
+            organization_id=str(current_user.organization_id),
+            reactivated_by=str(current_user.id),
+            reason=request.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    return result
+
+
+@router.get("/archived")
+async def get_archived_members(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    List all archived members in the organization.
+
+    Returns archived members sorted by archive date (most recent first).
+    Useful for leadership to review former members for legal requests
+    or to identify members eligible for reactivation.
+
+    Requires `members.manage` permission.
+    """
+    result = await db.execute(
+        select(User)
+        .where(
+            User.organization_id == current_user.organization_id,
+            User.status == UserStatus.ARCHIVED,
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.archived_at.desc())
+    )
+    members = result.scalars().all()
+
+    return {
+        "organization_id": str(current_user.organization_id),
+        "archived_count": len(members),
+        "members": [
+            {
+                "user_id": str(m.id),
+                "name": m.full_name,
+                "email": m.email,
+                "badge_number": m.badge_number,
+                "rank": m.rank,
+                "archived_at": m.archived_at.isoformat() if m.archived_at else None,
+                "status_change_reason": m.status_change_reason,
+            }
+            for m in members
+        ],
+    }
+
+
+# ==================== Membership Tier Management ====================
+
+
+class MembershipTypeChangeRequest(BaseModel):
+    """Request body for changing a member's membership tier."""
+    membership_type: str = Field(..., min_length=1, max_length=50, description="New tier ID (e.g. 'senior', 'life')")
+    reason: Optional[str] = Field(None, description="Reason for the tier change")
+
+
+@router.patch("/{user_id}/membership-type")
+async def change_membership_type(
+    user_id: UUID,
+    request: MembershipTypeChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Change a member's membership tier.
+
+    Leadership can promote or adjust a member's tier (e.g. probationary -> active,
+    active -> life). The available tiers are configured in Organization Settings >
+    membership_tiers.
+
+    Requires `members.manage` permission.
+    """
+    from datetime import datetime as dt
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == current_user.organization_id)
+        .where(User.deleted_at.is_(None))
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    # Validate the tier exists in org settings
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    tier_config = (organization.settings or {}).get("membership_tiers", {})
+    valid_tier_ids = [t["id"] for t in tier_config.get("tiers", [])]
+    # Allow the change even if no tiers are configured (freeform)
+    if valid_tier_ids and request.membership_type not in valid_tier_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid membership tier '{request.membership_type}'. Valid tiers: {valid_tier_ids}",
+        )
+
+    previous_type = member.membership_type or "active"
+    if previous_type == request.membership_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Member is already at tier '{request.membership_type}'",
+        )
+
+    now = dt.utcnow()
+    member.membership_type = request.membership_type
+    member.membership_type_changed_at = now
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_type_changed",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "member_name": member.full_name,
+            "previous_type": previous_type,
+            "new_type": request.membership_type,
+            "reason": request.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "user_id": str(user_id),
+        "member_name": member.full_name,
+        "previous_membership_type": previous_type,
+        "new_membership_type": request.membership_type,
+        "changed_at": now.isoformat(),
+    }
+
+
+@router.post("/advance-membership-tiers")
+async def advance_membership_tiers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Auto-advance all eligible members to their next membership tier.
+
+    Scans every active/probationary member, calculates their years of
+    service from `hire_date`, and promotes them to the highest tier they
+    qualify for based on the organization's `membership_tiers` settings.
+
+    This endpoint is idempotent and designed to be called periodically
+    (e.g. daily, monthly, or on-demand by leadership).
+
+    Requires `members.manage` permission.
+    """
+    from app.services.membership_tier_service import MembershipTierService
+
+    service = MembershipTierService(db)
+    result = await service.advance_all(
+        organization_id=str(current_user.organization_id),
+        performed_by=str(current_user.id),
+    )
+    return result
+
+
+@router.get("/membership-tiers/config")
+async def get_membership_tier_config(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Get the current membership tier configuration.
+
+    Returns all tiers with their benefits (training exemptions, voting rules,
+    attendance requirements, etc.).
+
+    **Requires permission: members.manage**
+    """
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    tier_config = (organization.settings or {}).get("membership_tiers", {})
+    return tier_config
+
+
+@router.put("/membership-tiers/config")
+async def update_membership_tier_config(
+    config: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Update membership tier configuration.
+
+    The training officer, compliance officer, or secretary can edit the
+    membership requirements for each tier/stage including:
+    - `voting_eligible` — whether members at this tier can vote
+    - `voting_requires_meeting_attendance` — require attendance % to vote
+    - `voting_min_attendance_pct` — minimum attendance percentage (e.g. 50.0)
+    - `voting_attendance_period_months` — look-back window for attendance
+    - `training_exempt` / `training_exempt_types` — training exemptions
+    - `can_hold_office` — office eligibility
+    - `years_required` — years of service for auto-advancement
+
+    **Requires permission: members.manage**
+    """
+    from datetime import datetime as dt
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Validate config structure
+    tiers = config.get("tiers", [])
+    if not isinstance(tiers, list):
+        raise HTTPException(status_code=400, detail="'tiers' must be a list")
+
+    for tier in tiers:
+        if not tier.get("id") or not tier.get("name"):
+            raise HTTPException(status_code=400, detail="Each tier must have 'id' and 'name'")
+        benefits = tier.get("benefits", {})
+        if not isinstance(benefits, dict):
+            raise HTTPException(status_code=400, detail=f"Tier '{tier['id']}' benefits must be a dict")
+        # Validate attendance percentage range
+        min_pct = benefits.get("voting_min_attendance_pct", 0.0)
+        if not (0 <= min_pct <= 100):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tier '{tier['id']}' voting_min_attendance_pct must be 0-100",
+            )
+
+    # Update org settings
+    settings = dict(organization.settings or {})
+    settings["membership_tiers"] = config
+    organization.settings = settings
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_tier_config_updated",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "tier_count": len(tiers),
+            "tier_ids": [t["id"] for t in tiers],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "message": "Membership tier configuration updated",
+        "tiers": tiers,
     }

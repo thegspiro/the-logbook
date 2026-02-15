@@ -56,10 +56,10 @@ class TestEnumConsistency:
             content = model_file.read_text()
 
             # Find enum class definitions
-            # Pattern: class EnumName(str, enum.Enum): followed by values
-            enum_class_pattern = r"class (\w+)\(str, enum\.Enum\):.*?\n((?:    \w+ = ['\"].*?\n)+)"
+            # Pattern: class EnumName(str, enum.Enum): followed by optional docstring then values
+            enum_class_pattern = r"class (\w+)\(str, enum\.Enum\):.*?\n(?:\s*\"\"\".*?\"\"\".*?\n)?((?:    \w+ = ['\"].*?\n)+)"
 
-            for match in re.finditer(enum_class_pattern, content, re.MULTILINE):
+            for match in re.finditer(enum_class_pattern, content, re.MULTILINE | re.DOTALL):
                 class_name = match.group(1)
                 values_block = match.group(2)
 

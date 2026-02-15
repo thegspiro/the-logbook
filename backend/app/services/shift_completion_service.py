@@ -145,13 +145,30 @@ class ShiftCompletionService:
 
             for progress, requirement in progress_entries:
                 value_to_add = 0.0
+                call_type_detail = None
 
                 if requirement.requirement_type == RequirementType.SHIFTS:
                     # Each shift report counts as 1 shift
                     value_to_add = 1.0
                 elif requirement.requirement_type == RequirementType.CALLS and calls_responded > 0:
-                    # Add actual calls responded
-                    value_to_add = float(calls_responded)
+                    # Check if requirement specifies required call types
+                    required_call_types = requirement.required_call_types or []
+                    if required_call_types and call_types:
+                        # Count only calls matching the required types
+                        required_lower = [rct.lower() for rct in required_call_types]
+                        matching_calls = [
+                            ct for ct in call_types
+                            if isinstance(ct, str) and ct.lower() in required_lower
+                        ]
+                        value_to_add = float(len(matching_calls))
+                        if matching_calls:
+                            call_type_detail = {
+                                "matched_types": matching_calls,
+                                "required_types": required_call_types,
+                            }
+                    else:
+                        # No specific types required — count all calls
+                        value_to_add = float(calls_responded)
                 elif requirement.requirement_type == RequirementType.HOURS:
                     # Add shift hours toward hour-based requirements
                     value_to_add = hours_on_shift
@@ -161,9 +178,28 @@ class ShiftCompletionService:
                 if value_to_add > 0:
                     from app.schemas.training_program import RequirementProgressUpdate
                     new_value = (progress.progress_value or 0) + value_to_add
+
+                    # Track call type breakdown in progress_notes
+                    notes = dict(progress.progress_notes or {})
+                    if call_type_detail:
+                        call_type_history = notes.get("call_type_history", [])
+                        call_type_history.append({
+                            "date": str(date.today()),
+                            "types": call_type_detail["matched_types"],
+                            "count": len(call_type_detail["matched_types"]),
+                        })
+                        notes["call_type_history"] = call_type_history
+
+                        # Build running totals per call type
+                        type_totals = notes.get("call_type_totals", {})
+                        for ct in call_type_detail["matched_types"]:
+                            type_totals[ct.lower()] = type_totals.get(ct.lower(), 0) + 1
+                        notes["call_type_totals"] = type_totals
+
                     update_data = RequirementProgressUpdate(
                         status="in_progress",
                         progress_value=new_value,
+                        progress_notes=notes if notes else None,
                     )
 
                     updated_progress, error = await program_service.update_requirement_progress(
@@ -174,10 +210,13 @@ class ShiftCompletionService:
                     )
 
                     if updated_progress and not error:
-                        requirements_progressed.append({
+                        entry = {
                             "requirement_progress_id": str(progress.id),
                             "value_added": value_to_add,
-                        })
+                        }
+                        if call_type_detail:
+                            entry["call_types_matched"] = call_type_detail["matched_types"]
+                        requirements_progressed.append(entry)
 
         return requirements_progressed
 
