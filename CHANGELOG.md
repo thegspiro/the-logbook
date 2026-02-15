@@ -24,8 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated 8 wiki files**: Replaced MariaDB references with MySQL 8.0 across Deployment-Guide, Deployment-Unraid, Development-Backend, Home, Installation, Quick-Reference, Troubleshooting, and Unraid-Quick-Start wiki pages
 
 #### New Features
+- **AWS deployment guide** (`docs/deployment/aws.md`): Comprehensive guide covering EC2 simple deployment, EC2 + RDS + ElastiCache production setup, security groups, VPC networking, S3 backups, CloudWatch monitoring, cost estimation, and troubleshooting
 - **Docker build verification script** (`scripts/verify-docker-build.sh`): 40-check validation covering Docker Compose config, Dockerfile validation, TypeScript compilation, Python syntax, database consistency, environment config, and service naming
 - **Proxmox deployment guide** (`docs/deployment/proxmox.md`): Complete guide for LXC and VM deployment on Proxmox VE with Docker, including networking, backups, reverse proxy, and migration from Unraid
+- **Fixed dangling references**: Removed references to non-existent `deploy/aws/` CloudFormation templates and `infrastructure/terraform/providers/aws/` directory, replaced with links to the new AWS deployment guide
 
 ### Fixed - TypeScript Build Errors (2026-02-15)
 

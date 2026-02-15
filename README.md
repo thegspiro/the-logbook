@@ -152,7 +152,7 @@ DB_PASSWORD=your-secure-password
 docker compose up -d backend frontend
 ```
 
-See [Deployment Guide](wiki/Deployment-Guide.md) for detailed cloud instructions.
+See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions or [Deployment Guide](wiki/Deployment-Guide.md) for other cloud platforms.
 </details>
 
 <details>
@@ -250,6 +250,7 @@ The wiki includes:
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute
 
 ### Deployment
+- [AWS Deployment Guide](docs/deployment/aws.md) - EC2, RDS, and ElastiCache deployment on AWS
 - [Unraid Deployment Guide](docs/deployment/unraid.md) - Complete Unraid guide
 - [Unraid Updated Quick Start](unraid/QUICK-START-UPDATED.md) - Latest Unraid instructions
 - [Proxmox Deployment Guide](docs/deployment/proxmox.md) - LXC and VM deployment on Proxmox VE

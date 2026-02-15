@@ -199,7 +199,7 @@ docker compose -f docker-compose.yml up -d backend frontend
 
 #### AWS ECS/Fargate
 
-See `deploy/aws/` for CloudFormation templates.
+For container-native deployments, build and push Docker images to ECR, then deploy via ECS task definitions. See the [AWS Deployment Guide](../docs/deployment/aws.md) for details.
 
 ---
 
