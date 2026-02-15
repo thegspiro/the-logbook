@@ -106,7 +106,7 @@ docker-compose up -d
 |-----------|-----------|
 | **Backend** | Python 3.13, FastAPI, SQLAlchemy |
 | **Frontend** | React 18.3, TypeScript 5.7, Vite 6 |
-| **Database** | MySQL 8.0+ / MariaDB 10.11+ |
+| **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache** | Redis 7+ |
 | **Authentication** | OAuth 2.0, SAML, LDAP, TOTP MFA |
 | **Encryption** | AES-256, Argon2id |

@@ -308,8 +308,8 @@ ls -lh /mnt/user/backups/the-logbook/
 ### Database Access
 
 ```bash
-# Access MariaDB shell
-docker-compose exec db mysql -u root -p
+# Access MySQL shell
+docker-compose exec logbook-db mysql -u root -p
 # Enter MYSQL_ROOT_PASSWORD from .env
 
 # Inside MySQL:

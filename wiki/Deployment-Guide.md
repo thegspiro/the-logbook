@@ -132,7 +132,7 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 For Pi 3 with 1GB RAM:
 
 1. Use minimal profile
-2. Consider external database (MySQL/MariaDB on another machine)
+2. Consider external database (MySQL on another machine)
 3. Disable non-essential modules
 
 ```bash
@@ -172,7 +172,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 #### AWS with RDS (Production)
 
 1. Create RDS MySQL instance:
-   - Engine: MySQL 8.0 or MariaDB 10.11
+   - Engine: MySQL 8.0
    - Instance: db.t3.micro (testing) or db.t3.small (production)
    - Enable automated backups
 

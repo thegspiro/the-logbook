@@ -5,7 +5,7 @@ Complete step-by-step guide for deploying The Logbook on Unraid using Docker Com
 ## What You'll Get
 
 This setup includes:
-- ✅ **MariaDB Database** - Your data storage (internal only, port 3306)
+- ✅ **MySQL Database** - Your data storage (internal only, port 3306)
 - ✅ **Redis Cache** - Performance optimization (internal only, port 6379)
 - ✅ **Backend API** - FastAPI server (port 7881)
 - ✅ **Frontend** - React web interface (port 7880)
@@ -279,7 +279,7 @@ docker-compose up -d
 
 ### What Happens:
 
-1. **MariaDB** starts and initializes database (30-60 seconds)
+1. **MySQL** starts and initializes database (30-60 seconds)
 2. **Redis** starts (5-10 seconds)
 3. **Backend** waits for database, then starts (20-30 seconds)
 4. **Frontend** starts after backend is ready (10-15 seconds)
@@ -625,7 +625,7 @@ free -h
 docker stats
 
 # Solutions:
-# 1. Reduce MariaDB buffer pool in docker-compose.yml:
+# 1. Reduce MySQL buffer pool in docker-compose.yml:
 #    --innodb_buffer_pool_size=256M  # Instead of 512M
 
 # 2. Reduce Redis max memory in docker-compose.yml:
@@ -763,7 +763,7 @@ rm -rf /mnt/user/backups/the-logbook
 # Remove Docker images
 docker rmi ghcr.io/thegspiro/the-logbook-frontend:latest
 docker rmi ghcr.io/thegspiro/the-logbook-backend:latest
-docker rmi mariadb:10.11
+docker rmi mysql:8.0
 docker rmi redis:7-alpine
 ```
 
@@ -776,7 +776,7 @@ docker rmi redis:7-alpine
 Edit `docker-compose.yml`:
 
 ```yaml
-# Reduce MariaDB buffer
+# Reduce MySQL buffer
 db:
   command: >
     --innodb_buffer_pool_size=256M  # Down from 512M
@@ -789,7 +789,7 @@ redis:
 ### For 16GB+ RAM Systems
 
 ```yaml
-# Increase MariaDB buffer
+# Increase MySQL buffer
 db:
   command: >
     --innodb_buffer_pool_size=1G  # Up from 512M

@@ -296,7 +296,7 @@ See [Deployment Guide](Deployment-Guide) for detailed cloud deployment instructi
 
 - Python 3.13+
 - Node.js 22+
-- MySQL 8.0+ or MariaDB 10.11+
+- MySQL 8.0+ (or MariaDB 10.11+ for ARM/Raspberry Pi)
 - Redis 7+
 
 ### Backend Setup
