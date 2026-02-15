@@ -197,6 +197,69 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
     return (len(errors) == 0, errors)
 
 
+def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, list[str]]:
+    """
+    Attempt to repair schema inconsistencies instead of immediately crashing.
+
+    Uses create_all(checkfirst=True) to fill in any missing model-based tables,
+    then re-runs migration-only files (which use op.create_table and will fail
+    gracefully if tables already exist). Re-validates after repair.
+
+    Returns (is_valid, errors) from the post-repair validation.
+    """
+    from sqlalchemy import text
+
+    logger.warning(
+        f"Schema validation found {len(original_errors)} issue(s). "
+        "Attempting automatic repair..."
+    )
+    for err in original_errors:
+        logger.warning(f"  Issue: {err}")
+
+    try:
+        _import_all_models()
+        from app.core.database import Base
+
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+
+                # Fill in any missing model-based tables
+                logger.info("Repair: running create_all(checkfirst=True) for missing tables...")
+                Base.metadata.create_all(conn, checkfirst=True)
+
+                # Re-run migration-only files for non-model tables
+                versions_dir = os.path.join(base_dir, "alembic", "versions")
+                for migration_file in MIGRATION_ONLY_FILES:
+                    migration_path = os.path.join(versions_dir, migration_file)
+                    if os.path.exists(migration_path):
+                        try:
+                            _run_migration_file(conn, migration_path)
+                        except Exception as mf_err:
+                            # "already exists" is expected if table was partially created
+                            if "already exists" not in str(mf_err).lower():
+                                logger.warning(f"Repair: migration file failed: {mf_err}")
+            finally:
+                try:
+                    conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+                except Exception:
+                    pass
+
+        # Re-validate after repair
+        schema_valid, schema_errors = validate_schema(engine)
+        if schema_valid:
+            logger.info("Schema repair successful - all issues resolved")
+        else:
+            logger.error(
+                f"Schema repair incomplete - {len(schema_errors)} issue(s) remain"
+            )
+        return (schema_valid, schema_errors)
+
+    except Exception as repair_err:
+        logger.error(f"Schema repair failed: {repair_err}")
+        return (False, original_errors + [f"Repair attempt failed: {repair_err}"])
+
+
 # The revision stamped by the initial SQL schema (001_initial_schema.sql)
 INITIAL_SQL_REVISION = '20260118_0001'
 
@@ -292,45 +355,51 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
     #    across all DDL operations (~100+ CREATE TABLEs, ~40 indexes).
     versions_dir = os.path.join(base_dir, "alembic", "versions")
     with engine.begin() as conn:
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        try:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
 
-        # 2. Drop ALL existing tables so create_all() starts from a clean slate.
-        #    Uses a single batched DROP TABLE statement instead of per-table drops.
-        #    We keep alembic_version since command.stamp() manages it.
-        logger.info("Dropping all existing tables for clean recreation...")
-        result = conn.execute(text("SHOW TABLES"))
-        tables_to_drop = [
-            row[0] for row in result if row[0] != "alembic_version"
-        ]
-        if tables_to_drop:
-            drop_list = ", ".join(f"`{t}`" for t in tables_to_drop)
-            conn.execute(text(f"DROP TABLE IF EXISTS {drop_list}"))
-        logger.info(f"Dropped {len(tables_to_drop)} existing tables")
+            # 2. Drop ALL existing tables so create_all() starts from a clean slate.
+            #    Uses a single batched DROP TABLE statement instead of per-table drops.
+            #    We keep alembic_version since command.stamp() manages it.
+            logger.info("Dropping all existing tables for clean recreation...")
+            result = conn.execute(text("SHOW TABLES"))
+            tables_to_drop = [
+                row[0] for row in result if row[0] != "alembic_version"
+            ]
+            if tables_to_drop:
+                drop_list = ", ".join(f"`{t}`" for t in tables_to_drop)
+                conn.execute(text(f"DROP TABLE IF EXISTS {drop_list}"))
+            logger.info(f"Dropped {len(tables_to_drop)} existing tables")
 
-        # 3. Create ALL tables from current model definitions.
-        #    checkfirst=False skips 100+ existence-check round-trips since
-        #    we just dropped everything. FK_CHECKS=0 (set above) skips FK
-        #    validation during CREATE TABLE.
-        logger.info("Creating all tables from model definitions...")
-        Base.metadata.create_all(conn, checkfirst=False)
-        logger.info("Model-based tables created")
+            # 3. Create ALL tables from current model definitions.
+            #    checkfirst=False skips 100+ existence-check round-trips since
+            #    we just dropped everything. FK_CHECKS=0 (set above) skips FK
+            #    validation during CREATE TABLE.
+            logger.info("Creating all tables from model definitions...")
+            Base.metadata.create_all(conn, checkfirst=False)
+            logger.info("Model-based tables created")
 
-        # 4. Create tables that only exist in migration files (no SQLAlchemy models).
-        #    Reuses the same connection to avoid pool overhead.
-        for migration_file in MIGRATION_ONLY_FILES:
-            migration_path = os.path.join(versions_dir, migration_file)
-            if os.path.exists(migration_path):
-                logger.info(f"Creating migration-only tables from {migration_file}...")
-                _run_migration_file(conn, migration_path)
+            # 4. Create tables that only exist in migration files (no SQLAlchemy models).
+            #    Reuses the same connection to avoid pool overhead.
+            for migration_file in MIGRATION_ONLY_FILES:
+                migration_path = os.path.join(versions_dir, migration_file)
+                if os.path.exists(migration_path):
+                    logger.info(f"Creating migration-only tables from {migration_file}...")
+                    _run_migration_file(conn, migration_path)
 
-        # 5. Insert seed data (apparatus types, statuses, maintenance types).
-        seed_path = os.path.join(versions_dir, SEED_DATA_FILE)
-        if os.path.exists(seed_path):
-            logger.info("Inserting apparatus seed data...")
-            _run_migration_file(conn, seed_path)
-            logger.info("Apparatus seed data inserted")
-
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+            # 5. Insert seed data (apparatus types, statuses, maintenance types).
+            seed_path = os.path.join(versions_dir, SEED_DATA_FILE)
+            if os.path.exists(seed_path):
+                logger.info("Inserting apparatus seed data...")
+                _run_migration_file(conn, seed_path)
+                logger.info("Apparatus seed data inserted")
+        finally:
+            # Re-enable FK checks even on failure. With NullPool the connection
+            # dies anyway, but this is defense-in-depth for pooled engines.
+            try:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+            except Exception:
+                pass
 
     # 6. Stamp alembic to head so future startups skip all migrations
     command.stamp(alembic_cfg, "head")
@@ -413,20 +482,52 @@ def run_migrations():
     # On first boot, the SQL init script stamps to INITIAL_SQL_REVISION.
     # Instead of running 39+ individual migrations (~20 min), create all
     # tables from model definitions in one batch (seconds).
-    # NOTE: NOT wrapped in forgiving try/except - if table creation fails,
-    # the app MUST crash. Running without tables causes 500 errors everywhere.
+    #
+    # Self-healing: retries once on failure. Because MySQL auto-commits DDL,
+    # a partial failure leaves orphaned tables. The retry drops everything
+    # and starts from a clean slate, recovering without manual intervention.
     if current_rev == INITIAL_SQL_REVISION or current_rev is None:
-        with timeout_context(1200, "Fast-path database initialization"):
-            _fast_path_init(engine, alembic_cfg, base_dir)
+        max_attempts = 2
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with timeout_context(1200, "Fast-path database initialization"):
+                    _fast_path_init(engine, alembic_cfg, base_dir)
+                break  # Success
+            except Exception as init_error:
+                if attempt < max_attempts:
+                    logger.warning(
+                        f"Fast-path attempt {attempt} failed: {init_error}. "
+                        "Retrying (the retry will drop all tables and start clean)..."
+                    )
+                    startup_status.set_phase(
+                        "migrations",
+                        "Retrying database initialization...",
+                        "First attempt failed. Retrying with a clean slate."
+                    )
+                    import time
+                    time.sleep(2)
+                else:
+                    raise
+
         startup_status.migrations_completed = total_migrations
         startup_status.set_phase("migrations", "Validating database schema...")
 
         # Validate schema after fast-path init
         schema_valid, schema_errors = validate_schema(engine)
+
+        # Self-healing: if validation fails, attempt to repair missing tables
+        # before giving up. This handles edge cases like partial create_all()
+        # where most tables were created but a few failed.
+        if not schema_valid:
+            schema_valid, schema_errors = _attempt_schema_repair(
+                engine, base_dir, schema_errors
+            )
+
         if not schema_valid:
             error_msg = (
                 "DATABASE SCHEMA INCONSISTENCY DETECTED after fast-path init!\n"
                 "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
+                "Automatic repair was attempted but could not resolve all issues.\n"
                 "TO FIX: docker compose down -v && docker compose up --build"
             )
             logger.error(error_msg)
@@ -481,11 +582,18 @@ def run_migrations():
     startup_status.set_phase("migrations", "Validating database schema...")
     schema_valid, schema_errors = validate_schema(engine)
 
+    # Self-healing: attempt repair before crashing
+    if not schema_valid:
+        schema_valid, schema_errors = _attempt_schema_repair(
+            engine, base_dir, schema_errors
+        )
+
     if not schema_valid:
         error_msg = (
             "DATABASE SCHEMA INCONSISTENCY DETECTED!\n"
             "The database schema does not match the expected structure.\n\n"
             "Issues found:\n" + "\n".join(f"  - {e}" for e in schema_errors) + "\n\n"
+            "Automatic repair was attempted but could not resolve all issues.\n"
             "TO FIX: docker compose down -v && docker compose up --build"
         )
         logger.error(error_msg)
