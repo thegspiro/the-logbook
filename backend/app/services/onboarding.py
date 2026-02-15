@@ -6,6 +6,7 @@ This module guides users through initial setup and can be disabled once complete
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy import select, func
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, UTC
@@ -109,37 +110,45 @@ class OnboardingService:
         Returns:
             True if onboarding is needed, False if already completed
         """
-        # First, check if onboarding is explicitly marked as completed
-        result = await self.db.execute(
-            select(OnboardingStatus).where(OnboardingStatus.is_completed == True)
-        )
-        completed = result.scalar_one_or_none()
+        try:
+            # First, check if onboarding is explicitly marked as completed
+            result = await self.db.execute(
+                select(OnboardingStatus).where(OnboardingStatus.is_completed == True)
+            )
+            completed = result.scalar_one_or_none()
 
-        if completed:
-            return False
+            if completed:
+                return False
 
-        # Check if there's an onboarding in progress (not completed)
-        result = await self.db.execute(
-            select(OnboardingStatus).where(OnboardingStatus.is_completed == False)
-        )
-        in_progress = result.scalar_one_or_none()
+            # Check if there's an onboarding in progress (not completed)
+            result = await self.db.execute(
+                select(OnboardingStatus).where(OnboardingStatus.is_completed == False)
+            )
+            in_progress = result.scalar_one_or_none()
 
-        if in_progress:
-            # Onboarding is in progress, needs to continue
+            if in_progress:
+                # Onboarding is in progress, needs to continue
+                return True
+
+            # No OnboardingStatus found - check if this is a legacy installation
+            # (organizations exist but no onboarding record was ever created)
+            result = await self.db.execute(select(func.count(Organization.id)))
+            org_count = result.scalar()
+
+            if org_count > 0:
+                # Legacy installation - auto-mark as completed
+                await self._mark_legacy_completed()
+                return False
+
+            # No onboarding status and no organizations - needs onboarding
             return True
-
-        # No OnboardingStatus found - check if this is a legacy installation
-        # (organizations exist but no onboarding record was ever created)
-        result = await self.db.execute(select(func.count(Organization.id)))
-        org_count = result.scalar()
-
-        if org_count > 0:
-            # Legacy installation - auto-mark as completed
-            await self._mark_legacy_completed()
-            return False
-
-        # No onboarding status and no organizations - needs onboarding
-        return True
+        except (ProgrammingError, OperationalError):
+            # Tables don't exist yet (migrations haven't run).
+            # Treat as needing onboarding — the frontend will show the
+            # setup wizard, and subsequent requests will work once
+            # migrations complete.
+            await self.db.rollback()
+            return True
 
     async def get_onboarding_status(self) -> Optional[OnboardingStatus]:
         """
@@ -148,10 +157,14 @@ class OnboardingService:
         Returns:
             OnboardingStatus object or None if not started
         """
-        result = await self.db.execute(
-            select(OnboardingStatus).order_by(OnboardingStatus.created_at.desc()).limit(1)
-        )
-        return result.scalar_one_or_none()
+        try:
+            result = await self.db.execute(
+                select(OnboardingStatus).order_by(OnboardingStatus.created_at.desc()).limit(1)
+            )
+            return result.scalar_one_or_none()
+        except (ProgrammingError, OperationalError):
+            await self.db.rollback()
+            return None
 
     async def start_onboarding(
         self,

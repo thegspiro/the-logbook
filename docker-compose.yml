@@ -109,6 +109,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import requests; r = requests.get('http://localhost:3001/health', timeout=5); exit(0 if r.status_code == 200 else 1)\""]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
     networks:
       - intranet-network
     # Exec form so uvicorn receives SIGTERM for graceful shutdown
@@ -129,7 +135,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - intranet-network
 
@@ -145,8 +152,10 @@ services:
       - ./infrastructure/docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infrastructure/docker/ssl:/etc/nginx/ssl:ro
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     networks:
       - intranet-network
     profiles:
