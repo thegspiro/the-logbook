@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-14 (includes shift module enhancements: templates, patterns, assignments, swaps, time-off, calls, reports; facilities module: building management, maintenance, utilities, keys, rooms, compliance; plus meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-15 (includes codebase quality fixes: type-safe error handling, unused code cleanup, backend Makefile corrections, documents service consolidation, public portal implementation, linting configuration; plus shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -25,7 +25,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 13. [Facilities Module](#facilities-module)
 14. [TypeScript Build Issues](#typescript-build-issues)
 15. [Error Message Reference](#error-message-reference)
-16. [Getting Help](#getting-help)
+16. [Error Handling Patterns](#error-handling-patterns)
+17. [Getting Help](#getting-help)
 
 ---
 
@@ -2101,6 +2102,87 @@ docker exec the-logbook-db-1 mysql -uroot -p"$MYSQL_ROOT_PASSWORD" logbook \
 - Check browser console for API errors (F12 -> Console)
 - Verify the rule ID is valid
 - Confirm `notifications.manage` permission is assigned
+
+---
+
+## Error Handling Patterns
+
+### Frontend Error Handling
+
+As of 2026-02-15, all frontend `catch` blocks use type-safe error handling:
+
+```typescript
+// Correct pattern — use catch (err: unknown)
+try {
+  const data = await apiCall();
+} catch (err: unknown) {
+  const appError = toAppError(err);
+  // For HTTP errors, use the API message; for generic errors, use a fallback
+  setError(appError.status ? appError.message : 'Operation failed');
+}
+```
+
+**Do NOT use:**
+```typescript
+// WRONG — 'any' bypasses type safety
+catch (err: any) { ... }
+```
+
+**Key utilities** (`frontend/src/utils/errorHandling.ts`):
+- `toAppError(err)` — Converts any error to a structured `AppError` with `message`, `status`, `code`, and `details`
+- `getErrorMessage(err, fallback)` — Shorthand that returns just the message string
+- `isAppError(err)` — Type guard for checking if an object is an `AppError`
+
+**Check order in `toAppError()`:**
+1. Axios/HTTP errors (objects with `.response`) — extracts `.response.data.detail` and `.response.status`
+2. Standard `Error` instances — uses `.message`
+3. Plain `AppError` objects — returns as-is
+4. Strings — wraps in `{ message: string }`
+5. Unknown — returns generic message
+
+### Backend Error Handling
+
+Backend services should raise `HTTPException` directly rather than returning error tuples:
+
+```python
+# Correct — raise on error
+async def get_item(item_id: str, db: AsyncSession):
+    item = await db.get(Item, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
+
+# WRONG — don't return (result, error) tuples
+async def get_item(item_id, db):
+    item = await db.get(Item, item_id)
+    if not item:
+        return None, "Item not found"  # Don't do this
+    return item, None
+```
+
+### Common Error Handling Issues
+
+#### Problem: Error message shows "Network error" instead of a user-friendly fallback
+
+**Cause**: The error is a plain `Error` object (not an HTTP error with `.response`), so `toAppError()` extracts the raw `.message` property.
+
+**Solution**: Use `toAppError()` and check for `appError.status` to decide between the API message and a fallback:
+```typescript
+const appError = toAppError(err);
+setError(appError.status ? appError.message : 'A friendly fallback message');
+```
+
+#### Problem: Test mock errors not being parsed correctly
+
+**Cause**: `createMockApiError()` must return an error object (not a Promise). The error needs a `.response` property for `toAppError()` to extract the detail message.
+
+**Solution**: Use the test utility correctly:
+```typescript
+// Correct — returns error object for use with mockRejectedValue
+vi.mocked(api.someMethod).mockRejectedValue(
+  createMockApiError('Error message', 400)
+);
+```
 
 ---
 

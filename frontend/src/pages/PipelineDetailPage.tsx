@@ -35,8 +35,10 @@ import type {
 
 interface ProgramDetails extends TrainingProgram {
   phases?: ProgramPhase[];
-  requirements?: ProgramRequirement[];
+  requirements?: (ProgramRequirement | TrainingRequirementEnhanced)[];
   milestones?: ProgramMilestone[];
+  total_requirements?: number;
+  total_required?: number;
 }
 
 type DetailTab = 'overview' | 'phases' | 'enrollments';

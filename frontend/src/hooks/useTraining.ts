@@ -147,7 +147,7 @@ export const useTrainingStats = (userId: string | undefined) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await trainingService.getStatistics(userId);
+      const data = await trainingService.getUserStats(userId);
       setStats(data);
     } catch (err: unknown) {
       const errorMessage =
@@ -251,7 +251,7 @@ export const useRequirementProgress = (userId: string | undefined) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await trainingService.getProgress(userId);
+      const data = await trainingService.getRequirementProgress(userId);
       setProgress(data);
     } catch (err: unknown) {
       const errorMessage =

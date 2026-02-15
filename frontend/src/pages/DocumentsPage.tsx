@@ -12,6 +12,7 @@ import {
   Trash2,
   File,
   ArrowLeft,
+  Upload,
 } from 'lucide-react';
 import {
   documentsService,

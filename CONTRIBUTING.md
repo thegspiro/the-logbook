@@ -1,6 +1,6 @@
-# Contributing to Intranet Platform
+# Contributing to The Logbook
 
-First off, thank you for considering contributing to the Intranet Platform! It's people like you that make this platform a great tool for fire departments and emergency services worldwide.
+First off, thank you for considering contributing to The Logbook! It's people like you that make this platform a great tool for fire departments and emergency services worldwide.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ Before creating bug reports, please check the existing issues to avoid duplicate
 - **Provide specific examples**
 - **Describe the behavior you observed and what you expected**
 - **Include screenshots if relevant**
-- **Include your environment details** (OS, Node version, browser, etc.)
+- **Include your environment details** (OS, Python version, Node version, browser, etc.)
 
 ### Suggesting Features
 
@@ -79,7 +79,10 @@ nano .env
 make docker-up
 
 # OR start services manually
-npm run dev
+# Backend:
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+# Frontend:
+cd frontend && npm install && npm run dev
 ```
 
 ### Project Structure
@@ -90,7 +93,7 @@ See [FILE_STRUCTURE.md](FILE_STRUCTURE.md) for detailed information about the pr
 
 1. **Update Documentation**: Ensure any new features or changes are documented
 2. **Add Tests**: All new code should include appropriate tests
-3. **Follow Code Style**: Run `npm run lint` and `npm run format`
+3. **Follow Code Style**: Run `make lint` and `make format`
 4. **Update CHANGELOG**: Add your changes to the unreleased section
 5. **Pass CI/CD**: Ensure all tests pass in GitHub Actions
 6. **Get Reviews**: At least one maintainer must approve your PR
@@ -123,24 +126,37 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 ### Code Style
 
-We use ESLint and Prettier for code formatting:
+We use ESLint and Prettier for frontend code formatting, and flake8/mypy for backend:
 
 ```bash
-# Check linting
-npm run lint
+# Check linting (frontend)
+cd frontend && npm run lint
 
-# Fix linting issues
-npm run lint:fix
+# Fix linting issues (frontend)
+cd frontend && npm run lint:fix
 
-# Format code
-npm run format
+# Format code (frontend)
+cd frontend && npm run format
+
+# Check linting (backend)
+cd backend && flake8
+cd backend && mypy .
 ```
+
+### Python (Backend)
+
+- Use Python 3.11+ features where appropriate
+- Use type hints for function signatures
+- Use `async`/`await` for all database operations (SQLAlchemy async)
+- Use `catch (err: unknown)` pattern — never use bare `except:` or `except Exception`
+- Always use `HTTPException` for API error responses, never return error tuples
+- Follow flake8 rules (configured in `.flake8`, max-line-length=120)
 
 ### Best Practices
 
 - **DRY**: Don't Repeat Yourself
 - **SOLID**: Follow SOLID principles
-- **Error Handling**: Always handle errors appropriately
+- **Error Handling**: Always handle errors appropriately — use `catch (err: unknown)` in TypeScript and typed exceptions in Python
 - **Security**: Follow OWASP guidelines
 - **Performance**: Consider performance implications
 - **Accessibility**: Ensure UI is accessible (WCAG 2.1 AA)
@@ -212,22 +228,24 @@ See [docs/development/creating-modules.md](docs/development/creating-modules.md)
 
 ```bash
 # All tests
-npm test
+make test
 
 # Backend tests
-npm run test:backend
+make test-backend
+# or: cd backend && pytest
 
 # Frontend tests
-npm run test:frontend
+make test-frontend
+# or: cd frontend && npx vitest run
 
-# Watch mode
-npm run test:watch
+# Frontend watch mode
+cd frontend && npx vitest
 
-# E2E tests
-npm run test:e2e
+# Frontend coverage
+cd frontend && npx vitest run --coverage
 
-# Coverage
-npm test -- --coverage
+# Backend coverage
+cd backend && pytest --cov=app --cov-report=term-missing
 ```
 
 ### Writing Tests

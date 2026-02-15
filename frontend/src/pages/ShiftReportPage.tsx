@@ -531,7 +531,7 @@ const ShiftReportPage: React.FC = () => {
                   <option value="">No specific pipeline</option>
                   {enrollments.map((e) => (
                     <option key={e.id} value={e.id}>
-                      {e.program_name || 'Program'} ({Math.round(e.progress_percentage || 0)}% complete)
+                      {e.program?.name || 'Program'} ({Math.round(e.progress_percentage || 0)}% complete)
                     </option>
                   ))}
                 </select>

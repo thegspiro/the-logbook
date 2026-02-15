@@ -138,7 +138,8 @@ Add to admin sidebar:
 
 ## 📝 Notes
 
-- All API endpoints are already implemented in the backend
+- Core public API endpoints (`/stats` and `/events/public`) are implemented with real database queries (2026-02-15)
+- Admin configuration endpoints and API key management are still needed
 - Hooks handle error messages via toast notifications
 - Loading states are managed in hooks
 - Config is fetched automatically on mount
