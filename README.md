@@ -247,8 +247,6 @@ The wiki includes:
 - [Drop Notifications & Email Templates](docs/DROP_NOTIFICATIONS.md) - Configurable drop notification messages, CC recipients, personal email, editable templates
 - [Role System](ROLE_SYSTEM_README.md) - Role-based access control (16 system roles)
 - [Onboarding Flow](docs/ONBOARDING_FLOW.md) - Onboarding process details
-- [Election Security Audit](ELECTION_SECURITY_AUDIT.md) - Voting system security review
-- [Async SQLAlchemy Review](ASYNC_SQLALCHEMY_REVIEW.md) - Codebase async safety audit
 
 ### Development & Quality
 - [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) - Multi-layer TypeScript build protection, `as any` elimination
