@@ -18,10 +18,10 @@ export const getProspectiveMembersRoutes = () => {
   return (
     <React.Fragment>
       {/* Prospective Members Pipeline */}
-      <Route path="/prospective-members" element={<ProtectedRoute requiredPermission="members.manage"><ProspectiveMembersPage /></ProtectedRoute>} />
+      <Route path="/prospective-members" element={<ProtectedRoute requiredPermission="prospective_members.manage"><ProspectiveMembersPage /></ProtectedRoute>} />
 
       {/* Pipeline Settings */}
-      <Route path="/prospective-members/settings" element={<ProtectedRoute requiredPermission="members.manage"><PipelineSettingsPage /></ProtectedRoute>} />
+      <Route path="/prospective-members/settings" element={<ProtectedRoute requiredPermission="prospective_members.manage"><PipelineSettingsPage /></ProtectedRoute>} />
     </React.Fragment>
   );
 };

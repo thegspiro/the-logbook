@@ -85,7 +85,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: Users,
       subItems: [
         { label: 'All Members', path: '/members', icon: Users },
-        { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'members.manage' },
+        { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
       ],
     },
     { label: 'Events', path: '/events', icon: Calendar },
@@ -130,7 +130,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Organization', path: '/settings', icon: Building2 },
         { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'roles.manage' },
         { label: 'Member Admin', path: '/admin/members', icon: UserCog, permission: 'members.manage' },
-        { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'admin.settings' },
+        { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
       ],
     },
   ];

@@ -58,7 +58,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       path: '/members',
       subItems: [
         { label: 'All Members', path: '/members' },
-        { label: 'Prospective', path: '/prospective-members', permission: 'members.manage' },
+        { label: 'Prospective', path: '/prospective-members', permission: 'prospective_members.manage' },
       ],
     },
     { label: 'Events', path: '/events' },
@@ -99,7 +99,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Organization', path: '/settings' },
         { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
         { label: 'Member Admin', path: '/admin/members', permission: 'members.manage' },
-        { label: 'Public Portal', path: '/admin/public-portal', permission: 'admin.settings' },
+        { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
       ],
     },
   ];
