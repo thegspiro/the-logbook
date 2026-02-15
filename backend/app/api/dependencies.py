@@ -15,6 +15,43 @@ from app.models.user import User, Organization, Role
 from app.services.auth_service import AuthService
 
 
+async def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Get the current authenticated user from the request
+
+    Extracts JWT token from Authorization header, validates it,
+    and returns the authenticated user.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if not authorization:
+        raise credentials_exception
+
+    # Extract token from "Bearer <token>" format
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise credentials_exception
+    except ValueError:
+        raise credentials_exception
+
+    # Validate token and get user
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_from_token(token)
+
+    if not user:
+        raise credentials_exception
+
+    return user
+
+
 class PermissionChecker:
     """
     Dependency class for checking user permissions using OR logic.
@@ -122,43 +159,6 @@ def require_all_permissions(*permissions: str):
             ...
     """
     return AllPermissionChecker(list(permissions))
-
-
-async def get_current_user(
-    authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """
-    Get the current authenticated user from the request
-
-    Extracts JWT token from Authorization header, validates it,
-    and returns the authenticated user.
-    """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    if not authorization:
-        raise credentials_exception
-
-    # Extract token from "Bearer <token>" format
-    try:
-        scheme, token = authorization.split()
-        if scheme.lower() != "bearer":
-            raise credentials_exception
-    except ValueError:
-        raise credentials_exception
-
-    # Validate token and get user
-    auth_service = AuthService(db)
-    user = await auth_service.get_user_from_token(token)
-
-    if not user:
-        raise credentials_exception
-
-    return user
 
 
 async def get_current_active_user(
