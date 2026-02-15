@@ -336,7 +336,7 @@ start_services() {
 
     # Pull base images first
     print_info "Pulling base images..."
-    docker pull mariadb:10.11
+    docker pull mysql:8.0
     docker pull redis:7-alpine
 
     # Build and start
