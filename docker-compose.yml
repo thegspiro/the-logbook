@@ -37,7 +37,7 @@ services:
           mysql -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_in_production} -e 'SELECT 1' $${MYSQL_DATABASE:-intranet_db}
       interval: 5s
       timeout: 3s
-      retries: 30
+      retries: 60
       start_period: 300s
     networks:
       - intranet-network
