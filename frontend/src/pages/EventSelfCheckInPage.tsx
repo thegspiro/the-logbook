@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { QRCheckInData, RSVP } from '../types/event';
-import { getErrorMessage } from '../utils/errorHandling';
+import { toAppError } from '../utils/errorHandling';
 
 /**
  * Event Self Check-In Page
@@ -37,49 +37,49 @@ const EventSelfCheckInPage: React.FC = () => {
       const data = await eventService.getQRCheckInData(eventId);
       setQrData(data);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load event information'));
+      const appError = toAppError(err);
+      setError(appError.status ? appError.message : 'Failed to load event information');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCheckIn = async (isCheckOut: boolean = false) => {
+  const handleCheckIn = async () => {
     if (!eventId) return;
 
     try {
       setCheckingIn(true);
       setError(null);
 
-      const rsvp = await eventService.selfCheckIn(eventId, isCheckOut);
-
-      // Check if user was already checked in (from response headers or data)
-      if (!isCheckOut && rsvp.checked_in && !rsvp.checked_out_at) {
-        // User was already checked in, prompt for check-out
-        setCheckInData(rsvp);
-        setShowCheckOutPrompt(true);
-      } else {
-        // Successfully checked in or out
-        setCheckInData(rsvp);
-        setCheckedIn(true);
-        setShowCheckOutPrompt(false);
-      }
+      const rsvp = await eventService.selfCheckIn(eventId);
+      setCheckInData(rsvp);
+      setCheckedIn(true);
+      setShowCheckOutPrompt(false);
     } catch (err: unknown) {
-      const errorMessage = getErrorMessage(err, 'Failed to check in');
-
-      // Special handling for "already checked in" message
-      if (errorMessage.includes('already checked in')) {
-        setShowCheckOutPrompt(true);
-        setError(null); // Don't show as error, show as prompt
-      } else {
-        setError(errorMessage);
-      }
+      const appError = toAppError(err);
+      setError(appError.status ? appError.message : 'Failed to check in');
     } finally {
       setCheckingIn(false);
     }
   };
 
   const handleCheckOut = async () => {
-    await handleCheckIn(true);
+    if (!eventId) return;
+
+    try {
+      setCheckingIn(true);
+      setError(null);
+
+      const rsvp = await eventService.selfCheckIn(eventId, true);
+      setCheckInData(rsvp);
+      setCheckedIn(true);
+      setShowCheckOutPrompt(false);
+    } catch (err: unknown) {
+      const appError = toAppError(err);
+      setError(appError.status ? appError.message : 'Failed to check out');
+    } finally {
+      setCheckingIn(false);
+    }
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -379,7 +379,7 @@ const EventSelfCheckInPage: React.FC = () => {
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
               <div>
-                <h4 className="font-semibold text-yellow-900 mb-2">Check-In Not Available</h4>
+                <h4 className="font-semibold text-yellow-900 mb-2">Check-in Not Available</h4>
                 <p className="text-yellow-800 mb-2">
                   Check-in is only available during the following time window:
                 </p>

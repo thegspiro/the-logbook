@@ -95,17 +95,13 @@ export function createMockApiResponse<T>(data: T, delay = 0) {
 /**
  * Create a mock API error
  */
-export function createMockApiError(message: string, status = 400, delay = 0) {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      const error: any = new Error(message);
-      error.response = {
-        data: { detail: message },
-        status,
-      };
-      reject(error);
-    }, delay);
-  });
+export function createMockApiError(message: string, status = 400) {
+  const error: any = new Error(message);
+  error.response = {
+    data: { detail: message },
+    status,
+  };
+  return error;
 }
 
 /**
