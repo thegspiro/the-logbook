@@ -20,8 +20,6 @@ export type {
 import type { User, ContactInfoSettings, NotificationPreferences, ContactInfoUpdate } from '../../../types/user';
 export type { User, ContactInfoSettings, NotificationPreferences, ContactInfoUpdate };
 
-import type { User } from '../../../types/user';
-
 // =============================================================================
 // Pagination & Filtering
 // =============================================================================

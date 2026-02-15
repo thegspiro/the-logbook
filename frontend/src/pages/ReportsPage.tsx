@@ -719,7 +719,7 @@ export const ReportsPage: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
-                      {activeReport.usesDateRange && (reportData?.period_start || reportData?.period_end) && (
+                      {activeReport.usesDateRange && (!!reportData?.period_start || !!reportData?.period_end) && (
                         <p className="text-xs text-slate-400 mt-0.5">
                           {reportData.period_start ? String(reportData.period_start) : 'Start'} — {reportData.period_end ? String(reportData.period_end) : 'End'}
                         </p>
