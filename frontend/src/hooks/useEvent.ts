@@ -28,7 +28,6 @@ export const useEvent = (eventId: string | undefined) => {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load event';
-      console.error('Error fetching event:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);

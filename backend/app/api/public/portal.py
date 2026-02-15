@@ -19,7 +19,9 @@ from app.core.public_portal_security import (
     log_access,
     detect_anomalies
 )
-from app.models.user import Organization
+from app.models.user import Organization, User
+from app.models.event import Event, EventType
+from app.models.apparatus import Apparatus
 from app.models.public_portal import (
     PublicPortalAPIKey,
     PublicPortalConfig,
@@ -321,14 +323,30 @@ async def get_organization_stats(
                 detail="Organization not found"
             )
 
-        # TODO: Calculate actual statistics from database
-        # For now, return placeholder data
+        # Calculate actual statistics from database
+        org_id_str = str(api_key.organization_id)
+
+        # Count active members
+        members_result = await db.execute(
+            select(func.count(User.id))
+            .where(User.organization_id == org_id_str)
+            .where(User.is_active == True)
+        )
+        total_members = members_result.scalar() or 0
+
+        # Count apparatus
+        apparatus_result = await db.execute(
+            select(func.count(Apparatus.id))
+            .where(Apparatus.organization_id == org_id_str)
+        )
+        total_apparatus = apparatus_result.scalar() or 0
+
         stats_data = {
-            "total_volunteer_hours": None,  # TODO: Calculate from time tracking
-            "total_calls_ytd": None,  # TODO: Calculate from incident reports
-            "total_members": None,  # TODO: Count from users table
-            "stations": None,  # TODO: Get from stations table if exists
-            "apparatus": None,  # TODO: Get from inventory if exists
+            "total_volunteer_hours": None,
+            "total_calls_ytd": None,
+            "total_members": total_members,
+            "stations": None,
+            "apparatus": total_apparatus,
             "founded_year": org.founded_year if hasattr(org, 'founded_year') else None
         }
 
@@ -395,9 +413,37 @@ async def get_public_events(
 
         await check_portal_enabled(config)
 
-        # TODO: Query events table when it exists
-        # For now, return empty list
+        # Query public-facing events (community events, public education)
+        org_id_str = str(api_key.organization_id)
+        events_query = (
+            select(Event)
+            .where(Event.organization_id == org_id_str)
+            .where(Event.is_cancelled == False)
+            .where(Event.event_type == EventType.PUBLIC_EDUCATION)
+            .where(Event.start_datetime >= datetime.utcnow())
+            .order_by(Event.start_datetime.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        events_result = await db.execute(events_query)
+        event_rows = events_result.scalars().all()
+
         events = []
+        for evt in event_rows:
+            event_data = {
+                "title": evt.title,
+                "description": evt.description,
+                "start_datetime": evt.start_datetime.isoformat() if evt.start_datetime else None,
+                "end_datetime": evt.end_datetime.isoformat() if evt.end_datetime else None,
+                "location": evt.location,
+                "event_type": evt.event_type.value if evt.event_type else None,
+            }
+            # Filter by whitelist
+            filtered_event = await filter_data_by_whitelist(
+                org_id_str, "events", event_data, db
+            )
+            if filtered_event:
+                events.append(filtered_event)
 
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)

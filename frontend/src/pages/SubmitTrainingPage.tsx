@@ -409,7 +409,6 @@ const SubmitTrainingPage: React.FC = () => {
       setCategories(categoriesData);
       setSubmissions(submissionsData);
     } catch (error) {
-      console.error('Failed to load data:', error);
       toast.error('Failed to load submission form');
     } finally {
       setLoading(false);

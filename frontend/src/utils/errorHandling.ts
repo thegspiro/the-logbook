@@ -42,20 +42,7 @@ export function isAppError(error: unknown): error is AppError {
  * Converts an unknown error to an AppError
  */
 export function toAppError(error: unknown): AppError {
-  // Already an AppError
-  if (isAppError(error)) {
-    return error;
-  }
-
-  // Standard Error object
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      details: { name: error.name, stack: error.stack },
-    };
-  }
-
-  // Axios/Fetch error with response
+  // Axios/Fetch error with response (check first, since Axios errors also have .message and extend Error)
   if (
     typeof error === 'object' &&
     error !== null &&
@@ -69,6 +56,19 @@ export function toAppError(error: unknown): AppError {
       status: response.status,
       details: response.data?.details,
     };
+  }
+
+  // Standard Error object
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      details: { name: error.name, stack: error.stack },
+    };
+  }
+
+  // Already an AppError (plain object with message)
+  if (isAppError(error)) {
+    return error;
   }
 
   // String error

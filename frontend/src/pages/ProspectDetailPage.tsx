@@ -17,6 +17,7 @@ import type {
   TransferRequest,
 } from '../services/membershipPipelineApi';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 import {
   ArrowLeft,
   User,
@@ -124,8 +125,8 @@ export const ProspectDetailPage: React.FC = () => {
         fetchProspect();
         fetchActivityLog();
       }
-    } catch (err: any) {
-      setTransferError(err.response?.data?.detail || 'Failed to transfer prospect');
+    } catch (err: unknown) {
+      setTransferError(getErrorMessage(err, 'Failed to transfer prospect'));
     }
   };
 

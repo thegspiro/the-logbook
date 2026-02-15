@@ -375,7 +375,7 @@ const MemberProgressPage: React.FC = () => {
       }
       setProgressDetails(details);
     } catch (error) {
-      console.error('Failed to load enrollments:', error);
+      // Error silently handled - empty enrollments shown
     } finally {
       setLoading(false);
     }

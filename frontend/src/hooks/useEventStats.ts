@@ -27,7 +27,6 @@ export const useEventStats = (eventId: string | undefined, shouldFetch: boolean 
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to load stats';
-      console.error('Error fetching stats:', err);
       setError(errorMessage);
     } finally {
       setLoading(false);

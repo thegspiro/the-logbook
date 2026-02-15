@@ -50,7 +50,6 @@ const Dashboard: React.FC = () => {
       const data = await dashboardService.getStats();
       setStats(data);
     } catch (error) {
-      console.error('Failed to load dashboard stats:', error);
       // Fallback to default values if API fails
       setStats({
         total_members: 1,
@@ -79,13 +78,11 @@ const Dashboard: React.FC = () => {
           const progress = await trainingProgramService.getEnrollmentProgress(enrollment.id);
           details.set(enrollment.id, progress);
         } catch (err) {
-          console.error(`Failed to load progress for enrollment ${enrollment.id}:`, err);
           // Continue loading other enrollments even if one fails
         }
       }
       setProgressDetails(details);
     } catch (error) {
-      console.error('Failed to load training progress:', error);
       toast.error('Failed to load training progress');
     } finally {
       setLoadingTraining(false);

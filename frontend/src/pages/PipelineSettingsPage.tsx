@@ -16,6 +16,7 @@ import type {
   PipelineCreate,
   PipelineStepCreate,
 } from '../services/membershipPipelineApi';
+import { getErrorMessage } from '../utils/errorHandling';
 import {
   ArrowLeft,
   Plus,
@@ -105,8 +106,8 @@ const PipelineSettingsPage: React.FC = () => {
       setCreateFormData({ name: '', description: '', is_default: false, auto_transfer_on_approval: false });
       await fetchPipelines();
       fetchPipelineDetail(pipeline.id);
-    } catch (err: any) {
-      setCreateError(err.response?.data?.detail || 'Failed to create pipeline');
+    } catch (err: unknown) {
+      setCreateError(getErrorMessage(err, 'Failed to create pipeline'));
     }
   };
 

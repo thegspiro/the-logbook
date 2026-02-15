@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { userService } from '../services/api';
 import { User } from '../types/user';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface MemberStats {
   total: number;
@@ -66,9 +67,8 @@ const Members: React.FC = () => {
         retired: users.filter(u => u.status === 'retired').length,
       };
       setStats(calculatedStats);
-    } catch (err: any) {
-      console.error('Failed to load members:', err);
-      setError(err.response?.data?.detail || 'Unable to load the member list. Please check your connection and refresh the page.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to load the member list. Please check your connection and refresh the page.'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ const Members: React.FC = () => {
       const settings = await userService.checkContactInfoEnabled();
       setContactInfoEnabled(settings);
     } catch (err) {
-      console.error('Failed to check contact info settings:', err);
+      // Error silently handled - contact info settings default to disabled
     }
   };
 

@@ -63,7 +63,6 @@ const TrainingRequirementsPage: React.FC = () => {
       setRequirements(reqs);
       setCategories(cats);
     } catch (error) {
-      console.error('Error loading data:', error);
       toast.error('Failed to load training requirements');
     } finally {
       setLoading(false);
@@ -78,7 +77,6 @@ const TrainingRequirementsPage: React.FC = () => {
       setRequirements(requirements.filter(r => r.id !== id));
       toast.success('Requirement deleted');
     } catch (error) {
-      console.error('Error deleting requirement:', error);
       toast.error('Failed to delete requirement');
     }
   };
@@ -108,7 +106,6 @@ const TrainingRequirementsPage: React.FC = () => {
       setRequirements([...requirements, created]);
       toast.success('Requirement duplicated');
     } catch (error) {
-      console.error('Error duplicating requirement:', error);
       toast.error('Failed to duplicate requirement');
     }
   };
@@ -124,7 +121,6 @@ const TrainingRequirementsPage: React.FC = () => {
       ));
       toast.success(requirement.active ? 'Requirement deactivated' : 'Requirement activated');
     } catch (error) {
-      console.error('Error toggling requirement:', error);
       toast.error('Failed to update requirement');
     }
   };
@@ -143,7 +139,6 @@ const TrainingRequirementsPage: React.FC = () => {
       setShowCreateModal(false);
       setSelectedRequirement(null);
     } catch (error) {
-      console.error('Error saving requirement:', error);
       toast.error('Failed to save requirement');
     }
   };
@@ -306,7 +301,6 @@ const TrainingRequirementsPage: React.FC = () => {
                 toast.success(`Template "${template.name}" added`);
                 setShowTemplateModal(false);
               } catch (error) {
-                console.error('Error creating from template:', error);
                 toast.error('Failed to create requirement from template');
               }
             }}

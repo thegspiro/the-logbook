@@ -52,7 +52,6 @@ export const MembersAdminPage: React.FC = () => {
       setUsers(usersData);
       setRoles(rolesData);
     } catch (err) {
-      console.error('Error fetching data:', err);
       setError('Unable to load members and roles. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -90,7 +89,6 @@ export const MembersAdminPage: React.FC = () => {
       setEditingRoles(false);
       setSelectedUser(null);
     } catch (err) {
-      console.error('Error saving roles:', err);
       setError('Unable to save role assignments. Please check your connection and try again.');
     } finally {
       setSaving(false);
@@ -142,7 +140,6 @@ export const MembersAdminPage: React.FC = () => {
       setEditingMembers(false);
       setSelectedRole(null);
     } catch (err) {
-      console.error('Error saving members:', err);
       setError('Unable to update member assignments. Please check your connection and try again.');
     } finally {
       setSaving(false);
@@ -176,7 +173,6 @@ export const MembersAdminPage: React.FC = () => {
       await userService.assignUserRoles(user.id, newRoleIds);
       await fetchData();
     } catch (err) {
-      console.error('Error removing role:', err);
       setError('Unable to remove the role. Please check your connection and try again.');
     }
   };
@@ -195,7 +191,6 @@ export const MembersAdminPage: React.FC = () => {
       await userService.assignUserRoles(userId, newRoleIds);
       await fetchData();
     } catch (err) {
-      console.error('Error removing user:', err);
       setError('Unable to remove the user from this role. Please check your connection and try again.');
     }
   };

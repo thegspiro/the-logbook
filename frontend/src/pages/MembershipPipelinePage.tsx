@@ -17,6 +17,7 @@ import type {
   ProspectCreate,
 } from '../services/membershipPipelineApi';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 import {
   Users,
   Plus,
@@ -109,8 +110,8 @@ const MembershipPipelinePage: React.FC = () => {
       setShowAddModal(false);
       setAddFormData({ first_name: '', last_name: '', email: '', phone: '', interest_reason: '', referral_source: '' });
       fetchKanbanBoard();
-    } catch (err: any) {
-      setAddError(err.response?.data?.detail || 'Failed to add prospect');
+    } catch (err: unknown) {
+      setAddError(getErrorMessage(err, 'Failed to add prospect'));
     }
   };
 

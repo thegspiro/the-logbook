@@ -48,7 +48,7 @@ const TrainingProgramsPage: React.FC = () => {
         setRequirements(data);
       }
     } catch (error) {
-      console.error('Failed to load data:', error);
+      // Error silently handled - empty state shown
     } finally {
       setLoading(false);
     }

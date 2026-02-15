@@ -237,7 +237,6 @@ const PipelineDetailPage: React.FC = () => {
       // Expand all phases by default
       setExpandedPhases(new Set(phasesData.map((p: ProgramPhase) => p.id)));
     } catch (error) {
-      console.error('Failed to load program:', error);
       toast.error('Failed to load program');
       navigate('/training/programs');
     } finally {

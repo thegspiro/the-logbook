@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
+import { getErrorMessage } from '../utils/errorHandling';
 
 /**
  * Event Check-In Monitoring Dashboard
@@ -38,9 +39,8 @@ const EventCheckInMonitoringPage: React.FC = () => {
       const data = await eventService.getCheckInMonitoring(eventId);
       setStats(data);
       setLastUpdated(new Date());
-    } catch (err: any) {
-      console.error('Error fetching monitoring stats:', err);
-      setError(err.response?.data?.detail || 'Failed to load monitoring data');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load monitoring data'));
     } finally {
       setLoading(false);
     }

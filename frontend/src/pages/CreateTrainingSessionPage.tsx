@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TrainingSessionCreate, TrainingType, TrainingCourse } from '../types/training';
+import { getErrorMessage } from '../utils/errorHandling';
 
 /**
  * Create Training Session Page
@@ -24,11 +25,7 @@ const CreateTrainingSessionPage: React.FC = () => {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-
-  // Available courses for selection
-  const [availableCourses, _setAvailableCourses] = useState<TrainingCourse[]>([]);
-  // Suppress unused warning - will be used when API is implemented
-  void availableCourses;
+  const [availableCourses] = useState<TrainingCourse[]>([]);
 
   // Form data
   const [formData, setFormData] = useState<TrainingSessionCreate>({
@@ -92,8 +89,8 @@ const CreateTrainingSessionPage: React.FC = () => {
       // Navigate to the event page to view QR code
       // navigate(`/events/${response.event_id}`);
       navigate('/training/sessions');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create training session');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create training session'));
       setSaving(false);
     }
   };

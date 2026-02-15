@@ -6,6 +6,7 @@ Endpoints for event management including events, RSVPs, and attendance tracking.
 
 import os
 import uuid as uuid_lib
+from loguru import logger
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -1312,8 +1313,8 @@ async def delete_event_attachment(
     try:
         if os.path.exists(file_path):
             os.remove(file_path)
-    except OSError:
-        pass
+    except OSError as e:
+        logger.warning(f"Failed to remove attachment file {file_path}: {e}")
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]

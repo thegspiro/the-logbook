@@ -40,7 +40,6 @@ export const EventsPage: React.FC = () => {
       const data = await eventService.getEvents();
       setEvents(data);
     } catch (err) {
-      console.error('Error fetching events:', err);
       setError('Failed to load events. Please try again later.');
     } finally {
       setLoading(false);

@@ -42,7 +42,7 @@ export const EventDetailPage: React.FC = () => {
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
 
-  const { checkPermission, user: _user } = useAuthStore();
+  const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
 
   useEffect(() => {
@@ -64,7 +64,6 @@ export const EventDetailPage: React.FC = () => {
       const data = await eventService.getEvent(eventId);
       setEvent(data);
     } catch (err) {
-      console.error('Error fetching event:', err);
       setError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to load event');
     } finally {
       setLoading(false);
@@ -78,7 +77,7 @@ export const EventDetailPage: React.FC = () => {
       const data = await eventService.getEventRSVPs(eventId);
       setRsvps(data);
     } catch (err) {
-      console.error('Error fetching RSVPs:', err);
+      // Error silently handled - RSVPs section will show empty
     }
   };
 
@@ -89,7 +88,7 @@ export const EventDetailPage: React.FC = () => {
       const data = await eventService.getEventStats(eventId);
       setStats(data);
     } catch (err) {
-      console.error('Error fetching stats:', err);
+      // Error silently handled - stats section will show empty
     }
   };
 
@@ -100,7 +99,7 @@ export const EventDetailPage: React.FC = () => {
       const data = await eventService.getEligibleMembers(eventId);
       setEligibleMembers(data);
     } catch (err) {
-      console.error('Error fetching eligible members:', err);
+      // Error silently handled - eligible members list will show empty
     }
   };
 
@@ -135,7 +134,6 @@ export const EventDetailPage: React.FC = () => {
         await fetchStats();
       }
     } catch (err) {
-      console.error('Error submitting RSVP:', err);
       setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to submit RSVP');
     } finally {
       setSubmitting(false);
@@ -161,7 +159,6 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Event cancelled successfully');
       await fetchEvent();
     } catch (err) {
-      console.error('Error cancelling event:', err);
       setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to cancel event');
     } finally {
       setSubmitting(false);
@@ -177,7 +174,6 @@ export const EventDetailPage: React.FC = () => {
       await fetchStats();
       toast.success('Member checked in successfully');
     } catch (err) {
-      console.error('Error checking in attendee:', err);
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to check in attendee');
     }
   };
@@ -191,7 +187,6 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Event duplicated successfully');
       navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
-      console.error('Error duplicating event:', err);
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to duplicate event');
     } finally {
       setSubmitting(false);
@@ -207,7 +202,6 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Event deleted successfully');
       navigate('/events');
     } catch (err) {
-      console.error('Error deleting event:', err);
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete event');
     } finally {
       setSubmitting(false);
@@ -244,7 +238,6 @@ export const EventDetailPage: React.FC = () => {
         await fetchRSVPs();
       }
     } catch (err) {
-      console.error('Error recording times:', err);
       setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to record times');
     } finally {
       setSubmitting(false);

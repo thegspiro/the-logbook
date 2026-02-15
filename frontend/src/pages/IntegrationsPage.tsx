@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { integrationsService, type IntegrationConfig } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -115,8 +116,8 @@ const IntegrationsPage: React.FC = () => {
       setIntegrations(prev => prev.map(i => i.id === integrationId ? updated : i));
       setShowConnectModal(null);
       toast.success('Integration connected successfully!');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to connect integration');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to connect integration'));
     } finally {
       setConnecting(false);
     }
@@ -129,8 +130,8 @@ const IntegrationsPage: React.FC = () => {
         i.id === integrationId ? { ...i, status: 'available' as const, enabled: false } : i
       ));
       toast.success('Integration disconnected');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to disconnect integration');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to disconnect integration'));
     }
   };
 

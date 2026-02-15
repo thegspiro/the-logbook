@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { electionService } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -59,7 +60,6 @@ export const ElectionsPage: React.FC = () => {
       const data = await electionService.getElections();
       setElections(data);
     } catch (err) {
-      console.error('Error fetching elections:', err);
       setError('Unable to load elections. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -130,9 +130,8 @@ export const ElectionsPage: React.FC = () => {
       });
       setPositionInput('');
       await fetchElections();
-    } catch (err: any) {
-      console.error('Error creating election:', err);
-      setCreateError(err.response?.data?.detail || 'Failed to create election');
+    } catch (err: unknown) {
+      setCreateError(getErrorMessage(err, 'Failed to create election'));
     }
   };
 

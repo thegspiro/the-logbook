@@ -11,6 +11,7 @@ import { authService, userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type TabType = 'account' | 'password' | 'notifications';
 
@@ -88,10 +89,9 @@ export const UserSettingsPage: React.FC = () => {
       setConfirmPassword('');
 
       toast.success('Password changed successfully!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(
-        err.response?.data?.detail ||
-        'Failed to change password. Please check your current password and try again.'
+        getErrorMessage(err, 'Failed to change password. Please check your current password and try again.')
       );
     } finally {
       setChangingPassword(false);
@@ -111,10 +111,9 @@ export const UserSettingsPage: React.FC = () => {
       });
 
       toast.success('Preferences saved successfully!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(
-        err.response?.data?.detail ||
-        'Failed to save preferences. Please try again.'
+        getErrorMessage(err, 'Failed to save preferences. Please try again.')
       );
     } finally {
       setSavingPreferences(false);

@@ -15,6 +15,7 @@ import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -79,9 +80,8 @@ export const ElectionDetailPage: React.FC = () => {
       if (data.status === 'closed' || data.results_visible_immediately) {
         setShowResults(true);
       }
-    } catch (err: any) {
-      console.error('Error fetching election:', err);
-      setError(err.response?.data?.detail || 'Failed to load election');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load election'));
     } finally {
       setLoading(false);
     }
@@ -97,9 +97,8 @@ export const ElectionDetailPage: React.FC = () => {
       });
       setElection(updated);
       toast.success('Visibility setting updated successfully');
-    } catch (err: any) {
-      console.error('Error updating visibility:', err);
-      toast.error(err.response?.data?.detail || 'Failed to update visibility');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update visibility'));
     } finally {
       setUpdatingVisibility(false);
     }
@@ -112,9 +111,8 @@ export const ElectionDetailPage: React.FC = () => {
       const updated = await electionService.openElection(electionId);
       setElection(updated);
       toast.success('Election opened successfully');
-    } catch (err: any) {
-      console.error('Error opening election:', err);
-      toast.error(err.response?.data?.detail || 'Failed to open election');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to open election'));
     }
   };
 
@@ -130,9 +128,8 @@ export const ElectionDetailPage: React.FC = () => {
       setElection(updated);
       setShowResults(true);
       toast.success('Election closed successfully');
-    } catch (err: any) {
-      console.error('Error closing election:', err);
-      toast.error(err.response?.data?.detail || 'Failed to close election');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to close election'));
     }
   };
 
@@ -147,9 +144,8 @@ export const ElectionDetailPage: React.FC = () => {
       setElection(updated);
       setShowExtendModal(false);
       setNewEndDate('');
-    } catch (err: any) {
-      console.error('Error extending election:', err);
-      setExtendError(err.response?.data?.detail || 'Failed to extend election');
+    } catch (err: unknown) {
+      setExtendError(getErrorMessage(err, 'Failed to extend election'));
     }
   };
 
@@ -189,9 +185,8 @@ export const ElectionDetailPage: React.FC = () => {
       setRollbackReason('');
 
       toast.success(`Election rolled back successfully. ${response.notifications_sent} leadership members were notified.`);
-    } catch (err: any) {
-      console.error('Error rolling back election:', err);
-      setRollbackError(err.response?.data?.detail || 'Failed to rollback election');
+    } catch (err: unknown) {
+      setRollbackError(getErrorMessage(err, 'Failed to rollback election'));
     } finally {
       setIsRollingBack(false);
     }
@@ -221,9 +216,8 @@ export const ElectionDetailPage: React.FC = () => {
       } else {
         toast.success(`Ballots sent successfully to ${response.recipients_count} voters`);
       }
-    } catch (err: any) {
-      console.error('Error sending ballot emails:', err);
-      setSendEmailError(err.response?.data?.detail || 'Failed to send ballot emails');
+    } catch (err: unknown) {
+      setSendEmailError(getErrorMessage(err, 'Failed to send ballot emails'));
     } finally {
       setIsSendingEmails(false);
     }
@@ -252,9 +246,8 @@ export const ElectionDetailPage: React.FC = () => {
       setShowDeleteModal(false);
       toast.success(response.message);
       navigate('/elections');
-    } catch (err: any) {
-      console.error('Error deleting election:', err);
-      setDeleteError(err.response?.data?.detail || 'Failed to delete election');
+    } catch (err: unknown) {
+      setDeleteError(getErrorMessage(err, 'Failed to delete election'));
     } finally {
       setIsDeleting(false);
     }
@@ -268,9 +261,8 @@ export const ElectionDetailPage: React.FC = () => {
       setLoadingIntegrity(true);
       const result = await electionService.verifyIntegrity(electionId);
       setIntegrityResult(result);
-    } catch (err: any) {
-      console.error('Error verifying integrity:', err);
-      toast.error(err.response?.data?.detail || 'Failed to verify integrity');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to verify integrity'));
     } finally {
       setLoadingIntegrity(false);
     }
@@ -284,9 +276,8 @@ export const ElectionDetailPage: React.FC = () => {
       setLoadingForensics(true);
       const report = await electionService.getForensics(electionId);
       setForensicsReport(report);
-    } catch (err: any) {
-      console.error('Error loading forensics:', err);
-      toast.error(err.response?.data?.detail || 'Failed to load forensics report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load forensics report'));
     } finally {
       setLoadingForensics(false);
     }
@@ -306,9 +297,8 @@ export const ElectionDetailPage: React.FC = () => {
       if (forensicsReport) {
         handleLoadForensics();
       }
-    } catch (err: any) {
-      console.error('Error voiding vote:', err);
-      toast.error(err.response?.data?.detail || 'Failed to void vote');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to void vote'));
     } finally {
       setIsVoidingVote(false);
     }

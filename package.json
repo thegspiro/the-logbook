@@ -5,8 +5,7 @@
   "private": true,
   "workspaces": [
     "backend",
-    "frontend",
-    "mobile"
+    "frontend"
   ],
   "scripts": {
     "setup": "npm install && npm run setup:backend && npm run setup:frontend",

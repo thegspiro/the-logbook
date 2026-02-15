@@ -3,24 +3,28 @@ Documents Service
 
 Business logic for document management including folders,
 document CRUD, and file handling.
+
+This is a thin wrapper around DocumentService that provides the
+interface used by the documents API endpoint (using direct returns
+and HTTPException-style error handling rather than tuple returns).
 """
 
-from typing import List, Optional, Dict, Tuple, Any
+import logging
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func
 from uuid import UUID
-import os
 
 from app.models.document import Document, DocumentFolder, DocumentStatus
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
+
 
 class DocumentsService:
-    """Service for document management"""
+    """Service for document management used by the documents endpoint"""
 
-    # Storage directory for uploaded files
     UPLOAD_DIR = "/app/uploads/documents"
 
     def __init__(self, db: AsyncSession):
@@ -32,21 +36,17 @@ class DocumentsService:
 
     async def create_folder(
         self, organization_id: UUID, folder_data: Dict[str, Any], created_by: UUID
-    ) -> Tuple[Optional[DocumentFolder], Optional[str]]:
-        """Create a new document folder"""
-        try:
-            folder = DocumentFolder(
-                organization_id=organization_id,
-                created_by=created_by,
-                **folder_data
-            )
-            self.db.add(folder)
-            await self.db.commit()
-            await self.db.refresh(folder)
-            return folder, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+    ) -> DocumentFolder:
+        """Create a new document folder. Raises on failure."""
+        folder = DocumentFolder(
+            organization_id=organization_id,
+            created_by=created_by,
+            **folder_data
+        )
+        self.db.add(folder)
+        await self.db.commit()
+        await self.db.refresh(folder)
+        return folder
 
     async def get_folders(
         self, organization_id: UUID, parent_id: Optional[UUID] = None
@@ -90,38 +90,30 @@ class DocumentsService:
 
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
-    ) -> Tuple[Optional[DocumentFolder], Optional[str]]:
-        """Update a folder"""
-        try:
-            folder = await self.get_folder_by_id(folder_id, organization_id)
-            if not folder:
-                return None, "Folder not found"
+    ) -> Optional[DocumentFolder]:
+        """Update a folder. Returns None if not found."""
+        folder = await self.get_folder_by_id(folder_id, organization_id)
+        if not folder:
+            return None
 
-            for key, value in update_data.items():
-                setattr(folder, key, value)
+        for key, value in update_data.items():
+            setattr(folder, key, value)
 
-            await self.db.commit()
-            await self.db.refresh(folder)
-            return folder, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+        await self.db.commit()
+        await self.db.refresh(folder)
+        return folder
 
     async def delete_folder(
         self, folder_id: UUID, organization_id: UUID
-    ) -> Tuple[bool, Optional[str]]:
-        """Delete a folder and all its documents"""
-        try:
-            folder = await self.get_folder_by_id(folder_id, organization_id)
-            if not folder:
-                return False, "Folder not found"
+    ) -> bool:
+        """Delete a folder and all its documents. Returns False if not found."""
+        folder = await self.get_folder_by_id(folder_id, organization_id)
+        if not folder:
+            return False
 
-            await self.db.delete(folder)
-            await self.db.commit()
-            return True, None
-        except Exception as e:
-            await self.db.rollback()
-            return False, str(e)
+        await self.db.delete(folder)
+        await self.db.commit()
+        return True
 
     # ============================================
     # Document Management
@@ -132,21 +124,17 @@ class DocumentsService:
         organization_id: UUID,
         doc_data: Dict[str, Any],
         uploaded_by: UUID,
-    ) -> Tuple[Optional[Document], Optional[str]]:
-        """Create a new document record"""
-        try:
-            document = Document(
-                organization_id=organization_id,
-                uploaded_by=uploaded_by,
-                **doc_data
-            )
-            self.db.add(document)
-            await self.db.commit()
-            await self.db.refresh(document)
-            return document, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+    ) -> Document:
+        """Create a new document record. Raises on failure."""
+        document = Document(
+            organization_id=organization_id,
+            uploaded_by=uploaded_by,
+            **doc_data
+        )
+        self.db.add(document)
+        await self.db.commit()
+        await self.db.refresh(document)
+        return document
 
     async def get_documents(
         self,
@@ -204,38 +192,30 @@ class DocumentsService:
 
     async def update_document(
         self, document_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
-    ) -> Tuple[Optional[Document], Optional[str]]:
-        """Update a document"""
-        try:
-            document = await self.get_document_by_id(document_id, organization_id)
-            if not document:
-                return None, "Document not found"
+    ) -> Optional[Document]:
+        """Update a document. Returns None if not found."""
+        document = await self.get_document_by_id(document_id, organization_id)
+        if not document:
+            return None
 
-            for key, value in update_data.items():
-                setattr(document, key, value)
+        for key, value in update_data.items():
+            setattr(document, key, value)
 
-            await self.db.commit()
-            await self.db.refresh(document)
-            return document, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+        await self.db.commit()
+        await self.db.refresh(document)
+        return document
 
     async def delete_document(
         self, document_id: UUID, organization_id: UUID
-    ) -> Tuple[bool, Optional[str]]:
-        """Delete a document"""
-        try:
-            document = await self.get_document_by_id(document_id, organization_id)
-            if not document:
-                return False, "Document not found"
+    ) -> bool:
+        """Delete a document. Returns False if not found."""
+        document = await self.get_document_by_id(document_id, organization_id)
+        if not document:
+            return False
 
-            await self.db.delete(document)
-            await self.db.commit()
-            return True, None
-        except Exception as e:
-            await self.db.rollback()
-            return False, str(e)
+        await self.db.delete(document)
+        await self.db.commit()
+        return True
 
     # ============================================
     # Summary & Reporting

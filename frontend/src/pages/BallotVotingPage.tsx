@@ -25,6 +25,7 @@ import type {
   BallotItemVote,
   BallotSubmissionResponse,
 } from '../types/election';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type ItemChoice = {
   choice: string; // 'approve' | 'deny' | 'write_in' | 'abstain' | candidate UUID
@@ -71,13 +72,12 @@ export const BallotVotingPage: React.FC = () => {
         initialChoices[item.id] = { choice: 'abstain', write_in_name: '' };
       }
       setChoices(initialChoices);
-    } catch (err: any) {
-      console.error('Error loading ballot:', err);
-      const detail = err.response?.data?.detail;
+    } catch (err: unknown) {
+      const detail = getErrorMessage(err, 'Unable to load ballot. The link may be expired or invalid.');
       if (detail === 'This ballot has already been fully submitted') {
         setError('This ballot has already been submitted. Each voting link can only be used once.');
       } else {
-        setError(detail || 'Unable to load ballot. The link may be expired or invalid.');
+        setError(detail);
       }
     } finally {
       setLoading(false);
@@ -134,9 +134,8 @@ export const BallotVotingPage: React.FC = () => {
       setSubmitResult(result);
       setSubmitted(true);
       setShowConfirmation(false);
-    } catch (err: any) {
-      console.error('Error submitting ballot:', err);
-      setError(err.response?.data?.detail || 'Failed to submit ballot. Please try again.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to submit ballot. Please try again.'));
       setShowConfirmation(false);
     } finally {
       setSubmitting(false);

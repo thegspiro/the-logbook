@@ -15,6 +15,7 @@ import type {
   VoteCreate,
   VotingMethod,
 } from '../types/election';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface ElectionBallotProps {
   electionId: string;
@@ -58,9 +59,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
       setCandidates(candidatesData.filter((c) => c.accepted));
       setEligibility(eligibilityData);
-    } catch (err: any) {
-      console.error('Error fetching ballot data:', err);
-      setError(err.response?.data?.detail || 'Failed to load ballot');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load ballot'));
     } finally {
       setLoading(false);
     }
@@ -186,9 +186,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
       const updatedEligibility = await electionService.checkEligibility(electionId);
       setEligibility(updatedEligibility);
       onVoteCast?.();
-    } catch (err: any) {
-      console.error('Error casting vote:', err);
-      setError(err.response?.data?.detail || 'Failed to cast vote');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to cast vote'));
     } finally {
       setSubmitting(false);
     }

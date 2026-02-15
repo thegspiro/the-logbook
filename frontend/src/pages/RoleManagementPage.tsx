@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export const RoleManagementPage: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -42,7 +43,6 @@ export const RoleManagementPage: React.FC = () => {
       setRoles(rolesData);
       setPermissionCategories(permsData);
     } catch (err) {
-      console.error('Error fetching data:', err);
       setError('Unable to load roles and permissions. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -92,9 +92,8 @@ export const RoleManagementPage: React.FC = () => {
 
       await fetchData();
       setShowCreateModal(false);
-    } catch (err: any) {
-      console.error('Error saving role:', err);
-      setError(err.response?.data?.detail || 'Unable to save the role. Please check your input and try again.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
     }
   };
 
@@ -107,9 +106,8 @@ export const RoleManagementPage: React.FC = () => {
       setError(null);
       await roleService.deleteRole(role.id);
       await fetchData();
-    } catch (err: any) {
-      console.error('Error deleting role:', err);
-      setError(err.response?.data?.detail || 'Unable to delete the role. It may still be assigned to users.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to delete the role. It may still be assigned to users.'));
     }
   };
 

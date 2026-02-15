@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { Election, Candidate, CandidateCreate, CandidateUpdate } from '../types/election';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface CandidateManagementProps {
   electionId: string;
@@ -52,9 +53,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       setLoading(true);
       const data = await electionService.getCandidates(electionId);
       setCandidates(data);
-    } catch (err: any) {
-      console.error('Error fetching candidates:', err);
-      setError(err.response?.data?.detail || 'Failed to load candidates');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load candidates'));
     } finally {
       setLoading(false);
     }
@@ -85,9 +85,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       setFormData(emptyCandidateForm);
       setShowAddForm(false);
       toast.success('Candidate added successfully');
-    } catch (err: any) {
-      console.error('Error adding candidate:', err);
-      setError(err.response?.data?.detail || 'Failed to add candidate');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to add candidate'));
     } finally {
       setSubmitting(false);
     }
@@ -109,9 +108,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       setEditingId(null);
       setFormData(emptyCandidateForm);
       toast.success('Candidate updated');
-    } catch (err: any) {
-      console.error('Error updating candidate:', err);
-      setError(err.response?.data?.detail || 'Failed to update candidate');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update candidate'));
     } finally {
       setSubmitting(false);
     }
@@ -125,9 +123,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       await electionService.deleteCandidate(electionId, candidateId);
       setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
       toast.success('Candidate removed');
-    } catch (err: any) {
-      console.error('Error deleting candidate:', err);
-      setError(err.response?.data?.detail || 'Failed to remove candidate');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to remove candidate'));
     }
   };
 
@@ -138,9 +135,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       });
       setCandidates((prev) => prev.map((c) => (c.id === candidate.id ? updated : c)));
       toast.success(updated.accepted ? 'Candidate accepted' : 'Candidate declined');
-    } catch (err: any) {
-      console.error('Error toggling acceptance:', err);
-      setError(err.response?.data?.detail || 'Failed to update candidate');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update candidate'));
     }
   };
 

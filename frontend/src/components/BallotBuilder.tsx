@@ -11,6 +11,7 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { Election, BallotItem, BallotTemplate } from '../types/election';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface BallotBuilderProps {
   electionId: string;
@@ -58,7 +59,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
       const data = await electionService.getBallotTemplates();
       setTemplates(data);
     } catch (err) {
-      console.error('Error loading templates:', err);
+      // Error silently handled - templates list will be empty
     }
   };
 
@@ -71,9 +72,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
       setBallotItems(items);
       onUpdate(updated);
       toast.success('Ballot items saved');
-    } catch (err: any) {
-      console.error('Error saving ballot items:', err);
-      toast.error(err.response?.data?.detail || 'Failed to save ballot items');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save ballot items'));
     } finally {
       setSaving(false);
     }

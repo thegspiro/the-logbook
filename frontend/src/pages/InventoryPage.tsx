@@ -18,6 +18,7 @@ import {
   type InventoryCategoryCreate,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 
 const ITEM_TYPES = [
   { value: 'uniform', label: 'Uniform' },
@@ -137,9 +138,8 @@ const InventoryPage: React.FC = () => {
       setCategories(categoriesData);
       setItems(itemsData.items);
       setTotalItems(itemsData.total);
-    } catch (err: any) {
-      console.error('Error loading inventory:', err);
-      setError(err.response?.data?.detail || 'Unable to load inventory data. Please check your connection and refresh the page.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to load inventory data. Please check your connection and refresh the page.'));
     } finally {
       setLoading(false);
     }
@@ -155,8 +155,8 @@ const InventoryPage: React.FC = () => {
       });
       setItems(data.items);
       setTotalItems(data.total);
-    } catch (err: any) {
-      console.error('Error loading items:', err);
+    } catch (err: unknown) {
+      // Error silently handled - items list will remain unchanged
     }
   };
 
@@ -175,8 +175,8 @@ const InventoryPage: React.FC = () => {
         condition: 'good', status: 'available', quantity: 1,
       });
       loadData();
-    } catch (err: any) {
-      setFormError(err.response?.data?.detail || 'Unable to create the item. Please check your input and try again.');
+    } catch (err: unknown) {
+      setFormError(getErrorMessage(err, 'Unable to create the item. Please check your input and try again.'));
     }
   };
 
@@ -191,8 +191,8 @@ const InventoryPage: React.FC = () => {
         requires_serial_number: false, requires_maintenance: false, requires_assignment: false,
       });
       loadData();
-    } catch (err: any) {
-      setFormError(err.response?.data?.detail || 'Unable to create the category. Please check your input and try again.');
+    } catch (err: unknown) {
+      setFormError(getErrorMessage(err, 'Unable to create the category. Please check your input and try again.'));
     }
   };
 

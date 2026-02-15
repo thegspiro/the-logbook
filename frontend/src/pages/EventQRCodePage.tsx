@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventService } from '../services/api';
 import type { QRCheckInData } from '../types/event';
+import { getErrorMessage } from '../utils/errorHandling';
 
 /**
  * Event QR Code Page
@@ -36,9 +37,8 @@ const EventQRCodePage: React.FC = () => {
       setError(null);
       const data = await eventService.getQRCheckInData(eventId);
       setQrData(data);
-    } catch (err: any) {
-      console.error('Error fetching QR data:', err);
-      setError(err.response?.data?.detail || 'Failed to load QR code');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load QR code'));
     } finally {
       setLoading(false);
     }
