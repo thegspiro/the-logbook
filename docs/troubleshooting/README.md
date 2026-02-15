@@ -382,6 +382,38 @@ docker compose up -d
 
 ---
 
+### Problem: "Duplicate key name" error on startup
+**Error:** `(1061, "Duplicate key name 'ix_locations_organization_id'")` or `"Duplicate key name 'ix_voting_tokens_token'"`
+
+**Symptom:** Backend crashes immediately with `Application startup failed. Exiting.`
+
+### Root Cause
+SQLAlchemy models had a column with `index=True` AND an explicit `Index()` with the same auto-generated name (`ix_<tablename>_<columnname>`) in `__table_args__`. MySQL rejects the duplicate index name during `create_all()`.
+
+### Solution
+This has been fixed in the codebase. Pull the latest changes:
+
+```bash
+git pull origin main
+docker compose down
+docker volume rm the-logbook_mysql_data  # Recommended for clean start
+docker compose up -d
+```
+
+**If developing new models**, use only one indexing method per column:
+```python
+# Option A: index=True on column (simple)
+col = Column(String(36), index=True)
+
+# Option B: Explicit Index in __table_args__ (preferred for clarity)
+col = Column(String(36))
+__table_args__ = (Index("ix_table_col", "col"),)
+
+# NEVER both — causes duplicate key crash on MySQL
+```
+
+---
+
 ### Problem: MySQL deprecation warnings in logs
 **Warnings:**
 - `'default_authentication_plugin' is deprecated`

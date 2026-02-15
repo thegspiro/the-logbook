@@ -215,7 +215,7 @@ class VotingToken(Base):
     election_id = Column(String(36), ForeignKey("elections.id"), nullable=False)
 
     # Secure token for ballot access (sent via email)
-    token = Column(String(128), nullable=False, unique=True, index=True)
+    token = Column(String(128), nullable=False, unique=True)
 
     # Hashed voter identifier (for tracking without revealing identity)
     voter_hash = Column(String(64), nullable=False)  # SHA256 hash
