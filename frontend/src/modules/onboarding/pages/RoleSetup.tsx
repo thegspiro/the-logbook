@@ -23,6 +23,7 @@ import {
   UserPlus,
   BadgeCheck,
   Megaphone,
+  Building2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
@@ -186,7 +187,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         name: 'Vice President',
         description: 'Second in command, supports the President',
         icon: Star,
-        priority: 90,
+        priority: 80,
         permissions: generateRolePermissions(modules, 'leadership'),
       },
     ],
@@ -209,6 +210,19 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
           'minutes',
           'reports',
           'prospective_members',
+        ]),
+      },
+      {
+        id: 'assistant_secretary',
+        name: 'Assistant Secretary',
+        description: 'Assists the secretary with records and communications',
+        icon: Briefcase,
+        priority: 70,
+        permissions: generateRolePermissions(modules, 'officer', [
+          'members',
+          'events',
+          'documents',
+          'minutes',
         ]),
       },
       {
@@ -273,7 +287,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         name: 'Quartermaster',
         description: 'Equipment and inventory management',
         icon: Wrench,
-        priority: 60,
+        priority: 85,
         permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
       },
       {
@@ -281,7 +295,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         name: 'Scheduling Officer',
         description: 'Manages duty rosters and shift scheduling',
         icon: ClipboardList,
-        priority: 60,
+        priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['scheduling']),
       },
       {
@@ -321,50 +335,35 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
         priority: 55,
         permissions: generateRolePermissions(modules, 'specialist', ['members', 'prospective_members']),
       },
+      {
+        id: 'meeting_hall_coordinator',
+        name: 'Meeting Hall Coordinator',
+        description: 'Manages meeting hall and location bookings',
+        icon: ClipboardList,
+        priority: 60,
+        permissions: generateRolePermissions(modules, 'specialist', ['events', 'scheduling']),
+      },
+      {
+        id: 'facilities_manager',
+        name: 'Facilities Manager',
+        description: 'Day-to-day building management, maintenance logging, and inspections',
+        icon: Building2,
+        priority: 50,
+        permissions: generateRolePermissions(modules, 'specialist', ['inventory']),
+      },
     ],
   },
   members: {
     name: 'Member Roles',
-    description: 'Standard member, administrator, life member, and probationary roles',
+    description: 'Standard member access level',
     roles: [
-      {
-        id: 'administrator_member',
-        name: 'Administrator',
-        description: 'Organizational administrator handling day-to-day operations',
-        icon: UserCog,
-        priority: 30,
-        permissions: generateRolePermissions(modules, 'officer', [
-          'members',
-          'events',
-          'documents',
-          'reports',
-          'forms',
-          'scheduling',
-        ]),
-      },
       {
         id: 'member',
         name: 'Member',
-        description: 'Active member with standard access',
-        icon: Users,
-        priority: 20,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'life_member',
-        name: 'Life Member',
-        description: 'Long-standing member with honorary status and standard access',
-        icon: Star,
-        priority: 15,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'probationary',
-        name: 'Probationary Member',
-        description: 'New member with limited access during probation',
+        description: 'Regular department member',
         icon: Users,
         priority: 10,
-        permissions: generateRolePermissions(modules, 'probationary'),
+        permissions: generateRolePermissions(modules, 'member'),
       },
     ],
   },
@@ -373,7 +372,7 @@ const buildRoleTemplates = (modules: ModuleDefinition[]) => ({
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
-  Truck, Monitor, UserPlus, BadgeCheck, Megaphone,
+  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2,
 };
 
 const getIconName = (icon: React.ElementType): string => {

@@ -579,6 +579,8 @@ class OnboardingService:
             "notifications", "mobile",
             # Advanced modules
             "integrations",
+            # Membership
+            "prospective_members",
             # Legacy/additional modules (for backwards compatibility)
             "compliance", "meetings", "fundraising", "incidents",
             "equipment", "vehicles", "budget"
@@ -696,7 +698,9 @@ class OnboardingService:
         step_name: str
     ):
         """Mark a step as completed in onboarding status"""
-        steps = status.steps_completed or {}
+        # Copy the dict so SQLAlchemy detects the JSON column mutation.
+        # Assigning the same dict object back won't trigger change detection.
+        steps = dict(status.steps_completed or {})
         steps[step_name] = {
             "completed": True,
             "completed_at": datetime.now(UTC).isoformat(),

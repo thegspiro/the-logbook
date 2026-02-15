@@ -70,7 +70,7 @@ api_router.include_router(external_training.router, prefix="/training/external",
 api_router.include_router(training_module_config.router, prefix="/training/module-config", tags=["training-module-config"])
 api_router.include_router(email_templates.router, prefix="/email-templates", tags=["email-templates"])
 api_router.include_router(member_status.router, prefix="/users", tags=["member-status"])
-api_router.include_router(membership_pipeline.router, prefix="/membership-pipeline", tags=["membership-pipeline"])
+api_router.include_router(membership_pipeline.router, prefix="/prospective-members", tags=["prospective-members"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
@@ -120,7 +120,7 @@ async def api_root():
             "analytics": "/api/v1/analytics",
             "errors": "/api/v1/errors",
             "integrations": "/api/v1/integrations",
-            "membership_pipeline": "/api/v1/membership-pipeline",
+            "prospective_members": "/api/v1/prospective-members",
             "public_portal": "/api/v1/public-portal"
         }
     }
