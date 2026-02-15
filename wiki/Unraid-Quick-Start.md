@@ -142,7 +142,7 @@ The setup script automatically configures:
 ### 📦 Containers
 - **Frontend** - React/Vite app (Port 7880)
 - **Backend** - FastAPI (Port 7881)
-- **Database** - MariaDB 10.11
+- **Database** - MySQL 8.0
 - **Cache** - Redis 7
 
 ### 📁 Directory Structure

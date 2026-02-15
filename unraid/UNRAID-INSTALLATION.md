@@ -22,7 +22,7 @@ Complete guide for installing The Logbook on Unraid using Community Applications
 
 - **Unraid 6.9.0 or later**
 - **Community Applications plugin installed**
-- **MySQL/MariaDB database** (can use existing Unraid MariaDB)
+- **MySQL 8.0 database** (can use existing Unraid MySQL instance)
 - **8GB RAM minimum** (16GB recommended for production)
 - **20GB free disk space** (50GB+ recommended)
 
@@ -58,7 +58,7 @@ If not already installed:
 |---------|-------|-------|
 | **WebUI Port** | 7880 | Or any available port |
 | **API Port** | 7881 | Or any available port |
-| **Database Host** | Your Unraid IP or MariaDB container name | |
+| **Database Host** | Your Unraid IP or MySQL container name | |
 | **Database Name** | the_logbook | Create this database first |
 | **Database User** | logbook_user | Create this user first |
 | **Database Password** | *strong password* | **REQUIRED** |
@@ -95,15 +95,15 @@ Complete the onboarding wizard to set up your organization.
 
 ## Detailed Setup
 
-### Database Setup (MariaDB)
+### Database Setup (MySQL)
 
-If you don't have MariaDB installed or need to create a new database:
+If you don't have MySQL installed or need to create a new database:
 
-#### Option 1: Use Existing MariaDB Container
+#### Option 1: Use Existing MySQL Container
 
-1. **Open MariaDB Terminal**
+1. **Open MySQL Terminal**
    ```bash
-   docker exec -it mariadb mysql -u root -p
+   docker exec -it logbook-db mysql -u root -p
    ```
 
 2. **Create Database**
@@ -119,13 +119,13 @@ If you don't have MariaDB installed or need to create a new database:
    EXIT;
    ```
 
-#### Option 2: Install MariaDB from Community Apps
+#### Option 2: Install MySQL from Community Apps
 
-1. Search for **MariaDB** in Community Apps
+1. Search for **MySQL** in Community Apps
 2. Install with these settings:
    - Port: 3306 (default)
    - Root password: Set a strong password
-   - AppData: `/mnt/user/appdata/mariadb`
+   - AppData: `/mnt/user/appdata/mysql`
 3. After installation, follow Option 1 steps to create database
 
 #### Option 3: Use Separate Database Stack
@@ -139,7 +139,7 @@ version: '3.8'
 
 services:
   db:
-    image: mariadb:10.11
+    image: mysql:8.0
     container_name: logbook-db
     restart: unless-stopped
     environment:
@@ -303,7 +303,7 @@ These ports are commonly used by Unraid and should be avoided:
 | 80 | HTTP | Unraid WebUI, nginx |
 | 443 | HTTPS | Unraid WebUI, nginx |
 | 3000 | Various | Grafana, many apps |
-| 3306 | MySQL | MariaDB |
+| 3306 | MySQL | MySQL |
 | 5432 | PostgreSQL | PostgreSQL |
 | 6379 | Redis | Redis |
 | 8080 | HTTP Alt | Many apps |
@@ -343,8 +343,8 @@ lsof -i :7880
 **Method 1: Command Line**
 
 ```bash
-# Access MariaDB
-docker exec -it mariadb mysql -u root -p
+# Access MySQL
+docker exec -it logbook-db mysql -u root -p
 
 # In MySQL prompt:
 CREATE DATABASE the_logbook CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -390,14 +390,14 @@ asyncio.run(test())
 **Issue: Can't connect to database**
 
 ```bash
-# Check MariaDB is running
-docker ps | grep mariadb
+# Check MySQL is running
+docker ps | grep logbook-db
 
-# Check MariaDB logs
-docker logs mariadb
+# Check MySQL logs
+docker logs logbook-db
 
 # Verify credentials
-docker exec -it mariadb mysql -h localhost -u logbook_user -p
+docker exec -it logbook-db mysql -h localhost -u logbook_user -p
 ```
 
 **Issue: Access denied for user**
@@ -441,10 +441,10 @@ docker logs TheLogbook
 2. **Database Connection Failed**
    ```bash
    # Verify database is running
-   docker ps | grep mariadb
+   docker ps | grep logbook-db
 
    # Test connection
-   docker exec -it mariadb mysql -u logbook_user -p
+   docker exec -it logbook-db mysql -u logbook_user -p
 
    # Check DB_HOST is correct (Unraid IP or container name)
    ```
@@ -502,10 +502,10 @@ docker logs TheLogbook
 
 ```sql
 -- Optimize database
-docker exec -it mariadb mysqlcheck -u root -p --optimize the_logbook
+docker exec -it logbook-db mysqlcheck -u root -p --optimize the_logbook
 
 -- Check table sizes
-docker exec -it mariadb mysql -u root -p -e "
+docker exec -it logbook-db mysql -u root -p -e "
 SELECT table_schema, table_name,
        ROUND((data_length + index_length) / 1024 / 1024, 2) as 'Size (MB)'
 FROM information_schema.tables
@@ -741,8 +741,8 @@ docker network create logbook-network
 # Add to template Extra Parameters:
 --network=logbook-network
 
-# Update DB_HOST to use container name if MariaDB is on same network
-DB_HOST=mariadb
+# Update DB_HOST to use container name if MySQL is on same network
+DB_HOST=logbook-db
 ```
 
 ### Resource Limits
@@ -878,11 +878,11 @@ fi
 
 ## FAQ
 
-**Q: Can I use an existing MariaDB instance?**
-A: Yes! Just create a new database and user in your existing MariaDB.
+**Q: Can I use an existing MySQL instance?**
+A: Yes! Just create a new database and user in your existing MySQL instance.
 
 **Q: Does this work with PostgreSQL?**
-A: Currently only MySQL/MariaDB is supported.
+A: MySQL 8.0 is the supported database. MariaDB is used as a lightweight alternative for ARM/Raspberry Pi deployments.
 
 **Q: Can I change ports after installation?**
 A: Yes, stop container, edit template, change ports, restart.
@@ -897,7 +897,7 @@ A: Yes, use different ports and database names for each instance.
 A: Not yet, but the web interface is mobile-responsive.
 
 **Q: Does it support ARM (Raspberry Pi)?**
-A: Currently x86_64 only. ARM support planned for future release.
+A: ARM/Raspberry Pi deployments are supported using the `docker-compose.arm.yml` override, which uses MariaDB instead of MySQL 8.0 as a lightweight alternative. Unraid itself is x86_64 and uses MySQL 8.0.
 
 **Q: Can I use with Cloudflare Tunnel?**
 A: Yes! Configure tunnel to point to your Unraid IP:7880.

@@ -152,7 +152,7 @@ DB_PASSWORD=your-secure-password
 docker compose up -d backend frontend
 ```
 
-See [Deployment Guide](wiki/Deployment-Guide.md) for detailed cloud instructions.
+See [AWS Deployment Guide](docs/deployment/aws.md) for detailed AWS instructions or [Deployment Guide](wiki/Deployment-Guide.md) for other cloud platforms.
 </details>
 
 <details>
@@ -165,6 +165,42 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/un
 Access: `http://YOUR-UNRAID-IP:7880`
 
 See [Unraid Quick Start](unraid/QUICK-START-UPDATED.md) for details.
+</details>
+
+<details>
+<summary><strong>🖧 Proxmox VE</strong></summary>
+
+```bash
+# Create an LXC container with nesting enabled, then inside it:
+curl -fsSL https://get.docker.com | sh
+git clone https://github.com/thegspiro/the-logbook.git /opt/the-logbook
+cd /opt/the-logbook
+cp .env.example .env
+# Edit .env with your settings
+docker compose up -d
+```
+
+Access: `http://YOUR-LXC-IP:3000`
+
+See [Proxmox Deployment Guide](docs/deployment/proxmox.md) for details.
+</details>
+
+<details>
+<summary><strong>💾 Synology NAS</strong></summary>
+
+```bash
+# SSH into your Synology NAS, then:
+sudo mkdir -p /volume1/docker/the-logbook
+cd /volume1/docker/the-logbook
+sudo git clone https://github.com/thegspiro/the-logbook.git .
+sudo cp .env.example .env
+# Edit .env with your settings
+sudo docker compose up -d
+```
+
+Access: `http://YOUR-NAS-IP:3000`
+
+See [Synology Deployment Guide](docs/deployment/synology.md) for details.
 </details>
 
 <details>
@@ -205,6 +241,8 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 | **Azure** (VMs, Container Instances) | x86_64 | All | ✅ Full support |
 | **Google Cloud** (Compute, Cloud Run) | x86_64 | All | ✅ Full support |
 | **DigitalOcean** (Droplets, App Platform) | x86_64 | All | ✅ Full support |
+| **Proxmox VE** (LXC, VM) | x86_64 | All | ✅ Full support |
+| **Synology NAS** (DS+, XS+ series) | x86_64 | minimal, standard | ✅ Full support |
 | **Unraid** | x86_64 | standard | ✅ Optimized |
 | **Kubernetes** | x86_64, ARM64 | standard, full | ✅ Helm chart available |
 
@@ -231,10 +269,14 @@ The wiki includes:
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute
 
 ### Deployment
+- [AWS Deployment Guide](docs/deployment/aws.md) - EC2, RDS, and ElastiCache deployment on AWS
 - [Unraid Deployment Guide](docs/deployment/unraid.md) - Complete Unraid guide
 - [Unraid Updated Quick Start](unraid/QUICK-START-UPDATED.md) - Latest Unraid instructions
+- [Proxmox Deployment Guide](docs/deployment/proxmox.md) - LXC and VM deployment on Proxmox VE
+- [Synology NAS Deployment Guide](docs/deployment/synology.md) - Docker deployment on Synology DS+/XS+ series
 - [General Deployment Guide](docs/DEPLOYMENT.md) - Deployment instructions
 - [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) - Docker image management
+- [Docker Build Verification](scripts/verify-docker-build.sh) - Validate Docker configuration before deploying
 
 ### Backend
 - [Python Backend Guide](docs/backend/python-backend.md) - Backend development
