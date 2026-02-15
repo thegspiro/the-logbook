@@ -57,6 +57,8 @@ SYSTEM_FOLDERS = [
     {"slug": "general", "name": "General Documents", "description": "Miscellaneous department files", "sort_order": 6, "icon": "folder", "color": "text-slate-400"},
     {"slug": "members", "name": "Member Files", "description": "Per-member folders (auto-created, access-controlled)", "sort_order": 7, "icon": "users", "color": "text-emerald-400"},
     {"slug": "apparatus", "name": "Apparatus Files", "description": "Per-vehicle folders with categorized sub-folders", "sort_order": 8, "icon": "truck", "color": "text-orange-400"},
+    {"slug": "facilities", "name": "Facility Files", "description": "Per-facility folders with categorized sub-folders", "sort_order": 9, "icon": "building", "color": "text-indigo-400"},
+    {"slug": "events", "name": "Event Attachments", "description": "Per-event attachment folders", "sort_order": 10, "icon": "calendar", "color": "text-rose-400"},
 ]
 
 
@@ -67,6 +69,16 @@ APPARATUS_SUB_FOLDERS = [
     {"slug": "maintenance", "name": "Maintenance Records", "description": "Invoices, work orders, and service reports", "sort_order": 2, "icon": "wrench", "color": "text-amber-400"},
     {"slug": "inspections", "name": "Inspection & Compliance", "description": "Inspection certificates and NFPA documentation", "sort_order": 3, "icon": "clipboard-check", "color": "text-green-400"},
     {"slug": "manuals", "name": "Manuals & References", "description": "Operator manuals and technical documentation", "sort_order": 4, "icon": "book-open", "color": "text-purple-400"},
+]
+
+# Standard sub-folders auto-created inside each facility folder
+FACILITY_SUB_FOLDERS = [
+    {"slug": "photos", "name": "Photos", "description": "Building exterior, interior, and detail photos", "sort_order": 0, "icon": "camera", "color": "text-sky-400"},
+    {"slug": "blueprints-permits", "name": "Blueprints & Permits", "description": "Floor plans, blueprints, and building permits", "sort_order": 1, "icon": "map", "color": "text-blue-400"},
+    {"slug": "maintenance", "name": "Maintenance Records", "description": "Work orders, service reports, and repair records", "sort_order": 2, "icon": "wrench", "color": "text-amber-400"},
+    {"slug": "inspections", "name": "Inspection Reports", "description": "Building inspections and compliance reports", "sort_order": 3, "icon": "clipboard-check", "color": "text-green-400"},
+    {"slug": "insurance-leases", "name": "Insurance & Leases", "description": "Insurance policies, lease agreements, and property documents", "sort_order": 4, "icon": "shield", "color": "text-red-400"},
+    {"slug": "capital-projects", "name": "Capital Projects", "description": "Renovation plans, bids, and project documents", "sort_order": 5, "icon": "hard-hat", "color": "text-orange-400"},
 ]
 
 

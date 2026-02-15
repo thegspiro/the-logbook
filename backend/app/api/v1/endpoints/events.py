@@ -41,6 +41,8 @@ from app.schemas.event import (
     RecurringEventCreate,
 )
 from app.services.event_service import EventService
+from app.services.documents_service import DocumentsService
+from app.schemas.documents import DocumentFolderResponse
 from app.api.dependencies import get_current_user, require_permission
 
 router = APIRouter()
@@ -1321,3 +1323,49 @@ async def delete_event_attachment(
     event.updated_at = datetime.utcnow()
 
     await db.commit()
+
+
+# ============================================================================
+# Event Folder Endpoint (Document Management Integration)
+# ============================================================================
+
+@router.get("/{event_id}/folder", response_model=DocumentFolderResponse)
+async def get_event_folder(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.view")),
+):
+    """
+    Get (or auto-create) the document folder for an event.
+
+    Returns the folder under 'Event Attachments' where documents
+    for this event can be stored.
+
+    **Permissions required:** events.view
+    """
+    service = EventService(db)
+    event, _ = await service.get_event(event_id, current_user.organization_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    docs_service = DocumentsService(db)
+    folder = await docs_service.ensure_event_folder(
+        organization_id=current_user.organization_id,
+        event_id=str(event_id),
+        event_title=event.title,
+    )
+    await db.commit()
+
+    from sqlalchemy import func as sa_func
+    from app.models.document import Document, DocumentStatus
+    count_result = await db.execute(
+        select(sa_func.count(Document.id))
+        .where(Document.folder_id == folder.id)
+        .where(Document.status == DocumentStatus.ACTIVE)
+    )
+    folder.document_count = count_result.scalar() or 0
+
+    return {
+        **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
+        "document_count": folder.document_count,
+    }

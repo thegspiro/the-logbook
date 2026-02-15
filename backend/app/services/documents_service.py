@@ -515,6 +515,215 @@ class DocumentsService:
         return sub_folders
 
     # ============================================
+    # Per-Facility Folder Management
+    # ============================================
+
+    async def ensure_facility_folder(
+        self, organization_id: UUID, facility_id: str, facility_display_name: str
+    ) -> DocumentFolder:
+        """
+        Get or create a hierarchical folder structure for a facility
+        under the 'Facility Files' system folder.
+
+        Folder hierarchy:
+          Facility Files/                           (system, visibility=leadership)
+            └── Station 1 - Main St (display_name)/ (visibility=organization)
+                ├── Photos/
+                ├── Blueprints & Permits/
+                ├── Maintenance Records/
+                ├── Inspection Reports/
+                ├── Insurance & Leases/
+                └── Capital Projects/
+        """
+        # Find the 'facilities' system folder
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.slug == "facilities")
+            .where(DocumentFolder.is_system.is_(True))
+        )
+        facilities_root = result.scalar_one_or_none()
+
+        if not facilities_root:
+            from app.models.document import SYSTEM_FOLDERS
+            facilities_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "facilities")
+            facilities_root = DocumentFolder(
+                organization_id=organization_id,
+                name=facilities_def["name"],
+                slug=facilities_def["slug"],
+                description=facilities_def["description"],
+                icon=facilities_def["icon"],
+                color=facilities_def["color"],
+                sort_order=facilities_def["sort_order"],
+                is_system=True,
+                visibility=FolderVisibility.LEADERSHIP,
+            )
+            self.db.add(facilities_root)
+            await self.db.flush()
+            await self.db.refresh(facilities_root)
+
+        # Check if this facility already has a folder
+        facility_id_str = str(facility_id)
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facilities_root.id)
+            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+        )
+        facility_folder = result.scalar_one_or_none()
+
+        if not facility_folder:
+            facility_folder = DocumentFolder(
+                organization_id=organization_id,
+                parent_id=facilities_root.id,
+                name=facility_display_name,
+                slug=f"facility-{facility_id_str}",
+                icon="building",
+                color="text-indigo-400",
+                visibility=FolderVisibility.ORGANIZATION,
+                is_system=False,
+            )
+            self.db.add(facility_folder)
+            await self.db.flush()
+            await self.db.refresh(facility_folder)
+            logger.info(f"Created facility folder '{facility_display_name}' for facility {facility_id_str}")
+
+            # Create standard sub-folders
+            from app.models.document import FACILITY_SUB_FOLDERS
+            for sub_def in FACILITY_SUB_FOLDERS:
+                sub_folder = DocumentFolder(
+                    organization_id=organization_id,
+                    parent_id=facility_folder.id,
+                    name=sub_def["name"],
+                    slug=f"facility-{facility_id_str}-{sub_def['slug']}",
+                    description=sub_def["description"],
+                    icon=sub_def["icon"],
+                    color=sub_def["color"],
+                    sort_order=sub_def["sort_order"],
+                    visibility=FolderVisibility.ORGANIZATION,
+                    is_system=False,
+                )
+                self.db.add(sub_folder)
+
+            await self.db.flush()
+            logger.info(f"Created {len(FACILITY_SUB_FOLDERS)} sub-folders for facility '{facility_display_name}'")
+
+        return facility_folder
+
+    async def get_facility_sub_folders(
+        self, organization_id: UUID, facility_id: str
+    ) -> List[DocumentFolder]:
+        """
+        Get the sub-folders for a specific facility.
+        Returns an empty list if the facility folder doesn't exist.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.slug == "facilities")
+            .where(DocumentFolder.is_system.is_(True))
+        )
+        facilities_root = result.scalar_one_or_none()
+        if not facilities_root:
+            return []
+
+        facility_id_str = str(facility_id)
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facilities_root.id)
+            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+        )
+        facility_folder = result.scalar_one_or_none()
+        if not facility_folder:
+            return []
+
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facility_folder.id)
+            .order_by(DocumentFolder.sort_order, DocumentFolder.name)
+        )
+        sub_folders = list(result.scalars().all())
+
+        for folder in sub_folders:
+            count_result = await self.db.execute(
+                select(func.count(Document.id))
+                .where(Document.folder_id == folder.id)
+                .where(Document.status == DocumentStatus.ACTIVE)
+            )
+            folder.document_count = count_result.scalar() or 0
+
+        return sub_folders
+
+    # ============================================
+    # Per-Event Folder Management
+    # ============================================
+
+    async def ensure_event_folder(
+        self, organization_id: UUID, event_id: str, event_title: str
+    ) -> DocumentFolder:
+        """
+        Get or create a folder for an event under the 'Event Attachments'
+        system folder. Events get a single folder (no sub-folders) since
+        their attachments are simpler.
+
+        Folder hierarchy:
+          Event Attachments/                  (system, visibility=organization)
+            └── Monthly Meeting - Feb 2026/   (per-event folder)
+        """
+        # Find the 'events' system folder
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.slug == "events")
+            .where(DocumentFolder.is_system.is_(True))
+        )
+        events_root = result.scalar_one_or_none()
+
+        if not events_root:
+            from app.models.document import SYSTEM_FOLDERS
+            events_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "events")
+            events_root = DocumentFolder(
+                organization_id=organization_id,
+                name=events_def["name"],
+                slug=events_def["slug"],
+                description=events_def["description"],
+                icon=events_def["icon"],
+                color=events_def["color"],
+                sort_order=events_def["sort_order"],
+                is_system=True,
+                visibility=FolderVisibility.ORGANIZATION,
+            )
+            self.db.add(events_root)
+            await self.db.flush()
+            await self.db.refresh(events_root)
+
+        # Check if this event already has a folder
+        event_id_str = str(event_id)
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == events_root.id)
+            .where(DocumentFolder.slug == f"event-{event_id_str}")
+        )
+        event_folder = result.scalar_one_or_none()
+
+        if not event_folder:
+            event_folder = DocumentFolder(
+                organization_id=organization_id,
+                parent_id=events_root.id,
+                name=event_title,
+                slug=f"event-{event_id_str}",
+                icon="calendar",
+                color="text-rose-400",
+                visibility=FolderVisibility.ORGANIZATION,
+                is_system=False,
+            )
+            self.db.add(event_folder)
+            await self.db.flush()
+            await self.db.refresh(event_folder)
+            logger.info(f"Created event folder '{event_title}' for event {event_id_str}")
+
+        return event_folder
+
+    # ============================================
     # Summary & Reporting
     # ============================================
 
