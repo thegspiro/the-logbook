@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuthStore } from '../../stores/authStore';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -10,10 +11,17 @@ interface TopNavigationProps {
   onLogout: () => void;
 }
 
+interface SubNavItem {
+  label: string;
+  path: string;
+  permission?: string;
+}
+
 interface NavItem {
   label: string;
   path: string;
-  subItems?: { label: string; path: string }[];
+  permission?: string;
+  subItems?: SubNavItem[];
 }
 
 export const TopNavigation: React.FC<TopNavigationProps> = ({
@@ -24,6 +32,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
+  const { checkPermission } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
@@ -49,7 +58,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       path: '/members',
       subItems: [
         { label: 'All Members', path: '/members' },
-        { label: 'Prospective', path: '/prospective-members' },
+        { label: 'Prospective', path: '/prospective-members', permission: 'members.manage' },
       ],
     },
     { label: 'Events', path: '/events' },
@@ -88,9 +97,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'My Account', path: '/settings/account' },
         { label: 'Organization', path: '/settings' },
-        { label: 'Role Management', path: '/settings/roles' },
-        { label: 'Member Admin', path: '/admin/members' },
-        { label: 'Public Portal', path: '/admin/public-portal' },
+        { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
+        { label: 'Member Admin', path: '/admin/members', permission: 'members.manage' },
+        { label: 'Public Portal', path: '/admin/public-portal', permission: 'admin.settings' },
       ],
     },
   ];
@@ -162,7 +171,18 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-1" ref={dropdownRef} aria-label="Main navigation">
             {navItems.map((item) => {
-              const hasSubItems = !!item.subItems;
+              // Filter sub-items by permission
+              const visibleSubItems = item.subItems?.filter(
+                (sub) => !sub.permission || checkPermission(sub.permission)
+              );
+
+              // Skip top-level permission-gated items
+              if (item.permission && !checkPermission(item.permission)) return null;
+
+              // Skip parent groups where all sub-items are hidden
+              if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+
+              const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
               const active = isParentActive(item);
 
               if (hasSubItems) {
@@ -182,7 +202,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
                     {openDropdown === item.label && (
                       <div className="absolute top-full left-0 mt-1 w-48 bg-slate-800 border border-white/10 rounded-lg shadow-xl py-1 z-50">
-                        {item.subItems!.map((subItem) => (
+                        {visibleSubItems!.map((subItem) => (
                           <a
                             key={subItem.path}
                             href={subItem.path}
@@ -251,7 +271,18 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           <nav id="mobile-menu" className="md:hidden pb-4" aria-label="Mobile navigation">
             <div ref={mobileMenuRef} className="flex flex-col space-y-1">
               {navItems.map((item) => {
-                const hasSubItems = !!item.subItems;
+                // Filter sub-items by permission
+                const visibleSubItems = item.subItems?.filter(
+                  (sub) => !sub.permission || checkPermission(sub.permission)
+                );
+
+                // Skip top-level permission-gated items
+                if (item.permission && !checkPermission(item.permission)) return null;
+
+                // Skip parent groups where all sub-items are hidden
+                if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+
+                const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
                 const isExpanded = expandedMobileMenus.includes(item.label);
 
                 if (hasSubItems) {
@@ -269,7 +300,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       </button>
                       {isExpanded && (
                         <div className="ml-4 space-y-1 mt-1">
-                          {item.subItems!.map((subItem) => (
+                          {visibleSubItems!.map((subItem) => (
                             <a
                               key={subItem.path}
                               href={subItem.path}
