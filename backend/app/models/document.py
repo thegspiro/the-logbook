@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     BigInteger,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -38,6 +39,13 @@ class DocumentType(str, enum.Enum):
     GENERATED = "generated"
 
 
+class FolderVisibility(str, enum.Enum):
+    """Who can see a folder and its contents"""
+    ORGANIZATION = "organization"  # All org members with documents.view
+    LEADERSHIP = "leadership"      # Only users with members.manage or documents.manage
+    OWNER = "owner"                # Only the owner_user_id (+ leadership)
+
+
 # System folders created automatically for each organization
 SYSTEM_FOLDERS = [
     {"slug": "meeting-minutes", "name": "Meeting Minutes", "description": "Published meeting minutes", "sort_order": 0, "icon": "clipboard-list", "color": "text-cyan-400"},
@@ -47,6 +55,7 @@ SYSTEM_FOLDERS = [
     {"slug": "reports", "name": "Reports", "description": "Monthly, quarterly, and annual reports", "sort_order": 4, "icon": "bar-chart", "color": "text-purple-400"},
     {"slug": "training", "name": "Training Materials", "description": "Training manuals and reference materials", "sort_order": 5, "icon": "book-open", "color": "text-red-400"},
     {"slug": "general", "name": "General Documents", "description": "Miscellaneous department files", "sort_order": 6, "icon": "folder", "color": "text-slate-400"},
+    {"slug": "members", "name": "Member Files", "description": "Per-member folders (auto-created, access-controlled)", "sort_order": 7, "icon": "users", "color": "text-emerald-400"},
 ]
 
 
@@ -75,6 +84,16 @@ class DocumentFolder(Base):
     # Hierarchy
     parent_id = Column(String(36), ForeignKey("document_folders.id", ondelete="CASCADE"))
 
+    # Access control
+    visibility = Column(
+        Enum(FolderVisibility, values_callable=lambda x: [e.value for e in x]),
+        default=FolderVisibility.ORGANIZATION,
+        nullable=False,
+        server_default="organization",
+    )
+    owner_user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    allowed_roles = Column(JSON, nullable=True)  # List of role slugs; null = no restriction
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -83,10 +102,12 @@ class DocumentFolder(Base):
     # Relationships
     documents = relationship("Document", back_populates="folder", cascade="all, delete-orphan")
     children = relationship("DocumentFolder", backref="parent", remote_side=[id], cascade="all, delete-orphan", single_parent=True)
+    owner = relationship("User", foreign_keys=[owner_user_id])
 
     __table_args__ = (
         Index("idx_doc_folders_org", "organization_id"),
         Index("idx_doc_folders_parent", "parent_id"),
+        Index("idx_doc_folders_owner", "owner_user_id"),
     )
 
     def __repr__(self):

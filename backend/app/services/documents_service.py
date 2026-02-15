@@ -10,16 +10,37 @@ and HTTPException-style error handling rather than tuple returns).
 """
 
 import logging
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Set, Tuple
 from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from uuid import UUID
 
-from app.models.document import Document, DocumentFolder, DocumentStatus
+from app.models.document import Document, DocumentFolder, DocumentStatus, FolderVisibility
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+# Permissions that grant leadership-level access to all folders
+LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
+
+
+def _get_user_permissions(user: User) -> Set[str]:
+    """Collect all permissions from a user's roles."""
+    perms: Set[str] = set()
+    for role in user.roles:
+        perms.update(role.permissions or [])
+    return perms
+
+
+def _get_user_role_slugs(user: User) -> Set[str]:
+    """Collect role slugs from a user's roles."""
+    return {role.slug for role in user.roles}
+
+
+def _is_leadership(user_permissions: Set[str]) -> bool:
+    """Check if the user has any leadership-level permission."""
+    return bool(user_permissions & LEADERSHIP_PERMISSIONS)
 
 
 class DocumentsService:
@@ -49,9 +70,23 @@ class DocumentsService:
         return folder
 
     async def get_folders(
-        self, organization_id: UUID, parent_id: Optional[UUID] = None
+        self,
+        organization_id: UUID,
+        parent_id: Optional[UUID] = None,
+        current_user: Optional[User] = None,
     ) -> List[DocumentFolder]:
-        """Get all folders for an organization, optionally filtered by parent"""
+        """
+        Get folders the user is allowed to see.
+
+        Access rules:
+        - visibility='organization' → visible to all org members
+        - visibility='leadership'   → only users with leadership permissions
+        - visibility='owner'        → only the owner_user_id + leadership
+        - allowed_roles (if set)    → only users with a matching role slug
+
+        Users with documents.manage, members.manage, or wildcard '*'
+        bypass all restrictions (leadership override).
+        """
         query = (
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == organization_id)
@@ -62,9 +97,36 @@ class DocumentsService:
         else:
             query = query.where(DocumentFolder.parent_id.is_(None))
 
-        query = query.order_by(DocumentFolder.name)
+        query = query.order_by(DocumentFolder.sort_order, DocumentFolder.name)
         result = await self.db.execute(query)
         folders = result.scalars().all()
+
+        # Apply access filtering if a user is provided
+        if current_user is not None:
+            user_perms = _get_user_permissions(current_user)
+            leadership = _is_leadership(user_perms)
+
+            if not leadership:
+                user_id = str(current_user.id)
+                user_roles = _get_user_role_slugs(current_user)
+                visible: List[DocumentFolder] = []
+
+                for f in folders:
+                    vis = f.visibility or FolderVisibility.ORGANIZATION
+
+                    # Organization-wide folders are always visible
+                    if vis == FolderVisibility.ORGANIZATION:
+                        # But check allowed_roles if set
+                        if f.allowed_roles and not (user_roles & set(f.allowed_roles)):
+                            continue
+                        visible.append(f)
+                    elif vis == FolderVisibility.OWNER:
+                        if f.owner_user_id and str(f.owner_user_id) == user_id:
+                            visible.append(f)
+                    # visibility='leadership' is hidden from non-leadership
+                    # (intentionally omitted from visible list)
+
+                folders = visible
 
         # Add document counts
         for folder in folders:
@@ -87,6 +149,27 @@ class DocumentsService:
             .where(DocumentFolder.organization_id == organization_id)
         )
         return result.scalar_one_or_none()
+
+    def can_access_folder(self, folder: DocumentFolder, user: User) -> bool:
+        """Check if a user can access a specific folder."""
+        user_perms = _get_user_permissions(user)
+        if _is_leadership(user_perms):
+            return True
+
+        vis = folder.visibility or FolderVisibility.ORGANIZATION
+
+        if vis == FolderVisibility.LEADERSHIP:
+            return False
+
+        if vis == FolderVisibility.OWNER:
+            return folder.owner_user_id is not None and str(folder.owner_user_id) == str(user.id)
+
+        # organization visibility - check allowed_roles if set
+        if folder.allowed_roles:
+            user_roles = _get_user_role_slugs(user)
+            return bool(user_roles & set(folder.allowed_roles))
+
+        return True
 
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -216,6 +299,78 @@ class DocumentsService:
         await self.db.delete(document)
         await self.db.commit()
         return True
+
+    # ============================================
+    # Per-Member Folder Management
+    # ============================================
+
+    async def ensure_member_folder(
+        self, organization_id: UUID, user: User
+    ) -> DocumentFolder:
+        """
+        Get or create a personal folder for a member under the
+        'Member Files' system folder.  The folder is access-controlled
+        so only the member and leadership can see it.
+
+        Folder hierarchy:
+          Member Files/              (system, visibility=leadership)
+            └── Last, First/         (owner=user, visibility=owner)
+        """
+        # Find the 'members' system folder
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.slug == "members")
+            .where(DocumentFolder.is_system.is_(True))
+        )
+        members_root = result.scalar_one_or_none()
+
+        if not members_root:
+            # Auto-create if missing (e.g. org created before this feature)
+            from app.models.document import SYSTEM_FOLDERS
+            members_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "members")
+            members_root = DocumentFolder(
+                organization_id=organization_id,
+                name=members_def["name"],
+                slug=members_def["slug"],
+                description=members_def["description"],
+                icon=members_def["icon"],
+                color=members_def["color"],
+                sort_order=members_def["sort_order"],
+                is_system=True,
+                visibility=FolderVisibility.LEADERSHIP,
+            )
+            self.db.add(members_root)
+            await self.db.flush()
+            await self.db.refresh(members_root)
+
+        # Check if user already has a personal folder
+        user_id_str = str(user.id)
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == members_root.id)
+            .where(DocumentFolder.owner_user_id == user_id_str)
+        )
+        member_folder = result.scalar_one_or_none()
+
+        if not member_folder:
+            folder_name = f"{user.last_name}, {user.first_name}"
+            member_folder = DocumentFolder(
+                organization_id=organization_id,
+                parent_id=members_root.id,
+                name=folder_name,
+                icon="user",
+                color="text-emerald-400",
+                visibility=FolderVisibility.OWNER,
+                owner_user_id=user_id_str,
+                is_system=False,
+            )
+            self.db.add(member_folder)
+            await self.db.flush()
+            await self.db.refresh(member_folder)
+            logger.info(f"Created member folder '{folder_name}' for user {user_id_str}")
+
+        return member_folder
 
     # ============================================
     # Summary & Reporting
