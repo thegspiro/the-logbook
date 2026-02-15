@@ -30,7 +30,7 @@ The onboarding process is critical - if it fails, new deployments cannot be set 
 
 ```bash
 # 1. Pull the latest changes
-git pull origin claude/review-frontend-pages-rb0hk
+git pull origin main
 
 # 2. Run onboarding tests WITHOUT rebuilding (fast)
 docker compose exec backend pytest tests/test_onboarding_integration.py -v
@@ -113,6 +113,56 @@ cd frontend && npx vitest run --coverage src/pages/Event*.test.tsx
 ```
 
 **Total**: 1,865+ lines of test code covering all event components.
+
+### Self-Check-In & QR Code Tests (Frontend - Added 2026-02-14)
+
+| Test File | Purpose | Tests |
+|-----------|---------|-------|
+| `EventSelfCheckInPage.test.tsx` | Self-check-in flow, error handling, time window validation | 31 |
+| `EventQRCodePage.test.tsx` | QR code display, auto-refresh, time validation | 25 |
+
+**Running self-check-in tests:**
+
+```bash
+# Run self-check-in tests
+cd frontend && npx vitest run src/pages/EventSelfCheckInPage.test.tsx
+
+# Run QR code tests
+cd frontend && npx vitest run src/pages/EventQRCodePage.test.tsx
+```
+
+### Backend Tests (204+ tests)
+
+The backend test suite covers models, services, and API endpoints:
+
+```bash
+# Run all backend tests (requires MySQL)
+cd backend && pytest
+
+# Run with verbose output
+cd backend && pytest -v
+
+# Run specific test file
+cd backend && pytest tests/test_onboarding_integration.py -v
+
+# Run with coverage
+cd backend && pytest --cov=app --cov-report=term-missing
+```
+
+**Note**: Some backend tests require a MySQL database connection and will show as errors if the database is unavailable. This is expected in local development without Docker.
+
+### Running All Tests (Makefile)
+
+```bash
+# Run backend tests
+make test-backend
+
+# Run frontend tests
+make test-frontend
+
+# Run all tests
+make test
+```
 
 ## Understanding Test Results
 

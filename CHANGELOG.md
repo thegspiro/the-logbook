@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Codebase Quality & Error Handling (2026-02-15)
+
+#### Error Handling Improvements
+- **Type-safe error handling**: Replaced all `catch (err: any)` with `catch (err: unknown)` across 40+ frontend files, using `getErrorMessage()` and `toAppError()` utilities from `utils/errorHandling.ts`
+- **`toAppError()` check ordering**: Fixed check order to evaluate Axios/HTTP errors (with `.response`) before `Error` instances and plain `AppError` objects, ensuring HTTP status codes and API detail messages are correctly extracted
+- **Silent exception handlers**: Added proper logging to previously empty `catch` blocks in `backend/app/utils/cache.py` and `backend/app/api/v1/endpoints/events.py`
+- **`createMockApiError()` test utility**: Fixed to return error object directly instead of a Promise, so `mockRejectedValue()` works correctly in tests
+
+#### Unused Code & Import Cleanup
+- **Removed unused imports/variables** in `ImportMembers.tsx` (`_XCircle`, `_AlertTriangle`, `_X`), `CreateTrainingSessionPage.tsx` (unused setter), `EventSelfCheckInPage.tsx` (`_alreadyCheckedIn`), `EventDetailPage.tsx` (`user: _user`), `TrainingOfficerDashboard.tsx` (duplicate `FileTextIcon`)
+- **Removed `console.log`/`console.error` statements** across 40+ frontend files for production readiness
+
+#### Backend Fixes
+- **Makefile**: Fixed all backend targets to use `pip`/`pytest`/`alembic` instead of incorrect `npm` commands
+- **Documents service**: Consolidated duplicate service pattern — all methods now return objects directly or raise `HTTPException`, eliminating inconsistent `(result, error)` tuple returns
+- **Documents endpoint**: Updated to match new service API (no more tuple unpacking)
+- **Public portal endpoints**: Implemented real database queries for `/api/public/v1/organization/stats` (active member count, apparatus count) and `/api/public/v1/events/public` (future public education events)
+- **Duplicate dependency**: Removed duplicate `redis==5.2.1` entry from `requirements.txt`
+- **Dockerfile healthcheck**: Fixed to validate HTTP response status
+
+#### Frontend Fixes
+- **ExternalTrainingPage**: Implemented `EditProviderModal` with full form fields (name, API URL, API key, description, sync settings)
+- **ErrorBoundary**: Integrated with `errorTracker` service for error reporting
+- **LoginPage**: Replaced OAuth TODO placeholder with actual API call to `/api/v1/auth/oauth-config`
+- **EventSelfCheckInPage**: Simplified check-in flow to always treat successful `selfCheckIn` response as success; fixed "Check-In" → "Check-in" case mismatch
+
+#### Configuration & Tooling
+- **Backend linting**: Added `.flake8` (max-line-length=120, excludes alembic) and `mypy.ini` (python 3.11, ignore missing imports)
+- **ESLint**: Changed 5 `no-unsafe-*` rules from `"off"` to `"warn"` in `.eslintrc.json`
+- **`package.json`**: Removed non-existent `"mobile"` workspace
+
 ### Added - Shift Module Enhancement: Full Scheduling System (2026-02-14)
 
 #### Shift Templates & Recurring Patterns

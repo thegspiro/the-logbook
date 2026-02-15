@@ -319,7 +319,23 @@ async function fetchPublicEvents() {
 
 ---
 
-**Status**: Design Complete - Ready for Implementation
+**Status**: Partially Implemented
 **Author**: Claude AI Assistant
-**Date**: 2026-02-07
-**Version**: 1.0
+**Date**: 2026-02-15
+**Version**: 1.1
+
+### Implementation Progress (as of 2026-02-15)
+
+#### Completed
+- **`/api/public/v1/organization/stats`**: Returns real database-backed statistics (active member count, apparatus count) queried from `User` and `Apparatus` models
+- **`/api/public/v1/events/public`**: Returns future public education events from the `Event` model, filtered by `PUBLIC_EDUCATION` type, future start date, and non-cancelled status
+- **Backend route registration**: Public portal routes registered in the FastAPI application
+
+#### Remaining
+- API key authentication middleware
+- Rate limiting per API key
+- Access logging and audit trail
+- Data whitelist configuration
+- Admin UI (API keys, logs, stats, whitelist tabs)
+- CORS configuration per portal
+- Cache layer implementation
