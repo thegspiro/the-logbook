@@ -26,6 +26,7 @@ import { OnboardingHeader, OnboardingFooter, ProgressIndicator } from '../compon
 import { useOnboardingStorage } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { AVAILABLE_MODULES, Module } from '../../../types/modules';
 
 // Icon mapping
@@ -104,8 +105,8 @@ const ModuleSelection: React.FC = () => {
 
       // Navigate to admin user creation
       navigate('/onboarding/admin-user');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to save module configuration';
+    } catch (err: unknown) {
+      const errorMessage = getErrorMessage(err, 'Failed to save module configuration');
       toast.error(errorMessage);
       setIsSaving(false);
     }

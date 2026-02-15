@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
 import { userService } from '../services/api';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 interface ImportResult {
   success: number;
@@ -231,9 +232,9 @@ const ImportMembers: React.FC = () => {
           });
 
           result.success++;
-        } catch (error: any) {
+        } catch (error: unknown) {
           result.failed++;
-          const errorMessage = error.response?.data?.detail || 'Unknown error';
+          const errorMessage = getErrorMessage(error, 'Unknown error');
           result.errors.push({
             row: i + 1,
             error: errorMessage,

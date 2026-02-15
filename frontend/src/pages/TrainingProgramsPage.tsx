@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { getErrorMessage } from '@/utils/errorHandling';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
@@ -60,8 +61,8 @@ const TrainingProgramsPage: React.FC = () => {
       const result = await trainingProgramService.importRegistry(registryName);
       toast.success(`Successfully imported ${result.imported_count} requirements from ${result.registry_name}`);
       loadData();
-    } catch (error: any) {
-      toast.error(`Failed to import registry: ${error.response?.data?.detail || error.message}`);
+    } catch (error: unknown) {
+      toast.error(`Failed to import registry: ${getErrorMessage(error)}`);
     } finally {
       setImportingRegistry(null);
     }
