@@ -56,6 +56,17 @@ SYSTEM_FOLDERS = [
     {"slug": "training", "name": "Training Materials", "description": "Training manuals and reference materials", "sort_order": 5, "icon": "book-open", "color": "text-red-400"},
     {"slug": "general", "name": "General Documents", "description": "Miscellaneous department files", "sort_order": 6, "icon": "folder", "color": "text-slate-400"},
     {"slug": "members", "name": "Member Files", "description": "Per-member folders (auto-created, access-controlled)", "sort_order": 7, "icon": "users", "color": "text-emerald-400"},
+    {"slug": "apparatus", "name": "Apparatus Files", "description": "Per-vehicle folders with categorized sub-folders", "sort_order": 8, "icon": "truck", "color": "text-orange-400"},
+]
+
+
+# Standard sub-folders auto-created inside each apparatus folder
+APPARATUS_SUB_FOLDERS = [
+    {"slug": "photos", "name": "Photos", "description": "Exterior, interior, damage, and detail photos", "sort_order": 0, "icon": "camera", "color": "text-sky-400"},
+    {"slug": "registration-insurance", "name": "Registration & Insurance", "description": "Titles, registration, and insurance documents", "sort_order": 1, "icon": "shield", "color": "text-blue-400"},
+    {"slug": "maintenance", "name": "Maintenance Records", "description": "Invoices, work orders, and service reports", "sort_order": 2, "icon": "wrench", "color": "text-amber-400"},
+    {"slug": "inspections", "name": "Inspection & Compliance", "description": "Inspection certificates and NFPA documentation", "sort_order": 3, "icon": "clipboard-check", "color": "text-green-400"},
+    {"slug": "manuals", "name": "Manuals & References", "description": "Operator manuals and technical documentation", "sort_order": 4, "icon": "book-open", "color": "text-purple-400"},
 ]
 
 

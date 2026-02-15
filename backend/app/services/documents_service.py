@@ -373,6 +373,148 @@ class DocumentsService:
         return member_folder
 
     # ============================================
+    # Per-Apparatus Folder Management
+    # ============================================
+
+    async def ensure_apparatus_folder(
+        self, organization_id: UUID, apparatus_id: str, apparatus_unit_number: str
+    ) -> DocumentFolder:
+        """
+        Get or create a hierarchical folder structure for an apparatus
+        under the 'Apparatus Files' system folder.
+
+        Folder hierarchy:
+          Apparatus Files/                      (system, visibility=leadership)
+            └── Engine 1 (unit_number)/         (visibility=organization, allowed_roles restricted)
+                ├── Photos/
+                ├── Registration & Insurance/
+                ├── Maintenance Records/
+                ├── Inspection & Compliance/
+                └── Manuals & References/
+        """
+        # Find the 'apparatus' system folder
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.slug == "apparatus")
+            .where(DocumentFolder.is_system.is_(True))
+        )
+        apparatus_root = result.scalar_one_or_none()
+
+        if not apparatus_root:
+            # Auto-create if missing (e.g. org created before this feature)
+            from app.models.document import SYSTEM_FOLDERS
+            apparatus_def = next(s for s in SYSTEM_FOLDERS if s["slug"] == "apparatus")
+            apparatus_root = DocumentFolder(
+                organization_id=organization_id,
+                name=apparatus_def["name"],
+                slug=apparatus_def["slug"],
+                description=apparatus_def["description"],
+                icon=apparatus_def["icon"],
+                color=apparatus_def["color"],
+                sort_order=apparatus_def["sort_order"],
+                is_system=True,
+                visibility=FolderVisibility.LEADERSHIP,
+            )
+            self.db.add(apparatus_root)
+            await self.db.flush()
+            await self.db.refresh(apparatus_root)
+
+        # Check if this apparatus already has a folder
+        apparatus_id_str = str(apparatus_id)
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == apparatus_root.id)
+            .where(DocumentFolder.slug == f"apparatus-{apparatus_id_str}")
+        )
+        vehicle_folder = result.scalar_one_or_none()
+
+        if not vehicle_folder:
+            vehicle_folder = DocumentFolder(
+                organization_id=organization_id,
+                parent_id=apparatus_root.id,
+                name=apparatus_unit_number,
+                slug=f"apparatus-{apparatus_id_str}",
+                icon="truck",
+                color="text-orange-400",
+                visibility=FolderVisibility.ORGANIZATION,
+                is_system=False,
+            )
+            self.db.add(vehicle_folder)
+            await self.db.flush()
+            await self.db.refresh(vehicle_folder)
+            logger.info(f"Created apparatus folder '{apparatus_unit_number}' for apparatus {apparatus_id_str}")
+
+            # Create standard sub-folders
+            from app.models.document import APPARATUS_SUB_FOLDERS
+            for sub_def in APPARATUS_SUB_FOLDERS:
+                sub_folder = DocumentFolder(
+                    organization_id=organization_id,
+                    parent_id=vehicle_folder.id,
+                    name=sub_def["name"],
+                    slug=f"apparatus-{apparatus_id_str}-{sub_def['slug']}",
+                    description=sub_def["description"],
+                    icon=sub_def["icon"],
+                    color=sub_def["color"],
+                    sort_order=sub_def["sort_order"],
+                    visibility=FolderVisibility.ORGANIZATION,
+                    is_system=False,
+                )
+                self.db.add(sub_folder)
+
+            await self.db.flush()
+            logger.info(f"Created {len(APPARATUS_SUB_FOLDERS)} sub-folders for apparatus '{apparatus_unit_number}'")
+
+        return vehicle_folder
+
+    async def get_apparatus_sub_folders(
+        self, organization_id: UUID, apparatus_id: str
+    ) -> List[DocumentFolder]:
+        """
+        Get the sub-folders for a specific apparatus.
+        Returns an empty list if the apparatus folder doesn't exist.
+        """
+        # Find the apparatus root
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.slug == "apparatus")
+            .where(DocumentFolder.is_system.is_(True))
+        )
+        apparatus_root = result.scalar_one_or_none()
+        if not apparatus_root:
+            return []
+
+        # Find the vehicle folder
+        apparatus_id_str = str(apparatus_id)
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == apparatus_root.id)
+            .where(DocumentFolder.slug == f"apparatus-{apparatus_id_str}")
+        )
+        vehicle_folder = result.scalar_one_or_none()
+        if not vehicle_folder:
+            return []
+
+        # Get sub-folders with document counts
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == vehicle_folder.id)
+            .order_by(DocumentFolder.sort_order, DocumentFolder.name)
+        )
+        sub_folders = list(result.scalars().all())
+
+        for folder in sub_folders:
+            count_result = await self.db.execute(
+                select(func.count(Document.id))
+                .where(Document.folder_id == folder.id)
+                .where(Document.status == DocumentStatus.ACTIVE)
+            )
+            folder.document_count = count_result.scalar() or 0
+
+        return sub_folders
+
+    # ============================================
     # Summary & Reporting
     # ============================================
 

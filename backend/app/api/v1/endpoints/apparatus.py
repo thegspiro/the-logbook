@@ -88,6 +88,8 @@ from app.schemas.apparatus import (
     ApparatusServiceReport,
 )
 from app.services.apparatus_service import ApparatusService
+from app.services.documents_service import DocumentsService
+from app.schemas.documents import DocumentFolderResponse, FoldersListResponse
 from app.api.dependencies import require_permission
 
 router = APIRouter()
@@ -2226,3 +2228,61 @@ async def generate_service_report(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ============================================================================
+# Apparatus Folder Endpoints (Document Management Integration)
+# ============================================================================
+
+@router.get("/{apparatus_id}/folders", response_model=FoldersListResponse, tags=["Apparatus Folders"])
+async def get_apparatus_folders(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.view", "apparatus.manage")),
+):
+    """
+    Get the hierarchical folder structure for an apparatus.
+
+    Auto-creates the folder tree on first access:
+      Apparatus Files/
+        └── <unit_number>/
+            ├── Photos/
+            ├── Registration & Insurance/
+            ├── Maintenance Records/
+            ├── Inspection & Compliance/
+            └── Manuals & References/
+
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    apparatus_service = ApparatusService(db)
+    apparatus = await apparatus_service.get_apparatus(
+        apparatus_id=apparatus_id,
+        organization_id=current_user.organization_id,
+        include_relations=False,
+    )
+    if not apparatus:
+        raise HTTPException(status_code=404, detail="Apparatus not found")
+
+    docs_service = DocumentsService(db)
+    await docs_service.ensure_apparatus_folder(
+        organization_id=current_user.organization_id,
+        apparatus_id=apparatus_id,
+        apparatus_unit_number=apparatus.unit_number,
+    )
+    await db.commit()
+
+    sub_folders = await docs_service.get_apparatus_sub_folders(
+        organization_id=current_user.organization_id,
+        apparatus_id=apparatus_id,
+    )
+
+    return {
+        "folders": [
+            {
+                **{c.key: getattr(f, c.key) for c in f.__table__.columns},
+                "document_count": getattr(f, "document_count", 0),
+            }
+            for f in sub_folders
+        ],
+        "total": len(sub_folders),
+    }
