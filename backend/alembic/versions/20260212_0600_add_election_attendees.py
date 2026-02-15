@@ -1,7 +1,7 @@
 """add election attendees column for meeting attendance tracking
 
-Revision ID: 20260212_0400
-Revises: 20260212_0300
+Revision ID: 20260212_0600
+Revises: 20260212_0500
 Create Date: 2026-02-12 16:00:00.000000
 
 Adds attendees JSON column to elections table to track
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20260212_0400'
-down_revision = '20260212_0300'
+revision = '20260212_0600'
+down_revision = '20260212_0500'
 branch_labels = None
 depends_on = None
 

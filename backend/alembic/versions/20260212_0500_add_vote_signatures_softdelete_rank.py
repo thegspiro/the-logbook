@@ -1,7 +1,7 @@
 """add vote signatures, soft-delete, rank column, and token positions_voted
 
-Revision ID: 20260212_0300
-Revises: 20260212_0200
+Revision ID: 20260212_0500
+Revises: 20260212_0400
 Create Date: 2026-02-12 15:00:00.000000
 
 Adds columns to support:
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20260212_0300'
-down_revision = '20260212_0200'
+revision = '20260212_0500'
+down_revision = '20260212_0400'
 branch_labels = None
 depends_on = None
 
