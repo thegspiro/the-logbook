@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Home, LogOut, Menu, X, Sun, Moon, Monitor } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -10,15 +10,25 @@ interface TopNavigationProps {
   onLogout: () => void;
 }
 
+interface NavItem {
+  label: string;
+  path: string;
+  subItems?: { label: string; path: string }[];
+}
+
 export const TopNavigation: React.FC<TopNavigationProps> = ({
   departmentName,
   logoPreview,
   onLogout,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const cycleTheme = () => {
     const order = ['dark', 'light', 'system'] as const;
@@ -31,15 +41,81 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
   const ThemeIcon = themeIcon;
 
-  const navItems = [
-    { label: 'Dashboard', path: '/dashboard', active: false },
-    { label: 'Members', path: '/members', active: false },
-    { label: 'Events', path: '/events', active: false },
-    { label: 'Documents', path: '/documents', active: false },
-    { label: 'Training', path: '/training', active: false },
-    { label: 'Reports', path: '/reports', active: false },
-    { label: 'Settings', path: '/settings', active: false },
+  // Match the side navigation structure
+  const navItems: NavItem[] = [
+    { label: 'Dashboard', path: '/dashboard' },
+    {
+      label: 'Members',
+      path: '/members',
+      subItems: [
+        { label: 'All Members', path: '/members' },
+        { label: 'Prospective', path: '/prospective-members' },
+      ],
+    },
+    { label: 'Events', path: '/events' },
+    { label: 'Documents', path: '/documents' },
+    { label: 'Training', path: '/training' },
+    {
+      label: 'Operations',
+      path: '/inventory',
+      subItems: [
+        { label: 'Inventory', path: '/inventory' },
+        { label: 'Scheduling', path: '/scheduling' },
+        { label: 'Apparatus', path: '/apparatus' },
+      ],
+    },
+    {
+      label: 'Governance',
+      path: '/elections',
+      subItems: [
+        { label: 'Elections', path: '/elections' },
+        { label: 'Minutes', path: '/minutes' },
+        { label: 'Reports', path: '/reports' },
+      ],
+    },
+    {
+      label: 'Communication',
+      path: '/notifications',
+      subItems: [
+        { label: 'Notifications', path: '/notifications' },
+        { label: 'Forms', path: '/forms' },
+        { label: 'Integrations', path: '/integrations' },
+      ],
+    },
+    {
+      label: 'Settings',
+      path: '/settings',
+      subItems: [
+        { label: 'My Account', path: '/settings/account' },
+        { label: 'Organization', path: '/settings' },
+        { label: 'Role Management', path: '/settings/roles' },
+        { label: 'Member Admin', path: '/admin/members' },
+        { label: 'Public Portal', path: '/admin/public-portal' },
+      ],
+    },
   ];
+
+  const isActive = (path: string) => {
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
+
+  const isParentActive = (item: NavItem) => {
+    if (item.subItems) {
+      return item.subItems.some(sub => isActive(sub.path));
+    }
+    return isActive(item.path);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleNavigation = (path: string, e?: React.MouseEvent) => {
     if (e) {
@@ -48,7 +124,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     if (path !== '#') {
       navigate(path);
       setMobileMenuOpen(false);
+      setOpenDropdown(null);
     }
+  };
+
+  const toggleMobileMenu = (label: string) => {
+    setExpandedMobileMenus(prev =>
+      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
+    );
   };
 
   return (
@@ -77,20 +160,63 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           </a>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-4" aria-label="Main navigation">
-            {navItems.map((item) => (
-              <a
-                key={item.label}
-                href={item.path}
-                onClick={(e) => handleNavigation(item.path, e)}
-                aria-current={item.active ? 'page' : undefined}
-                className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                  item.active ? 'text-white' : 'text-slate-300'
-                }`}
-              >
-                {item.label}
-              </a>
-            ))}
+          <nav className="hidden md:flex items-center space-x-1" ref={dropdownRef} aria-label="Main navigation">
+            {navItems.map((item) => {
+              const hasSubItems = !!item.subItems;
+              const active = isParentActive(item);
+
+              if (hasSubItems) {
+                return (
+                  <div key={item.label} className="relative">
+                    <button
+                      onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
+                      aria-expanded={openDropdown === item.label}
+                      aria-haspopup="true"
+                      className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center gap-1 ${
+                        active ? 'text-white' : 'text-slate-300'
+                      }`}
+                    >
+                      {item.label}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
+
+                    {openDropdown === item.label && (
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-slate-800 border border-white/10 rounded-lg shadow-xl py-1 z-50">
+                        {item.subItems!.map((subItem) => (
+                          <a
+                            key={subItem.path}
+                            href={subItem.path}
+                            onClick={(e) => handleNavigation(subItem.path, e)}
+                            aria-current={isActive(subItem.path) ? 'page' : undefined}
+                            className={`block px-4 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-500 ${
+                              isActive(subItem.path)
+                                ? 'bg-red-600 text-white'
+                                : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {subItem.label}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <a
+                  key={item.label}
+                  href={item.path}
+                  onClick={(e) => handleNavigation(item.path, e)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    active ? 'text-white' : 'text-slate-300'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
             <button
               onClick={cycleTheme}
               className="text-slate-300 p-2 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -123,20 +249,61 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <nav id="mobile-menu" className="md:hidden pb-4" aria-label="Mobile navigation">
-            <div ref={mobileMenuRef} className="flex flex-col space-y-2">
-              {navItems.map((item) => (
-                <a
-                  key={item.label}
-                  href={item.path}
-                  onClick={(e) => handleNavigation(item.path, e)}
-                  aria-current={item.active ? 'page' : undefined}
-                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    item.active ? 'text-white' : 'text-slate-300'
-                  }`}
-                >
-                  {item.label}
-                </a>
-              ))}
+            <div ref={mobileMenuRef} className="flex flex-col space-y-1">
+              {navItems.map((item) => {
+                const hasSubItems = !!item.subItems;
+                const isExpanded = expandedMobileMenus.includes(item.label);
+
+                if (hasSubItems) {
+                  return (
+                    <div key={item.label}>
+                      <button
+                        onClick={() => toggleMobileMenu(item.label)}
+                        aria-expanded={isExpanded}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                          isParentActive(item) ? 'text-white' : 'text-slate-300'
+                        }`}
+                      >
+                        {item.label}
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      </button>
+                      {isExpanded && (
+                        <div className="ml-4 space-y-1 mt-1">
+                          {item.subItems!.map((subItem) => (
+                            <a
+                              key={subItem.path}
+                              href={subItem.path}
+                              onClick={(e) => handleNavigation(subItem.path, e)}
+                              aria-current={isActive(subItem.path) ? 'page' : undefined}
+                              className={`block px-3 py-2 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                                isActive(subItem.path)
+                                  ? 'bg-red-600 text-white'
+                                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                              }`}
+                            >
+                              {subItem.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <a
+                    key={item.label}
+                    href={item.path}
+                    onClick={(e) => handleNavigation(item.path, e)}
+                    aria-current={isActive(item.path) ? 'page' : undefined}
+                    className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      isActive(item.path) ? 'text-white' : 'text-slate-300'
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
               <button
                 onClick={cycleTheme}
                 className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
