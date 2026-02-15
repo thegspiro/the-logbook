@@ -2,6 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme CSS Custom Properties */
+:root {
+  /* Background gradient */
+  --bg-gradient-from: #f1f5f9;   /* slate-100 */
+  --bg-gradient-via: #fef2f2;    /* red-50 */
+  --bg-gradient-to: #f1f5f9;     /* slate-100 */
+
+  /* Surfaces */
+  --surface-bg: #ffffff;                    /* white */
+  --surface-secondary: #f8fafc;             /* slate-50 */
+  --surface-hover: #f1f5f9;                 /* slate-100 */
+  --surface-border: #e2e8f0;               /* slate-200 */
+
+  /* Text */
+  --text-primary: #0f172a;                  /* slate-900 */
+  --text-secondary: #475569;               /* slate-600 */
+  --text-muted: #94a3b8;                   /* slate-400 */
+
+  /* Navigation */
+  --nav-bg: #ffffff;                        /* white */
+  --nav-border: #e2e8f0;                   /* slate-200 */
+
+  /* Inputs */
+  --input-bg: #ffffff;                      /* white */
+  --input-border: #cbd5e1;                 /* slate-300 */
+
+  /* Scrollbar */
+  --scrollbar-track: #f1f5f9;              /* slate-100 */
+
+  /* Focus ring offset */
+  --ring-offset-bg: #ffffff;               /* white */
+}
+
+.dark {
+  /* Background gradient */
+  --bg-gradient-from: #0f172a;              /* slate-900 */
+  --bg-gradient-via: #7f1d1d;              /* red-900 */
+  --bg-gradient-to: #0f172a;               /* slate-900 */
+
+  /* Surfaces */
+  --surface-bg: rgba(255, 255, 255, 0.1);  /* white/10 */
+  --surface-secondary: rgba(255, 255, 255, 0.05); /* white/5 */
+  --surface-hover: rgba(255, 255, 255, 0.15); /* white/15 */
+  --surface-border: rgba(255, 255, 255, 0.2); /* white/20 */
+
+  /* Text */
+  --text-primary: #ffffff;                  /* white */
+  --text-secondary: #cbd5e1;              /* slate-300 */
+  --text-muted: #94a3b8;                   /* slate-400 */
+
+  /* Navigation */
+  --nav-bg: #0f172a;                       /* slate-900 */
+  --nav-border: rgba(255, 255, 255, 0.1); /* white/10 */
+
+  /* Inputs */
+  --input-bg: rgba(15, 23, 42, 0.5);      /* slate-900/50 */
+  --input-border: #475569;                 /* slate-600 */
+
+  /* Scrollbar */
+  --scrollbar-track: #1e293b;              /* slate-800 */
+
+  /* Focus ring offset */
+  --ring-offset-bg: #0f172a;              /* slate-900 */
+}
+
 /* Custom scrollbar */
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
@@ -10,7 +75,7 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-slate-800;
+    background-color: var(--scrollbar-track);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
@@ -39,7 +104,8 @@ body {
 
 /* Focus visible for accessibility */
 *:focus-visible {
-  @apply outline-none ring-2 ring-red-500 ring-offset-2 ring-offset-slate-900;
+  @apply outline-none ring-2 ring-red-500 ring-offset-2;
+  --tw-ring-offset-color: var(--ring-offset-bg);
 }
 
 /* Skip to main content link for accessibility */

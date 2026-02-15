@@ -2428,6 +2428,16 @@ export const schedulingService = {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
     return response.data;
   },
+
+  async getMyShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number }> {
+    const response = await api.get('/scheduling/my-shifts', { params });
+    return response.data;
+  },
+
+  async getMyAssignments(): Promise<Array<{ id: string; user_id: string; shift_id: string; position: string; status: string; shift?: ShiftRecord }>> {
+    const response = await api.get('/scheduling/my-assignments');
+    return response.data;
+  },
 };
 
 // ============================================

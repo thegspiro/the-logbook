@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-15 (includes duplicate index crash fix, codebase quality fixes: type-safe error handling, unused code cleanup, backend Makefile corrections, documents service consolidation, public portal implementation, linting configuration; plus shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-15 (includes system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix; plus duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -23,10 +23,12 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 11. [Documents Module Issues](#documents-module-issues)
 12. [Events Module Issues](#events-module-issues)
 13. [Facilities Module](#facilities-module)
-14. [TypeScript Build Issues](#typescript-build-issues)
-15. [Error Message Reference](#error-message-reference)
-16. [Error Handling Patterns](#error-handling-patterns)
-17. [Getting Help](#getting-help)
+14. [Theme & Display Issues](#theme--display-issues)
+15. [Dashboard Issues](#dashboard-issues)
+16. [TypeScript Build Issues](#typescript-build-issues)
+17. [Error Message Reference](#error-message-reference)
+18. [Error Handling Patterns](#error-handling-patterns)
+19. [Getting Help](#getting-help)
 
 ---
 
@@ -2926,6 +2928,78 @@ Expected: 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training
 2. **RSVP limit reached**: The event may have reached its maximum RSVP capacity. Admins can use RSVP override to bypass limits.
 
 3. **Missing `events.view` permission**: Users need at least view permission to RSVP.
+
+---
+
+## Theme & Display Issues
+
+### Theme Not Switching
+
+**Symptom**: Clicking the theme toggle button doesn't change the app's appearance.
+
+**Possible Causes & Solutions**:
+
+1. **Browser localStorage blocked**: Some privacy settings block localStorage. Check browser console for storage errors.
+2. **CSS not loading**: Verify that `src/styles/index.css` is imported and contains the `:root` and `.dark` CSS variable blocks.
+3. **ThemeProvider missing**: Ensure `<ThemeProvider>` wraps the app in `App.tsx`. Without it, the `useTheme` hook will throw an error.
+
+### Components Still Using Hardcoded Colors
+
+**Symptom**: Some components don't change appearance when switching themes.
+
+**Explanation**: The theme system uses CSS custom properties for the main layout (background gradient, navigation, inputs). Individual components that still use hardcoded Tailwind classes (e.g., `bg-white/10`, `text-white`) will only look correct in dark mode. To make a component theme-aware, replace hardcoded colors with the `theme-*` Tailwind utilities:
+
+| Dark-only class | Theme-aware class |
+|---|---|
+| `bg-white/10` | `bg-theme-surface` |
+| `border-white/20` | `border-theme-surface-border` |
+| `text-white` | `text-theme-text-primary` |
+| `text-slate-300` | `text-theme-text-secondary` |
+| `bg-slate-900/50` | `bg-theme-input-bg` |
+| `border-slate-600` | `border-theme-input-border` |
+
+### Election Components Display Issues
+
+**Symptom**: Election-related UI (ballot builder, voting, results, attendance) appears invisible or has white text on white backgrounds.
+
+**Fix Applied**: As of 2026-02-15, all election sub-components (CandidateManagement, BallotBuilder, ElectionBallot, ElectionResults, MeetingAttendance) have been converted to use the dark theme color scheme. If you still see display issues, hard-refresh (Ctrl+Shift+R) to clear cached CSS.
+
+### Election Dates Show Wrong Times
+
+**Symptom**: Election start/end dates appear offset by your timezone difference from UTC.
+
+**Fix Applied**: As of 2026-02-15, the frontend uses local datetime formatting instead of `.toISOString()` for `datetime-local` inputs, and the backend uses `datetime.now()` instead of `datetime.utcnow()` for comparisons. If you created elections before this fix, the stored dates may still be in UTC and appear offset.
+
+---
+
+## Dashboard Issues
+
+### Dashboard Shows Admin Content Instead of Member Content
+
+**Symptom**: Dashboard shows "Getting Started", "Setup Status", or other admin-oriented content.
+
+**Fix Applied**: As of 2026-02-15, the dashboard has been redesigned to show member-focused content:
+- **Hours summary**: Training, standby, and administrative hours for the current month
+- **Notifications**: Recent department notifications with read/unread status
+- **Upcoming shifts**: Your scheduled shifts for the next 30 days
+- **Training progress**: Active training program enrollments
+
+### Notifications Not Loading on Dashboard
+
+**Symptom**: The notifications widget shows "No notifications" even when you have notifications.
+
+**Possible Causes**:
+1. **Permissions**: The `/notifications/logs` endpoint requires `notifications.view` permission. Ensure the user's role includes this permission.
+2. **No notification rules configured**: Notifications are generated by rules. If no rules are active, no notifications will be created. Go to Settings → Notifications to configure rules.
+
+### Shift Hours Showing Zero
+
+**Symptom**: All hour counts show 0 on the dashboard.
+
+**Possible Causes**:
+1. **No shifts logged this month**: Hours are calculated from shift attendance records for the current month.
+2. **Scheduling permissions**: The `/scheduling/summary` endpoint requires `scheduling.view` permission.
+3. **Detailed hour breakdown**: Training and administrative hours require shift completion reports to be filed. The standby hours come from the scheduling summary.
 
 ---
 

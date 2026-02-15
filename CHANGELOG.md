@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - System-Wide Theme Support (2026-02-15)
+
+#### Theme System
+- **ThemeProvider context**: New `ThemeContext` with support for light, dark, and system (auto-detect) themes
+- **CSS custom properties**: Theme colors defined as CSS variables in `:root` (light) and `.dark` (dark), enabling centralized theme management instead of per-component hardcoding
+- **Tailwind dark mode**: Configured `darkMode: 'class'` with custom `theme-*` color utilities that reference CSS variables
+- **Theme toggle**: Added theme cycle button (Dark → Light → System) to both TopNavigation and SideNavigation
+- **Theme persistence**: Saves preference to `localStorage`, defaults to dark mode, respects `prefers-color-scheme` in system mode
+- **AppLayout**: Background gradient now uses CSS variables, automatically adapting to the selected theme
+
+#### Dashboard Redesign
+- **Member-focused dashboard**: Replaced admin-oriented dashboard (setup status, getting started guide) with member-focused content
+- **Hours tracking cards**: Shows total, training, standby, and administrative hours for the current month
+- **Notifications widget**: Displays recent notifications with unread indicators and mark-as-read functionality
+- **Upcoming shifts widget**: Shows the member's upcoming shifts for the next 30 days with date, time, and officer info
+- **Training progress**: Retained training enrollment progress with deadlines and next steps
+- **Added API methods**: `schedulingService.getMyShifts()` and `schedulingService.getMyAssignments()` for member-specific shift data
+
+### Fixed - UI Issues (2026-02-15)
+
+#### Footer & Layout
+- **Dashboard footer**: Fixed footer floating mid-page by using flexbox sticky footer pattern (`flex-col` + `flex-1` + `mt-auto`)
+
+#### Election Module Dark Theme
+- **CandidateManagement**: Converted from invisible light theme to dark theme with proper contrast
+- **BallotBuilder**: Converted secretary ballot creation interface to dark theme
+- **ElectionBallot**: Converted voter-facing ballot interface to dark theme
+- **ElectionResults**: Converted results display to dark theme
+- **MeetingAttendance**: Converted attendance tracker to dark theme
+
+#### Election Timezone Handling
+- **Frontend**: Replaced `.toISOString().slice(0,16)` with local datetime formatting helper to prevent UTC conversion of `datetime-local` input values
+- **Backend**: Changed `datetime.utcnow()` to `datetime.now()` in election service comparisons to match user-entered naive datetimes
+
 ### Fixed - Duplicate Index Definitions Crashing Startup (2026-02-15)
 
 #### Database Model Fixes
