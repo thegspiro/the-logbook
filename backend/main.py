@@ -227,14 +227,20 @@ def _import_all_models():
     import app.models  # noqa: F401 - triggers __init__.py which imports all models
 
 
-def _run_migration_file(engine, migration_path):
+def _run_migration_file(engine_or_conn, migration_path):
     """
     Run a single Alembic migration file's upgrade() function outside of Alembic.
 
     Uses Alembic's Operations context so migration code that calls
     op.create_table(), op.bulk_insert(), etc. works correctly.
+
+    Args:
+        engine_or_conn: SQLAlchemy Engine (opens new transaction) or
+                        Connection (reuses existing transaction for batching).
+        migration_path: Path to the Alembic migration .py file.
     """
     import importlib.util
+    from sqlalchemy.engine import Connection
     from alembic.operations import Operations
     from alembic.runtime.migration import MigrationContext
 
@@ -242,10 +248,17 @@ def _run_migration_file(engine, migration_path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    with engine.begin() as conn:
-        ctx = MigrationContext.configure(conn)
+    if isinstance(engine_or_conn, Connection):
+        # Reuse existing connection/transaction (batched mode)
+        ctx = MigrationContext.configure(engine_or_conn)
         with Operations.context(ctx):
             module.upgrade()
+    else:
+        # Open new transaction (standalone mode)
+        with engine_or_conn.begin() as conn:
+            ctx = MigrationContext.configure(conn)
+            with Operations.context(ctx):
+                module.upgrade()
 
 
 def _fast_path_init(engine, alembic_cfg, base_dir):
@@ -274,53 +287,50 @@ def _fast_path_init(engine, alembic_cfg, base_dir):
     _import_all_models()
     from app.core.database import Base
 
-    # 2. Drop ALL existing tables so create_all() starts from a clean slate.
-    #    This handles both the initial SQL tables AND any leftover tables from
-    #    a previous failed boot (e.g., a partial create_all() that crashed).
-    #    We keep alembic_version since command.stamp() manages it.
-    logger.info("Dropping all existing tables for clean recreation...")
-    with engine.begin() as conn:
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-        result = conn.execute(text("SHOW TABLES"))
-        existing_tables = [row[0] for row in result]
-        dropped = 0
-        for table_name in existing_tables:
-            if table_name == "alembic_version":
-                continue
-            conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
-            logger.debug(f"Dropped table: {table_name}")
-            dropped += 1
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-    logger.info(f"Dropped {dropped} existing tables")
-
-    # 3. Create ALL tables from current model definitions
-    #    This handles ~90% of tables in one fast batch operation.
-    #    Optimizations for slow/resource-constrained environments:
-    #    - checkfirst=False: skip existence checks (we just dropped everything)
-    #    - FK_CHECKS=0: skip FK validation during CREATE TABLE (much faster)
-    #    - Single connection: avoid pool overhead for 100+ DDL statements
-    logger.info("Creating all tables from model definitions...")
-    with engine.begin() as conn:
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-        Base.metadata.create_all(conn, checkfirst=False)
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-    logger.info("Model-based tables created")
-
-    # 4. Create tables that only exist in migration files (no SQLAlchemy models)
-    #    Currently: compliance module (5 tables) and fundraising module (5 tables)
+    # 2-5. Drop, create, and seed all in a SINGLE connection with FK checks off.
+    #    This eliminates connection pool overhead and FK validation overhead
+    #    across all DDL operations (~100+ CREATE TABLEs, ~40 indexes).
     versions_dir = os.path.join(base_dir, "alembic", "versions")
-    for migration_file in MIGRATION_ONLY_FILES:
-        migration_path = os.path.join(versions_dir, migration_file)
-        if os.path.exists(migration_path):
-            logger.info(f"Creating migration-only tables from {migration_file}...")
-            _run_migration_file(engine, migration_path)
+    with engine.begin() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
 
-    # 5. Insert seed data (apparatus types, statuses, maintenance types)
-    seed_path = os.path.join(versions_dir, SEED_DATA_FILE)
-    if os.path.exists(seed_path):
-        logger.info("Inserting apparatus seed data...")
-        _run_migration_file(engine, seed_path)
-        logger.info("Apparatus seed data inserted")
+        # 2. Drop ALL existing tables so create_all() starts from a clean slate.
+        #    Uses a single batched DROP TABLE statement instead of per-table drops.
+        #    We keep alembic_version since command.stamp() manages it.
+        logger.info("Dropping all existing tables for clean recreation...")
+        result = conn.execute(text("SHOW TABLES"))
+        tables_to_drop = [
+            row[0] for row in result if row[0] != "alembic_version"
+        ]
+        if tables_to_drop:
+            drop_list = ", ".join(f"`{t}`" for t in tables_to_drop)
+            conn.execute(text(f"DROP TABLE IF EXISTS {drop_list}"))
+        logger.info(f"Dropped {len(tables_to_drop)} existing tables")
+
+        # 3. Create ALL tables from current model definitions.
+        #    checkfirst=False skips 100+ existence-check round-trips since
+        #    we just dropped everything. FK_CHECKS=0 (set above) skips FK
+        #    validation during CREATE TABLE.
+        logger.info("Creating all tables from model definitions...")
+        Base.metadata.create_all(conn, checkfirst=False)
+        logger.info("Model-based tables created")
+
+        # 4. Create tables that only exist in migration files (no SQLAlchemy models).
+        #    Reuses the same connection to avoid pool overhead.
+        for migration_file in MIGRATION_ONLY_FILES:
+            migration_path = os.path.join(versions_dir, migration_file)
+            if os.path.exists(migration_path):
+                logger.info(f"Creating migration-only tables from {migration_file}...")
+                _run_migration_file(conn, migration_path)
+
+        # 5. Insert seed data (apparatus types, statuses, maintenance types).
+        seed_path = os.path.join(versions_dir, SEED_DATA_FILE)
+        if os.path.exists(seed_path):
+            logger.info("Inserting apparatus seed data...")
+            _run_migration_file(conn, seed_path)
+            logger.info("Apparatus seed data inserted")
+
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
     # 6. Stamp alembic to head so future startups skip all migrations
     command.stamp(alembic_cfg, "head")
@@ -344,6 +354,7 @@ def run_migrations():
     from alembic import command
     from alembic.script import ScriptDirectory
     from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import NullPool
     import os
 
     startup_status.set_phase("migrations", "Preparing database migrations...")
@@ -358,7 +369,9 @@ def run_migrations():
     startup_status.migrations_total = total_migrations
 
     head_revision = script_dir.get_current_head()
-    engine = create_engine(settings.SYNC_DATABASE_URL)
+    # NullPool avoids connection pool overhead during DDL-heavy initialization.
+    # Matches Alembic's own env.py strategy (pool is discarded after migrations).
+    engine = create_engine(settings.SYNC_DATABASE_URL, poolclass=NullPool)
 
     # Determine current database revision
     current_rev = None
