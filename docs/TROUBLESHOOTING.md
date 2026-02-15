@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-15 (includes codebase quality fixes: type-safe error handling, unused code cleanup, backend Makefile corrections, documents service consolidation, public portal implementation, linting configuration; plus shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-15 (includes duplicate index crash fix, codebase quality fixes: type-safe error handling, unused code cleanup, backend Makefile corrections, documents service consolidation, public portal implementation, linting configuration; plus shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -718,6 +718,65 @@ python scripts/verify_database_enums.py
 3. **Verification script** - `python scripts/verify_database_enums.py`
 
 See: [`ENUM_CONVENTIONS.md`](./ENUM_CONVENTIONS.md)
+
+---
+
+### Duplicate Index Name on Startup
+
+**Status**: ✅ **FIXED** as of 2026-02-15
+
+#### Symptoms
+```
+sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1061, "Duplicate key name 'ix_locations_organization_id'")
+[SQL: CREATE INDEX ix_locations_organization_id ON locations (organization_id)]
+```
+or:
+```
+sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1061, "Duplicate key name 'ix_voting_tokens_token'")
+```
+
+Application crashes during startup with `Application startup failed. Exiting.`
+
+#### Cause
+SQLAlchemy model columns had **both** `index=True` on the column definition **and** an explicit `Index()` with the same name in `__table_args__`. When SQLAlchemy generates the `index=True` index, it auto-names it `ix_<tablename>_<columnname>`. If `__table_args__` also declares an `Index("ix_<tablename>_<columnname>", ...)`, MySQL rejects the duplicate name.
+
+This happens on every fresh database initialization — it is not caused by leftover tables.
+
+**Affected models** (now fixed):
+- `location.py` — `organization_id` (crash: same index name)
+- `election.py` — `VotingToken.token` (crash: same index name)
+- `apparatus.py`, `facilities.py`, `inventory.py`, `ip_security.py`, `public_portal.py` — had redundant indexes with different names (no crash, but wasteful)
+
+#### Fix
+This has been fixed in the codebase. Pull the latest changes:
+```bash
+git pull origin main
+docker compose down
+docker volume rm the-logbook_mysql_data  # Clean slate recommended
+docker compose up -d
+```
+
+#### Prevention
+When defining indexes on SQLAlchemy models, use **one** method, not both:
+
+```python
+# ✅ CORRECT: Use explicit Index in __table_args__ (preferred for clarity)
+organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
+
+__table_args__ = (
+    Index("ix_locations_organization_id", "organization_id"),
+)
+
+# ✅ CORRECT: Use index=True on the column (simpler for single-column indexes)
+organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
+
+# ❌ WRONG: Both together — creates duplicate index
+organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
+
+__table_args__ = (
+    Index("ix_locations_organization_id", "organization_id"),  # Duplicate!
+)
+```
 
 ---
 

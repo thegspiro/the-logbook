@@ -508,6 +508,26 @@ alembic heads
 alembic merge heads -m "Merge migrations"
 ```
 
+### Duplicate Index Name on MySQL
+
+If you see `(1061, "Duplicate key name 'ix_<table>_<column>'")` during startup, a model column has both `index=True` and an explicit `Index()` with the same auto-generated name. Use one method, not both:
+
+```python
+# CORRECT: explicit Index in __table_args__ (preferred)
+organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
+
+__table_args__ = (
+    Index("ix_locations_organization_id", "organization_id"),
+)
+
+# WRONG: both together — MySQL rejects the duplicate name
+organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
+
+__table_args__ = (
+    Index("ix_locations_organization_id", "organization_id"),  # Duplicate!
+)
+```
+
 ### Redis Connection Issues
 
 ```bash

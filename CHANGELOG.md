@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Duplicate Index Definitions Crashing Startup (2026-02-15)
+
+#### Database Model Fixes
+- **Location model crash fix**: Removed duplicate `ix_locations_organization_id` index that crashed `Base.metadata.create_all()` on MySQL — the `organization_id` column had both `index=True` (auto-generating the index) and an explicit `Index("ix_locations_organization_id", ...)` in `__table_args__` with the same name, causing a `Duplicate key name` error on every fresh database initialization
+- **VotingToken model crash fix**: Same issue — `token` column had `index=True` plus an explicit `Index("ix_voting_tokens_token", ...)` in `__table_args__`, causing startup failure after locations table was fixed
+- **Redundant index cleanup**: Removed `index=True` from 5 additional columns across `apparatus.py`, `facilities.py`, `inventory.py`, `ip_security.py`, and `public_portal.py` that had redundant (but differently-named) explicit indexes in `__table_args__`, preventing double-indexing
+- **Fast-path init log accuracy**: Fixed dropped table count in `_fast_path_init()` to exclude the skipped `alembic_version` table
+
 ### Fixed - Codebase Quality & Error Handling (2026-02-15)
 
 #### Error Handling Improvements
