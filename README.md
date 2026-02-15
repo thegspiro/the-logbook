@@ -186,6 +186,24 @@ See [Proxmox Deployment Guide](docs/deployment/proxmox.md) for details.
 </details>
 
 <details>
+<summary><strong>💾 Synology NAS</strong></summary>
+
+```bash
+# SSH into your Synology NAS, then:
+sudo mkdir -p /volume1/docker/the-logbook
+cd /volume1/docker/the-logbook
+sudo git clone https://github.com/thegspiro/the-logbook.git .
+sudo cp .env.example .env
+# Edit .env with your settings
+sudo docker compose up -d
+```
+
+Access: `http://YOUR-NAS-IP:3000`
+
+See [Synology Deployment Guide](docs/deployment/synology.md) for details.
+</details>
+
+<details>
 <summary><strong>🔧 Traditional (No Docker)</strong></summary>
 
 ```bash
@@ -224,6 +242,7 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 | **Google Cloud** (Compute, Cloud Run) | x86_64 | All | ✅ Full support |
 | **DigitalOcean** (Droplets, App Platform) | x86_64 | All | ✅ Full support |
 | **Proxmox VE** (LXC, VM) | x86_64 | All | ✅ Full support |
+| **Synology NAS** (DS+, XS+ series) | x86_64 | minimal, standard | ✅ Full support |
 | **Unraid** | x86_64 | standard | ✅ Optimized |
 | **Kubernetes** | x86_64, ARM64 | standard, full | ✅ Helm chart available |
 
@@ -254,6 +273,7 @@ The wiki includes:
 - [Unraid Deployment Guide](docs/deployment/unraid.md) - Complete Unraid guide
 - [Unraid Updated Quick Start](unraid/QUICK-START-UPDATED.md) - Latest Unraid instructions
 - [Proxmox Deployment Guide](docs/deployment/proxmox.md) - LXC and VM deployment on Proxmox VE
+- [Synology NAS Deployment Guide](docs/deployment/synology.md) - Docker deployment on Synology DS+/XS+ series
 - [General Deployment Guide](docs/DEPLOYMENT.md) - Deployment instructions
 - [Docker Build & Publish](docs/DOCKER-BUILD-PUBLISH.md) - Docker image management
 - [Docker Build Verification](scripts/verify-docker-build.sh) - Validate Docker configuration before deploying

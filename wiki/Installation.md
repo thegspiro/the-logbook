@@ -61,6 +61,7 @@ curl -sSL .../universal-install.sh | bash -s -- --profile full
 | **Azure** (VMs, Container Instances) | x86_64 | All | Full support |
 | **Google Cloud** (Compute, Cloud Run) | x86_64 | All | Full support |
 | **DigitalOcean** (Droplets, App Platform) | x86_64 | All | Full support |
+| **Synology NAS** (DS+, XS+ series) | x86_64 | minimal, standard | Full support |
 | **Unraid** | x86_64 | standard | Optimized |
 | **Kubernetes** | x86_64, ARM64 | standard, full | Helm chart available |
 

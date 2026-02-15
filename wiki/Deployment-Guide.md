@@ -29,6 +29,7 @@ This guide covers deploying The Logbook across various platforms, from small dev
 | Raspberry Pi 4/5 | 2GB | 4GB | standard |
 | Small VPS | 1GB | 2GB | minimal |
 | Standard VPS | 2GB | 4GB | standard |
+| Synology NAS (DS+/XS+) | 4GB | 8GB | standard |
 | Production Server | 4GB | 8GB+ | full |
 | Kubernetes | 2GB per pod | 4GB per pod | standard |
 
