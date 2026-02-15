@@ -100,7 +100,7 @@ async def get_my_training_summary(
         records_result = await db.execute(
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == org_id, TrainingRecord.user_id == user_id)
-            .order_by(TrainingRecord.completed_date.desc())
+            .order_by(TrainingRecord.completion_date.desc())
             .limit(100)
         )
         records = records_result.scalars().all()
@@ -112,7 +112,7 @@ async def get_my_training_summary(
                 "course_code": r.course_code,
                 "training_type": r.training_type.value if hasattr(r.training_type, 'value') else str(r.training_type),
                 "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
-                "completion_date": str(r.completed_date) if r.completed_date else None,
+                "completion_date": str(r.completion_date) if r.completion_date else None,
                 "hours_completed": float(r.hours_completed) if r.hours_completed else 0,
                 "expiration_date": str(r.expiration_date) if r.expiration_date else None,
                 "instructor": r.instructor,
