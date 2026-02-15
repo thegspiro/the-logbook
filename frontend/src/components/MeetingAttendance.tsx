@@ -105,20 +105,20 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="text-gray-500 text-center py-4">Loading attendance...</div>
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+        <div className="text-slate-400 text-center py-4">Loading attendance...</div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-gray-900">
+        <h3 className="text-lg font-medium text-white">
           Meeting Attendance ({attendees.length})
         </h3>
         {attendees.length > 0 && members.length > 0 && (
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-slate-400">
             {Math.round((attendees.length / members.length) * 100)}% of members present
           </span>
         )}
@@ -127,16 +127,16 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
       {/* Checked-in Attendees */}
       {attendees.length > 0 && (
         <div className="mb-6">
-          <h4 className="text-sm font-semibold text-green-700 mb-2">
+          <h4 className="text-sm font-semibold text-green-400 mb-2">
             Present ({attendees.length})
           </h4>
           <div className="flex flex-wrap gap-2">
             {attendees.map((attendee) => (
               <div
                 key={attendee.user_id}
-                className="flex items-center gap-1 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full text-sm"
+                className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full text-sm"
               >
-                <span className="text-green-800 font-medium">{attendee.name}</span>
+                <span className="text-green-300 font-medium">{attendee.name}</span>
                 <span className="text-green-500 text-xs">
                   {new Date(attendee.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -144,7 +144,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                   <button
                     type="button"
                     onClick={() => handleRemove(attendee.user_id, attendee.name)}
-                    className="ml-1 text-green-400 hover:text-red-500 text-xs"
+                    className="ml-1 text-green-500 hover:text-red-400 text-xs"
                     title="Remove from attendance"
                   >
                     &#10005;
@@ -159,7 +159,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
       {/* Check-in Section */}
       {!isClosed && (
         <div>
-          <h4 className="text-sm font-semibold text-gray-600 mb-2">
+          <h4 className="text-sm font-semibold text-slate-300 mb-2">
             Check In Members ({notCheckedIn.length} remaining)
           </h4>
 
@@ -169,30 +169,30 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
               placeholder="Search by name or badge number..."
             />
           </div>
 
           {/* Members list */}
           {notCheckedIn.length === 0 ? (
-            <div className="text-center py-4 text-gray-500 text-sm">
+            <div className="text-center py-4 text-slate-400 text-sm">
               {searchQuery ? 'No matching members found' : 'All members are checked in'}
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+            <div className="max-h-64 overflow-y-auto border border-white/20 rounded-lg divide-y divide-white/10">
               {notCheckedIn.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between px-4 py-2 hover:bg-gray-50"
+                  className="flex items-center justify-between px-4 py-2 hover:bg-white/5"
                 >
                   <div className="flex items-center gap-3">
                     <div>
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="text-sm font-medium text-white">
                         {member.first_name} {member.last_name}
                       </span>
                       {member.badge_number && (
-                        <span className="ml-2 text-xs text-gray-400">
+                        <span className="ml-2 text-xs text-slate-500">
                           #{member.badge_number}
                         </span>
                       )}
@@ -200,8 +200,8 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                     <span
                       className={`px-1.5 py-0.5 text-xs rounded ${
                         member.status === 'probationary'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-green-100 text-green-700'
+                          ? 'bg-yellow-500/20 text-yellow-300'
+                          : 'bg-green-500/20 text-green-300'
                       }`}
                     >
                       {member.status}

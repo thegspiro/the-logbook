@@ -89,9 +89,9 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
         {/* Welcome Section */}
         <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 border border-white/20 mb-8">
           <div className="flex items-start justify-between">
@@ -335,7 +335,7 @@ const Dashboard: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 mt-12" role="contentinfo">
+      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 mt-auto" role="contentinfo">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-slate-300 text-sm">
             © {new Date().getFullYear()} {departmentName}. All rights reserved.

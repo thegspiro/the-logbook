@@ -66,6 +66,16 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  // Format a Date as a local datetime-local string (YYYY-MM-DDTHH:MM)
+  const formatLocalDateTime = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const handleStartDateChange = (startDate: string) => {
     setFormData({ ...formData, start_date: startDate });
 
@@ -74,8 +84,7 @@ export const ElectionsPage: React.FC = () => {
       const start = new Date(startDate);
       const end = new Date(start);
       end.setHours(23, 59, 0, 0);
-      const endDateString = end.toISOString().slice(0, 16);
-      setFormData({ ...formData, start_date: startDate, end_date: endDateString });
+      setFormData({ ...formData, start_date: startDate, end_date: formatLocalDateTime(end) });
     }
   };
 
@@ -87,8 +96,7 @@ export const ElectionsPage: React.FC = () => {
 
     const start = new Date(formData.start_date);
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-    const endDateString = end.toISOString().slice(0, 16);
-    setFormData({ ...formData, end_date: endDateString });
+    setFormData({ ...formData, end_date: formatLocalDateTime(end) });
   };
 
   const setEndOfDay = () => {
@@ -100,8 +108,7 @@ export const ElectionsPage: React.FC = () => {
     const start = new Date(formData.start_date);
     const end = new Date(start);
     end.setHours(23, 59, 0, 0);
-    const endDateString = end.toISOString().slice(0, 16);
-    setFormData({ ...formData, end_date: endDateString });
+    setFormData({ ...formData, end_date: formatLocalDateTime(end) });
   };
 
   const handleCreateElection = async (e: React.FormEvent) => {

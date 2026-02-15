@@ -268,7 +268,7 @@ async def update_election(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be after start date"
                 )
-            if new_end_date <= datetime.utcnow():
+            if new_end_date <= datetime.now():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="End date must be in the future"
