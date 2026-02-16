@@ -68,7 +68,7 @@ docker-compose up -d
 ### 1. Prerequisites
 
 - Unraid 6.9.0 or later
-- MySQL/MariaDB database
+- MySQL 8.0 database
 - 8GB RAM minimum
 
 ### 2. Install
@@ -107,7 +107,7 @@ Start managing your organization! 🎉
 
 ### Required Services
 
-- **MySQL/MariaDB** - For data storage
+- **MySQL 8.0** - For data storage
 - **Redis** (optional) - For caching (improves performance)
 
 ---
@@ -173,7 +173,7 @@ BACKUP_ENABLED=true
 
 ## Database Setup
 
-### Option 1: Use Existing MariaDB
+### Option 1: Use Existing MySQL Instance
 
 ```sql
 CREATE DATABASE the_logbook CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -182,14 +182,14 @@ GRANT ALL PRIVILEGES ON the_logbook.* TO 'logbook_user'@'%';
 FLUSH PRIVILEGES;
 ```
 
-### Option 2: Install MariaDB from Community Apps
+### Option 2: Install MySQL from Community Apps
 
-1. Install **MariaDB** from Apps
+1. Install **MySQL** from Apps
 2. Create database using phpMyAdmin or command line
 
 ### Option 3: Use Included Docker Compose
 
-The `docker-compose-unraid.yml` includes MariaDB and Redis.
+The `docker-compose-unraid.yml` includes MySQL 8.0 and Redis.
 
 📖 **[Database Setup Guide →](./UNRAID-INSTALLATION.md#database-setup)**
 
@@ -254,7 +254,7 @@ curl http://UNRAID-IP:7880
 
 ```bash
 # Test database connection
-docker exec -it mariadb mysql -u logbook_user -p
+docker exec -it logbook-db mysql -u logbook_user -p
 
 # Verify database exists
 SHOW DATABASES;
@@ -354,7 +354,7 @@ docker ps -a | grep TheLogbook
 curl http://localhost:3001/health
 
 # Database access
-docker exec -it mariadb mysql -u root -p
+docker exec -it logbook-db mysql -u root -p
 
 # Container shell
 docker exec -it TheLogbook bash

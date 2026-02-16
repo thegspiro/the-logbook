@@ -12,20 +12,21 @@
 
 services:
   # MySQL with minimal resources
+  # Note: On ARM/Raspberry Pi, layer the ARM override which switches to MariaDB:
+  #   docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-compose.arm.yml up -d
   mysql:
-    image: mariadb:10.11  # MariaDB is lighter and ARM-friendly
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
       --max_connections=50
       --max_allowed_packet=16M
       --innodb_buffer_pool_size=128M
-      --innodb_log_file_size=32M
-      --key_buffer_size=16M
+      --innodb_redo_log_capacity=33554432
       --tmp_table_size=16M
       --max_heap_table_size=16M
       --table_open_cache=64
       --skip-name-resolve
+      --skip-log-bin
     deploy:
       resources:
         limits:

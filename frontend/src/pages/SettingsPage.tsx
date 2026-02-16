@@ -1,9 +1,8 @@
 /**
  * Settings Page
  *
- * Allows secretary to manage organization settings including:
- * - Contact information visibility
- * - Membership ID configuration
+ * Allows secretary to manage contact information visibility settings
+ * and membership ID configuration.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -21,11 +20,11 @@ export const SettingsPage: React.FC = () => {
     enabled: false,
     prefix: '',
     next_number: 1,
-    padding: 4,
+    zero_pad: 3,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingMembershipId, setSavingMembershipId] = useState(false);
+  const [savingMembership, setSavingMembership] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -35,12 +34,11 @@ export const SettingsPage: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        const [orgData, midData] = await Promise.all([
-          organizationService.getSettings(),
-          organizationService.getMembershipIdSettings(),
-        ]);
-        setSettings(orgData.contact_info_visibility);
-        setMembershipIdSettings(midData);
+        const data = await organizationService.getSettings();
+        setSettings(data.contact_info_visibility);
+        if (data.membership_ids) {
+          setMembershipIdSettings(data.membership_ids);
+        }
       } catch (err) {
         setError('Unable to load settings. Please check your connection and refresh the page.');
       } finally {
@@ -68,9 +66,9 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveMembershipId = async () => {
+  const handleSaveMembershipIds = async () => {
     try {
-      setSavingMembershipId(true);
+      setSavingMembership(true);
       setError(null);
       setSuccessMessage(null);
 
@@ -81,7 +79,7 @@ export const SettingsPage: React.FC = () => {
     } catch (err) {
       setError('Unable to save membership ID settings. Please try again.');
     } finally {
-      setSavingMembershipId(false);
+      setSavingMembership(false);
     }
   };
 
@@ -92,9 +90,10 @@ export const SettingsPage: React.FC = () => {
     }));
   };
 
-  const getPreviewId = () => {
-    const numberStr = String(membershipIdSettings.next_number).padStart(membershipIdSettings.padding, '0');
-    return `${membershipIdSettings.prefix}${numberStr}`;
+  // Preview the next membership number that will be assigned
+  const previewNextNumber = () => {
+    const numStr = String(membershipIdSettings.next_number).padStart(membershipIdSettings.zero_pad, '0');
+    return `${membershipIdSettings.prefix}${numStr}`;
   };
 
   if (loading) {
@@ -115,7 +114,7 @@ export const SettingsPage: React.FC = () => {
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
           <p className="mt-1 text-sm text-theme-text-muted">
-            Manage department settings including contact visibility and membership IDs.
+            Manage contact information visibility and membership ID configuration.
           </p>
         </div>
 
@@ -296,15 +295,16 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Membership ID Configuration */}
+        {/* Membership ID Settings */}
         <div className="mt-6 bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-theme-text-primary mb-4">
-            Membership ID
+            Membership ID Numbers
           </h3>
           <p className="text-sm text-theme-text-muted mb-6">
-            Configure automatic membership ID assignment. When enabled, each new member
-            receives a sequential membership ID. The membership coordinator can also
-            manually assign an ID to returning former members.
+            Configure automatic membership ID assignment for new members. When enabled,
+            each member who joins the department will receive a sequential membership number.
+            The membership coordinator can also manually assign a number to former members
+            being reinstated.
           </p>
 
           <div className="space-y-4">
@@ -312,15 +312,17 @@ export const SettingsPage: React.FC = () => {
             <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
               <div>
                 <label className="text-sm font-medium text-theme-text-primary">
-                  Enable Membership IDs
+                  Auto-Assign Membership Numbers
                 </label>
                 <p className="text-sm text-theme-text-muted">
-                  Automatically assign membership IDs to new members
+                  Automatically assign the next sequential membership number when a new member joins
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setMembershipIdSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
+                onClick={() =>
+                  setMembershipIdSettings((prev) => ({ ...prev, enabled: !prev.enabled }))
+                }
                 className={`${
                   membershipIdSettings.enabled ? 'bg-blue-600' : 'bg-slate-600'
                 } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
@@ -335,65 +337,81 @@ export const SettingsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Configuration (only shown when enabled) */}
             {membershipIdSettings.enabled && (
-              <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="mid-prefix" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                      Prefix
-                    </label>
-                    <input
-                      id="mid-prefix"
-                      type="text"
-                      value={membershipIdSettings.prefix}
-                      onChange={(e) => setMembershipIdSettings(prev => ({ ...prev, prefix: e.target.value }))}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., FD-"
-                      maxLength={20}
-                    />
-                    <p className="text-xs text-theme-text-muted mt-1">Optional prefix before the number</p>
-                  </div>
+              <div className="pl-4 space-y-5">
+                {/* Prefix */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Prefix (optional)
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    Text prepended to each membership number (e.g. &quot;M-&quot;, &quot;FD-&quot;)
+                  </p>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={membershipIdSettings.prefix}
+                    onChange={(e) =>
+                      setMembershipIdSettings((prev) => ({ ...prev, prefix: e.target.value }))
+                    }
+                    placeholder="e.g. M-"
+                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-                  <div>
-                    <label htmlFor="mid-next" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                      Next Number
-                    </label>
-                    <input
-                      id="mid-next"
-                      type="number"
-                      value={membershipIdSettings.next_number}
-                      onChange={(e) => setMembershipIdSettings(prev => ({ ...prev, next_number: Math.max(1, parseInt(e.target.value) || 1) }))}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min={1}
-                    />
-                    <p className="text-xs text-theme-text-muted mt-1">Next number to assign</p>
-                  </div>
+                {/* Next Number */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Next Number
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    The next sequential number to assign to a new member
+                  </p>
+                  <input
+                    type="number"
+                    min={1}
+                    value={membershipIdSettings.next_number}
+                    onChange={(e) =>
+                      setMembershipIdSettings((prev) => ({
+                        ...prev,
+                        next_number: Math.max(1, parseInt(e.target.value) || 1),
+                      }))
+                    }
+                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-                  <div>
-                    <label htmlFor="mid-padding" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                      Digits
-                    </label>
-                    <select
-                      id="mid-padding"
-                      value={membershipIdSettings.padding}
-                      onChange={(e) => setMembershipIdSettings(prev => ({ ...prev, padding: parseInt(e.target.value) }))}
-                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={2}>2 digits (01)</option>
-                      <option value={3}>3 digits (001)</option>
-                      <option value={4}>4 digits (0001)</option>
-                      <option value={5}>5 digits (00001)</option>
-                      <option value={6}>6 digits (000001)</option>
-                    </select>
-                    <p className="text-xs text-theme-text-muted mt-1">Zero-padded digits</p>
-                  </div>
+                {/* Zero Padding */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Zero Padding
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    Pad the number with leading zeros to this many digits (e.g. 3 = &quot;001&quot;)
+                  </p>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={membershipIdSettings.zero_pad}
+                    onChange={(e) =>
+                      setMembershipIdSettings((prev) => ({
+                        ...prev,
+                        zero_pad: Math.min(10, Math.max(0, parseInt(e.target.value) || 0)),
+                      }))
+                    }
+                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
 
                 {/* Preview */}
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-theme-surface-border">
-                  <p className="text-sm text-theme-text-secondary mb-1">Preview: Next member will receive</p>
-                  <p className="text-xl font-mono font-bold text-theme-text-primary">{getPreviewId()}</p>
+                <div className="pt-2 border-t border-theme-surface-border">
+                  <p className="text-sm text-theme-text-muted">
+                    Next membership number to be assigned:{' '}
+                    <span className="font-mono font-semibold text-theme-text-primary">
+                      {previewNextNumber()}
+                    </span>
+                  </p>
                 </div>
               </div>
             )}
@@ -401,15 +419,15 @@ export const SettingsPage: React.FC = () => {
 
           <div className="mt-6 flex justify-end">
             <button
-              onClick={handleSaveMembershipId}
-              disabled={savingMembershipId}
+              onClick={handleSaveMembershipIds}
+              disabled={savingMembership}
               className={`${
-                savingMembershipId
+                savingMembership
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
               } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >
-              {savingMembershipId ? 'Saving...' : 'Save Membership ID Settings'}
+              {savingMembership ? 'Saving...' : 'Save Membership ID Settings'}
             </button>
           </div>
         </div>

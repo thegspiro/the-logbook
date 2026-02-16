@@ -7,9 +7,10 @@ Business logic for organization-related operations.
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 from uuid import UUID
 
-from app.models.user import Organization
+from app.models.user import Organization, User
 from app.schemas.organization import (
     OrganizationSettings,
     ContactInfoSettings,
@@ -87,10 +88,15 @@ class OrganizationService:
             integrations=modules.get("integrations", False),
         )
 
+        # Parse membership ID settings
+        membership_ids_raw = settings_dict.get("membership_ids", {})
+        membership_id_settings = MembershipIdSettings(**membership_ids_raw)
+
         return OrganizationSettings(
             contact_info_visibility=contact_settings,
             email_service=email_settings,
             modules=module_settings,
+            membership_ids=membership_id_settings,
         )
 
     async def update_organization_settings(
@@ -118,8 +124,11 @@ class OrganizationService:
         # Update with new settings (merge dictionaries)
         updated_settings = {**current_settings, **settings_update}
 
-        # Update in database
+        # Update in database — flag_modified is required because the
+        # Organization.settings column uses plain JSON (not MutableDict),
+        # so SQLAlchemy may not detect the change without an explicit hint.
         org.settings = updated_settings
+        flag_modified(org, "settings")
         await self.db.commit()
         await self.db.refresh(org)
 
@@ -197,75 +206,65 @@ class OrganizationService:
         updated_modules = {**current_modules, **module_updates}
         current_settings["modules"] = updated_modules
 
-        # Update in database
+        # Update in database — flag_modified needed for plain JSON column
         org.settings = current_settings
+        flag_modified(org, "settings")
         await self.db.commit()
         await self.db.refresh(org)
 
         # Return updated enabled modules
         return await self.get_enabled_modules(organization_id)
 
+    # =========================================================================
+    # Membership ID helpers
+    # =========================================================================
+
     async def get_membership_id_settings(
         self,
         organization_id: UUID,
     ) -> MembershipIdSettings:
-        """Get membership ID settings for an organization"""
+        """Return the membership ID settings for an organization."""
         org = await self.get_organization(organization_id)
         if not org:
             return MembershipIdSettings()
+        settings_dict = (org.settings or {}).get("membership_ids", {})
+        return MembershipIdSettings(**settings_dict)
 
-        settings_dict = org.settings or {}
-        mid = settings_dict.get("membership_id", {})
-        return MembershipIdSettings(
-            enabled=mid.get("enabled", False),
-            prefix=mid.get("prefix", ""),
-            next_number=mid.get("next_number", 1),
-            padding=mid.get("padding", 4),
-        )
-
-    async def generate_next_membership_id(
+    async def assign_next_membership_number(
         self,
         organization_id: UUID,
-    ) -> str | None:
+        user: User,
+    ) -> Optional[str]:
         """
-        Generate the next membership ID and increment the counter.
+        Assign the next sequential membership number to *user* and
+        increment the counter stored in organization settings.
 
-        Returns the formatted membership ID (e.g., "FD-0001") or None
-        if membership ID assignment is not enabled.
+        Returns the formatted membership number (e.g. "M-004") or None
+        if membership IDs are disabled for this organization.
+
+        The caller is responsible for calling ``db.commit()`` afterwards.
         """
         org = await self.get_organization(organization_id)
         if not org:
             return None
 
         settings_dict = org.settings or {}
-        mid = settings_dict.get("membership_id", {})
-        mid_settings = MembershipIdSettings(
-            enabled=mid.get("enabled", False),
-            prefix=mid.get("prefix", ""),
-            next_number=mid.get("next_number", 1),
-            padding=mid.get("padding", 4),
-        )
+        mid_settings = MembershipIdSettings(**settings_dict.get("membership_ids", {}))
 
         if not mid_settings.enabled:
             return None
 
-        # Format the membership ID
-        number_str = str(mid_settings.next_number).zfill(mid_settings.padding)
-        membership_id = f"{mid_settings.prefix}{number_str}"
+        # Build the formatted membership number
+        number_part = str(mid_settings.next_number).zfill(mid_settings.zero_pad)
+        membership_number = f"{mid_settings.prefix}{number_part}"
 
-        # Increment the counter in settings
-        mid["enabled"] = mid_settings.enabled
-        mid["prefix"] = mid_settings.prefix
-        mid["next_number"] = mid_settings.next_number + 1
-        mid["padding"] = mid_settings.padding
-        settings_dict["membership_id"] = mid
+        # Assign to user
+        user.membership_number = membership_number
+
+        # Increment next_number and persist
+        mid_settings.next_number += 1
+        settings_dict["membership_ids"] = mid_settings.model_dump()
         org.settings = settings_dict
-
-        # Force SQLAlchemy to detect the JSON change
-        from sqlalchemy.orm.attributes import flag_modified
         flag_modified(org, "settings")
 
-        await self.db.commit()
-        await self.db.refresh(org)
-
-        return membership_id
+        return membership_number

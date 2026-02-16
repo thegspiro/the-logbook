@@ -36,7 +36,7 @@ class UserBase(BaseModel):
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     badge_number: Optional[str] = Field(None, max_length=50)
-    membership_id: Optional[str] = Field(None, max_length=50)
+    membership_number: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
 
@@ -161,7 +161,7 @@ class UserListResponse(BaseModel):
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     badge_number: Optional[str] = None
-    membership_id: Optional[str] = None
+    membership_number: Optional[str] = None
     phone: Optional[str] = None  # Conditionally included
     mobile: Optional[str] = None  # Conditionally included
     photo_url: Optional[str] = None
@@ -214,6 +214,16 @@ class ContactInfoUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     notification_preferences: Optional[NotificationPreferences] = None
+
+
+class MembershipNumberAssignment(BaseModel):
+    """Schema for manually assigning or updating a member's membership number"""
+    membership_number: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="The membership number to assign (e.g. '042', 'M-007')",
+    )
 
 
 class UserProfileResponse(UserResponse):

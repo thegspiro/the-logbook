@@ -332,8 +332,8 @@ git push heroku main
 - Deploy automatically on push
 
 **AWS ECS/Fargate:**
-- Use provided Terraform configurations
-- Set up in `infrastructure/terraform/providers/aws/`
+- Build and push Docker images to ECR
+- See [AWS Deployment Guide](../deployment/aws.md) for full instructions
 
 ### Option 3: GitHub Pages (Frontend Only)
 

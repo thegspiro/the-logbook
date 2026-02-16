@@ -61,6 +61,7 @@ curl -sSL .../universal-install.sh | bash -s -- --profile full
 | **Azure** (VMs, Container Instances) | x86_64 | All | Full support |
 | **Google Cloud** (Compute, Cloud Run) | x86_64 | All | Full support |
 | **DigitalOcean** (Droplets, App Platform) | x86_64 | All | Full support |
+| **Synology NAS** (DS+, XS+ series) | x86_64 | minimal, standard | Full support |
 | **Unraid** | x86_64 | standard | Optimized |
 | **Kubernetes** | x86_64, ARM64 | standard, full | Helm chart available |
 
@@ -296,7 +297,7 @@ See [Deployment Guide](Deployment-Guide) for detailed cloud deployment instructi
 
 - Python 3.13+
 - Node.js 22+
-- MySQL 8.0+ or MariaDB 10.11+
+- MySQL 8.0+ (or MariaDB 10.11+ for ARM/Raspberry Pi)
 - Redis 7+
 
 ### Backend Setup

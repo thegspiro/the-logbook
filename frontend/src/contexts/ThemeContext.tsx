@@ -23,20 +23,20 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 function getSystemPreference(): ResolvedTheme {
   if (typeof window === 'undefined') {
-    return 'dark';
+    return 'light';
   }
   return window.matchMedia(MEDIA_QUERY).matches ? 'dark' : 'light';
 }
 
 function getSavedTheme(): Theme {
   if (typeof window === 'undefined') {
-    return 'dark';
+    return 'light';
   }
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved === 'light' || saved === 'dark' || saved === 'system') {
     return saved;
   }
-  return 'dark';
+  return 'light';
 }
 
 function applyThemeToDocument(resolved: ResolvedTheme): void {

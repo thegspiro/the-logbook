@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
-import type { Election, ForensicsReport, VoteIntegrityResult } from '../types/election';
+import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, BallotItem } from '../types/election';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
 import { CandidateManagement } from '../components/CandidateManagement';
@@ -57,6 +57,11 @@ export const ElectionDetailPage: React.FC = () => {
   const [voidVoteId, setVoidVoteId] = useState('');
   const [voidVoteReason, setVoidVoteReason] = useState('');
   const [isVoidingVote, setIsVoidingVote] = useState(false);
+
+  // Ballot Preview state
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewCandidates, setPreviewCandidates] = useState<Candidate[]>([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -317,6 +322,25 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
+  const handleOpenPreview = async () => {
+    if (!electionId) return;
+    try {
+      setLoadingPreview(true);
+      const candidatesData = await electionService.getCandidates(electionId);
+      setPreviewCandidates(candidatesData.filter((c: Candidate) => c.accepted));
+      setShowPreview(true);
+    } catch {
+      toast.error('Failed to load ballot preview');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const getPreviewCandidatesForItem = (item: BallotItem): Candidate[] => {
+    const position = item.position || item.id;
+    return previewCandidates.filter((c) => c.position === position && !c.is_write_in);
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
@@ -460,6 +484,17 @@ export const ElectionDetailPage: React.FC = () => {
         {canManage && (
           <div className="mt-6 pt-6 border-t border-theme-surface-border">
             <div className="flex flex-wrap gap-3">
+              {/* Preview Ballot */}
+              {election.ballot_items && election.ballot_items.length > 0 && (
+                <button
+                  onClick={handleOpenPreview}
+                  disabled={loadingPreview}
+                  className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
+                >
+                  {loadingPreview ? 'Loading Preview...' : 'Preview Ballot'}
+                </button>
+              )}
+
               {election.status === 'draft' && (
                 <button
                   onClick={handleOpenElection}
@@ -1255,6 +1290,173 @@ export const ElectionDetailPage: React.FC = () => {
                   Extend Election
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ballot Preview Modal */}
+      {showPreview && election && (
+        <div
+          className="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ballot-preview-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowPreview(false); }}
+        >
+          <div className="bg-gray-50 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Preview Banner */}
+            <div className="sticky top-0 z-10 bg-amber-500 text-amber-900 px-4 py-2 text-center text-sm font-bold">
+              BALLOT PREVIEW — This is how voters will see the ballot
+            </div>
+
+            {/* Ballot Header (matches BallotVotingPage) */}
+            <div className="bg-red-700 text-white">
+              <div className="px-6 py-6 text-center">
+                <h3 id="ballot-preview-title" className="text-xl font-bold">{election.title}</h3>
+                {election.description && (
+                  <p className="mt-2 text-red-100">{election.description}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Ballot Instructions */}
+            <div className="px-6 pt-6">
+              <p className="text-gray-600 text-sm">
+                Please review each item below and make your selection. You may vote for the
+                presented option, write in an alternative, or abstain from voting on any item.
+              </p>
+            </div>
+
+            {/* Ballot Items */}
+            <div className="px-6 py-6 space-y-6">
+              {(election.ballot_items || []).length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  No ballot items have been added yet.
+                </div>
+              ) : (
+                (election.ballot_items || []).map((item, index) => {
+                  const itemCandidates = getPreviewCandidatesForItem(item);
+                  const isApprovalType = item.vote_type === 'approval';
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                    >
+                      {/* Item Header */}
+                      <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                        <div className="flex items-start gap-3">
+                          <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-sm font-bold">
+                            {index + 1}
+                          </span>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{item.title}</h4>
+                            {item.description && (
+                              <p className="mt-1 text-sm text-gray-500">{item.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Voting Options (disabled/preview) */}
+                      <div className="px-6 py-4 space-y-3">
+                        {isApprovalType ? (
+                          <>
+                            <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
+                              <input type="radio" disabled className="w-4 h-4 text-green-600" />
+                              <span className="font-medium text-gray-900">Approve</span>
+                            </div>
+                            <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
+                              <input type="radio" disabled className="w-4 h-4 text-red-600" />
+                              <span className="font-medium text-gray-900">Deny</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {itemCandidates.length > 0 ? (
+                              itemCandidates.map((candidate) => (
+                                <div key={candidate.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
+                                  <input type="radio" disabled className="w-4 h-4 text-blue-600" />
+                                  <div>
+                                    <span className="font-medium text-gray-900">{candidate.name}</span>
+                                    {candidate.statement && (
+                                      <p className="text-sm text-gray-500 mt-0.5">{candidate.statement}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm">
+                                No candidates added for this position yet.
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {election.allow_write_ins && (
+                          <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
+                            <input type="radio" disabled className="w-4 h-4 text-purple-600" />
+                            <span className="font-medium text-gray-900">Write-in</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
+                          <input type="radio" disabled className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-500">Abstain (Do not vote on this item)</span>
+                        </div>
+                      </div>
+
+                      {/* Item metadata for admin */}
+                      <div className="px-6 py-2 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-2">
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">
+                          {item.type?.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">
+                          {isApprovalType ? 'Yes/No vote' : 'Candidate selection'}
+                        </span>
+                        {item.require_attendance && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700">
+                            Requires attendance
+                          </span>
+                        )}
+                        {item.eligible_voter_types && !item.eligible_voter_types.includes('all') && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                            Restricted: {item.eligible_voter_types.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {/* Preview-only Submit Button (disabled) */}
+              {(election.ballot_items || []).length > 0 && (
+                <div className="text-center pt-4">
+                  <button
+                    type="button"
+                    disabled
+                    className="px-8 py-3 bg-red-700 text-white text-lg font-semibold rounded-lg opacity-50 cursor-not-allowed"
+                  >
+                    Submit Ballot
+                  </button>
+                  <p className="mt-2 text-sm text-gray-400">
+                    You will have a chance to review your choices before they are submitted.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Close button */}
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                className="px-6 py-2 bg-slate-700 text-white rounded-md hover:bg-slate-800"
+              >
+                Close Preview
+              </button>
             </div>
           </div>
         </div>

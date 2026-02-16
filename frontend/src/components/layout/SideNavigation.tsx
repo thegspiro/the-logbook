@@ -30,6 +30,7 @@ import {
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuthStore } from '../../stores/authStore';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -37,11 +38,19 @@ interface SideNavigationProps {
   onLogout: () => void;
 }
 
+interface SubNavItem {
+  label: string;
+  path: string;
+  icon: React.ElementType;
+  permission?: string;
+}
+
 interface NavItem {
   label: string;
   path: string;
   icon: React.ElementType;
-  subItems?: { label: string; path: string; icon: React.ElementType }[];
+  permission?: string;
+  subItems?: SubNavItem[];
 }
 
 export const SideNavigation: React.FC<SideNavigationProps> = ({
@@ -52,13 +61,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
+  const { checkPermission } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
 
   const cycleTheme = () => {
-    const order = ['dark', 'light', 'system'] as const;
+    const order = ['light', 'dark', 'system'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex]);
@@ -75,7 +85,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: Users,
       subItems: [
         { label: 'All Members', path: '/members', icon: Users },
-        { label: 'Prospective', path: '/prospective-members', icon: UserPlus },
+        { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
       ],
     },
     { label: 'Events', path: '/events', icon: Calendar },
@@ -118,9 +128,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       subItems: [
         { label: 'My Account', path: '/settings/account', icon: UserCog },
         { label: 'Organization', path: '/settings', icon: Building2 },
-        { label: 'Role Management', path: '/settings/roles', icon: Shield },
-        { label: 'Member Admin', path: '/admin/members', icon: UserCog },
-        { label: 'Public Portal', path: '/admin/public-portal', icon: Globe },
+        { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'roles.manage' },
+        { label: 'Member Admin', path: '/admin/members', icon: UserCog, permission: 'members.manage' },
+        { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
       ],
     },
   ];
@@ -275,8 +285,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Side navigation">
             <ul role="list" className="space-y-1">
               {navItems.map((item) => {
+                // Filter sub-items by permission
+                const visibleSubItems = item.subItems?.filter(
+                  (sub) => !sub.permission || checkPermission(sub.permission)
+                );
+
+                // Skip top-level permission-gated items
+                if (item.permission && !checkPermission(item.permission)) return null;
+
+                // Skip parent groups where all sub-items are hidden
+                if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
+
                 const Icon = item.icon;
-                const hasSubItems = !!item.subItems;
+                const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
                 const isExpanded = expandedMenus.includes(item.label);
                 const parentActive = isParentActive(item);
 
@@ -318,7 +339,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     {/* Sub Items */}
                     {hasSubItems && isExpanded && !collapsed && (
                       <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
-                        {item.subItems!.map((subItem) => {
+                        {visibleSubItems!.map((subItem) => {
                           const SubIcon = subItem.icon;
                           const subActive = isActive(subItem.path);
                           return (

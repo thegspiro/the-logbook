@@ -20,6 +20,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     UserProfileResponse,
     AdminUserCreate,
+    MembershipNumberAssignment,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
@@ -189,6 +190,13 @@ async def create_member(
 
     db.add(new_user)
     await db.flush()  # Flush to get the user ID
+
+    # Auto-assign membership number if enabled for this organization
+    org_service = OrganizationService(db)
+    await org_service.assign_next_membership_number(
+        organization_id=current_user.organization_id,
+        user=new_user,
+    )
 
     # Assign initial roles if provided
     if user_data.role_ids:
@@ -698,6 +706,73 @@ async def update_contact_info(
         event_data={
             "updated_user_id": str(user_id),
             "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return user
+
+
+@router.put("/{user_id}/membership-number", response_model=UserProfileResponse)
+async def assign_membership_number(
+    user_id: str,
+    assignment: MembershipNumberAssignment,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Manually assign or update a member's membership number.
+
+    Use this when reinstating a former member and assigning them their
+    previous membership number, or when the coordinator needs to
+    override the auto-assigned value.
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+        .options(selectinload(User.roles))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check that the membership number is not already in use by another member
+    existing = await db.execute(
+        select(User)
+        .where(User.membership_number == assignment.membership_number)
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.id != str(user_id))
+        .where(User.deleted_at.is_(None))
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This membership number is already assigned to another member"
+        )
+
+    user.membership_number = assignment.membership_number
+    await db.commit()
+    await db.refresh(user)
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_number_assigned",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "membership_number": assignment.membership_number,
         },
         user_id=str(current_user.id),
         username=current_user.username,
