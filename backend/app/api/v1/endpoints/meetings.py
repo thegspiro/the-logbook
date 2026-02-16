@@ -35,7 +35,7 @@ router = APIRouter()
 # Meeting Endpoints
 # ============================================
 
-@router.get("/", response_model=MeetingsListResponse)
+@router.get("", response_model=MeetingsListResponse)
 async def list_meetings(
     meeting_type: Optional[str] = None,
     status: Optional[str] = None,
@@ -64,7 +64,7 @@ async def list_meetings(
     }
 
 
-@router.post("/", response_model=MeetingDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=MeetingDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_meeting(
     meeting: MeetingCreate,
     db: AsyncSession = Depends(get_db),

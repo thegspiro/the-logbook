@@ -88,7 +88,7 @@ async def list_permissions_by_category():
 # Role CRUD Endpoints
 # ============================================
 
-@router.get("/", response_model=List[RoleWithUserCount])
+@router.get("", response_model=List[RoleWithUserCount])
 async def list_roles(
     include_user_count: bool = Query(True, description="Include count of users per role"),
     db: AsyncSession = Depends(get_db),
@@ -111,7 +111,7 @@ async def list_roles(
     return roles
 
 
-@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role_data: RoleCreate,
     db: AsyncSession = Depends(get_db),
