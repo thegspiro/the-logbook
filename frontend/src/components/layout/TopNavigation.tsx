@@ -162,8 +162,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 <Home className="w-6 h-6 text-white" />
               </div>
             )}
-            <div className="ml-3">
-              <span className="text-white text-lg font-semibold">{departmentName}</span>
+            <div className="ml-3 min-w-0">
+              <span className="text-white text-lg font-semibold break-words leading-tight">{departmentName}</span>
               <p className="text-slate-300 text-xs">Dashboard</p>
             </div>
           </a>
