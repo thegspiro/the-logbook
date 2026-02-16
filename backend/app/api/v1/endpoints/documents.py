@@ -121,7 +121,7 @@ async def delete_folder(
 # Document Endpoints
 # ============================================
 
-@router.get("/", response_model=DocumentsListResponse)
+@router.get("", response_model=DocumentsListResponse)
 async def list_documents(
     folder_id: Optional[str] = None,
     search: Optional[str] = None,

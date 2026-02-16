@@ -199,15 +199,15 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       aria-labelledby="stage-config-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-slate-800 border border-white/10 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-slate-800 border border-theme-surface-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 id="stage-config-modal-title" className="text-xl font-bold text-white">
+        <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
+          <h2 id="stage-config-modal-title" className="text-xl font-bold text-theme-text-primary">
             {editingStage ? 'Edit Stage' : 'Add Pipeline Stage'}
           </h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -218,7 +218,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         <div className="p-6 space-y-6">
           {/* Stage Name */}
           <div>
-            <label htmlFor="stage-name" className="block text-sm font-medium text-slate-300 mb-2">
+            <label htmlFor="stage-name" className="block text-sm font-medium text-theme-text-secondary mb-2">
               Stage Name <span aria-hidden="true">*</span>
             </label>
             <input
@@ -229,14 +229,14 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               placeholder="e.g., Application Review"
               required
               aria-required="true"
-              className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
             />
-            {errors.name && <p className="mt-1 text-sm text-red-400">{errors.name}</p>}
+            {errors.name && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.name}</p>}
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="stage-description" className="block text-sm font-medium text-slate-300 mb-2">
+            <label htmlFor="stage-description" className="block text-sm font-medium text-theme-text-secondary mb-2">
               Description
             </label>
             <textarea
@@ -245,13 +245,13 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe what happens at this stage..."
               rows={2}
-              className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+              className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
             />
           </div>
 
           {/* Stage Type */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-3">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-3">
               Stage Type *
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -265,16 +265,16 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     className={`flex flex-col items-start p-4 rounded-lg border transition-all text-left ${
                       selected
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-white/10 bg-slate-700/50 hover:border-white/20'
+                        : 'border-theme-surface-border bg-slate-700/50 hover:border-theme-surface-border'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <Icon className={`w-4 h-4 ${selected ? 'text-red-400' : 'text-slate-400'}`} aria-hidden="true" />
-                      <span className={`text-sm font-medium ${selected ? 'text-white' : 'text-slate-300'}`}>
+                      <Icon className={`w-4 h-4 ${selected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`} aria-hidden="true" />
+                      <span className={`text-sm font-medium ${selected ? 'text-theme-text-primary' : 'text-theme-text-secondary'}`}>
                         {opt.label}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">{opt.description}</p>
+                    <p className="text-xs text-theme-text-muted">{opt.description}</p>
                   </button>
                 );
               })}
@@ -282,13 +282,13 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
           </div>
 
           {/* Type-Specific Configuration */}
-          <div className="border-t border-white/10 pt-6">
-            <h3 className="text-sm font-medium text-slate-300 mb-4">Stage Configuration</h3>
+          <div className="border-t border-theme-surface-border pt-6">
+            <h3 className="text-sm font-medium text-theme-text-secondary mb-4">Stage Configuration</h3>
 
             {/* Form Submission Config */}
             {stageType === 'form_submission' && (
               <div>
-                <label htmlFor="stage-form-id" className="block text-sm text-slate-400 mb-2">
+                <label htmlFor="stage-form-id" className="block text-sm text-theme-text-muted mb-2">
                   Form ID (from Forms module)
                 </label>
                 <input
@@ -299,10 +299,10 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     setConfig({ ...config, form_id: e.target.value } as FormStageConfig)
                   }
                   placeholder="Enter form ID or select from Forms module"
-                  className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 {errors.form_id && (
-                  <p className="mt-1 text-sm text-red-400">{errors.form_id}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.form_id}</p>
                 )}
               </div>
             )}
@@ -311,7 +311,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {stageType === 'document_upload' && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-2">
+                  <label className="block text-sm text-theme-text-muted mb-2">
                     Required Document Types
                   </label>
                   {docConfig.required_document_types.map((docType, idx) => (
@@ -326,7 +326,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         }}
                         placeholder="e.g., Photo ID, Background Check"
                         aria-label={`Document type ${idx + 1}`}
-                        className="flex-1 bg-slate-700 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="flex-1 bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       {docConfig.required_document_types.length > 1 && (
                         <button
@@ -334,7 +334,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             const updated = docConfig.required_document_types.filter((_, i) => i !== idx);
                             setConfig({ ...docConfig, required_document_types: updated });
                           }}
-                          className="text-slate-400 hover:text-red-400 transition-colors"
+                          className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
                           aria-label={`Remove document type ${idx + 1}`}
                         >
                           <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -349,22 +349,22 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         required_document_types: [...docConfig.required_document_types, ''],
                       })
                     }
-                    className="flex items-center gap-1 text-sm text-red-400 hover:text-red-300 transition-colors"
+                    className="flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
                   >
                     <Plus className="w-3 h-3" aria-hidden="true" /> Add document type
                   </button>
                   {errors.document_types && (
-                    <p className="mt-1 text-sm text-red-400">{errors.document_types}</p>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.document_types}</p>
                   )}
                 </div>
-                <label className="flex items-center gap-2 text-sm text-slate-300">
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                   <input
                     type="checkbox"
                     checked={docConfig.allow_multiple}
                     onChange={(e) =>
                       setConfig({ ...docConfig, allow_multiple: e.target.checked })
                     }
-                    className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Allow multiple files per document type
                 </label>
@@ -375,14 +375,14 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {stageType === 'election_vote' && (
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="stage-voting-method" className="block text-sm text-slate-400 mb-2">Voting Method</label>
+                  <label htmlFor="stage-voting-method" className="block text-sm text-theme-text-muted mb-2">Voting Method</label>
                   <select
                     id="stage-voting-method"
                     value={electionConfig.voting_method}
                     onChange={(e) =>
                       setConfig({ ...electionConfig, voting_method: e.target.value as ElectionStageConfig['voting_method'] })
                     }
-                    className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     <option value="simple_majority">Simple Majority</option>
                     <option value="approval">Approval Voting</option>
@@ -390,14 +390,14 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="stage-victory-condition" className="block text-sm text-slate-400 mb-2">Victory Condition</label>
+                  <label htmlFor="stage-victory-condition" className="block text-sm text-theme-text-muted mb-2">Victory Condition</label>
                   <select
                     id="stage-victory-condition"
                     value={electionConfig.victory_condition}
                     onChange={(e) =>
                       setConfig({ ...electionConfig, victory_condition: e.target.value as ElectionStageConfig['victory_condition'] })
                     }
-                    className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     <option value="most_votes">Most Votes</option>
                     <option value="majority">Majority (&gt;50%)</option>
@@ -406,7 +406,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 </div>
                 {electionConfig.victory_condition === 'supermajority' && (
                   <div>
-                    <label htmlFor="stage-victory-percentage" className="block text-sm text-slate-400 mb-2">
+                    <label htmlFor="stage-victory-percentage" className="block text-sm text-theme-text-muted mb-2">
                       Required Percentage
                     </label>
                     <input
@@ -418,26 +418,26 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       onChange={(e) =>
                         setConfig({ ...electionConfig, victory_percentage: Number(e.target.value) })
                       }
-                      className="w-32 bg-slate-700 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-32 bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
-                    <span className="ml-2 text-slate-400 text-sm">%</span>
+                    <span className="ml-2 text-theme-text-muted text-sm">%</span>
                   </div>
                 )}
-                <label className="flex items-center gap-2 text-sm text-slate-300">
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                   <input
                     type="checkbox"
                     checked={electionConfig.anonymous_voting}
                     onChange={(e) =>
                       setConfig({ ...electionConfig, anonymous_voting: e.target.checked })
                     }
-                    className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Anonymous voting
                 </label>
 
                 {/* Election Package Fields */}
-                <div className="border-t border-white/10 pt-4 mt-4">
-                  <h4 className="text-sm font-medium text-slate-300 mb-2">
+                <div className="border-t border-theme-surface-border pt-4 mt-4">
+                  <h4 className="text-sm font-medium text-theme-text-secondary mb-2">
                     Election Package Contents
                   </h4>
                   <p className="text-xs text-slate-500 mb-3">
@@ -454,62 +454,62 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     };
                     return (
                       <div className="space-y-2">
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                           <input
                             type="checkbox"
                             checked={fields.include_email}
                             onChange={(e) => updateField('include_email', e.target.checked)}
-                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include email address
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                           <input
                             type="checkbox"
                             checked={fields.include_phone}
                             onChange={(e) => updateField('include_phone', e.target.checked)}
-                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include phone number
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                           <input
                             type="checkbox"
                             checked={fields.include_address}
                             onChange={(e) => updateField('include_address', e.target.checked)}
-                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include address
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                           <input
                             type="checkbox"
                             checked={fields.include_date_of_birth}
                             onChange={(e) => updateField('include_date_of_birth', e.target.checked)}
-                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include date of birth
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                           <input
                             type="checkbox"
                             checked={fields.include_documents}
                             onChange={(e) => updateField('include_documents', e.target.checked)}
-                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include uploaded documents
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                           <input
                             type="checkbox"
                             checked={fields.include_stage_history}
                             onChange={(e) => updateField('include_stage_history', e.target.checked)}
-                            className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include stage completion history
                         </label>
                         <div className="pt-1">
-                          <label htmlFor="stage-custom-note-prompt" className="block text-xs text-slate-400 mb-1">
+                          <label htmlFor="stage-custom-note-prompt" className="block text-xs text-theme-text-muted mb-1">
                             Custom note prompt (optional)
                           </label>
                           <input
@@ -518,7 +518,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             value={fields.custom_note_prompt ?? ''}
                             onChange={(e) => updateField('custom_note_prompt', e.target.value)}
                             placeholder="e.g., Please describe the applicant's qualifications..."
-                            className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                           />
                         </div>
                       </div>
@@ -531,41 +531,41 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
             {/* Manual Approval Config */}
             {stageType === 'manual_approval' && (
               <div className="space-y-4">
-                <label className="flex items-center gap-2 text-sm text-slate-300">
+                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                   <input
                     type="checkbox"
                     checked={approvalConfig.require_notes}
                     onChange={(e) =>
                       setConfig({ ...approvalConfig, require_notes: e.target.checked })
                     }
-                    className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Require approval notes
                 </label>
                 <p className="text-xs text-slate-500">
                   Approver roles can be configured in the organization settings.
-                  Any user with the <code className="text-slate-400">prospective_members.manage</code> permission can approve.
+                  Any user with the <code className="text-theme-text-muted">prospective_members.manage</code> permission can approve.
                 </p>
               </div>
             )}
           </div>
 
           {/* Inactivity Timeout Override */}
-          <div className="border-t border-white/10 pt-6">
+          <div className="border-t border-theme-surface-border pt-6">
             <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-slate-400" aria-hidden="true" />
-              <h3 className="text-sm font-medium text-slate-300">Inactivity Timeout Override</h3>
+              <Clock className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+              <h3 className="text-sm font-medium text-theme-text-secondary">Inactivity Timeout Override</h3>
             </div>
             <p className="text-xs text-slate-500 mb-3">
               Override the pipeline's default inactivity timeout for this stage.
               Useful for stages that naturally take longer (e.g., background checks, scheduling votes).
             </p>
-            <label className="flex items-center gap-2 text-sm text-slate-300 mb-3">
+            <label className="flex items-center gap-2 text-sm text-theme-text-secondary mb-3">
               <input
                 type="checkbox"
                 checked={hasTimeoutOverride}
                 onChange={(e) => setHasTimeoutOverride(e.target.checked)}
-                className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
               />
               Use a custom timeout for this stage
             </label>
@@ -578,30 +578,30 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   value={timeoutOverrideDays}
                   onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
                   aria-label="Timeout override days"
-                  className="w-24 bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-24 bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
-                <span className="text-sm text-slate-400">days before marked inactive</span>
+                <span className="text-sm text-theme-text-muted">days before marked inactive</span>
               </div>
             )}
           </div>
 
           {/* Required toggle */}
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
             <input
               type="checkbox"
               checked={isRequired}
               onChange={(e) => setIsRequired(e.target.checked)}
-              className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+              className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
             />
             This stage is required (cannot be skipped)
           </label>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+            className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
           >
             Cancel
           </button>

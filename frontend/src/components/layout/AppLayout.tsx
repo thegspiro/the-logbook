@@ -22,7 +22,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const user = useAuthStore((s) => s.user);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
+  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>(
+    () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
+  );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Session inactivity timeout
@@ -49,10 +51,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, [logout, navigate]);
 
   useEffect(() => {
-    // Load department info and navigation preference from sessionStorage first
-    const savedDepartmentName = sessionStorage.getItem('departmentName');
-    const savedLogo = sessionStorage.getItem('logoData');
-    const savedLayout = sessionStorage.getItem('navigationLayout') as 'top' | 'left' | null;
+    // Load branding from localStorage first (persists across sessions/logout)
+    const savedDepartmentName = localStorage.getItem('departmentName');
+    const savedLogo = localStorage.getItem('logoData');
 
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
@@ -60,21 +61,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     if (savedLogo) {
       setLogoPreview(savedLogo);
     }
-    if (savedLayout) {
-      setNavigationLayout(savedLayout);
-    }
 
-    // If sessionStorage is empty (new tab, returning user), fetch branding from backend
+    // If localStorage is empty (first visit), fetch branding from backend
     if (!savedDepartmentName) {
       axios.get('/api/v1/auth/branding').then((response) => {
         const { name, logo } = response.data;
         if (name) {
           setDepartmentName(name);
-          sessionStorage.setItem('departmentName', name);
+          localStorage.setItem('departmentName', name);
         }
         if (logo) {
           setLogoPreview(logo);
-          sessionStorage.setItem('logoData', logo);
+          localStorage.setItem('logoData', logo);
         }
       }).catch(() => {
         // Branding is non-critical — keep defaults

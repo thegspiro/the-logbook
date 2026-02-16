@@ -148,7 +148,7 @@ async def get_provider(
     """
     result = await db.execute(
         select(ExternalTrainingProvider)
-        .where(ExternalTrainingProvider.id == provider_id)
+        .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
@@ -177,7 +177,7 @@ async def update_provider(
     """
     result = await db.execute(
         select(ExternalTrainingProvider)
-        .where(ExternalTrainingProvider.id == provider_id)
+        .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
@@ -227,7 +227,7 @@ async def delete_provider(
     """
     result = await db.execute(
         select(ExternalTrainingProvider)
-        .where(ExternalTrainingProvider.id == provider_id)
+        .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
@@ -258,7 +258,7 @@ async def test_provider_connection(
 
     result = await db.execute(
         select(ExternalTrainingProvider)
-        .where(ExternalTrainingProvider.id == provider_id)
+        .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
@@ -330,7 +330,7 @@ async def perform_sync_task(
             # Get provider
             result = await db.execute(
                 select(ExternalTrainingProvider)
-                .where(ExternalTrainingProvider.id == provider_id)
+                .where(ExternalTrainingProvider.id == str(provider_id))
             )
             provider = result.scalar_one_or_none()
 
@@ -381,7 +381,7 @@ async def trigger_sync(
 
     result = await db.execute(
         select(ExternalTrainingProvider)
-        .where(ExternalTrainingProvider.id == provider_id)
+        .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
         .where(ExternalTrainingProvider.active == True)
     )
@@ -530,7 +530,7 @@ async def update_category_mapping(
     """
     result = await db.execute(
         select(ExternalCategoryMapping)
-        .where(ExternalCategoryMapping.id == mapping_id)
+        .where(ExternalCategoryMapping.id == str(mapping_id))
         .where(ExternalCategoryMapping.provider_id == str(provider_id))
         .where(ExternalCategoryMapping.organization_id == current_user.organization_id)
     )
@@ -663,7 +663,7 @@ async def update_user_mapping(
     """
     result = await db.execute(
         select(ExternalUserMapping)
-        .where(ExternalUserMapping.id == mapping_id)
+        .where(ExternalUserMapping.id == str(mapping_id))
         .where(ExternalUserMapping.provider_id == str(provider_id))
         .where(ExternalUserMapping.organization_id == current_user.organization_id)
     )
@@ -770,7 +770,7 @@ async def import_single_record(
     """
     result = await db.execute(
         select(ExternalTrainingImport)
-        .where(ExternalTrainingImport.id == import_id)
+        .where(ExternalTrainingImport.id == str(import_id))
         .where(ExternalTrainingImport.provider_id == str(provider_id))
         .where(ExternalTrainingImport.organization_id == current_user.organization_id)
     )

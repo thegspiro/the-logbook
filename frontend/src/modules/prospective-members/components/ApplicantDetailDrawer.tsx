@@ -265,27 +265,27 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       />
 
       {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-slate-900 border-l border-white/10 z-50 flex flex-col shadow-2xl">
+      <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-slate-900 border-l border-theme-surface-border z-50 flex flex-col shadow-2xl">
         {/* Loading */}
         {isLoadingApplicant && (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+            <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
           </div>
         )}
 
         {applicant && !isLoadingApplicant && (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
+            <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-white">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-theme-text-primary">
                   {getInitials(applicant.first_name, applicant.last_name)}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">
+                  <h2 className="text-lg font-bold text-theme-text-primary">
                     {applicant.first_name} {applicant.last_name}
                   </h2>
-                  <p className="text-sm text-slate-400 capitalize">
+                  <p className="text-sm text-theme-text-muted capitalize">
                     {applicant.status.replace('_', ' ')} &middot;{' '}
                     {applicant.target_membership_type} member
                   </p>
@@ -294,14 +294,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowPii(!showPii)}
-                  className="text-slate-400 hover:text-white transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                   title={showPii ? 'Hide personal info' : 'Show personal info'}
                 >
                   {showPii ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
                 <button
                   onClick={onClose}
-                  className="text-slate-400 hover:text-white transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -312,10 +312,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {applicant.status === 'inactive' && (
               <div className="mx-4 mt-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-medium text-amber-300">Application Inactive</span>
+                  <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Application Inactive</span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-theme-text-muted">
                   This application was marked inactive due to no activity
                   {applicant.deactivated_at && (
                     <> since {formatDate(applicant.deactivated_at)}</>
@@ -334,10 +334,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {applicant.status === 'withdrawn' && (
               <div className="mx-4 mt-4 p-3 bg-slate-500/5 border border-slate-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
-                  <Archive className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-medium text-slate-300">Application Withdrawn</span>
+                  <Archive className="w-4 h-4 text-theme-text-muted" />
+                  <span className="text-sm font-medium text-theme-text-secondary">Application Withdrawn</span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-theme-text-muted">
                   This applicant voluntarily withdrew from the pipeline
                   {applicant.withdrawn_at && (
                     <> on {formatDate(applicant.withdrawn_at)}</>
@@ -354,25 +354,25 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
               {/* Contact Info */}
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                   Contact Information
                 </h3>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Mail className="w-4 h-4 text-slate-500" />
-                    <span className="text-slate-300">{maskValue(applicant.email)}</span>
+                    <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
                   </div>
                   {applicant.phone && (
                     <div className="flex items-center gap-2 text-sm">
                       <Phone className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">{maskValue(applicant.phone)}</span>
+                      <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
                     </div>
                   )}
                   {applicant.date_of_birth && (
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">
+                      <span className="text-theme-text-secondary">
                         DOB: {showPii ? formatDate(applicant.date_of_birth) : '••/••/••••'}
                       </span>
                     </div>
@@ -380,7 +380,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   {applicant.address?.city && (
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">
+                      <span className="text-theme-text-secondary">
                         {showPii
                           ? [applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
                               .filter(Boolean)
@@ -393,23 +393,23 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               </div>
 
               {/* Current Stage */}
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                   Current Stage
                 </h3>
-                <div className="bg-slate-800 rounded-lg p-3 border border-white/10">
+                <div className="bg-slate-800 rounded-lg p-3 border border-theme-surface-border">
                   <div className="flex items-center gap-2 mb-1">
                     {applicant.current_stage_type && (
                       (() => {
                         const Icon = STAGE_TYPE_ICONS[applicant.current_stage_type];
-                        return <Icon className="w-4 h-4 text-red-400" />;
+                        return <Icon className="w-4 h-4 text-red-700 dark:text-red-400" />;
                       })()
                     )}
-                    <span className="text-sm font-medium text-white">
+                    <span className="text-sm font-medium text-theme-text-primary">
                       {applicant.current_stage_name ?? 'Unknown stage'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
+                  <div className="flex items-center gap-1 text-xs text-theme-text-muted mt-1">
                     <Clock className="w-3 h-3" />
                     Entered {formatDateTime(applicant.stage_entered_at)}
                   </div>
@@ -417,38 +417,38 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
                 {/* Target Role */}
                 {applicant.target_role_name && (
-                  <div className="mt-3 flex items-center gap-2 text-sm text-slate-400">
+                  <div className="mt-3 flex items-center gap-2 text-sm text-theme-text-muted">
                     <User className="w-4 h-4" />
-                    Target role: <span className="text-slate-300">{applicant.target_role_name}</span>
+                    Target role: <span className="text-theme-text-secondary">{applicant.target_role_name}</span>
                   </div>
                 )}
               </div>
 
               {/* Election Package Section */}
               {isOnElectionStage && (
-                <div className="p-4 border-b border-white/10">
-                  <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+                <div className="p-4 border-b border-theme-surface-border">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                     Election Package
                   </h3>
                   {isLoadingElectionPackage ? (
                     <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                      <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
                     </div>
                   ) : currentElectionPackage ? (
                     <div className="space-y-3">
                       {/* Package status badge */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-400">Status</span>
+                        <span className="text-xs text-theme-text-muted">Status</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           currentElectionPackage.status === 'draft'
-                            ? 'bg-slate-600/50 text-slate-300'
+                            ? 'bg-slate-600/50 text-theme-text-secondary'
                             : currentElectionPackage.status === 'ready'
-                              ? 'bg-emerald-500/20 text-emerald-300'
+                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
                               : currentElectionPackage.status === 'added_to_ballot'
-                                ? 'bg-purple-500/20 text-purple-300'
+                                ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
                                 : currentElectionPackage.status === 'elected'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-red-500/20 text-red-300'
+                                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-red-500/20 text-red-700 dark:text-red-300'
                         }`}>
                           {currentElectionPackage.status.replace(/_/g, ' ')}
                         </span>
@@ -458,16 +458,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       <div className="bg-slate-800/70 rounded-lg p-3 text-xs space-y-1">
                         <div className="flex justify-between">
                           <span className="text-slate-500">Name</span>
-                          <span className="text-slate-300">{currentElectionPackage.applicant_name}</span>
+                          <span className="text-theme-text-secondary">{currentElectionPackage.applicant_name}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-500">Membership Type</span>
-                          <span className="text-slate-300 capitalize">{currentElectionPackage.target_membership_type}</span>
+                          <span className="text-theme-text-secondary capitalize">{currentElectionPackage.target_membership_type}</span>
                         </div>
                         {currentElectionPackage.target_role_name && (
                           <div className="flex justify-between">
                             <span className="text-slate-500">Target Role</span>
-                            <span className="text-slate-300">{currentElectionPackage.target_role_name}</span>
+                            <span className="text-theme-text-secondary">{currentElectionPackage.target_role_name}</span>
                           </div>
                         )}
                         {currentElectionPackage.documents && currentElectionPackage.documents.length > 0 && (
@@ -475,7 +475,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             <span className="text-slate-500">Documents:</span>
                             <div className="mt-1 space-y-0.5">
                               {currentElectionPackage.documents.map((doc, i) => (
-                                <div key={i} className="flex items-center gap-1 text-blue-400">
+                                <div key={i} className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
                                   <FileText className="w-3 h-3" />
                                   {isSafeUrl(doc.url) ? (
                                     <a href={doc.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
@@ -495,7 +495,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       {currentElectionPackage.status === 'draft' && (
                         <>
                           <div>
-                            <label className="block text-xs text-slate-400 mb-1">
+                            <label className="block text-xs text-theme-text-muted mb-1">
                               Coordinator Notes
                             </label>
                             <textarea
@@ -503,11 +503,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               onChange={(e) => setPkgNotes(e.target.value)}
                               placeholder="Internal notes about this applicant..."
                               rows={2}
-                              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                              className="w-full bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-slate-400 mb-1">
+                            <label className="block text-xs text-theme-text-muted mb-1">
                               Supporting Statement
                             </label>
                             <textarea
@@ -515,13 +515,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               onChange={(e) => setPkgStatement(e.target.value)}
                               placeholder="Statement shown to voters on the ballot..."
                               rows={2}
-                              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                              className="w-full bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                             />
                           </div>
                           <div className="flex items-center gap-2 justify-end">
                             <button
                               onClick={handleSavePackage}
-                              className="px-3 py-1.5 text-xs text-slate-300 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                              className="px-3 py-1.5 text-xs text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
                             >
                               Save Draft
                             </button>
@@ -541,14 +541,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       {/* Ready state info */}
                       {currentElectionPackage.status === 'ready' && (
                         <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
-                          <p className="text-xs text-emerald-300">
+                          <p className="text-xs text-emerald-700 dark:text-emerald-300">
                             This package is ready for the secretary to add to a ballot.
                             {currentElectionPackage.submitted_at && (
                               <> Submitted {formatDateTime(currentElectionPackage.submitted_at)}.</>
                             )}
                           </p>
                           {currentElectionPackage.coordinator_notes && (
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className="text-xs text-theme-text-muted mt-1">
                               Notes: {currentElectionPackage.coordinator_notes}
                             </p>
                           )}
@@ -568,10 +568,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         }`}>
                           <p className={`text-xs ${
                             currentElectionPackage.status === 'elected'
-                              ? 'text-emerald-300'
+                              ? 'text-emerald-700 dark:text-emerald-300'
                               : currentElectionPackage.status === 'not_elected'
-                                ? 'text-red-300'
-                                : 'text-purple-300'
+                                ? 'text-red-700 dark:text-red-300'
+                                : 'text-purple-700 dark:text-purple-300'
                           }`}>
                             {currentElectionPackage.status === 'added_to_ballot' &&
                               'This applicant has been added to a ballot and is awaiting election results.'}
@@ -592,8 +592,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               )}
 
               {/* Stage History Timeline */}
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                   Stage History
                 </h3>
                 {applicant.stage_history.length === 0 ? (
@@ -610,20 +610,20 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             {/* Timeline line */}
                             <div className="flex flex-col items-center">
                               {isComplete ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                                <CheckCircle2 className="w-5 h-5 text-emerald-700 dark:text-emerald-400 flex-shrink-0" />
                               ) : isCurrent ? (
                                 <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 flex-shrink-0" />
                               ) : (
                                 <Circle className="w-5 h-5 text-slate-600 flex-shrink-0" />
                               )}
                               {idx < applicant.stage_history.length - 1 && (
-                                <div className="w-px h-full min-h-[24px] bg-white/10 my-1" />
+                                <div className="w-px h-full min-h-[24px] bg-theme-surface my-1" />
                               )}
                             </div>
 
                             {/* Content */}
                             <div className="pb-4 min-w-0">
-                              <p className={`text-sm font-medium ${isComplete ? 'text-slate-300' : isCurrent ? 'text-white' : 'text-slate-500'}`}>
+                              <p className={`text-sm font-medium ${isComplete ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-slate-500'}`}>
                                 {entry.stage_name}
                               </p>
                               <p className="text-xs text-slate-500 mt-0.5">
@@ -638,7 +638,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                 </p>
                               )}
                               {entry.notes && (
-                                <p className="text-xs text-slate-400 mt-1 bg-slate-800/50 rounded px-2 py-1">
+                                <p className="text-xs text-theme-text-muted mt-1 bg-slate-800/50 rounded px-2 py-1">
                                   {entry.notes}
                                 </p>
                               )}
@@ -647,7 +647,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                   {entry.artifacts.map((artifact) => (
                                     <div
                                       key={artifact.id}
-                                      className="flex items-center gap-1 text-xs text-blue-400"
+                                      className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400"
                                     >
                                       <FileText className="w-3 h-3" />
                                       {artifact.url && isSafeUrl(artifact.url) ? (
@@ -677,17 +677,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
               {/* Notes */}
               {applicant.notes && (
-                <div className="p-4 border-b border-white/10">
-                  <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                <div className="p-4 border-b border-theme-surface-border">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
                     Notes
                   </h3>
-                  <p className="text-sm text-slate-300">{applicant.notes}</p>
+                  <p className="text-sm text-theme-text-secondary">{applicant.notes}</p>
                 </div>
               )}
 
               {/* Metadata */}
               <div className="p-4">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
                   Details
                 </h3>
                 <div className="text-xs text-slate-500 space-y-1">
@@ -709,17 +709,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Footer Actions */}
             {applicant.status === 'active' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {/* Notes input */}
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for this action..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
@@ -727,20 +727,20 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 {/* Withdraw confirmation */}
                 {showWithdrawConfirm && (
                   <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
-                    <p className="text-sm text-slate-300 mb-2">
+                    <p className="text-sm text-theme-text-secondary mb-2">
                       Withdraw this application? The applicant will be archived and removed from the active pipeline.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleWithdraw}
                         disabled={isWithdrawing}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-theme-text-primary rounded-lg transition-colors disabled:opacity-50"
                       >
                         {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Withdraw
@@ -752,13 +752,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 {/* Reject confirmation */}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-300 mb-2">
+                    <p className="text-sm text-red-700 dark:text-red-300 mb-2">
                       Are you sure you want to reject this applicant? This action cannot be easily undone.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -777,7 +777,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -788,7 +788,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowWithdrawConfirm(true)}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 border border-white/10 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
                     title="Withdraw application"
                   >
                     <Archive className="w-3.5 h-3.5" />
@@ -797,7 +797,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={handleHold}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
                   >
                     {isHolding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />}
                     Hold
@@ -805,7 +805,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowRejectConfirm(true)}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
                     Reject
@@ -828,35 +828,35 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* On Hold Actions */}
             {applicant.status === 'on_hold' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for this action..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
                 {showWithdrawConfirm && (
                   <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
-                    <p className="text-sm text-slate-300 mb-2">
+                    <p className="text-sm text-theme-text-secondary mb-2">
                       Withdraw this application? The applicant will be archived and removed from the active pipeline.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleWithdraw}
                         disabled={isWithdrawing}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-theme-text-primary rounded-lg transition-colors disabled:opacity-50"
                       >
                         {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
                         Confirm Withdraw
@@ -866,13 +866,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 )}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-300 mb-2">
+                    <p className="text-sm text-red-700 dark:text-red-300 mb-2">
                       Are you sure you want to reject this applicant? This action cannot be easily undone.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -890,7 +890,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -899,7 +899,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowWithdrawConfirm(true)}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 border border-white/10 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
                     title="Withdraw application"
                   >
                     <Archive className="w-3.5 h-3.5" />
@@ -908,7 +908,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowRejectConfirm(true)}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
                     Reject
@@ -927,23 +927,23 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Withdrawn Actions */}
             {applicant.status === 'withdrawn' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for reactivation..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -967,28 +967,28 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Inactive Actions */}
             {applicant.status === 'inactive' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for reactivation..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-300 mb-2">
+                    <p className="text-sm text-red-700 dark:text-red-300 mb-2">
                       Are you sure you want to reject this applicant?
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -1006,7 +1006,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -1015,7 +1015,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowRejectConfirm(true)}
                     disabled={isRejecting || isReactivating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
                     Reject

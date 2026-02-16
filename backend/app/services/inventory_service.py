@@ -43,6 +43,9 @@ class InventoryService:
     ) -> Tuple[Optional[InventoryCategory], Optional[str]]:
         """Create a new inventory category"""
         try:
+            # Rename "metadata" → "extra_data" (DB column name; "metadata" is reserved by SQLAlchemy)
+            if "metadata" in category_data:
+                category_data["extra_data"] = category_data.pop("metadata")
             category = InventoryCategory(
                 organization_id=organization_id,
                 created_by=created_by,

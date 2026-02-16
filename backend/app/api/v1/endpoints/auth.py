@@ -61,6 +61,39 @@ async def get_login_branding(
         return {"name": None, "logo": None}
 
 
+@router.get("/oauth-config")
+async def get_oauth_config(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get OAuth provider configuration for the login page.
+
+    Returns which OAuth providers are enabled so the login page
+    can conditionally show Google/Microsoft sign-in buttons.
+    """
+    try:
+        result = await db.execute(
+            select(Organization.settings)
+            .where(Organization.active == True)
+            .order_by(Organization.created_at.asc())
+            .limit(1)
+        )
+        row = result.first()
+
+        if not row or not row.settings:
+            return {"googleEnabled": False, "microsoftEnabled": False}
+
+        auth_settings = row.settings.get("auth", {}) if isinstance(row.settings, dict) else {}
+        provider = auth_settings.get("provider", "local")
+
+        return {
+            "googleEnabled": provider == "google",
+            "microsoftEnabled": provider == "microsoft",
+        }
+    except Exception:
+        return {"googleEnabled": False, "microsoftEnabled": False}
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(check_rate_limit)])
 async def register(
     user_data: UserRegister,

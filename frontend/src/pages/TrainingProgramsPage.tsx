@@ -84,11 +84,11 @@ const TrainingProgramsPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center space-x-3">
-              <GraduationCap className="w-8 h-8 text-red-500" aria-hidden="true" />
+            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
+              <GraduationCap className="w-8 h-8 text-red-700 dark:text-red-500" aria-hidden="true" />
               <span>Training Programs</span>
             </h1>
-            <p className="text-gray-400 mt-2">
+            <p className="text-theme-text-muted mt-2">
               Manage training programs, requirements, and member progress
             </p>
           </div>
@@ -114,7 +114,7 @@ const TrainingProgramsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'programs'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
             }`}
           >
             <Target className="w-4 h-4 inline mr-2" aria-hidden="true" />
@@ -128,7 +128,7 @@ const TrainingProgramsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'requirements'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
             }`}
           >
             <ListChecks className="w-4 h-4 inline mr-2" aria-hidden="true" />
@@ -142,7 +142,7 @@ const TrainingProgramsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
             }`}
           >
             <Award className="w-4 h-4 inline mr-2" aria-hidden="true" />
@@ -153,7 +153,7 @@ const TrainingProgramsPage: React.FC = () => {
         {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
             <label htmlFor="programs-search" className="sr-only">Search {activeTab}</label>
             <input
               id="programs-search"
@@ -161,7 +161,7 @@ const TrainingProgramsPage: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={`Search ${activeTab}...`}
-              className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -170,7 +170,7 @@ const TrainingProgramsPage: React.FC = () => {
         {loading ? (
           <div className="text-center py-12" role="status" aria-live="polite">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500" aria-hidden="true"></div>
-            <p className="text-gray-400 mt-4">Loading {activeTab}...</p>
+            <p className="text-theme-text-muted mt-4">Loading {activeTab}...</p>
           </div>
         ) : (
           <>
@@ -179,7 +179,7 @@ const TrainingProgramsPage: React.FC = () => {
                 {filteredPrograms.length === 0 ? (
                   <div className="text-center py-12 bg-gray-800 rounded-lg">
                     <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
-                    <p className="text-gray-400">
+                    <p className="text-theme-text-muted">
                       {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
                     </p>
                     {!searchTerm && activeTab === 'programs' && (
@@ -205,20 +205,20 @@ const TrainingProgramsPage: React.FC = () => {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-xl font-semibold text-white">{program.name}</h3>
+                            <h3 className="text-xl font-semibold text-theme-text-primary">{program.name}</h3>
                             {program.target_position && (
-                              <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">
+                              <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded">
                                 {program.target_position}
                               </span>
                             )}
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs rounded">
                               {program.structure_type}
                             </span>
                           </div>
                           {program.description && (
-                            <p className="text-gray-400 mb-3">{program.description}</p>
+                            <p className="text-theme-text-muted mb-3">{program.description}</p>
                           )}
-                          <div className="flex items-center space-x-6 text-sm text-gray-400">
+                          <div className="flex items-center space-x-6 text-sm text-theme-text-muted">
                             {program.time_limit_days && (
                               <div className="flex items-center space-x-1">
                                 <Calendar className="w-4 h-4" aria-hidden="true" />
@@ -231,7 +231,7 @@ const TrainingProgramsPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                        <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                       </div>
                     </div>
                   ))
@@ -241,14 +241,14 @@ const TrainingProgramsPage: React.FC = () => {
               <div id="tab-panel-requirements" role="tabpanel">
                 {/* Registry Import Section */}
                 <div className="bg-gray-800 rounded-lg p-6 mb-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">Import from Registry</h3>
+                  <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Import from Registry</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {['nfpa', 'nremt', 'proboard'].map((registry) => (
                       <button
                         key={registry}
                         onClick={() => handleImportRegistry(registry)}
                         disabled={importingRegistry !== null}
-                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50"
+                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 disabled:opacity-50"
                       >
                         <Download className="w-5 h-5" aria-hidden="true" />
                         <span>
@@ -264,10 +264,10 @@ const TrainingProgramsPage: React.FC = () => {
                   {filteredRequirements.length === 0 ? (
                     <div className="text-center py-12 bg-gray-800 rounded-lg">
                       <ListChecks className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
-                      <p className="text-gray-400">
+                      <p className="text-theme-text-muted">
                         {searchTerm ? 'No requirements found' : 'No requirements yet'}
                       </p>
-                      <p className="text-gray-500 mt-2 text-sm">
+                      <p className="text-theme-text-muted mt-2 text-sm">
                         Import from a registry or create custom requirements
                       </p>
                     </div>
@@ -280,27 +280,27 @@ const TrainingProgramsPage: React.FC = () => {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-2">
-                              <h3 className="text-lg font-semibold text-white">{req.name}</h3>
+                              <h3 className="text-lg font-semibold text-theme-text-primary">{req.name}</h3>
                               <span className={`px-2 py-1 text-xs rounded ${
-                                req.source === 'national' ? 'bg-blue-500/20 text-blue-400' :
-                                req.source === 'state' ? 'bg-green-500/20 text-green-400' :
-                                'bg-gray-500/20 text-gray-400'
+                                req.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
+                                req.source === 'state' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+                                'bg-gray-500/20 text-theme-text-muted'
                               }`}>
                                 {req.source}
                               </span>
                               {req.registry_name && (
-                                <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
+                                <span className="px-2 py-1 bg-purple-500/20 text-purple-700 dark:text-purple-400 text-xs rounded">
                                   {req.registry_name}
                                 </span>
                               )}
-                              <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded">
+                              <span className="px-2 py-1 bg-orange-500/20 text-orange-700 dark:text-orange-400 text-xs rounded">
                                 {req.requirement_type}
                               </span>
                             </div>
                             {req.description && (
-                              <p className="text-gray-400 text-sm mb-2">{req.description}</p>
+                              <p className="text-theme-text-muted text-sm mb-2">{req.description}</p>
                             )}
-                            <div className="flex items-center space-x-4 text-sm text-gray-400">
+                            <div className="flex items-center space-x-4 text-sm text-theme-text-muted">
                               {req.required_hours && (
                                 <span>{req.required_hours} hours</span>
                               )}
@@ -315,7 +315,7 @@ const TrainingProgramsPage: React.FC = () => {
                           </div>
                           {!req.is_editable && (
                             <div aria-label="Registry requirement (read-only)">
-                              <AlertCircle className="w-5 h-5 text-yellow-500" aria-hidden="true" />
+                              <AlertCircle className="w-5 h-5 text-yellow-700 dark:text-yellow-500" aria-hidden="true" />
                             </div>
                           )}
                         </div>

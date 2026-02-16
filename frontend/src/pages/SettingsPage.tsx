@@ -67,7 +67,7 @@ export const SettingsPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400">Loading settings...</div>
+            <div className="text-theme-text-muted">Loading settings...</div>
           </div>
         </div>
       </div>
@@ -78,8 +78,8 @@ export const SettingsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white">Organization Settings</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Manage contact information visibility for department members.
           </p>
         </div>
@@ -89,7 +89,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-red-400"
+                  className="h-5 w-5 text-red-700 dark:text-red-400"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
@@ -113,7 +113,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-green-400"
+                  className="h-5 w-5 text-green-700 dark:text-green-400"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
@@ -132,11 +132,11 @@ export const SettingsPage: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-white mb-4">
+        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
             Contact Information Visibility
           </h3>
-          <p className="text-sm text-slate-400 mb-6">
+          <p className="text-sm text-theme-text-muted mb-6">
             Control whether contact information is displayed on the member list page.
             When enabled, a privacy notice will be shown to remind users that this information
             is for department purposes only.
@@ -144,12 +144,12 @@ export const SettingsPage: React.FC = () => {
 
           <div className="space-y-4">
             {/* Master Toggle */}
-            <div className="flex items-center justify-between py-4 border-b border-white/20">
+            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
               <div>
-                <label htmlFor="enabled" className="text-sm font-medium text-white">
+                <label htmlFor="enabled" className="text-sm font-medium text-theme-text-primary">
                   Show Contact Information
                 </label>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-theme-text-muted">
                   Enable display of contact information for all members
                 </p>
               </div>
@@ -175,7 +175,7 @@ export const SettingsPage: React.FC = () => {
               <div className="pl-4 space-y-4">
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_email" className="text-sm font-medium text-white">
+                    <label htmlFor="show_email" className="text-sm font-medium text-theme-text-primary">
                       Show Email Addresses
                     </label>
                   </div>
@@ -198,7 +198,7 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_phone" className="text-sm font-medium text-white">
+                    <label htmlFor="show_phone" className="text-sm font-medium text-theme-text-primary">
                       Show Phone Numbers
                     </label>
                   </div>
@@ -221,7 +221,7 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_mobile" className="text-sm font-medium text-white">
+                    <label htmlFor="show_mobile" className="text-sm font-medium text-theme-text-primary">
                       Show Mobile Numbers
                     </label>
                   </div>
@@ -253,7 +253,7 @@ export const SettingsPage: React.FC = () => {
                 saving
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
+              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
@@ -264,7 +264,7 @@ export const SettingsPage: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
-                className="h-5 w-5 text-yellow-400"
+                className="h-5 w-5 text-yellow-700 dark:text-yellow-400"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 20"
                 fill="currentColor"

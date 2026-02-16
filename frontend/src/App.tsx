@@ -97,10 +97,7 @@ const PublicFormPage = lazy(() => import('./pages/PublicFormPage'));
 // Integrations Module
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 
-// Membership Pipeline Module
-const MembershipPipelinePage = lazy(() => import('./pages/MembershipPipelinePage'));
-const ProspectDetailPage = lazy(() => import('./pages/ProspectDetailPage'));
-const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage'));
+// Membership Pipeline — superseded by prospective-members module routes
 
 // Settings & Reports
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -187,7 +184,7 @@ function App() {
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
-              <Route path="/elections/:id" element={<ElectionDetailPage />} />
+              <Route path="/elections/:electionId" element={<ElectionDetailPage />} />
 
               {/* Minutes Module */}
               <Route path="/minutes" element={<MinutesPage />} />

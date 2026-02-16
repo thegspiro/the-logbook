@@ -48,7 +48,7 @@ router = APIRouter()
 # Form Endpoints
 # ============================================
 
-@router.get("/", response_model=FormsListResponse)
+@router.get("", response_model=FormsListResponse)
 async def list_forms(
     status: Optional[str] = None,
     category: Optional[str] = None,
@@ -112,7 +112,7 @@ async def list_forms(
     )
 
 
-@router.post("/", response_model=FormDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FormDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_form(
     form_data: FormCreate,
     db: AsyncSession = Depends(get_db),

@@ -211,8 +211,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-        <div className="text-slate-400 text-center py-4">Loading candidates...</div>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+        <div className="text-theme-text-muted text-center py-4">Loading candidates...</div>
       </div>
     );
   }
@@ -220,9 +220,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   const isClosed = election.status === 'closed' || election.status === 'cancelled';
 
   return (
-    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-white">
+        <h3 className="text-lg font-medium text-theme-text-primary">
           Candidates ({candidates.length})
         </h3>
         {!isClosed && (
@@ -243,13 +243,13 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
       {error && (
         <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
-          <p className="text-sm text-red-300">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
       {/* Add Candidate Form */}
       {showAddForm && (
-        <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/20">
+        <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
           <h4 className="text-sm font-semibold text-slate-200 mb-3">Add New Candidate</h4>
           <div className="space-y-3">
             {/* Member Search */}
@@ -317,7 +317,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 <select
                   value={formData.position}
                   onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                  className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="">Select position...</option>
                   {positions.map((pos) => (
@@ -335,7 +335,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                 rows={3}
-                className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder="Candidate's statement or platform..."
               />
             </div>
@@ -346,7 +346,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 id="is_write_in"
                 checked={formData.is_write_in}
                 onChange={(e) => setFormData((prev) => ({ ...prev, is_write_in: e.target.checked }))}
-                className="rounded border-slate-600 text-blue-600"
+                className="rounded border-theme-input-border text-blue-600"
               />
               <label htmlFor="is_write_in" className="text-sm text-slate-200">
                 Write-in candidate
@@ -357,7 +357,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-2 text-sm border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
+                className="px-3 py-2 text-sm border border-white/30 rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
               >
                 Cancel
               </button>
@@ -376,7 +376,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
       {/* Candidates List */}
       {candidates.length === 0 ? (
-        <div className="text-center py-8 text-slate-400">
+        <div className="text-center py-8 text-theme-text-muted">
           <p>No candidates yet.</p>
           {!isClosed && <p className="text-sm mt-1">Click "Add Candidate" to get started.</p>}
         </div>
@@ -385,7 +385,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
           {Object.entries(groupedCandidates).map(([groupName, groupCandidates]) => (
             <div key={groupName}>
               {Object.keys(groupedCandidates).length > 1 && (
-                <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                <h4 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wider mb-3">
                   {groupName} ({groupCandidates.length})
                 </h4>
               )}
@@ -396,7 +396,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                     key={candidate.id}
                     className={`p-4 rounded-lg border ${
                       candidate.accepted
-                        ? 'border-white/20 bg-white/5'
+                        ? 'border-theme-surface-border bg-theme-surface-secondary'
                         : 'border-yellow-500/30 bg-yellow-500/10'
                     }`}
                   >
@@ -408,7 +408,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           onChange={(e) =>
                             setFormData((prev) => ({ ...prev, name: e.target.value }))
                           }
-                          className="block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white text-sm"
+                          className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary text-sm"
                         />
                         <textarea
                           value={formData.statement}
@@ -416,7 +416,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             setFormData((prev) => ({ ...prev, statement: e.target.value }))
                           }
                           rows={2}
-                          className="block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white text-sm"
+                          className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary text-sm"
                           placeholder="Statement..."
                         />
                         <div className="flex gap-2">
@@ -431,7 +431,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           <button
                             type="button"
                             onClick={cancelEdit}
-                            className="px-3 py-1 text-sm border border-white/30 rounded text-slate-300 hover:bg-white/5"
+                            className="px-3 py-1 text-sm border border-white/30 rounded text-theme-text-secondary hover:bg-theme-surface-secondary"
                           >
                             Cancel
                           </button>
@@ -441,20 +441,20 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">{candidate.name}</span>
+                            <span className="font-medium text-theme-text-primary">{candidate.name}</span>
                             {candidate.is_write_in && (
-                              <span className="px-2 py-0.5 text-xs bg-white/10 text-slate-300 rounded">
+                              <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded">
                                 Write-in
                               </span>
                             )}
                             {!candidate.accepted && (
-                              <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-300 rounded">
+                              <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 rounded">
                                 Pending
                               </span>
                             )}
                           </div>
                           {candidate.statement && (
-                            <p className="mt-1 text-sm text-slate-400 line-clamp-2">
+                            <p className="mt-1 text-sm text-theme-text-muted line-clamp-2">
                               {candidate.statement}
                             </p>
                           )}
@@ -467,8 +467,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                               onClick={() => handleToggleAccepted(candidate)}
                               className={`px-2 py-1 text-xs rounded ${
                                 candidate.accepted
-                                  ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
-                                  : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
+                                  ? 'bg-green-500/20 text-green-700 dark:text-green-300 hover:bg-green-500/30'
+                                  : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/30'
                               }`}
                             >
                               {candidate.accepted ? 'Accepted' : 'Accept'}
@@ -476,14 +476,14 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                             <button
                               type="button"
                               onClick={() => startEdit(candidate)}
-                              className="px-2 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
+                              className="px-2 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDelete(candidate.id, candidate.name)}
-                              className="px-2 py-1 text-xs bg-red-500/20 text-red-300 rounded hover:bg-red-500/30"
+                              className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded hover:bg-red-500/30"
                             >
                               Remove
                             </button>
