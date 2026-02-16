@@ -19,6 +19,7 @@ import {
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import toast from 'react-hot-toast';
 
 const ITEM_TYPES = [
   { value: 'uniform', label: 'Uniform' },
@@ -175,6 +176,7 @@ const InventoryPage: React.FC = () => {
         condition: 'good', status: 'available', quantity: 1,
       });
       loadData();
+      toast.success('Item added successfully');
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Unable to create the item. Please check your input and try again.'));
     }
@@ -191,6 +193,7 @@ const InventoryPage: React.FC = () => {
         requires_serial_number: false, requires_maintenance: false, requires_assignment: false,
       });
       loadData();
+      toast.success('Category created successfully');
     } catch (err: unknown) {
       setFormError(getErrorMessage(err, 'Unable to create the category. Please check your input and try again.'));
     }

@@ -12,13 +12,20 @@ import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 const AnalyticsDashboardPage: React.FC = () => {
   const { id: eventId } = useParams<{ id?: string }>();
   const [metrics, setMetrics] = useState<QRCodeMetrics | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadMetrics = async () => {
-      const data = eventId
-        ? await analyticsService.getEventMetrics(eventId)
-        : await analyticsService.getOverallMetrics();
-      setMetrics(data);
+      try {
+        const data = eventId
+          ? await analyticsService.getEventMetrics(eventId)
+          : await analyticsService.getOverallMetrics();
+        setMetrics(data);
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load analytics';
+        setError(message);
+      }
     };
 
     loadMetrics();
@@ -37,6 +44,17 @@ const AnalyticsDashboardPage: React.FC = () => {
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  if (error && !metrics) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-700 dark:text-red-400 mb-2">Unable to load analytics</p>
+          <p className="text-theme-text-muted text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!metrics) {
     return (

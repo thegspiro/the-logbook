@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -92,6 +93,7 @@ export const RoleManagementPage: React.FC = () => {
 
       await fetchData();
       setShowCreateModal(false);
+      toast.success(editingRole ? 'Role updated successfully' : 'Role created successfully');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to save the role. Please check your input and try again.'));
     }
@@ -106,6 +108,7 @@ export const RoleManagementPage: React.FC = () => {
       setError(null);
       await roleService.deleteRole(role.id);
       await fetchData();
+      toast.success('Role deleted successfully');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to delete the role. It may still be assigned to users.'));
     }
