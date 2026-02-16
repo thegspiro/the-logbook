@@ -232,7 +232,7 @@ export const UserSettingsPage: React.FC = () => {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="currentPassword"
@@ -268,7 +268,7 @@ export const UserSettingsPage: React.FC = () => {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="newPassword"
@@ -331,7 +331,7 @@ export const UserSettingsPage: React.FC = () => {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="confirmPassword"

@@ -57,11 +57,11 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
         aria-labelledby="logout-modal-title"
         aria-describedby="logout-modal-description"
       >
-        <div className="bg-slate-900 border border-white/20 rounded-lg shadow-xl max-w-md w-full p-6 relative">
+        <div className="bg-slate-900 border border-theme-surface-border rounded-lg shadow-xl max-w-md w-full p-6 relative">
           {/* Close button */}
           <button
             onClick={onCancel}
-            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+            className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -69,20 +69,20 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
 
           {/* Icon */}
           <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-600/20 mb-4">
-            <LogOut className="h-6 w-6 text-red-500" aria-hidden="true" />
+            <LogOut className="h-6 w-6 text-red-700 dark:text-red-500" aria-hidden="true" />
           </div>
 
           {/* Content */}
           <div className="text-center mb-6">
             <h3
               id="logout-modal-title"
-              className="text-lg font-semibold text-white mb-2"
+              className="text-lg font-semibold text-theme-text-primary mb-2"
             >
               Confirm Logout
             </h3>
             <p
               id="logout-modal-description"
-              className="text-sm text-slate-300"
+              className="text-sm text-theme-text-secondary"
             >
               Are you sure you want to log out? Any unsaved changes may be lost.
             </p>
@@ -92,7 +92,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
           <div className="flex space-x-3">
             <button
               onClick={onCancel}
-              className="flex-1 px-4 py-2 border border-white/20 rounded-md text-sm font-medium text-slate-300 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
             >
               Cancel
             </button>

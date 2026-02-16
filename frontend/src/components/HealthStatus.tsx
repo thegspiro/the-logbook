@@ -34,7 +34,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
 
   if (loading || !health) {
     return (
-      <div className="flex items-center gap-2 text-gray-500">
+      <div className="flex items-center gap-2 text-theme-text-muted">
         <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
         <span className="text-sm">Checking system health...</span>
       </div>
@@ -104,10 +104,10 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
                 <p className="text-xs text-gray-600 ml-4 mt-1">{component.message}</p>
               )}
             </div>
-            <div className="flex flex-col items-end text-xs text-gray-500">
+            <div className="flex flex-col items-end text-xs text-theme-text-muted">
               <span>{getStatusText(component.status)}</span>
               {component.responseTime !== undefined && (
-                <span className="text-gray-400">{component.responseTime}ms</span>
+                <span className="text-theme-text-muted">{component.responseTime}ms</span>
               )}
             </div>
           </div>
@@ -116,7 +116,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
 
       {/* Last Updated */}
       <div className="mt-4 pt-4 border-t border-gray-200">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-theme-text-muted">
           Last checked: {health.lastUpdated.toLocaleTimeString()}
         </p>
       </div>

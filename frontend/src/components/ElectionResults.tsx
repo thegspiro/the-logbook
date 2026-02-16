@@ -39,7 +39,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="text-slate-400">Loading results...</div>
+        <div className="text-theme-text-muted">Loading results...</div>
       </div>
     );
   }
@@ -47,15 +47,15 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   if (error) {
     return (
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-        <p className="text-sm text-yellow-300">{error}</p>
+        <p className="text-sm text-yellow-700 dark:text-yellow-300">{error}</p>
       </div>
     );
   }
 
   if (!results) {
     return (
-      <div className="bg-white/5 border border-white/20 rounded-lg p-4">
-        <p className="text-sm text-slate-300">No results available</p>
+      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
+        <p className="text-sm text-theme-text-secondary">No results available</p>
       </div>
     );
   }
@@ -86,33 +86,33 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
   return (
     <div className="space-y-6">
       {/* Overall Stats */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-        <h3 className="text-lg font-medium text-white mb-4">Election Summary</h3>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+        <h3 className="text-lg font-medium text-theme-text-primary mb-4">Election Summary</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-500/10 rounded-lg p-4">
-            <div className="text-sm font-medium text-blue-400">Total Votes</div>
+            <div className="text-sm font-medium text-blue-700 dark:text-blue-400">Total Votes</div>
             <div className="mt-1 text-2xl font-semibold text-blue-200">
               {results.total_votes}
             </div>
           </div>
 
           <div className="bg-green-500/10 rounded-lg p-4">
-            <div className="text-sm font-medium text-green-400">Eligible Voters</div>
+            <div className="text-sm font-medium text-green-700 dark:text-green-400">Eligible Voters</div>
             <div className="mt-1 text-2xl font-semibold text-green-200">
               {results.total_eligible_voters}
             </div>
           </div>
 
           <div className="bg-purple-500/10 rounded-lg p-4">
-            <div className="text-sm font-medium text-purple-400">Turnout</div>
+            <div className="text-sm font-medium text-purple-700 dark:text-purple-400">Turnout</div>
             <div className="mt-1 text-2xl font-semibold text-purple-200">
               {results.voter_turnout_percentage}%
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-lg p-4">
-            <div className="text-sm font-medium text-slate-400">Victory Condition</div>
-            <div className="mt-1 text-sm font-semibold text-white">
+          <div className="bg-theme-surface-secondary rounded-lg p-4">
+            <div className="text-sm font-medium text-theme-text-muted">Victory Condition</div>
+            <div className="mt-1 text-sm font-semibold text-theme-text-primary">
               {getVictoryInfo()}
             </div>
           </div>
@@ -122,12 +122,12 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {/* Results by Position */}
       {results.results_by_position && results.results_by_position.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-white">Results by Position</h3>
+          <h3 className="text-lg font-medium text-theme-text-primary">Results by Position</h3>
           {results.results_by_position.map((positionResult) => (
-            <div key={positionResult.position} className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+            <div key={positionResult.position} className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-md font-semibold text-white">{positionResult.position}</h4>
-                <span className="text-sm text-slate-400">
+                <h4 className="text-md font-semibold text-theme-text-primary">{positionResult.position}</h4>
+                <span className="text-sm text-theme-text-muted">
                   {positionResult.total_votes} {positionResult.total_votes === 1 ? 'vote' : 'votes'}
                 </span>
               </div>
@@ -139,13 +139,13 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
                     className={`flex items-center justify-between p-4 rounded-lg border-2 ${
                       candidate.is_winner
                         ? 'border-green-500 bg-green-500/10'
-                        : 'border-white/20 bg-white/5'
+                        : 'border-theme-surface-border bg-theme-surface-secondary'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
                       {candidate.is_winner && (
                         <svg
-                          className="h-6 w-6 text-green-400"
+                          className="h-6 w-6 text-green-700 dark:text-green-400"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                         >
@@ -157,25 +157,25 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
                         </svg>
                       )}
                       <div>
-                        <div className="font-medium text-white">
+                        <div className="font-medium text-theme-text-primary">
                           {candidate.candidate_name}
                         </div>
                         {candidate.is_winner && (
-                          <div className="text-sm text-green-400 font-medium">Winner</div>
+                          <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
                         )}
                       </div>
                     </div>
 
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
-                        <div className="text-sm text-slate-400">Votes</div>
-                        <div className="text-lg font-semibold text-white">
+                        <div className="text-sm text-theme-text-muted">Votes</div>
+                        <div className="text-lg font-semibold text-theme-text-primary">
                           {candidate.vote_count}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-slate-400">Percentage</div>
-                        <div className="text-lg font-semibold text-white">
+                        <div className="text-sm text-theme-text-muted">Percentage</div>
+                        <div className="text-lg font-semibold text-theme-text-primary">
                           {candidate.percentage}%
                         </div>
                       </div>
@@ -191,8 +191,8 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {/* Overall Results (if no positions or single election) */}
       {(!results.results_by_position || results.results_by_position.length === 0) &&
         results.overall_results && results.overall_results.length > 0 && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-            <h3 className="text-lg font-medium text-white mb-4">Results</h3>
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+            <h3 className="text-lg font-medium text-theme-text-primary mb-4">Results</h3>
             <div className="space-y-3">
               {results.overall_results.map((candidate) => (
                 <div
@@ -200,13 +200,13 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
                   className={`flex items-center justify-between p-4 rounded-lg border-2 ${
                     candidate.is_winner
                       ? 'border-green-500 bg-green-500/10'
-                      : 'border-white/20 bg-white/5'
+                      : 'border-theme-surface-border bg-theme-surface-secondary'
                   }`}
                 >
                   <div className="flex items-center space-x-3">
                     {candidate.is_winner && (
                       <svg
-                        className="h-6 w-6 text-green-400"
+                        className="h-6 w-6 text-green-700 dark:text-green-400"
                         fill="currentColor"
                         viewBox="0 0 20 20"
                       >
@@ -218,25 +218,25 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
                       </svg>
                     )}
                     <div>
-                      <div className="font-medium text-white">
+                      <div className="font-medium text-theme-text-primary">
                         {candidate.candidate_name}
                       </div>
                       {candidate.is_winner && (
-                        <div className="text-sm text-green-400 font-medium">Winner</div>
+                        <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-4">
                     <div className="text-right">
-                      <div className="text-sm text-slate-400">Votes</div>
-                      <div className="text-lg font-semibold text-white">
+                      <div className="text-sm text-theme-text-muted">Votes</div>
+                      <div className="text-lg font-semibold text-theme-text-primary">
                         {candidate.vote_count}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-slate-400">Percentage</div>
-                      <div className="text-lg font-semibold text-white">
+                      <div className="text-sm text-theme-text-muted">Percentage</div>
+                      <div className="text-lg font-semibold text-theme-text-primary">
                         {candidate.percentage}%
                       </div>
                     </div>

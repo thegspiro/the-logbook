@@ -139,7 +139,7 @@ const ConfigurationTab: React.FC = () => {
             max={100000}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-theme-text-muted">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
           </p>
         </div>
@@ -164,7 +164,7 @@ const ConfigurationTab: React.FC = () => {
             max={3600}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-theme-text-muted">
             Recommended: 300 seconds (5 minutes). Set to 0 to disable caching.
           </p>
         </div>

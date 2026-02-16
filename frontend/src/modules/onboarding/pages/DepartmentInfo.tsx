@@ -143,25 +143,25 @@ const DepartmentInfo: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Building2 className="w-8 h-8 text-white" />
+            <Building2 className="w-8 h-8 text-theme-text-primary" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
+          <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
             Let's Get Started
           </h1>
-          <p className="text-xl text-slate-300">
+          <p className="text-xl text-theme-text-secondary">
             Tell us about your department
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 border border-white/20 space-y-6">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border space-y-6">
           {/* Department Name */}
           <div>
             <label
               htmlFor="departmentName"
               className="block text-sm font-semibold text-slate-200 mb-2"
             >
-              Department Name <span className="text-red-400">*</span>
+              Department Name <span className="text-red-700 dark:text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -172,14 +172,14 @@ const DepartmentInfo: React.FC = () => {
                 clearError();
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
               maxLength={100}
               autoFocus
               aria-required="true"
               aria-invalid={error ? 'true' : 'false'}
               aria-describedby="departmentNameHelp"
             />
-            <p id="departmentNameHelp" className="mt-1 text-xs text-slate-400">
+            <p id="departmentNameHelp" className="mt-1 text-xs text-theme-text-muted">
               {departmentName.length}/100 characters
             </p>
           </div>
@@ -187,7 +187,7 @@ const DepartmentInfo: React.FC = () => {
           {/* Logo Upload */}
           <div className="relative">
             <label className="block text-sm font-semibold text-slate-200 mb-2">
-              Department Logo <span className="text-slate-400 font-normal">(Optional)</span>
+              Department Logo <span className="text-theme-text-muted font-normal">(Optional)</span>
             </label>
 
             <div className="relative">
@@ -202,7 +202,7 @@ const DepartmentInfo: React.FC = () => {
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                   dragActive
                     ? 'border-red-500 bg-red-500/10'
-                    : 'border-slate-600 hover:border-red-500 hover:bg-white/5'
+                    : 'border-theme-input-border hover:border-red-500 hover:bg-theme-surface-secondary'
                 }`}
                 onClick={() => fileInputRef.current?.click()}
                 role="button"
@@ -224,20 +224,20 @@ const DepartmentInfo: React.FC = () => {
                 />
                 <div className="flex flex-col items-center space-y-3">
                   <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center">
-                    <Upload className="w-8 h-8 text-slate-400" />
+                    <Upload className="w-8 h-8 text-theme-text-muted" />
                   </div>
                   <div>
-                    <p className="text-white font-medium mb-1">
+                    <p className="text-theme-text-primary font-medium mb-1">
                       Drop your logo here, or click to browse
                     </p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-theme-text-muted">
                       PNG, JPG or WebP (max 5MB)
                     </p>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="border-2 border-slate-600 rounded-lg p-6 bg-slate-900/50">
+              <div className="border-2 border-theme-input-border rounded-lg p-6 bg-theme-input-bg">
                 <div className="flex items-start space-x-4">
                   {/* Preview - transparent background to preserve PNG transparency */}
                   <div className="flex-shrink-0 w-24 h-24 rounded-lg flex items-center justify-center overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZTJlOGYwIi8+PHJlY3QgeD0iOCIgeT0iOCIgd2lkdGg9IjgiIGhlaWdodD0iOCIgZmlsbD0iI2UyZThmMCIvPjxyZWN0IHg9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmMWY1ZjkiLz48cmVjdCB5PSI4IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZjFmNWY5Ii8+PC9zdmc+')]">
@@ -252,10 +252,10 @@ const DepartmentInfo: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-white font-medium truncate">
+                        <p className="text-theme-text-primary font-medium truncate">
                           {logo?.name}
                         </p>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <p className="text-sm text-theme-text-muted mt-1">
                           {logo && (logo.size / 1024).toFixed(1)} KB
                         </p>
                       </div>
@@ -264,14 +264,14 @@ const DepartmentInfo: React.FC = () => {
                         className="flex-shrink-0 ml-4 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
                         aria-label="Remove logo"
                       >
-                        <X className="w-5 h-5 text-red-400" />
+                        <X className="w-5 h-5 text-red-700 dark:text-red-400" />
                       </button>
                     </div>
 
                     {/* Change button */}
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="mt-3 text-sm text-red-400 hover:text-red-300 font-medium transition-colors"
+                      className="mt-3 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors"
                     >
                       Change logo
                     </button>
@@ -281,7 +281,7 @@ const DepartmentInfo: React.FC = () => {
             )}
             </div>
 
-            <p className="mt-2 text-xs text-slate-400 flex items-start">
+            <p className="mt-2 text-xs text-theme-text-muted flex items-start">
               <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
               <span>
                 Your logo will be displayed in the header and on reports. You can change it later in settings.
@@ -307,8 +307,8 @@ const DepartmentInfo: React.FC = () => {
               disabled={!departmentName.trim() || isSaving}
               className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
                 departmentName.trim() && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
+                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -318,7 +318,7 @@ const DepartmentInfo: React.FC = () => {
             {departmentName.trim() && !logo && (
               <button
                 onClick={handleSkipLogo}
-                className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-slate-300 hover:text-white rounded-lg font-semibold transition-all duration-300"
+                className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all duration-300"
                 aria-label="Skip logo upload"
               >
                 Skip Logo for Now
@@ -327,7 +327,7 @@ const DepartmentInfo: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={1} totalSteps={10} className="pt-4 border-t border-white/10" />
+          <ProgressIndicator currentStep={1} totalSteps={10} className="pt-4 border-t border-theme-surface-border" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
@@ -335,11 +335,11 @@ const DepartmentInfo: React.FC = () => {
 
         {/* Help Text */}
         <div className="mt-6 text-center">
-          <p className="text-slate-400 text-sm">
+          <p className="text-theme-text-muted text-sm">
             Need help?{' '}
             <a
               href="/docs"
-              className="text-red-400 hover:text-red-300 underline"
+              className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
               target="_blank"
               rel="noopener noreferrer"
             >

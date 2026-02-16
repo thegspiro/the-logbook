@@ -188,7 +188,7 @@ export const BallotVotingPage: React.FC = () => {
           <div className="text-red-600 text-5xl mb-4">!</div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Unable to Load Ballot</h1>
           <p className="text-gray-600">{error}</p>
-          <p className="text-sm text-gray-400 mt-4">
+          <p className="text-sm text-theme-text-muted mt-4">
             If you believe this is an error, please contact your organization secretary.
           </p>
         </div>
@@ -207,7 +207,7 @@ export const BallotVotingPage: React.FC = () => {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Ballot Submitted</h1>
           <p className="text-gray-600 mb-4">{submitResult.message}</p>
-          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-500">
+          <div className="bg-gray-50 rounded-lg p-4 text-sm text-theme-text-muted">
             <p>Your ballot has been recorded securely and anonymously.</p>
             <p className="mt-2">You may close this page.</p>
           </div>
@@ -277,7 +277,7 @@ export const BallotVotingPage: React.FC = () => {
                     <div>
                       <h3 className="font-semibold text-gray-900">{item.title}</h3>
                       {item.description && (
-                        <p className="mt-1 text-sm text-gray-500">{item.description}</p>
+                        <p className="mt-1 text-sm text-theme-text-muted">{item.description}</p>
                       )}
                     </div>
                   </div>
@@ -329,7 +329,7 @@ export const BallotVotingPage: React.FC = () => {
                           <div>
                             <span className="font-medium text-gray-900">{candidate.name}</span>
                             {candidate.statement && (
-                              <p className="text-sm text-gray-500 mt-0.5">{candidate.statement}</p>
+                              <p className="text-sm text-theme-text-muted mt-0.5">{candidate.statement}</p>
                             )}
                           </div>
                         </label>
@@ -377,9 +377,9 @@ export const BallotVotingPage: React.FC = () => {
                       name={`item-${item.id}`}
                       checked={itemChoice?.choice === 'abstain'}
                       onChange={() => updateChoice(item.id, 'abstain')}
-                      className="w-4 h-4 text-gray-400 focus:ring-gray-500"
+                      className="w-4 h-4 text-theme-text-muted focus:ring-gray-500"
                     />
-                    <span className="text-gray-500">Abstain (Do not vote on this item)</span>
+                    <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                   </label>
                 </div>
               </div>
@@ -396,13 +396,13 @@ export const BallotVotingPage: React.FC = () => {
           >
             Submit Ballot
           </button>
-          <p className="mt-2 text-sm text-gray-400">
+          <p className="mt-2 text-sm text-theme-text-muted">
             You will have a chance to review your choices before they are submitted.
           </p>
         </div>
 
         {/* Security notice */}
-        <div className="mt-8 text-center text-xs text-gray-400">
+        <div className="mt-8 text-center text-xs text-theme-text-muted">
           <p>Your vote is anonymous and securely recorded.</p>
           <p>This voting link is unique to you. Do not share it with others.</p>
         </div>
@@ -420,7 +420,7 @@ export const BallotVotingPage: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <h3 id="confirm-ballot-title" className="text-lg font-bold text-gray-900">Confirm Your Ballot</h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-theme-text-muted mt-1">
                 Please review your selections below. Once submitted, your ballot cannot be changed.
               </p>
             </div>
@@ -446,7 +446,7 @@ export const BallotVotingPage: React.FC = () => {
                         <div
                           className={`text-sm mt-0.5 font-semibold ${
                             isAbstain
-                              ? 'text-gray-400'
+                              ? 'text-theme-text-muted'
                               : choices[item.id]?.choice === 'approve'
                                 ? 'text-green-700'
                                 : choices[item.id]?.choice === 'deny'

@@ -26,20 +26,20 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
             <tr>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
                 Name
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
                 Badge Number
               </th>
               {contactSettings.enabled && contactSettings.show_email && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
                 >
                   Email
                 </th>
@@ -47,7 +47,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               {contactSettings.enabled && contactSettings.show_phone && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
                 >
                   Phone
                 </th>
@@ -55,14 +55,14 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               {contactSettings.enabled && contactSettings.show_mobile && (
                 <th
                   scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
                 >
                   Mobile
                 </th>
               )}
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider"
               >
                 Status
               </th>
@@ -73,7 +73,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               <tr>
                 <td
                   colSpan={showAnyContactInfo ? 6 : 3}
-                  className="px-6 py-12 text-center text-sm text-gray-500"
+                  className="px-6 py-12 text-center text-sm text-theme-text-muted"
                 >
                   No members found.
                 </td>
@@ -93,7 +93,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                         </div>
                       ) : (
                         <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-gray-500 font-medium">
+                          <span className="text-theme-text-muted font-medium">
                             {(member.first_name?.[0] || member.username[0]).toUpperCase()}
                           </span>
                         </div>
@@ -102,11 +102,11 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                         <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600">
                           {member.full_name || member.username}
                         </div>
-                        <div className="text-sm text-gray-500">@{member.username}</div>
+                        <div className="text-sm text-theme-text-muted">@{member.username}</div>
                       </div>
                     </Link>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {member.badge_number || '-'}
                   </td>
                   {contactSettings.enabled && contactSettings.show_email && (

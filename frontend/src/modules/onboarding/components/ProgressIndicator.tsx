@@ -15,7 +15,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
 
   return (
     <div className={className}>
-      <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
+      <div className="flex items-center justify-between text-sm text-theme-text-muted mb-2">
         <span>Setup Progress</span>
         <span>
           Step {currentStep} of {totalSteps}

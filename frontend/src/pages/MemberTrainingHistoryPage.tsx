@@ -171,7 +171,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-white">Loading training history...</div>
+            <div className="text-theme-text-primary">Loading training history...</div>
           </div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-            <p className="text-sm text-red-400">{error || 'Failed to load training history'}</p>
+            <p className="text-sm text-red-700 dark:text-red-400">{error || 'Failed to load training history'}</p>
           </div>
         </div>
       </div>
@@ -197,17 +197,17 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={() => navigate(`/members/${userId}`)}
-            className="text-sm text-slate-400 hover:text-white mb-4 flex items-center gap-1"
+            className="text-sm text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1"
           >
             &larr; Back to Profile
           </button>
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white">
+              <h1 className="text-3xl font-bold text-theme-text-primary">
                 Training History
               </h1>
-              <p className="text-slate-400 mt-1">
+              <p className="text-theme-text-muted mt-1">
                 {user.full_name || user.username}
               </p>
             </div>
@@ -225,7 +225,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
           <div className="flex flex-wrap gap-4 items-center">
             {/* Search */}
             <div className="flex-1 min-w-[200px]">
@@ -234,7 +234,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 placeholder="Search courses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -242,7 +242,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-              className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -260,7 +260,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
-              className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>
@@ -273,17 +273,17 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Training Records List */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
           {filteredTrainings.length === 0 ? (
             <div className="p-8 text-center">
-              <p className="text-slate-400">No training records found.</p>
+              <p className="text-theme-text-muted">No training records found.</p>
               {searchQuery || filterStatus !== 'all' ? (
                 <button
                   onClick={() => {
                     setSearchQuery('');
                     setFilterStatus('all');
                   }}
-                  className="mt-2 text-sm text-blue-400 hover:text-blue-300"
+                  className="mt-2 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   Clear filters
                 </button>
@@ -292,36 +292,36 @@ export const MemberTrainingHistoryPage: React.FC = () => {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-white/10">
-                <thead className="bg-slate-900/50">
+                <thead className="bg-theme-input-bg">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Course
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Hours
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Expires
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Status
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
                   {filteredTrainings.map((training) => (
-                    <tr key={training.id} className="hover:bg-white/5 transition-colors">
+                    <tr key={training.id} className="hover:bg-theme-surface-secondary transition-colors">
                       <td className="px-6 py-4">
                         <div>
-                          <div className="text-white font-medium">{training.course_name}</div>
+                          <div className="text-theme-text-primary font-medium">{training.course_name}</div>
                           {training.course_code && (
-                            <div className="text-slate-400 text-sm">{training.course_code}</div>
+                            <div className="text-theme-text-muted text-sm">{training.course_code}</div>
                           )}
                           {training.certification_number && (
                             <div className="text-slate-500 text-xs mt-1">
@@ -330,23 +330,23 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-300 text-sm capitalize">
+                      <td className="px-6 py-4 text-theme-text-secondary text-sm capitalize">
                         {training.training_type?.replace('_', ' ') || '-'}
                       </td>
-                      <td className="px-6 py-4 text-slate-300 text-sm">
+                      <td className="px-6 py-4 text-theme-text-secondary text-sm">
                         {formatDate(training.completion_date || training.scheduled_date)}
                       </td>
-                      <td className="px-6 py-4 text-slate-300 text-sm">
+                      <td className="px-6 py-4 text-theme-text-secondary text-sm">
                         {training.hours_completed || 0}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
                           className={
                             isExpired(training)
-                              ? 'text-red-400'
+                              ? 'text-red-700 dark:text-red-400'
                               : isExpiringSoon(training)
-                              ? 'text-yellow-400'
-                              : 'text-slate-300'
+                              ? 'text-yellow-700 dark:text-yellow-400'
+                              : 'text-theme-text-secondary'
                           }
                         >
                           {formatDate(training.expiration_date)}
@@ -383,7 +383,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
         {/* Summary */}
         {filteredTrainings.length > 0 && (
-          <div className="mt-4 text-sm text-slate-400 text-right">
+          <div className="mt-4 text-sm text-theme-text-muted text-right">
             Showing {filteredTrainings.length} of {trainings.length} records
           </div>
         )}
@@ -401,17 +401,17 @@ interface StatCardProps {
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
   const colorClasses = {
-    green: 'text-green-400',
-    blue: 'text-blue-400',
-    yellow: 'text-yellow-400',
-    orange: 'text-orange-400',
-    red: 'text-red-400',
+    green: 'text-green-700 dark:text-green-400',
+    blue: 'text-blue-700 dark:text-blue-400',
+    yellow: 'text-yellow-700 dark:text-yellow-400',
+    orange: 'text-orange-700 dark:text-orange-400',
+    red: 'text-red-700 dark:text-red-400',
   };
 
   return (
-    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-      <p className="text-slate-400 text-xs uppercase font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color ? colorClasses[color] : 'text-white'}`}>
+    <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+      <p className="text-theme-text-muted text-xs uppercase font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${color ? colorClasses[color] : 'text-theme-text-primary'}`}>
         {value}
       </p>
     </div>

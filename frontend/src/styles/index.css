@@ -18,7 +18,7 @@
   /* Text */
   --text-primary: #0f172a;                  /* slate-900 */
   --text-secondary: #475569;               /* slate-600 */
-  --text-muted: #94a3b8;                   /* slate-400 */
+  --text-muted: #64748b;                   /* slate-500 — 4.76:1 on white (WCAG AA) */
 
   /* Navigation */
   --nav-bg: #ffffff;                        /* white */

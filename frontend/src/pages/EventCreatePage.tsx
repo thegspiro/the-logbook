@@ -38,7 +38,7 @@ export const EventCreatePage: React.FC = () => {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex mb-6" aria-label="Breadcrumb">
-        <ol className="flex items-center space-x-2 text-sm text-slate-400">
+        <ol className="flex items-center space-x-2 text-sm text-theme-text-muted">
           <li>
             <Link to="/events" className="hover:text-slate-200">
               Events
@@ -49,21 +49,21 @@ export const EventCreatePage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </li>
-          <li className="text-white font-medium">Create Event</li>
+          <li className="text-theme-text-primary font-medium">Create Event</li>
         </ol>
       </nav>
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Create Event</h1>
-        <p className="mt-1 text-sm text-slate-300">
-          Schedule a new event for your department. All fields marked with <span className="text-red-500">*</span> are required.
+        <h1 className="text-3xl font-bold text-theme-text-primary">Create Event</h1>
+        <p className="mt-1 text-sm text-theme-text-secondary">
+          Schedule a new event for your department. All fields marked with <span className="text-red-700 dark:text-red-500">*</span> are required.
         </p>
       </div>
 
       {error && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-300">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
