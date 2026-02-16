@@ -250,7 +250,7 @@ class EmailTemplateService:
         """List all templates for an organization"""
         result = await self.db.execute(
             select(EmailTemplate)
-            .where(EmailTemplate.organization_id == organization_id)
+            .where(EmailTemplate.organization_id == str(organization_id))
             .options(selectinload(EmailTemplate.attachments))
             .order_by(EmailTemplate.template_type, EmailTemplate.name)
         )

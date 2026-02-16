@@ -127,8 +127,8 @@ async def get_training_requirement(
 
     result = await db.execute(
         select(TrainingRequirement).where(
-            TrainingRequirement.id == requirement_id,
-            TrainingRequirement.organization_id == current_user.organization_id
+            TrainingRequirement.id == str(requirement_id),
+            TrainingRequirement.organization_id == str(current_user.organization_id)
         )
     )
     requirement = result.scalar_one_or_none()
@@ -292,7 +292,7 @@ async def get_training_program(
     from app.models.training import ProgramMilestone
 
     milestones_result = await db.execute(
-        select(ProgramMilestone).where(ProgramMilestone.program_id == program_id)
+        select(ProgramMilestone).where(ProgramMilestone.program_id == str(program_id))
     )
     milestones = milestones_result.scalars().all()
 

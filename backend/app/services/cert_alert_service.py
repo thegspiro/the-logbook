@@ -51,7 +51,7 @@ class CertAlertService:
         }
         """
         result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = result.scalar_one_or_none()
         if not org:
@@ -123,7 +123,7 @@ class CertAlertService:
             return {"alerts_sent": 0, "escalations_sent": 0, "errors": 0}
 
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         if not org:

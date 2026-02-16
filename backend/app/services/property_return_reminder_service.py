@@ -66,7 +66,7 @@ class PropertyReturnReminderService:
 
         # Load organization for email
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         org_name = org.name if org else "Department"

@@ -100,7 +100,7 @@ class FacilitiesService:
                 )
             )
         else:
-            conditions.append(FacilityType.organization_id == organization_id)
+            conditions.append(FacilityType.organization_id == str(organization_id))
 
         if is_active is not None:
             conditions.append(FacilityType.is_active == is_active)
@@ -218,7 +218,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(func.count(Facility.id))
             .where(Facility.facility_type_id == type_id)
-            .where(Facility.organization_id == organization_id)
+            .where(Facility.organization_id == str(organization_id))
         )
         count = result.scalar()
         if count > 0:
@@ -250,7 +250,7 @@ class FacilitiesService:
                 )
             )
         else:
-            conditions.append(FacilityStatus.organization_id == organization_id)
+            conditions.append(FacilityStatus.organization_id == str(organization_id))
 
         if is_active is not None:
             conditions.append(FacilityStatus.is_active == is_active)
@@ -365,7 +365,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(func.count(Facility.id))
             .where(Facility.status_id == status_id)
-            .where(Facility.organization_id == organization_id)
+            .where(Facility.organization_id == str(organization_id))
         )
         count = result.scalar()
         if count > 0:
@@ -444,8 +444,8 @@ class FacilitiesService:
         """Get facility by ID"""
         query = (
             select(Facility)
-            .where(Facility.id == facility_id)
-            .where(Facility.organization_id == organization_id)
+            .where(Facility.id == str(facility_id))
+            .where(Facility.organization_id == str(organization_id))
         )
 
         if include_relations:
@@ -468,7 +468,7 @@ class FacilitiesService:
         if facility_data.facility_number:
             result = await self.db.execute(
                 select(Facility)
-                .where(Facility.organization_id == organization_id)
+                .where(Facility.organization_id == str(organization_id))
                 .where(Facility.facility_number == facility_data.facility_number)
             )
             if result.scalar_one_or_none():
@@ -525,7 +525,7 @@ class FacilitiesService:
         ):
             result = await self.db.execute(
                 select(Facility)
-                .where(Facility.organization_id == organization_id)
+                .where(Facility.organization_id == str(organization_id))
                 .where(Facility.facility_number == facility_data.facility_number)
                 .where(Facility.id != facility_id)
             )
@@ -607,8 +607,8 @@ class FacilitiesService:
         """List photos for a facility"""
         query = (
             select(FacilityPhoto)
-            .where(FacilityPhoto.facility_id == facility_id)
-            .where(FacilityPhoto.organization_id == organization_id)
+            .where(FacilityPhoto.facility_id == str(facility_id))
+            .where(FacilityPhoto.organization_id == str(organization_id))
             .order_by(desc(FacilityPhoto.is_primary), desc(FacilityPhoto.uploaded_at))
         )
 
@@ -627,7 +627,7 @@ class FacilitiesService:
             result = await self.db.execute(
                 select(FacilityPhoto)
                 .where(FacilityPhoto.facility_id == photo_data.facility_id)
-                .where(FacilityPhoto.organization_id == organization_id)
+                .where(FacilityPhoto.organization_id == str(organization_id))
                 .where(FacilityPhoto.is_primary == True)
             )
             for photo in result.scalars().all():
@@ -652,7 +652,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(FacilityPhoto)
             .where(FacilityPhoto.id == photo_id)
-            .where(FacilityPhoto.organization_id == organization_id)
+            .where(FacilityPhoto.organization_id == str(organization_id))
         )
         photo = result.scalar_one_or_none()
         if not photo:
@@ -673,8 +673,8 @@ class FacilitiesService:
         """List documents for a facility"""
         query = (
             select(FacilityDocument)
-            .where(FacilityDocument.facility_id == facility_id)
-            .where(FacilityDocument.organization_id == organization_id)
+            .where(FacilityDocument.facility_id == str(facility_id))
+            .where(FacilityDocument.organization_id == str(organization_id))
             .order_by(FacilityDocument.document_type, desc(FacilityDocument.uploaded_at))
         )
 
@@ -707,7 +707,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(FacilityDocument)
             .where(FacilityDocument.id == document_id)
-            .where(FacilityDocument.organization_id == organization_id)
+            .where(FacilityDocument.organization_id == str(organization_id))
         )
         document = result.scalar_one_or_none()
         if not document:
@@ -858,7 +858,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(func.count(FacilityMaintenance.id))
             .where(FacilityMaintenance.maintenance_type_id == type_id)
-            .where(FacilityMaintenance.organization_id == organization_id)
+            .where(FacilityMaintenance.organization_id == str(organization_id))
         )
         count = result.scalar()
         if count > 0:
@@ -893,7 +893,7 @@ class FacilitiesService:
         conditions = [FacilityMaintenance.organization_id == organization_id]
 
         if facility_id:
-            conditions.append(FacilityMaintenance.facility_id == facility_id)
+            conditions.append(FacilityMaintenance.facility_id == str(facility_id))
         if maintenance_type_id:
             conditions.append(
                 FacilityMaintenance.maintenance_type_id == maintenance_type_id
@@ -930,7 +930,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(FacilityMaintenance)
             .where(FacilityMaintenance.id == record_id)
-            .where(FacilityMaintenance.organization_id == organization_id)
+            .where(FacilityMaintenance.organization_id == str(organization_id))
             .options(selectinload(FacilityMaintenance.maintenance_type))
         )
         return result.scalar_one_or_none()
@@ -1069,7 +1069,7 @@ class FacilitiesService:
         conditions = [FacilitySystem.organization_id == organization_id]
 
         if facility_id:
-            conditions.append(FacilitySystem.facility_id == facility_id)
+            conditions.append(FacilitySystem.facility_id == str(facility_id))
         if system_type:
             conditions.append(FacilitySystem.system_type == system_type)
         if condition:
@@ -1095,7 +1095,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(FacilitySystem)
             .where(FacilitySystem.id == system_id)
-            .where(FacilitySystem.organization_id == organization_id)
+            .where(FacilitySystem.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -1183,7 +1183,7 @@ class FacilitiesService:
         conditions = [FacilityInspection.organization_id == organization_id]
 
         if facility_id:
-            conditions.append(FacilityInspection.facility_id == facility_id)
+            conditions.append(FacilityInspection.facility_id == str(facility_id))
         if inspection_type:
             conditions.append(FacilityInspection.inspection_type == inspection_type)
         if passed is not None:
@@ -1211,7 +1211,7 @@ class FacilitiesService:
         result = await self.db.execute(
             select(FacilityInspection)
             .where(FacilityInspection.id == inspection_id)
-            .where(FacilityInspection.organization_id == organization_id)
+            .where(FacilityInspection.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 

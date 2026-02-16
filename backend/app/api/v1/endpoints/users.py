@@ -109,7 +109,7 @@ async def create_member(
     result = await db.execute(
         select(User)
         .where(User.username == user_data.username)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
     )
     if result.scalar_one_or_none():
@@ -122,7 +122,7 @@ async def create_member(
     result = await db.execute(
         select(User)
         .where(User.email == user_data.email)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
     )
     existing_user = result.scalar_one_or_none()
@@ -189,7 +189,7 @@ async def create_member(
         result = await db.execute(
             select(Role)
             .where(Role.id.in_(user_data.role_ids))
-            .where(Role.organization_id == current_user.organization_id)
+            .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
 
@@ -229,7 +229,7 @@ async def create_member(
 
         # Load organization for email config
         org_result = await db.execute(
-            select(OrgModel).where(OrgModel.id == current_user.organization_id)
+            select(OrgModel).where(OrgModel.id == str(current_user.organization_id))
         )
         organization = org_result.scalar_one_or_none()
 
@@ -296,7 +296,7 @@ async def list_users_with_roles(
     """
     result = await db.execute(
         select(User)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
         .order_by(User.last_name, User.first_name)
@@ -319,8 +319,8 @@ async def get_user_roles(
     """
     result = await db.execute(
         select(User)
-        .where(User.id == user_id)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -357,8 +357,8 @@ async def assign_user_roles(
     # Get user
     result = await db.execute(
         select(User)
-        .where(User.id == user_id)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -375,7 +375,7 @@ async def assign_user_roles(
         result = await db.execute(
             select(Role)
             .where(Role.id.in_(role_assignment.role_ids))
-            .where(Role.organization_id == current_user.organization_id)
+            .where(Role.organization_id == str(current_user.organization_id))
         )
         roles = result.scalars().all()
 
@@ -389,7 +389,7 @@ async def assign_user_roles(
 
     # Remove all existing role assignments
     await db.execute(
-        delete(user_roles).where(user_roles.c.user_id == user_id)
+        delete(user_roles).where(user_roles.c.user_id == str(user_id))
     )
 
     # Assign new roles
@@ -436,8 +436,8 @@ async def add_role_to_user(
     # Get user
     result = await db.execute(
         select(User)
-        .where(User.id == user_id)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -452,8 +452,8 @@ async def add_role_to_user(
     # Get role
     result = await db.execute(
         select(Role)
-        .where(Role.id == role_id)
-        .where(Role.organization_id == current_user.organization_id)
+        .where(Role.id == str(role_id))
+        .where(Role.organization_id == str(current_user.organization_id))
     )
     role = result.scalar_one_or_none()
 
@@ -515,8 +515,8 @@ async def remove_role_from_user(
     # Get user
     result = await db.execute(
         select(User)
-        .where(User.id == user_id)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -584,8 +584,8 @@ async def get_user_with_roles(
     """
     result = await db.execute(
         select(User)
-        .where(User.id == user_id)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -641,8 +641,8 @@ async def update_contact_info(
 
     result = await db.execute(
         select(User)
-        .where(User.id == user_id)
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .options(selectinload(User.roles))
     )
@@ -660,7 +660,7 @@ async def update_contact_info(
         existing = await db.execute(
             select(User)
             .where(User.email == contact_update.email)
-            .where(User.organization_id == current_user.organization_id)
+            .where(User.organization_id == str(current_user.organization_id))
             .where(User.id != user_id)
             .where(User.deleted_at.is_(None))
         )

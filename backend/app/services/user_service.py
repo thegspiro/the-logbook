@@ -40,7 +40,7 @@ class UserService:
         # Query users with roles
         result = await self.db.execute(
             select(User)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.deleted_at.is_(None))
             .options(selectinload(User.roles))
             .order_by(User.last_name, User.first_name)
@@ -93,8 +93,8 @@ class UserService:
         """Get a user by ID within an organization"""
         result = await self.db.execute(
             select(User)
-            .where(User.id == user_id)
-            .where(User.organization_id == organization_id)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
             .where(User.deleted_at.is_(None))
             .options(selectinload(User.roles))
         )

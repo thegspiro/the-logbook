@@ -187,7 +187,7 @@ class TemplateService:
         """Get a template by ID"""
         result = await self.db.execute(
             select(MinutesTemplate)
-            .where(MinutesTemplate.id == template_id)
+            .where(MinutesTemplate.id == str(template_id))
             .where(MinutesTemplate.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()

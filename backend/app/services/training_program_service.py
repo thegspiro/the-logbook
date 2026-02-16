@@ -133,8 +133,8 @@ class TrainingProgramService:
         """
         result = await self.db.execute(
             select(TrainingRequirement)
-            .where(TrainingRequirement.id == requirement_id)
-            .where(TrainingRequirement.organization_id == organization_id)
+            .where(TrainingRequirement.id == str(requirement_id))
+            .where(TrainingRequirement.organization_id == str(organization_id))
         )
         requirement = result.scalar_one_or_none()
 
@@ -300,7 +300,7 @@ class TrainingProgramService:
 
         result = await self.db.execute(
             select(ProgramPhase)
-            .where(ProgramPhase.program_id == program_id)
+            .where(ProgramPhase.program_id == str(program_id))
             .order_by(ProgramPhase.phase_number)
         )
         return result.scalars().all()
@@ -326,7 +326,7 @@ class TrainingProgramService:
         req_result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.id == program_requirement_data.requirement_id)
-            .where(TrainingRequirement.organization_id == organization_id)
+            .where(TrainingRequirement.organization_id == str(organization_id))
         )
         requirement = req_result.scalar_one_or_none()
         if not requirement:
@@ -385,10 +385,10 @@ class TrainingProgramService:
 
         query = select(ProgramRequirement).options(
             selectinload(ProgramRequirement.requirement)
-        ).where(ProgramRequirement.program_id == program_id)
+        ).where(ProgramRequirement.program_id == str(program_id))
 
         if phase_id:
-            query = query.where(ProgramRequirement.phase_id == phase_id)
+            query = query.where(ProgramRequirement.phase_id == str(phase_id))
 
         query = query.order_by(ProgramRequirement.sort_order)
 
@@ -679,7 +679,7 @@ class TrainingProgramService:
         # Update enrollment
         await self.db.execute(
             update(ProgramEnrollment)
-            .where(ProgramEnrollment.id == enrollment_id)
+            .where(ProgramEnrollment.id == str(enrollment_id))
             .values(
                 progress_percentage=avg_percentage,
                 updated_at=datetime.utcnow()
@@ -690,7 +690,7 @@ class TrainingProgramService:
         if avg_percentage >= 100.0:
             await self.db.execute(
                 update(ProgramEnrollment)
-                .where(ProgramEnrollment.id == enrollment_id)
+                .where(ProgramEnrollment.id == str(enrollment_id))
                 .values(
                     status=EnrollmentStatus.COMPLETED,
                     completed_at=datetime.utcnow()
@@ -723,8 +723,8 @@ class TrainingProgramService:
                 selectinload(TrainingProgram.phases)
                 .selectinload(ProgramPhase.milestones)
             )
-            .where(TrainingProgram.id == source_program_id)
-            .where(TrainingProgram.organization_id == organization_id)
+            .where(TrainingProgram.id == str(source_program_id))
+            .where(TrainingProgram.organization_id == str(organization_id))
         )
         source_program = source_result.scalar_one_or_none()
 
@@ -818,14 +818,14 @@ class TrainingProgramService:
                 ]
                 await self.db.execute(
                     update(ProgramPhase)
-                    .where(ProgramPhase.id == new_phase_id)
+                    .where(ProgramPhase.id == str(new_phase_id))
                     .values(prerequisite_phase_ids=new_prerequisite_ids)
                 )
 
         # Get program-level requirements (not in phases)
         program_reqs_result = await self.db.execute(
             select(ProgramRequirement)
-            .where(ProgramRequirement.program_id == source_program_id)
+            .where(ProgramRequirement.program_id == str(source_program_id))
             .where(ProgramRequirement.phase_id == None)
         )
         program_reqs = program_reqs_result.scalars().all()
@@ -848,7 +848,7 @@ class TrainingProgramService:
         # Get program-level milestones
         program_milestones_result = await self.db.execute(
             select(ProgramMilestone)
-            .where(ProgramMilestone.program_id == source_program_id)
+            .where(ProgramMilestone.program_id == str(source_program_id))
             .where(ProgramMilestone.phase_id == None)
         )
         program_milestones = program_milestones_result.scalars().all()
@@ -911,7 +911,7 @@ class TrainingProgramService:
 
                     if not enrollment or enrollment.status != EnrollmentStatus.COMPLETED:
                         user_result = await self.db.execute(
-                            select(User).where(User.id == user_id)
+                            select(User).where(User.id == str(user_id))
                         )
                         user = user_result.scalar_one_or_none()
                         user_name = f"{user.first_name} {user.last_name}" if user else str(user_id)
@@ -933,7 +933,7 @@ class TrainingProgramService:
                 )
                 if active_enrollments.scalar_one_or_none():
                     user_result = await self.db.execute(
-                        select(User).where(User.id == user_id)
+                        select(User).where(User.id == str(user_id))
                     )
                     user = user_result.scalar_one_or_none()
                     user_name = f"{user.first_name} {user.last_name}" if user else str(user_id)

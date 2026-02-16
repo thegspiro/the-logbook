@@ -979,7 +979,7 @@ class ExternalTrainingSyncService:
         """
         query = (
             select(ExternalTrainingImport)
-            .where(ExternalTrainingImport.provider_id == provider_id)
+            .where(ExternalTrainingImport.provider_id == str(provider_id))
         )
 
         if import_ids:
@@ -1033,7 +1033,7 @@ class ExternalTrainingSyncService:
         """Get all unmapped users for a provider"""
         result = await self.db.execute(
             select(ExternalUserMapping)
-            .where(ExternalUserMapping.provider_id == provider_id)
+            .where(ExternalUserMapping.provider_id == str(provider_id))
             .where(ExternalUserMapping.is_mapped == False)
         )
         return result.scalars().all()
@@ -1044,7 +1044,7 @@ class ExternalTrainingSyncService:
         """Get all unmapped categories for a provider"""
         result = await self.db.execute(
             select(ExternalCategoryMapping)
-            .where(ExternalCategoryMapping.provider_id == provider_id)
+            .where(ExternalCategoryMapping.provider_id == str(provider_id))
             .where(ExternalCategoryMapping.is_mapped == False)
         )
         return result.scalars().all()
@@ -1058,7 +1058,7 @@ class ExternalTrainingSyncService:
         """Map an external user to an internal user"""
         result = await self.db.execute(
             select(ExternalUserMapping)
-            .where(ExternalUserMapping.id == mapping_id)
+            .where(ExternalUserMapping.id == str(mapping_id))
         )
         mapping = result.scalar_one_or_none()
 
@@ -1091,7 +1091,7 @@ class ExternalTrainingSyncService:
         """Map an external category to an internal category"""
         result = await self.db.execute(
             select(ExternalCategoryMapping)
-            .where(ExternalCategoryMapping.id == mapping_id)
+            .where(ExternalCategoryMapping.id == str(mapping_id))
         )
         mapping = result.scalar_one_or_none()
 

@@ -111,8 +111,8 @@ async def get_course(
     """
     result = await db.execute(
         select(TrainingCourse)
-        .where(TrainingCourse.id == course_id)
-        .where(TrainingCourse.organization_id == current_user.organization_id)
+        .where(TrainingCourse.id == str(course_id))
+        .where(TrainingCourse.organization_id == str(current_user.organization_id))
     )
     course = result.scalar_one_or_none()
 
@@ -142,8 +142,8 @@ async def update_course(
     """
     result = await db.execute(
         select(TrainingCourse)
-        .where(TrainingCourse.id == course_id)
-        .where(TrainingCourse.organization_id == current_user.organization_id)
+        .where(TrainingCourse.id == str(course_id))
+        .where(TrainingCourse.organization_id == str(current_user.organization_id))
     )
     course = result.scalar_one_or_none()
 
@@ -184,7 +184,7 @@ async def list_records(
     )
 
     if user_id:
-        query = query.where(TrainingRecord.user_id == user_id)
+        query = query.where(TrainingRecord.user_id == str(user_id))
 
     if status:
         query = query.where(TrainingRecord.status == status)
@@ -252,8 +252,8 @@ async def update_record(
     """
     result = await db.execute(
         select(TrainingRecord)
-        .where(TrainingRecord.id == record_id)
-        .where(TrainingRecord.organization_id == current_user.organization_id)
+        .where(TrainingRecord.id == str(record_id))
+        .where(TrainingRecord.organization_id == str(current_user.organization_id))
     )
     record = result.scalar_one_or_none()
 
@@ -354,8 +354,8 @@ async def get_category(
     """
     result = await db.execute(
         select(TrainingCategory)
-        .where(TrainingCategory.id == category_id)
-        .where(TrainingCategory.organization_id == current_user.organization_id)
+        .where(TrainingCategory.id == str(category_id))
+        .where(TrainingCategory.organization_id == str(current_user.organization_id))
     )
     category = result.scalar_one_or_none()
 
@@ -385,8 +385,8 @@ async def update_category(
     """
     result = await db.execute(
         select(TrainingCategory)
-        .where(TrainingCategory.id == category_id)
-        .where(TrainingCategory.organization_id == current_user.organization_id)
+        .where(TrainingCategory.id == str(category_id))
+        .where(TrainingCategory.organization_id == str(current_user.organization_id))
     )
     category = result.scalar_one_or_none()
 
@@ -422,8 +422,8 @@ async def delete_category(
     """
     result = await db.execute(
         select(TrainingCategory)
-        .where(TrainingCategory.id == category_id)
-        .where(TrainingCategory.organization_id == current_user.organization_id)
+        .where(TrainingCategory.id == str(category_id))
+        .where(TrainingCategory.organization_id == str(current_user.organization_id))
     )
     category = result.scalar_one_or_none()
 
@@ -512,8 +512,8 @@ async def update_requirement(
     """
     result = await db.execute(
         select(TrainingRequirement)
-        .where(TrainingRequirement.id == requirement_id)
-        .where(TrainingRequirement.organization_id == current_user.organization_id)
+        .where(TrainingRequirement.id == str(requirement_id))
+        .where(TrainingRequirement.organization_id == str(current_user.organization_id))
     )
     requirement = result.scalar_one_or_none()
 
@@ -549,8 +549,8 @@ async def delete_requirement(
     """
     result = await db.execute(
         select(TrainingRequirement)
-        .where(TrainingRequirement.id == requirement_id)
-        .where(TrainingRequirement.organization_id == current_user.organization_id)
+        .where(TrainingRequirement.id == str(requirement_id))
+        .where(TrainingRequirement.organization_id == str(current_user.organization_id))
     )
     requirement = result.scalar_one_or_none()
 
@@ -744,8 +744,8 @@ async def check_evaluator_permission(
 
     result = await db.execute(
         select(SkillEvaluation)
-        .where(SkillEvaluation.id == skill_id)
-        .where(SkillEvaluation.organization_id == current_user.organization_id)
+        .where(SkillEvaluation.id == str(skill_id))
+        .where(SkillEvaluation.organization_id == str(current_user.organization_id))
     )
     skill = result.scalar_one_or_none()
     if not skill:
@@ -825,7 +825,7 @@ async def enroll_member_in_program(
     user_result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.organization_id == str(current_user.organization_id))
     )
     member = user_result.scalar_one_or_none()
     if not member:

@@ -100,7 +100,7 @@ async def get_my_training_summary(
     if is_officer or visibility.get("show_training_history", True):
         records_result = await db.execute(
             select(TrainingRecord)
-            .where(TrainingRecord.organization_id == org_id, TrainingRecord.user_id == user_id)
+            .where(TrainingRecord.organization_id == str(org_id), TrainingRecord.user_id == str(user_id))
             .order_by(TrainingRecord.completion_date.desc())
             .limit(100)
         )
@@ -242,7 +242,7 @@ async def get_my_training_summary(
     if is_officer or visibility.get("show_pipeline_progress", True):
         enrollments_result = await db.execute(
             select(ProgramEnrollment)
-            .where(ProgramEnrollment.user_id == user_id)
+            .where(ProgramEnrollment.user_id == str(user_id))
             .order_by(ProgramEnrollment.enrolled_at.desc())
         )
         enrollments = enrollments_result.scalars().all()

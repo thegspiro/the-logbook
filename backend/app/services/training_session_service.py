@@ -58,7 +58,7 @@ class TrainingSessionService:
             course_result = await self.db.execute(
                 select(TrainingCourse)
                 .where(TrainingCourse.id == session_data.course_id)
-                .where(TrainingCourse.organization_id == organization_id)
+                .where(TrainingCourse.organization_id == str(organization_id))
             )
             course = course_result.scalar_one_or_none()
 
@@ -181,8 +181,8 @@ class TrainingSessionService:
         session_result = await self.db.execute(
             select(TrainingSession)
             .options(selectinload(TrainingSession.event).selectinload(Event.rsvps))
-            .where(TrainingSession.id == training_session_id)
-            .where(TrainingSession.organization_id == organization_id)
+            .where(TrainingSession.id == str(training_session_id))
+            .where(TrainingSession.organization_id == str(organization_id))
         )
         training_session = session_result.scalar_one_or_none()
 
@@ -613,8 +613,8 @@ class TrainingSessionService:
             # Find the member's active enrollment in this program
             enrollment_result = await self.db.execute(
                 select(ProgramEnrollment)
-                .where(ProgramEnrollment.user_id == user_id)
-                .where(ProgramEnrollment.program_id == program_id)
+                .where(ProgramEnrollment.user_id == str(user_id))
+                .where(ProgramEnrollment.program_id == str(program_id))
                 .where(ProgramEnrollment.status == EnrollmentStatus.ACTIVE)
             )
             enrollment = enrollment_result.scalar_one_or_none()
@@ -626,7 +626,7 @@ class TrainingSessionService:
             progress_result = await self.db.execute(
                 select(RequirementProgress)
                 .where(RequirementProgress.enrollment_id == enrollment.id)
-                .where(RequirementProgress.requirement_id == requirement_id)
+                .where(RequirementProgress.requirement_id == str(requirement_id))
             )
             progress = progress_result.scalar_one_or_none()
 

@@ -30,7 +30,7 @@ class LocationService:
         # Check if location with same name already exists
         result = await self.db.execute(
             select(Location)
-            .where(Location.organization_id == organization_id)
+            .where(Location.organization_id == str(organization_id))
             .where(Location.name == location_data.name)
         )
         existing = result.scalar_one_or_none()
@@ -57,7 +57,7 @@ class LocationService:
         result = await self.db.execute(
             select(Location)
             .where(Location.id == str(location_id))
-            .where(Location.organization_id == organization_id)
+            .where(Location.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -69,7 +69,7 @@ class LocationService:
         limit: int = 100,
     ) -> List[Location]:
         """List all locations with optional filtering"""
-        query = select(Location).where(Location.organization_id == organization_id)
+        query = select(Location).where(Location.organization_id == str(organization_id))
 
         if is_active is not None:
             query = query.where(Location.is_active == is_active)
@@ -95,7 +95,7 @@ class LocationService:
         if location_data.name and location_data.name != location.name:
             result = await self.db.execute(
                 select(Location)
-                .where(Location.organization_id == organization_id)
+                .where(Location.organization_id == str(organization_id))
                 .where(Location.name == location_data.name)
                 .where(Location.id != str(location_id))
             )
@@ -157,7 +157,7 @@ class LocationService:
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
-            .where(Event.organization_id == organization_id)
+            .where(Event.organization_id == str(organization_id))
         )
 
         if not include_cancelled:
@@ -189,7 +189,7 @@ class LocationService:
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
-            .where(Event.organization_id == organization_id)
+            .where(Event.organization_id == str(organization_id))
             .where(Event.is_cancelled == False)
             .where(Event.start_datetime <= check_in_start_threshold)
             .where(
@@ -221,7 +221,7 @@ class LocationService:
         query = (
             select(Event)
             .where(Event.location_id == str(location_id))
-            .where(Event.organization_id == organization_id)
+            .where(Event.organization_id == str(organization_id))
             .where(Event.is_cancelled == False)
             .where(
                 or_(
