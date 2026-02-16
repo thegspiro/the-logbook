@@ -204,7 +204,7 @@ async def get_election(
     """
     result = await db.execute(
         select(Election)
-        .where(Election.id == election_id)
+        .where(Election.id == str(election_id))
         .where(Election.organization_id == current_user.organization_id)
     )
     election = result.scalar_one_or_none()
@@ -233,7 +233,7 @@ async def update_election(
     """
     result = await db.execute(
         select(Election)
-        .where(Election.id == election_id)
+        .where(Election.id == str(election_id))
         .where(Election.organization_id == current_user.organization_id)
     )
     election = result.scalar_one_or_none()
@@ -337,7 +337,7 @@ async def delete_election(
     """
     result = await db.execute(
         select(Election)
-        .where(Election.id == election_id)
+        .where(Election.id == str(election_id))
         .where(Election.organization_id == current_user.organization_id)
     )
     election = result.scalar_one_or_none()
@@ -532,7 +532,7 @@ async def list_candidates(
     # Verify election exists and belongs to organization
     election_result = await db.execute(
         select(Election)
-        .where(Election.id == election_id)
+        .where(Election.id == str(election_id))
         .where(Election.organization_id == current_user.organization_id)
     )
     election = election_result.scalar_one_or_none()
@@ -568,7 +568,7 @@ async def create_candidate(
     # Verify election exists and belongs to organization
     election_result = await db.execute(
         select(Election)
-        .where(Election.id == election_id)
+        .where(Election.id == str(election_id))
         .where(Election.organization_id == current_user.organization_id)
     )
     election = election_result.scalar_one_or_none()
@@ -632,7 +632,7 @@ async def update_candidate(
     """
     result = await db.execute(
         select(Candidate)
-        .where(Candidate.id == candidate_id)
+        .where(Candidate.id == str(candidate_id))
         .where(Candidate.election_id == election_id)
     )
     candidate = result.scalar_one_or_none()
@@ -671,7 +671,7 @@ async def delete_candidate(
     """
     result = await db.execute(
         select(Candidate)
-        .where(Candidate.id == candidate_id)
+        .where(Candidate.id == str(candidate_id))
         .where(Candidate.election_id == election_id)
     )
     candidate = result.scalar_one_or_none()
@@ -907,7 +907,7 @@ async def send_ballot_emails(
     # Verify election exists
     election_result = await db.execute(
         select(Election)
-        .where(Election.id == election_id)
+        .where(Election.id == str(election_id))
         .where(Election.organization_id == current_user.organization_id)
     )
     election = election_result.scalar_one_or_none()
