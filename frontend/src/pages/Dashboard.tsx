@@ -466,18 +466,6 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-theme-text-secondary text-sm">
-            &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
-          </p>
-          <p className="text-center text-theme-text-muted text-xs mt-1">
-            Powered by The Logbook
-          </p>
-        </div>
-      </footer>
     </div>
   );
 };

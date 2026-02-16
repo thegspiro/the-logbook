@@ -265,10 +265,22 @@ async def get_my_training_summary(
                     select(RequirementProgress).where(RequirementProgress.enrollment_id == str(e.id))
                 )
                 rps = rp_result.scalars().all()
+
+                # Batch-fetch requirement names
+                req_ids = [str(rp.requirement_id) for rp in rps]
+                name_map: Dict[str, str] = {}
+                if req_ids:
+                    names_result = await db.execute(
+                        select(TrainingRequirement.id, TrainingRequirement.name)
+                        .where(TrainingRequirement.id.in_(req_ids))
+                    )
+                    name_map = {str(row[0]): row[1] for row in names_result.all()}
+
                 entry["requirements"] = [
                     {
                         "id": str(rp.id),
                         "requirement_id": str(rp.requirement_id),
+                        "requirement_name": name_map.get(str(rp.requirement_id), ""),
                         "status": rp.status.value if hasattr(rp.status, 'value') else str(rp.status),
                         "progress_value": float(rp.progress_value or 0),
                         "progress_percentage": float(rp.progress_percentage or 0),

@@ -63,6 +63,7 @@ const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
 const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
 const ShiftReportPage = lazy(() => import('./pages/ShiftReportPage'));
 const MyTrainingPage = lazy(() => import('./pages/MyTrainingPage'));
+const MemberProgressPage = lazy(() => import('./pages/MemberProgressPage'));
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
@@ -162,7 +163,8 @@ function App() {
               <Route path="/documents" element={<DocumentsPage />} />
 
               {/* Training Module */}
-              <Route path="/training" element={<TrainingDashboardPage />} />
+              <Route path="/training" element={<Navigate to="/training/my-training" replace />} />
+              <Route path="/training/dashboard" element={<ProtectedRoute requiredPermission="training.manage"><TrainingDashboardPage /></ProtectedRoute>} />
               <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
               <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
               <Route path="/training/programs" element={<TrainingProgramsPage />} />
@@ -175,6 +177,7 @@ function App() {
               <Route path="/training/shift-reports" element={<ShiftReportPage />} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
               <Route path="/training/my-training" element={<MyTrainingPage />} />
+              <Route path="/training/my-progress" element={<MemberProgressPage />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />

@@ -18,6 +18,7 @@ import {
   Star,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   AlertTriangle,
   CheckCircle2,
   Settings,
@@ -28,13 +29,7 @@ import {
 } from 'lucide-react';
 import { trainingModuleConfigService } from '../services/api';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
-
-// ==================== Helpers ====================
-
-const formatDate = (d: string | null | undefined) => {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
+import { formatDate } from '../utils/dateFormatting';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -401,21 +396,29 @@ const MyTrainingPage: React.FC = () => {
                       <div className="mt-3 space-y-1">
                         {e.requirements.map((r) => (
                           <div key={r.id} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 min-w-0">
                               {r.status === 'completed' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 flex-shrink-0" />
                               ) : (
-                                <div className="w-3.5 h-3.5 rounded-full border border-theme-input-border" />
+                                <div className="w-3.5 h-3.5 rounded-full border border-theme-input-border flex-shrink-0" />
                               )}
-                              <span className="text-theme-text-secondary">{Math.round(r.progress_percentage)}%</span>
+                              <span className="text-theme-text-primary truncate">{r.requirement_name || 'Requirement'}</span>
+                              <span className="text-theme-text-muted flex-shrink-0">{Math.round(r.progress_percentage)}%</span>
                             </div>
-                            <span className={`px-1.5 py-0.5 rounded ${getStatusColor(r.status)}`}>
+                            <span className={`px-1.5 py-0.5 rounded flex-shrink-0 ml-2 ${getStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
                             </span>
                           </div>
                         ))}
                       </div>
                     )}
+                    <button
+                      onClick={() => navigate('/training/my-progress')}
+                      className="mt-3 flex items-center space-x-1 text-xs text-red-700 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors"
+                    >
+                      <span>View Details</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
                   </div>
                 ))}
               </div>

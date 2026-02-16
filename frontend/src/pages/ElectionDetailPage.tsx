@@ -564,7 +564,7 @@ export const ElectionDetailPage: React.FC = () => {
                   onClick={() => setShowDeleteModal(true)}
                   className={`px-4 py-2 rounded-md ${
                     isDraft
-                      ? 'bg-gray-600 text-theme-text-primary hover:bg-gray-700'
+                      ? 'bg-gray-600 text-theme-text-primary hover:bg-theme-surface-hover'
                       : 'bg-red-800 text-white hover:bg-red-900'
                   }`}
                 >
@@ -1175,7 +1175,7 @@ export const ElectionDetailPage: React.FC = () => {
                   disabled={isDeleting || (!isDraft && deleteReason.trim().length < 10)}
                   className={`px-4 py-2 text-theme-text-primary rounded-md disabled:opacity-50 ${
                     isDraft
-                      ? 'bg-gray-600 hover:bg-gray-700'
+                      ? 'bg-gray-600 hover:bg-theme-surface-hover'
                       : 'bg-red-800 hover:bg-red-900'
                   }`}
                 >

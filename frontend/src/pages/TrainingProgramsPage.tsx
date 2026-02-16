@@ -105,7 +105,7 @@ const TrainingProgramsPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6" role="tablist" aria-label="Training program views">
+        <div className="flex space-x-1 bg-theme-surface-secondary p-1 rounded-lg mb-6" role="tablist" aria-label="Training program views">
           <button
             onClick={() => setActiveTab('programs')}
             role="tab"
@@ -114,7 +114,7 @@ const TrainingProgramsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'programs'
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Target className="w-4 h-4 inline mr-2" aria-hidden="true" />
@@ -128,7 +128,7 @@ const TrainingProgramsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'requirements'
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <ListChecks className="w-4 h-4 inline mr-2" aria-hidden="true" />
@@ -142,7 +142,7 @@ const TrainingProgramsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === 'templates'
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Award className="w-4 h-4 inline mr-2" aria-hidden="true" />
@@ -161,7 +161,7 @@ const TrainingProgramsPage: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={`Search ${activeTab}...`}
-              className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -177,7 +177,7 @@ const TrainingProgramsPage: React.FC = () => {
             {activeTab === 'programs' || activeTab === 'templates' ? (
               <div className="grid gap-4" id="tab-panel-programs" role="tabpanel">
                 {filteredPrograms.length === 0 ? (
-                  <div className="text-center py-12 bg-gray-800 rounded-lg">
+                  <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
                     <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
                     <p className="text-theme-text-muted">
                       {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
@@ -195,7 +195,7 @@ const TrainingProgramsPage: React.FC = () => {
                   filteredPrograms.map((program) => (
                     <div
                       key={program.id}
-                      className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 cursor-pointer transition-colors"
+                      className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover cursor-pointer transition-colors"
                       onClick={() => navigate(`/training/programs/${program.id}`)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/training/programs/${program.id}`); } }}
                       tabIndex={0}
@@ -240,7 +240,7 @@ const TrainingProgramsPage: React.FC = () => {
             ) : (
               <div id="tab-panel-requirements" role="tabpanel">
                 {/* Registry Import Section */}
-                <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                <div className="bg-theme-surface-secondary rounded-lg p-6 mb-6">
                   <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Import from Registry</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {['nfpa', 'nremt', 'proboard'].map((registry) => (
@@ -248,7 +248,7 @@ const TrainingProgramsPage: React.FC = () => {
                         key={registry}
                         onClick={() => handleImportRegistry(registry)}
                         disabled={importingRegistry !== null}
-                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 disabled:opacity-50"
+                        className="flex items-center justify-center space-x-2 px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50"
                       >
                         <Download className="w-5 h-5" aria-hidden="true" />
                         <span>
@@ -262,7 +262,7 @@ const TrainingProgramsPage: React.FC = () => {
                 {/* Requirements List */}
                 <div className="grid gap-4">
                   {filteredRequirements.length === 0 ? (
-                    <div className="text-center py-12 bg-gray-800 rounded-lg">
+                    <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
                       <ListChecks className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
                       <p className="text-theme-text-muted">
                         {searchTerm ? 'No requirements found' : 'No requirements yet'}
@@ -275,7 +275,7 @@ const TrainingProgramsPage: React.FC = () => {
                     filteredRequirements.map((req) => (
                       <div
                         key={req.id}
-                        className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 transition-colors"
+                        className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover transition-colors"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">

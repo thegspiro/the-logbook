@@ -153,8 +153,8 @@ const EnrollModal: React.FC<{
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-gray-800 rounded-lg max-w-lg w-full">
-        <div className="p-6 border-b border-gray-700">
+      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full">
+        <div className="p-6 border-b border-theme-surface-border">
           <h2 className="text-xl font-bold text-theme-text-primary">Enroll Members</h2>
           <p className="text-theme-text-muted text-sm mt-1">Enroll members into {programName}</p>
         </div>
@@ -167,7 +167,7 @@ const EnrollModal: React.FC<{
               value={userIds}
               onChange={(e) => setUserIds(e.target.value)}
               rows={5}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="Enter member user IDs, one per line..."
               required
             />
@@ -178,14 +178,14 @@ const EnrollModal: React.FC<{
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 text-sm"
+              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
             >
               Cancel
             </button>
@@ -312,7 +312,7 @@ const PipelineDetailPage: React.FC = () => {
           <div className="flex items-start space-x-4">
             <button
               onClick={() => navigate('/training/programs')}
-              className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-gray-800"
+              className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
               aria-label="Back to programs"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -351,7 +351,7 @@ const PipelineDetailPage: React.FC = () => {
             <button
               onClick={handleDuplicate}
               disabled={isDuplicating}
-              className="flex items-center space-x-1 px-3 py-2 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 text-sm disabled:opacity-50"
+              className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm disabled:opacity-50"
             >
               <Copy className="w-4 h-4" />
               <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
@@ -361,14 +361,14 @@ const PipelineDetailPage: React.FC = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-theme-surface-secondary rounded-lg p-4">
             <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <Layers className="w-4 h-4" />
               <span className="text-xs uppercase">Phases</span>
             </div>
             <p className="text-2xl font-bold text-theme-text-primary">{phases.length}</p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-theme-surface-secondary rounded-lg p-4">
             <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <ListChecks className="w-4 h-4" />
               <span className="text-xs uppercase">Requirements</span>
@@ -376,7 +376,7 @@ const PipelineDetailPage: React.FC = () => {
             <p className="text-2xl font-bold text-theme-text-primary">{totalReqs}</p>
             <p className="text-xs text-theme-text-muted">{requiredReqs} required</p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-theme-surface-secondary rounded-lg p-4">
             <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <Calendar className="w-4 h-4" />
               <span className="text-xs uppercase">Time Limit</span>
@@ -385,7 +385,7 @@ const PipelineDetailPage: React.FC = () => {
               {program.time_limit_days ? `${program.time_limit_days}d` : '—'}
             </p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-theme-surface-secondary rounded-lg p-4">
             <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <Users className="w-4 h-4" />
               <span className="text-xs uppercase">Enrolled</span>
@@ -395,7 +395,7 @@ const PipelineDetailPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6" role="tablist">
+        <div className="flex space-x-1 bg-theme-surface-secondary p-1 rounded-lg mb-6" role="tablist">
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
             { key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users },
@@ -410,7 +410,7 @@ const PipelineDetailPage: React.FC = () => {
                 className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
                   activeTab === tab.key
                     ? 'bg-red-600 text-white'
-                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -424,7 +424,7 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-4">
             {phases.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800 rounded-lg">
+              <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
                 <Layers className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <p className="text-theme-text-muted">No phases defined for this pipeline</p>
               </div>
@@ -436,7 +436,7 @@ const PipelineDetailPage: React.FC = () => {
                   const isExpanded = expandedPhases.has(phase.id);
 
                   return (
-                    <div key={phase.id} className="bg-gray-800 rounded-lg border border-gray-700">
+                    <div key={phase.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
                       {/* Phase header */}
                       <div
                         className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-750"
@@ -474,7 +474,7 @@ const PipelineDetailPage: React.FC = () => {
 
                       {/* Phase content */}
                       {isExpanded && (
-                        <div className="border-t border-gray-700 p-4">
+                        <div className="border-t border-theme-surface-border p-4">
                           {phase.description && (
                             <p className="text-theme-text-muted text-sm mb-4">{phase.description}</p>
                           )}
@@ -486,7 +486,7 @@ const PipelineDetailPage: React.FC = () => {
                               {phaseReqs.map((pr) => (
                                 <div
                                   key={pr.id}
-                                  className="bg-gray-700/50 rounded-lg p-3 flex items-start justify-between"
+                                  className="bg-theme-surface rounded-lg p-3 flex items-start justify-between"
                                 >
                                   <div className="flex items-start space-x-3">
                                     <CheckCircle2 className="w-5 h-5 text-theme-text-muted mt-0.5" />
@@ -537,7 +537,7 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'enrollments' && (
           <div>
             {enrollments.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800 rounded-lg">
+              <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
                 <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
                 <p className="text-theme-text-muted text-sm mb-4">
@@ -553,7 +553,7 @@ const PipelineDetailPage: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 {enrollments.map((enrollment) => (
-                  <div key={enrollment.id} className="bg-gray-800 rounded-lg p-4 flex items-center justify-between">
+                  <div key={enrollment.id} className="bg-theme-surface-secondary rounded-lg p-4 flex items-center justify-between">
                     <div>
                       <p className="text-theme-text-primary font-medium">{enrollment.user_id}</p>
                       <div className="flex items-center space-x-3 text-xs text-theme-text-muted mt-1">

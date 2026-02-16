@@ -160,8 +160,8 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+      <div className="bg-theme-surface-secondary rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <h2 className="text-xl font-bold text-theme-text-primary">
             {isEdit ? 'Edit Course' : 'Add New Course'}
           </h2>
@@ -186,7 +186,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="e.g., Firefighter I"
                 required
               />
@@ -197,7 +197,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="text"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="e.g., FF1"
                 maxLength={50}
               />
@@ -210,7 +210,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="Describe the course content, objectives, and target audience..."
             />
           </div>
@@ -221,7 +221,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               <select
                 value={formData.training_type}
                 onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 {TRAINING_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -234,7 +234,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="number"
                 value={formData.duration_hours}
                 onChange={(e) => setFormData({ ...formData, duration_hours: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="e.g., 40"
                 min={0}
                 step={0.5}
@@ -246,7 +246,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="number"
                 value={formData.credit_hours}
                 onChange={(e) => setFormData({ ...formData, credit_hours: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="e.g., 40"
                 min={0}
                 step={0.5}
@@ -261,7 +261,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="text"
                 value={formData.instructor}
                 onChange={(e) => setFormData({ ...formData, instructor: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="Instructor name"
               />
             </div>
@@ -271,7 +271,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="number"
                 value={formData.max_participants}
                 onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="Optional"
                 min={1}
               />
@@ -282,7 +282,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                 type="number"
                 value={formData.expiration_months}
                 onChange={(e) => setFormData({ ...formData, expiration_months: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="Never"
                 min={1}
               />
@@ -301,7 +301,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     formData.category_ids.includes(cat.id)
                       ? 'text-theme-text-primary'
-                      : 'bg-gray-700 text-theme-text-muted hover:bg-gray-600'
+                      : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
                   }`}
                   style={
                     formData.category_ids.includes(cat.id)
@@ -321,16 +321,16 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               value={formData.materials_required}
               onChange={(e) => setFormData({ ...formData, materials_required: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="e.g., SCBA&#10;Bunker gear&#10;Notebook"
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-theme-surface-border">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 text-sm"
+              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
               disabled={isSubmitting}
             >
               Cancel
@@ -481,7 +481,7 @@ const CourseLibraryPage: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search courses by name, code, or description..."
-                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
             <button
@@ -489,7 +489,7 @@ const CourseLibraryPage: React.FC = () => {
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg border text-sm ${
                 showFilters || filterType || filterCategory
                   ? 'bg-red-600/20 border-red-500 text-red-700 dark:text-red-400'
-                  : 'bg-gray-800 border-gray-700 text-theme-text-muted hover:text-theme-text-primary'
+                  : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <Filter className="w-4 h-4" />
@@ -499,13 +499,13 @@ const CourseLibraryPage: React.FC = () => {
           </div>
 
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border">
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Training Type</label>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">All Types</option>
                   {TRAINING_TYPES.map((t) => (
@@ -518,7 +518,7 @@ const CourseLibraryPage: React.FC = () => {
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">All Categories</option>
                   {parentCategories.map((cat) => (
@@ -537,7 +537,7 @@ const CourseLibraryPage: React.FC = () => {
             <p className="text-theme-text-muted mt-4">Loading courses...</p>
           </div>
         ) : filteredCourses.length === 0 ? (
-          <div className="text-center py-16 bg-gray-800 rounded-lg">
+          <div className="text-center py-16 bg-theme-surface-secondary rounded-lg">
             <BookOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <p className="text-theme-text-muted text-lg mb-2">
               {searchTerm || filterType || filterCategory ? 'No courses match your filters' : 'No courses in your library yet'}
@@ -556,7 +556,7 @@ const CourseLibraryPage: React.FC = () => {
             {filteredCourses.map((course) => (
               <div
                 key={course.id}
-                className="bg-gray-800 rounded-lg p-5 hover:bg-gray-750 transition-colors border border-gray-700"
+                className="bg-theme-surface-secondary rounded-lg p-5 hover:bg-gray-750 transition-colors border border-theme-surface-border"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
