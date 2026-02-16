@@ -26,11 +26,11 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, color
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6">
+    <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-6">
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">{value}</p>
+          <p className="text-sm font-medium text-theme-text-secondary">{title}</p>
+          <p className="mt-2 text-3xl font-semibold text-theme-text-primary">{value}</p>
           {subtitle && (
             <p className="mt-1 text-sm text-theme-text-muted">{subtitle}</p>
           )}
@@ -53,10 +53,10 @@ const EndpointBar: React.FC<EndpointStatsProps> = ({ endpoint, count, percentage
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
-        <span className="font-mono text-gray-700">{endpoint}</span>
+        <span className="font-mono text-theme-text-secondary">{endpoint}</span>
         <span className="text-theme-text-muted">{count.toLocaleString()} ({percentage.toFixed(1)}%)</span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-2">
+      <div className="w-full bg-theme-surface-border rounded-full h-2">
         <div
           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
           style={{ width: `${percentage}%` }}
@@ -87,8 +87,8 @@ export const UsageStatsTab: React.FC = () => {
 
   if (!stats) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-md p-8 text-center">
-        <p className="text-gray-600">No usage statistics available</p>
+      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-md p-8 text-center">
+        <p className="text-theme-text-secondary">No usage statistics available</p>
       </div>
     );
   }
@@ -109,14 +109,14 @@ export const UsageStatsTab: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Usage Statistics</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-lg font-semibold text-theme-text-primary">Usage Statistics</h3>
+          <p className="text-sm text-theme-text-secondary mt-1">
             Public portal usage metrics and analytics
           </p>
         </div>
         <button
           onClick={refetch}
-          className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          className="px-4 py-2 text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
         >
           <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -127,7 +127,7 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Request Volume Cards */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-700 mb-3">Request Volume</h4>
+        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Request Volume</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard
             title="Last 24 Hours"
@@ -167,7 +167,7 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Key Metrics */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-700 mb-3">Key Metrics</h4>
+        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Key Metrics</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <StatCard
             title="Active API Keys"
@@ -216,7 +216,7 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Response Status Distribution */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-700 mb-3">Response Status Distribution (24h)</h4>
+        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Response Status Distribution (24h)</h4>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <StatCard
             title="2xx Success"
@@ -275,8 +275,8 @@ export const UsageStatsTab: React.FC = () => {
       {/* Endpoint Usage */}
       {endpointStats.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Top Endpoints (All Time)</h4>
-          <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Top Endpoints (All Time)</h4>
+          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-6 space-y-4">
             {endpointStats.map((stat) => (
               <EndpointBar
                 key={stat.endpoint}

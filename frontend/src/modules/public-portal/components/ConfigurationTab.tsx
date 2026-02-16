@@ -66,11 +66,11 @@ const ConfigurationTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* CORS Origins */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-theme-surface rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
           Allowed Origins (CORS)
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-theme-text-secondary mb-4">
           Specify which domains can make requests to your public API. Leave empty
           to allow all origins (not recommended for production).
         </p>
@@ -82,9 +82,9 @@ const ConfigurationTab: React.FC = () => {
               {allowedOrigins.map((origin) => (
                 <div
                   key={origin}
-                  className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg"
+                  className="flex items-center justify-between bg-theme-surface-secondary px-4 py-2 rounded-lg"
                 >
-                  <span className="text-sm font-mono text-gray-700">{origin}</span>
+                  <span className="text-sm font-mono text-theme-text-secondary">{origin}</span>
                   <button
                     onClick={() => handleRemoveOrigin(origin)}
                     className="text-red-600 hover:text-red-800"
@@ -104,7 +104,7 @@ const ConfigurationTab: React.FC = () => {
               onChange={(e) => setNewOrigin(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddOrigin()}
               placeholder="https://example.com"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <button
               onClick={handleAddOrigin}
@@ -118,17 +118,17 @@ const ConfigurationTab: React.FC = () => {
       </div>
 
       {/* Rate Limiting */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-theme-surface rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
           Rate Limiting
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-theme-text-secondary mb-4">
           Set the default rate limit for API keys. Individual keys can override
           this value.
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
             Default Rate Limit (requests per hour)
           </label>
           <input
@@ -137,7 +137,7 @@ const ConfigurationTab: React.FC = () => {
             onChange={(e) => setDefaultRateLimit(parseInt(e.target.value, 10))}
             min={1}
             max={100000}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <p className="mt-1 text-xs text-theme-text-muted">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
@@ -146,14 +146,14 @@ const ConfigurationTab: React.FC = () => {
       </div>
 
       {/* Caching */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Caching</h3>
-        <p className="text-sm text-gray-600 mb-4">
+      <div className="bg-theme-surface rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Caching</h3>
+        <p className="text-sm text-theme-text-secondary mb-4">
           Configure how long responses are cached to reduce database load.
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
             Cache TTL (seconds)
           </label>
           <input
@@ -162,7 +162,7 @@ const ConfigurationTab: React.FC = () => {
             onChange={(e) => setCacheTTL(parseInt(e.target.value, 10))}
             min={0}
             max={3600}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <p className="mt-1 text-xs text-theme-text-muted">
             Recommended: 300 seconds (5 minutes). Set to 0 to disable caching.
@@ -193,7 +193,7 @@ const ConfigurationTab: React.FC = () => {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
         >
           <Save className="w-4 h-4" />
           <span>{saving ? 'Saving...' : 'Save Configuration'}</span>
