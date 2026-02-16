@@ -184,7 +184,7 @@ const EventSelfCheckInPage: React.FC = () => {
                 {checkingIn ? 'Checking Out...' : 'Check Out of This Event'}
               </button>
 
-              <p className="text-sm text-gray-500 text-center">
+              <p className="text-sm text-theme-text-muted text-center">
                 By checking out, you confirm you are leaving this event
               </p>
 
@@ -368,7 +368,7 @@ const EventSelfCheckInPage: React.FC = () => {
               {checkingIn ? 'Checking In...' : 'Check In to This Event'}
             </button>
 
-            <p className="text-sm text-gray-500 text-center mt-4">
+            <p className="text-sm text-theme-text-muted text-center mt-4">
               By checking in, you confirm your attendance at this event
             </p>
           </div>
@@ -404,7 +404,7 @@ const EventSelfCheckInPage: React.FC = () => {
           >
             View Event Details
           </Link>
-          <span className="text-gray-400 mx-3">|</span>
+          <span className="text-theme-text-muted mx-3">|</span>
           <Link
             to="/events"
             className="text-blue-600 hover:text-blue-800 font-medium"

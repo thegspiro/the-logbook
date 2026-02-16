@@ -32,7 +32,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, color
           <p className="text-sm font-medium text-gray-600">{title}</p>
           <p className="mt-2 text-3xl font-semibold text-gray-900">{value}</p>
           {subtitle && (
-            <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+            <p className="mt-1 text-sm text-theme-text-muted">{subtitle}</p>
           )}
         </div>
         <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
@@ -54,7 +54,7 @@ const EndpointBar: React.FC<EndpointStatsProps> = ({ endpoint, count, percentage
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
         <span className="font-mono text-gray-700">{endpoint}</span>
-        <span className="text-gray-500">{count.toLocaleString()} ({percentage.toFixed(1)}%)</span>
+        <span className="text-theme-text-muted">{count.toLocaleString()} ({percentage.toFixed(1)}%)</span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div
@@ -286,7 +286,7 @@ export const UsageStatsTab: React.FC = () => {
               />
             ))}
             {Object.keys(stats.endpoint_usage || {}).length > 10 && (
-              <p className="text-xs text-gray-500 text-center pt-2">
+              <p className="text-xs text-theme-text-muted text-center pt-2">
                 Showing top 10 of {Object.keys(stats.endpoint_usage || {}).length} endpoints
               </p>
             )}
@@ -299,7 +299,7 @@ export const UsageStatsTab: React.FC = () => {
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="h-5 w-5 text-yellow-700 dark:text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
             </div>

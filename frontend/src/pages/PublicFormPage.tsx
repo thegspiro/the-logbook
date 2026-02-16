@@ -235,7 +235,7 @@ const PublicFormPage = () => {
         return (
           <div className="border-b border-gray-200 pb-2 -mb-2">
             <h3 className="text-lg font-semibold text-gray-800">{clean(field.label)}</h3>
-            {field.help_text && <p className="text-sm text-gray-500 mt-1">{clean(field.help_text)}</p>}
+            {field.help_text && <p className="text-sm text-theme-text-muted mt-1">{clean(field.help_text)}</p>}
           </div>
         );
 
@@ -269,7 +269,7 @@ const PublicFormPage = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-8 h-8 text-red-700 dark:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
@@ -285,7 +285,7 @@ const PublicFormPage = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-8 h-8 text-green-700 dark:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
@@ -320,7 +320,7 @@ const PublicFormPage = () => {
             {form.organization_name && (
               <p className="text-blue-100 text-sm mb-1">{clean(form.organization_name)}</p>
             )}
-            <h1 className="text-2xl font-bold text-white">{clean(form.name)}</h1>
+            <h1 className="text-2xl font-bold text-theme-text-primary">{clean(form.name)}</h1>
             {form.description && (
               <p className="text-blue-100 mt-2">{clean(form.description)}</p>
             )}
@@ -337,7 +337,7 @@ const PublicFormPage = () => {
 
           {/* Contact Info Section */}
           <div className="mb-8 pb-6 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Your Information (Optional)</h3>
+            <h3 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wide mb-4">Your Information (Optional)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -377,10 +377,10 @@ const PublicFormPage = () => {
                 <div key={field.id} className={field.width === 'half' ? 'w-1/2 inline-block pr-2' : field.width === 'third' ? 'w-1/3 inline-block pr-2' : ''}>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {clean(field.label)}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                    {field.required && <span className="text-red-700 dark:text-red-500 ml-1">*</span>}
                   </label>
                   {field.help_text && (
-                    <p className="text-xs text-gray-500 mb-2">{clean(field.help_text)}</p>
+                    <p className="text-xs text-theme-text-muted mb-2">{clean(field.help_text)}</p>
                   )}
                   {renderField(field)}
                 </div>
@@ -424,7 +424,7 @@ const PublicFormPage = () => {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-gray-400 text-xs mt-6">
+        <p className="text-center text-theme-text-muted text-xs mt-6">
           Powered by The Logbook
         </p>
       </div>

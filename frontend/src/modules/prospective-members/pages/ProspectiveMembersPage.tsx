@@ -205,18 +205,18 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Users className="w-7 h-7 text-red-500" />
+          <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-3">
+            <Users className="w-7 h-7 text-red-700 dark:text-red-500" />
             Prospective Members
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-theme-text-muted mt-1">
             Manage your organization's applicant pipeline
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/prospective-members/settings')}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
           >
             <Settings className="w-4 h-4" />
             Pipeline Settings
@@ -235,41 +235,41 @@ export const ProspectiveMembersPage: React.FC = () => {
       {pipelineStats && !isLoadingStats && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-2">
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
+            <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
+              <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
                 <Users className="w-3.5 h-3.5" />
                 Total Active
               </div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-theme-text-primary">
                 {pipelineStats.active_applicants}
               </p>
             </div>
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-blue-400 text-xs mb-1">
+            <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs mb-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Converted
               </div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-theme-text-primary">
                 {pipelineStats.converted_count}
               </p>
             </div>
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-slate-400 text-xs mb-1">
+            <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
+              <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
                 <Clock className="w-3.5 h-3.5" />
                 Avg. Days to Convert
               </div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-theme-text-primary">
                 {pipelineStats.avg_days_to_convert > 0
                   ? pipelineStats.avg_days_to_convert
                   : '—'}
               </p>
             </div>
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-amber-400 text-xs mb-1">
+            <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs mb-1">
                 <TrendingUp className="w-3.5 h-3.5" />
                 Conversion Rate
               </div>
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-theme-text-primary">
                 {pipelineStats.conversion_rate > 0
                   ? `${pipelineStats.conversion_rate.toFixed(1)}%`
                   : '—'}
@@ -277,33 +277,33 @@ export const ProspectiveMembersPage: React.FC = () => {
             </div>
             {(pipelineStats.warning_count > 0) && (
               <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-amber-400 text-xs mb-1">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs mb-1">
                   <AlertTriangle className="w-3.5 h-3.5" />
                   Approaching Timeout
                 </div>
-                <p className="text-2xl font-bold text-amber-300">
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
                   {pipelineStats.warning_count}
                 </p>
               </div>
             )}
             {(pipelineStats.inactive_count > 0) && (
-              <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
+              <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
                 <div className="flex items-center gap-2 text-slate-500 text-xs mb-1">
                   <XCircle className="w-3.5 h-3.5" />
                   Inactive
                 </div>
-                <p className="text-2xl font-bold text-slate-400">
+                <p className="text-2xl font-bold text-theme-text-muted">
                   {pipelineStats.inactive_count}
                 </p>
               </div>
             )}
             {(pipelineStats.withdrawn_count > 0) && (
-              <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
+              <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
                 <div className="flex items-center gap-2 text-slate-500 text-xs mb-1">
                   <Archive className="w-3.5 h-3.5" />
                   Withdrawn
                 </div>
-                <p className="text-2xl font-bold text-slate-400">
+                <p className="text-2xl font-bold text-theme-text-muted">
                   {pipelineStats.withdrawn_count}
                 </p>
               </div>
@@ -319,13 +319,13 @@ export const ProspectiveMembersPage: React.FC = () => {
       )}
 
       {/* Active / Inactive Tabs */}
-      <div className="flex items-center gap-1 mb-4 border-b border-white/10">
+      <div className="flex items-center gap-1 mb-4 border-b border-theme-surface-border">
         <button
           onClick={() => setActiveTab('active')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'active'
-              ? 'border-red-500 text-white'
-              : 'border-transparent text-slate-400 hover:text-slate-300'
+              ? 'border-red-500 text-theme-text-primary'
+              : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
           }`}
         >
           Active Pipeline
@@ -334,13 +334,13 @@ export const ProspectiveMembersPage: React.FC = () => {
           onClick={() => setActiveTab('inactive')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'inactive'
-              ? 'border-red-500 text-white'
-              : 'border-transparent text-slate-400 hover:text-slate-300'
+              ? 'border-red-500 text-theme-text-primary'
+              : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
           }`}
         >
           Inactive Applications
           {pipelineStats && pipelineStats.inactive_count > 0 && (
-            <span className="px-1.5 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300">
+            <span className="px-1.5 py-0.5 text-xs rounded-full bg-slate-700 text-theme-text-secondary">
               {pipelineStats.inactive_count}
             </span>
           )}
@@ -349,13 +349,13 @@ export const ProspectiveMembersPage: React.FC = () => {
           onClick={() => setActiveTab('withdrawn')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'withdrawn'
-              ? 'border-red-500 text-white'
-              : 'border-transparent text-slate-400 hover:text-slate-300'
+              ? 'border-red-500 text-theme-text-primary'
+              : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
           }`}
         >
           Withdrawn
           {pipelineStats && pipelineStats.withdrawn_count > 0 && (
-            <span className="px-1.5 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300">
+            <span className="px-1.5 py-0.5 text-xs rounded-full bg-slate-700 text-theme-text-secondary">
               {pipelineStats.withdrawn_count}
             </span>
           )}
@@ -373,7 +373,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               const pipeline = pipelines.find((p) => p.id === e.target.value);
               if (pipeline) fetchPipeline(pipeline.id);
             }}
-            className="bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="bg-slate-800 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>
@@ -385,13 +385,13 @@ export const ProspectiveMembersPage: React.FC = () => {
 
         {/* Search */}
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search applicants..."
-            className="w-full bg-slate-800 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full bg-slate-800 border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
 
@@ -401,8 +401,8 @@ export const ProspectiveMembersPage: React.FC = () => {
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors ${
               statusFilter
-                ? 'border-red-500 text-red-400 bg-red-500/10'
-                : 'border-white/10 text-slate-300 hover:bg-white/5'
+                ? 'border-red-500 text-red-700 dark:text-red-400 bg-red-500/10'
+                : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
             }`}
           >
             <Filter className="w-4 h-4" />
@@ -420,7 +420,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             )}
           </button>
           {showFilters && (
-            <div className="absolute top-full mt-2 left-0 w-48 bg-slate-700 border border-white/10 rounded-lg shadow-xl z-10 py-1">
+            <div className="absolute top-full mt-2 left-0 w-48 bg-slate-700 border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
               {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map(
                 (status) => (
                   <button
@@ -429,10 +429,10 @@ export const ProspectiveMembersPage: React.FC = () => {
                       setStatusFilter(status);
                       setShowFilters(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm capitalize hover:bg-white/5 ${
+                    className={`w-full text-left px-4 py-2 text-sm capitalize hover:bg-theme-surface-secondary ${
                       statusFilter === status
-                        ? 'text-red-400'
-                        : 'text-slate-300'
+                        ? 'text-red-700 dark:text-red-400'
+                        : 'text-theme-text-secondary'
                     }`}
                   >
                     {status.replace('_', ' ')}
@@ -445,7 +445,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     setStatusFilter('');
                     setShowFilters(false);
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-slate-400 hover:bg-white/5 border-t border-white/10"
+                  className="w-full text-left px-4 py-2 text-sm text-theme-text-muted hover:bg-theme-surface-secondary border-t border-theme-surface-border"
                 >
                   Clear filter
                 </button>
@@ -460,20 +460,20 @@ export const ProspectiveMembersPage: React.FC = () => {
         <button
           onClick={() => fetchApplicants()}
           disabled={isLoading}
-          className="p-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
           title="Refresh"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
 
         {/* View Toggle */}
-        <div className="flex items-center bg-slate-800 border border-white/10 rounded-lg">
+        <div className="flex items-center bg-slate-800 border border-theme-surface-border rounded-lg">
           <button
             onClick={() => setViewMode('kanban')}
             className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-l-lg transition-colors ${
               viewMode === 'kanban'
                 ? 'bg-red-600 text-white'
-                : 'text-slate-400 hover:text-white'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
@@ -484,7 +484,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-r-lg transition-colors ${
               viewMode === 'table'
                 ? 'bg-red-600 text-white'
-                : 'text-slate-400 hover:text-white'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             <List className="w-4 h-4" />
@@ -497,8 +497,8 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Error State */}
       {error && (
         <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4 flex items-center gap-2">
-          <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-          <p className="text-sm text-red-400">{error}</p>
+          <XCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 
@@ -507,15 +507,15 @@ export const ProspectiveMembersPage: React.FC = () => {
         <>
           {(isLoading || isLoadingPipeline || isLoadingPipelines) && !applicants.length ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : !currentPipeline ? (
             <div className="text-center py-20">
               <Users className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">
+              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
                 No pipeline configured
               </h3>
-              <p className="text-slate-400 mb-4">
+              <p className="text-theme-text-muted mb-4">
                 Create a pipeline to start managing prospective members.
               </p>
               <button
@@ -554,8 +554,8 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div>
           {/* Inactive Bulk Actions */}
           {selectedInactive.size > 0 && (
-            <div className="mb-3 flex items-center gap-3 p-3 bg-slate-800 border border-white/10 rounded-lg">
-              <span className="text-sm text-slate-300">
+            <div className="mb-3 flex items-center gap-3 p-3 bg-slate-800 border border-theme-surface-border rounded-lg">
+              <span className="text-sm text-theme-text-secondary">
                 {selectedInactive.size} selected
               </span>
               <div className="flex items-center gap-2 ml-auto">
@@ -598,23 +598,23 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {isLoadingInactive ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : inactiveApplicants.length === 0 ? (
-            <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-white/10">
+            <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-theme-surface-border">
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">
+              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
                 No inactive applications
               </h3>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-theme-text-muted">
                 All applications are currently active or have been resolved.
               </p>
             </div>
           ) : (
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg overflow-hidden">
+            <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-white/10">
+                  <tr className="border-b border-theme-surface-border">
                     <th className="w-10 p-3">
                       <input
                         type="checkbox"
@@ -626,14 +626,14 @@ export const ProspectiveMembersPage: React.FC = () => {
                             setSelectedInactive(new Set());
                           }
                         }}
-                        className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                        className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                       />
                     </th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Name</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Email</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Last Stage</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Inactive Since</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Days Idle</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Email</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Last Stage</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Inactive Since</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Days Idle</th>
                     <th className="w-28 p-3"></th>
                   </tr>
                 </thead>
@@ -641,7 +641,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {inactiveApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                      className="border-b border-white/5 hover:bg-theme-surface-secondary transition-colors"
                     >
                       <td className="p-3">
                         <input
@@ -656,22 +656,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                             }
                             setSelectedInactive(next);
                           }}
-                          className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                          className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                         />
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-theme-text-secondary flex-shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
-                          <span className="text-sm font-medium text-slate-300">
+                          <span className="text-sm font-medium text-theme-text-secondary">
                             {applicant.first_name} {applicant.last_name}
                           </span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-slate-400">{applicant.email}</td>
-                      <td className="p-3 text-sm text-slate-400">{applicant.current_stage_name ?? '—'}</td>
-                      <td className="p-3 text-sm text-slate-400">
+                      <td className="p-3 text-sm text-theme-text-muted">{applicant.email}</td>
+                      <td className="p-3 text-sm text-theme-text-muted">{applicant.current_stage_name ?? '—'}</td>
+                      <td className="p-3 text-sm text-theme-text-muted">
                         {applicant.deactivated_at
                           ? new Date(applicant.deactivated_at).toLocaleDateString('en-US', {
                               month: 'short',
@@ -694,7 +694,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             }
                           }}
                           disabled={isReactivating}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
                         >
                           <RotateCcw className="w-3 h-3" />
                           Reactivate
@@ -705,22 +705,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </tbody>
               </table>
               {inactiveTotalPages > 1 && (
-                <div className="flex items-center justify-between p-3 border-t border-white/10">
-                  <p className="text-sm text-slate-400">
+                <div className="flex items-center justify-between p-3 border-t border-theme-surface-border">
+                  <p className="text-sm text-theme-text-muted">
                     Page {inactiveCurrentPage} of {inactiveTotalPages} ({inactiveTotalApplicants} total)
                   </p>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => fetchInactiveApplicants(inactiveCurrentPage - 1)}
                       disabled={inactiveCurrentPage <= 1}
-                      className="px-3 py-1 text-sm text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
                       Previous
                     </button>
                     <button
                       onClick={() => fetchInactiveApplicants(inactiveCurrentPage + 1)}
                       disabled={inactiveCurrentPage >= inactiveTotalPages}
-                      className="px-3 py-1 text-sm text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
                       Next
                     </button>
@@ -749,28 +749,28 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div>
           {isLoadingWithdrawn ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : withdrawnApplicants.length === 0 ? (
-            <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-white/10">
+            <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-theme-surface-border">
               <Archive className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">
+              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
                 No withdrawn applications
               </h3>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-theme-text-muted">
                 Applicants who voluntarily withdraw from the pipeline will appear here.
               </p>
             </div>
           ) : (
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg overflow-hidden">
+            <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Name</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Email</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Last Stage</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Withdrawn Date</th>
-                    <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">Reason</th>
+                  <tr className="border-b border-theme-surface-border">
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Email</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Last Stage</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Withdrawn Date</th>
+                    <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
                     <th className="w-32 p-3"></th>
                   </tr>
                 </thead>
@@ -778,24 +778,24 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {withdrawnApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                      className="border-b border-white/5 hover:bg-theme-surface-secondary transition-colors"
                     >
                       <td className="p-3">
                         <div
                           className="flex items-center gap-2.5 cursor-pointer"
                           onClick={() => fetchApplicant(applicant.id)}
                         >
-                          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-300 flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-theme-text-secondary flex-shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
-                          <span className="text-sm font-medium text-slate-300">
+                          <span className="text-sm font-medium text-theme-text-secondary">
                             {applicant.first_name} {applicant.last_name}
                           </span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-slate-400">{applicant.email}</td>
-                      <td className="p-3 text-sm text-slate-400">{applicant.current_stage_name ?? '—'}</td>
-                      <td className="p-3 text-sm text-slate-400">
+                      <td className="p-3 text-sm text-theme-text-muted">{applicant.email}</td>
+                      <td className="p-3 text-sm text-theme-text-muted">{applicant.current_stage_name ?? '—'}</td>
+                      <td className="p-3 text-sm text-theme-text-muted">
                         {applicant.withdrawn_at
                           ? new Date(applicant.withdrawn_at).toLocaleDateString('en-US', {
                               month: 'short',
@@ -811,7 +811,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => fetchApplicant(applicant.id)}
-                            className="text-xs text-slate-400 hover:text-white transition-colors"
+                            className="text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
                           >
                             View
                           </button>
@@ -825,7 +825,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               }
                             }}
                             disabled={isReactivating}
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
                           >
                             <RotateCcw className="w-3 h-3" />
                             Reactivate
@@ -837,22 +837,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </tbody>
               </table>
               {withdrawnTotalPages > 1 && (
-                <div className="flex items-center justify-between p-3 border-t border-white/10">
-                  <p className="text-sm text-slate-400">
+                <div className="flex items-center justify-between p-3 border-t border-theme-surface-border">
+                  <p className="text-sm text-theme-text-muted">
                     Page {withdrawnCurrentPage} of {withdrawnTotalPages} ({withdrawnTotalApplicants} total)
                   </p>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => fetchWithdrawnApplicants(withdrawnCurrentPage - 1)}
                       disabled={withdrawnCurrentPage <= 1}
-                      className="px-3 py-1 text-sm text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
                       Previous
                     </button>
                     <button
                       onClick={() => fetchWithdrawnApplicants(withdrawnCurrentPage + 1)}
                       disabled={withdrawnCurrentPage >= withdrawnTotalPages}
-                      className="px-3 py-1 text-sm text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
                     >
                       Next
                     </button>
@@ -878,27 +878,27 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-white/10 rounded-xl max-w-md w-full">
+          <div className="bg-slate-800 border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                  <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">Confirm Purge</h2>
-                  <p className="text-sm text-slate-400">This action cannot be undone</p>
+                  <h2 className="text-lg font-bold text-theme-text-primary">Confirm Purge</h2>
+                  <p className="text-sm text-theme-text-muted">This action cannot be undone</p>
                 </div>
               </div>
-              <p className="text-sm text-slate-300 mb-4">
-                You are about to permanently delete <strong className="text-white">{selectedInactive.size}</strong> inactive
+              <p className="text-sm text-theme-text-secondary mb-4">
+                You are about to permanently delete <strong className="text-theme-text-primary">{selectedInactive.size}</strong> inactive
                 application(s) and all associated personal data. This protects your organization from holding
                 unnecessary private information.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button
                 onClick={() => setShowPurgeConfirm(false)}
-                className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
               >
                 Cancel
               </button>
@@ -943,12 +943,12 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Add Applicant Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-white/10 rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <h2 className="text-lg font-bold text-white">Add Applicant</h2>
+          <div className="bg-slate-800 border border-theme-surface-border rounded-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
+              <h2 className="text-lg font-bold text-theme-text-primary">Add Applicant</h2>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -956,52 +956,52 @@ export const ProspectiveMembersPage: React.FC = () => {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">First Name *</label>
+                  <label className="block text-sm text-theme-text-muted mb-1">First Name *</label>
                   <input
                     type="text"
                     value={newApplicant.first_name}
                     onChange={(e) =>
                       setNewApplicant({ ...newApplicant, first_name: e.target.value })
                     }
-                    className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">Last Name *</label>
+                  <label className="block text-sm text-theme-text-muted mb-1">Last Name *</label>
                   <input
                     type="text"
                     value={newApplicant.last_name}
                     onChange={(e) =>
                       setNewApplicant({ ...newApplicant, last_name: e.target.value })
                     }
-                    className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Email *</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Email *</label>
                 <input
                   type="email"
                   value={newApplicant.email}
                   onChange={(e) =>
                     setNewApplicant({ ...newApplicant, email: e.target.value })
                   }
-                  className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Phone</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Phone</label>
                 <input
                   type="tel"
                   value={newApplicant.phone}
                   onChange={(e) =>
                     setNewApplicant({ ...newApplicant, phone: e.target.value })
                   }
-                  className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Membership Type</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Membership Type</label>
                 <select
                   value={newApplicant.target_membership_type}
                   onChange={(e) =>
@@ -1010,17 +1010,17 @@ export const ProspectiveMembersPage: React.FC = () => {
                       target_membership_type: e.target.value as 'probationary' | 'administrative',
                     })
                   }
-                  className="w-full bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="probationary">Probationary</option>
                   <option value="administrative">Administrative</option>
                 </select>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
               >
                 Cancel
               </button>

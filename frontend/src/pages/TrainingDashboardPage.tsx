@@ -57,8 +57,8 @@ export default function TrainingDashboardPage() {
   return (
     <div className="min-h-screen p-6 max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white">Training Dashboard</h1>
-        <p className="text-slate-300 mt-2">
+        <h1 className="text-3xl font-bold text-theme-text-primary">Training Dashboard</h1>
+        <p className="text-theme-text-secondary mt-2">
           Manage training courses, requirements, and certifications
         </p>
       </div>
@@ -69,7 +69,7 @@ export default function TrainingDashboardPage() {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
-                className="h-5 w-5 text-yellow-400"
+                className="h-5 w-5 text-yellow-700 dark:text-yellow-400"
                 viewBox="0 0 20 20"
                 fill="currentColor"
               >
@@ -81,7 +81,7 @@ export default function TrainingDashboardPage() {
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-yellow-300">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
                 <span className="font-medium">{expiringCerts.length} certifications</span> expiring within 90 days
               </p>
             </div>
@@ -91,20 +91,20 @@ export default function TrainingDashboardPage() {
 
       {/* Statistics Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-slate-300">Active Courses</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{courses.length}</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-theme-text-secondary">Active Courses</div>
+          <div className="mt-2 text-3xl font-semibold text-theme-text-primary">{courses.length}</div>
         </div>
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-slate-300">Requirements ({currentYear})</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{requirements.length}</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-theme-text-secondary">Requirements ({currentYear})</div>
+          <div className="mt-2 text-3xl font-semibold text-theme-text-primary">{requirements.length}</div>
         </div>
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-slate-300">Expiring Soon</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-theme-text-secondary">Expiring Soon</div>
           <div className="mt-2 text-3xl font-semibold text-yellow-600">{expiringCerts.length}</div>
         </div>
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-slate-300">Quick Actions</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-theme-text-secondary">Quick Actions</div>
           <div className="mt-2 space-y-2">
             <button onClick={() => navigate('/training/my-training')} className="text-sm text-blue-600 hover:text-blue-800 block">
               My Training
@@ -117,15 +117,15 @@ export default function TrainingDashboardPage() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow">
-        <div className="border-b border-white/20">
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow">
+        <div className="border-b border-theme-surface-border">
           <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
             <button
               onClick={() => setActiveTab('courses')}
               className={`${
                 activeTab === 'courses'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-white/30'
+                  : 'border-transparent text-theme-text-muted hover:text-slate-200 hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Training Courses
@@ -135,7 +135,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'requirements'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-white/30'
+                  : 'border-transparent text-theme-text-muted hover:text-slate-200 hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Requirements
@@ -145,7 +145,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'certifications'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-white/30'
+                  : 'border-transparent text-theme-text-muted hover:text-slate-200 hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Expiring Certifications
@@ -158,45 +158,45 @@ export default function TrainingDashboardPage() {
           {activeTab === 'courses' && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-white">Active Training Courses</h2>
+                <h2 className="text-lg font-semibold text-theme-text-primary">Active Training Courses</h2>
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                   Add New Course
                 </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-white/10">
-                  <thead className="bg-slate-900/50">
+                  <thead className="bg-theme-input-bg">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Course Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Code
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Duration
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Instructor
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
                     {courses.map((course) => (
-                      <tr key={course.id} className="hover:bg-white/5">
+                      <tr key={course.id} className="hover:bg-theme-surface-secondary">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-white">{course.name}</div>
+                          <div className="text-sm font-medium text-theme-text-primary">{course.name}</div>
                           {course.description && (
-                            <div className="text-sm text-slate-400">{course.description}</div>
+                            <div className="text-sm text-theme-text-muted">{course.description}</div>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                           {course.code || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -204,22 +204,22 @@ export default function TrainingDashboardPage() {
                             {course.training_type.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                           {course.duration_hours ? `${course.duration_hours}h` : '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                           {course.instructor || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
-                          <button className="text-slate-300 hover:text-white">View</button>
+                          <button className="text-theme-text-secondary hover:text-theme-text-primary">View</button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {courses.length === 0 && (
-                  <div className="text-center py-8 text-slate-400">
+                  <div className="text-center py-8 text-theme-text-muted">
                     No active courses. Add a new course to get started.
                   </div>
                 )}
@@ -231,7 +231,7 @@ export default function TrainingDashboardPage() {
           {activeTab === 'requirements' && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-theme-text-primary">
                   Training Requirements for {currentYear}
                 </h2>
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
@@ -240,27 +240,27 @@ export default function TrainingDashboardPage() {
               </div>
               <div className="space-y-4">
                 {requirements.map((req) => (
-                  <div key={req.id} className="border border-white/20 rounded-lg p-4">
+                  <div key={req.id} className="border border-theme-surface-border rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="text-lg font-medium text-white">{req.name}</h3>
+                        <h3 className="text-lg font-medium text-theme-text-primary">{req.name}</h3>
                         {req.description && (
-                          <p className="mt-1 text-sm text-slate-300">{req.description}</p>
+                          <p className="mt-1 text-sm text-theme-text-secondary">{req.description}</p>
                         )}
                         <div className="mt-2 flex flex-wrap gap-4">
                           {req.required_hours && (
-                            <div className="text-sm text-slate-300">
+                            <div className="text-sm text-theme-text-secondary">
                               <span className="font-medium">Required Hours:</span> {req.required_hours}
                             </div>
                           )}
                           {req.frequency && (
-                            <div className="text-sm text-slate-300">
+                            <div className="text-sm text-theme-text-secondary">
                               <span className="font-medium">Frequency:</span>{' '}
                               {req.frequency.replace('_', ' ')}
                             </div>
                           )}
                           {req.due_date && (
-                            <div className="text-sm text-slate-300">
+                            <div className="text-sm text-theme-text-secondary">
                               <span className="font-medium">Due Date:</span> {formatDate(req.due_date)}
                             </div>
                           )}
@@ -281,7 +281,7 @@ export default function TrainingDashboardPage() {
                         <button className="text-sm text-blue-600 hover:text-blue-900 mr-3">
                           Edit
                         </button>
-                        <button className="text-sm text-slate-300 hover:text-white">
+                        <button className="text-sm text-theme-text-secondary hover:text-theme-text-primary">
                           View Progress
                         </button>
                       </div>
@@ -289,7 +289,7 @@ export default function TrainingDashboardPage() {
                   </div>
                 ))}
                 {requirements.length === 0 && (
-                  <div className="text-center py-8 text-slate-400">
+                  <div className="text-center py-8 text-theme-text-muted">
                     No requirements set for {currentYear}. Add a new requirement to get started.
                   </div>
                 )}
@@ -300,29 +300,29 @@ export default function TrainingDashboardPage() {
           {/* Expiring Certifications Tab */}
           {activeTab === 'certifications' && (
             <div>
-              <h2 className="text-lg font-semibold text-white mb-4">
+              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
                 Certifications Expiring Within 90 Days
               </h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-white/10">
-                  <thead className="bg-slate-900/50">
+                  <thead className="bg-theme-input-bg">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Member
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Course
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Cert Number
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Expiration Date
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Days Remaining
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -333,8 +333,8 @@ export default function TrainingDashboardPage() {
                         ? getExpirationStatus(cert.expiration_date)
                         : null;
                       return (
-                        <tr key={cert.id} className="hover:bg-white/5">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                        <tr key={cert.id} className="hover:bg-theme-surface-secondary">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                             <Link
                               to={`/members/${cert.user_id}`}
                               className="text-blue-600 hover:text-blue-900"
@@ -343,15 +343,15 @@ export default function TrainingDashboardPage() {
                             </Link>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-white">{cert.course_name}</div>
+                            <div className="text-sm font-medium text-theme-text-primary">{cert.course_name}</div>
                             {cert.course_code && (
-                              <div className="text-sm text-slate-400">{cert.course_code}</div>
+                              <div className="text-sm text-theme-text-muted">{cert.course_code}</div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                             {cert.certification_number || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                             {formatDate(cert.expiration_date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -374,7 +374,7 @@ export default function TrainingDashboardPage() {
                   </tbody>
                 </table>
                 {expiringCerts.length === 0 && (
-                  <div className="text-center py-8 text-slate-400">
+                  <div className="text-center py-8 text-theme-text-muted">
                     No certifications expiring in the next 90 days.
                   </div>
                 )}

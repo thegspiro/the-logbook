@@ -101,7 +101,7 @@ export const RequirementProgressBar: React.FC<RequirementProgressBarProps> = ({
       {(label || showPercentage) && (
         <div className="mb-1 flex items-center justify-between text-sm">
           {label && <span className="font-medium text-gray-700">{label}</span>}
-          {showPercentage && <span className="text-gray-500">{Math.round(clamped)}%</span>}
+          {showPercentage && <span className="text-theme-text-muted">{Math.round(clamped)}%</span>}
         </div>
       )}
       <div className={`w-full overflow-hidden rounded-full bg-gray-200 ${progressBarHeight[size]}`}>
@@ -311,14 +311,14 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
             <div className="flex flex-col items-center gap-1">
               <div className="relative flex items-center justify-center">
                 {isCompleted ? (
-                  <CheckCircle className="h-6 w-6 text-green-500" />
+                  <CheckCircle className="h-6 w-6 text-green-700 dark:text-green-500" />
                 ) : isCurrent ? (
                   <div className="relative">
-                    <Circle className="h-6 w-6 text-blue-500 fill-blue-500" />
+                    <Circle className="h-6 w-6 text-blue-700 dark:text-blue-500 fill-blue-500" />
                     <span className="absolute inset-0 animate-ping rounded-full bg-blue-400 opacity-30" />
                   </div>
                 ) : (
-                  <Circle className="h-6 w-6 text-gray-300" />
+                  <Circle className="h-6 w-6 text-theme-text-secondary" />
                 )}
               </div>
               <span
@@ -327,7 +327,7 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
                     ? 'font-medium text-green-700'
                     : isCurrent
                       ? 'font-semibold text-blue-700'
-                      : 'text-gray-500'
+                      : 'text-theme-text-muted'
                 }`}
                 title={phase.name}
               >
@@ -360,9 +360,9 @@ export const TrainingHoursDisplay: React.FC<TrainingHoursDisplayProps> = ({
 
   return (
     <div className="w-full">
-      {label && <span className="mb-0.5 block text-xs font-medium text-gray-500">{label}</span>}
+      {label && <span className="mb-0.5 block text-xs font-medium text-theme-text-muted">{label}</span>}
       <span className="text-sm font-semibold text-gray-900">
-        {completed} <span className="font-normal text-gray-500">/ {required} hrs</span>
+        {completed} <span className="font-normal text-theme-text-muted">/ {required} hrs</span>
       </span>
       <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
         <div
@@ -390,23 +390,23 @@ const emptyStateConfig: Record<
   { icon: React.ReactNode; defaultMessage: string }
 > = {
   courses: {
-    icon: <BookOpen className="h-12 w-12 text-gray-400" />,
+    icon: <BookOpen className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training courses found.',
   },
   records: {
-    icon: <ClipboardList className="h-12 w-12 text-gray-400" />,
+    icon: <ClipboardList className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training records yet.',
   },
   requirements: {
-    icon: <ShieldCheck className="h-12 w-12 text-gray-400" />,
+    icon: <ShieldCheck className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training requirements configured.',
   },
   programs: {
-    icon: <GraduationCap className="h-12 w-12 text-gray-400" />,
+    icon: <GraduationCap className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training programs available.',
   },
   certifications: {
-    icon: <Award className="h-12 w-12 text-gray-400" />,
+    icon: <Award className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No certifications on file.',
   },
 };
@@ -422,7 +422,7 @@ export const EmptyTrainingState: React.FC<EmptyTrainingStateProps> = ({
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       {config.icon}
-      <p className="mt-4 text-sm text-gray-500">{message ?? config.defaultMessage}</p>
+      <p className="mt-4 text-sm text-theme-text-muted">{message ?? config.defaultMessage}</p>
       {actionLabel && onAction && (
         <button
           type="button"

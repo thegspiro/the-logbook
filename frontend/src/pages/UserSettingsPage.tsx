@@ -131,12 +131,12 @@ export const UserSettingsPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">User Settings</h1>
-        <p className="text-slate-300">Manage your account settings and preferences</p>
+        <h1 className="text-3xl font-bold text-theme-text-primary mb-2">User Settings</h1>
+        <p className="text-theme-text-secondary">Manage your account settings and preferences</p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-white/10 mb-6">
+      <div className="border-b border-theme-surface-border mb-6">
         <nav className="flex space-x-6" aria-label="Settings tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -146,8 +146,8 @@ export const UserSettingsPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center space-x-2 pb-4 px-1 border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                   activeTab === tab.id
-                    ? 'border-red-500 text-white'
-                    : 'border-transparent text-slate-400 hover:text-slate-300'
+                    ? 'border-red-500 text-theme-text-primary'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
                 }`}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
               >
@@ -160,24 +160,24 @@ export const UserSettingsPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-6">
         {/* Account Tab */}
         {activeTab === 'account' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-4">Account Information</h2>
-              <p className="text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Account Information</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Update your account details and personal information
               </p>
             </div>
 
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
               <div className="flex items-start space-x-3">
-                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <svg className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <div>
-                  <h4 className="text-sm font-medium text-blue-300 mb-1">
+                  <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
                     Account Settings Coming Soon
                   </h4>
                   <p className="text-sm text-blue-200">
@@ -193,8 +193,8 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'password' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-4">Change Password</h2>
-              <p className="text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Change Password</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Update your password to keep your account secure
               </p>
             </div>
@@ -207,7 +207,7 @@ export const UserSettingsPage: React.FC = () => {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="currentPassword"
@@ -215,7 +215,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showCurrentPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Enter current password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -224,7 +224,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
                     aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
                   >
                     {showCurrentPassword ? (
@@ -243,7 +243,7 @@ export const UserSettingsPage: React.FC = () => {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="newPassword"
@@ -251,7 +251,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showNewPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Enter new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -260,7 +260,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
                   >
                     {showNewPassword ? (
@@ -274,7 +274,7 @@ export const UserSettingsPage: React.FC = () => {
                 {/* Password strength indicator */}
                 {newPassword && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs text-slate-300 font-medium">Password must contain:</p>
+                    <p className="text-xs text-theme-text-secondary font-medium">Password must contain:</p>
                     <ul className="space-y-1 text-xs">
                       {[
                         { label: 'At least 8 characters', valid: passwordValidation.checks.length },
@@ -285,11 +285,11 @@ export const UserSettingsPage: React.FC = () => {
                       ].map((check, idx) => (
                         <li key={idx} className="flex items-center space-x-2">
                           {check.valid ? (
-                            <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" aria-hidden="true" />
+                            <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
                           ) : (
                             <div className="w-4 h-4 rounded-full border-2 border-slate-500 flex-shrink-0" aria-hidden="true" />
                           )}
-                          <span className={check.valid ? 'text-green-300' : 'text-slate-400'}>
+                          <span className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
                             {check.label}
                           </span>
                         </li>
@@ -306,7 +306,7 @@ export const UserSettingsPage: React.FC = () => {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="confirmPassword"
@@ -314,7 +314,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Confirm new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -323,7 +323,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? (
@@ -334,7 +334,7 @@ export const UserSettingsPage: React.FC = () => {
                   </button>
                 </div>
                 {confirmPassword && newPassword !== confirmPassword && (
-                  <p className="mt-2 text-sm text-red-300">Passwords do not match</p>
+                  <p className="mt-2 text-sm text-red-700 dark:text-red-300">Passwords do not match</p>
                 )}
               </div>
 
@@ -355,20 +355,20 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'notifications' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-4">Notification Preferences</h2>
-              <p className="text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Notification Preferences</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Manage how and when you receive notifications
               </p>
             </div>
 
             <div className="space-y-4">
               {/* Email Notifications Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="emailNotifications" className="text-sm font-medium text-white">
+                  <label htmlFor="emailNotifications" className="text-sm font-medium text-theme-text-primary">
                     Email Notifications
                   </label>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Receive email notifications for important updates
                   </p>
                 </div>
@@ -390,12 +390,12 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               {/* Event Reminders Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="eventReminders" className="text-sm font-medium text-white">
+                  <label htmlFor="eventReminders" className="text-sm font-medium text-theme-text-primary">
                     Event Reminders
                   </label>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Get reminders before scheduled events
                   </p>
                 </div>
@@ -417,12 +417,12 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               {/* Training Reminders Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="trainingReminders" className="text-sm font-medium text-white">
+                  <label htmlFor="trainingReminders" className="text-sm font-medium text-theme-text-primary">
                     Training Reminders
                   </label>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Notifications for training deadlines and requirements
                   </p>
                 </div>
@@ -446,10 +446,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Announcement Notifications Toggle */}
               <div className="flex items-center justify-between py-4">
                 <div>
-                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-white">
+                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-theme-text-primary">
                     Announcement Notifications
                   </label>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Stay updated with department announcements
                   </p>
                 </div>

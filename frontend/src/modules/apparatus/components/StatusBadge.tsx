@@ -27,44 +27,44 @@ const getStatusColors = (defaultStatus: DefaultApparatusStatus | null, color: st
     case 'in_service':
       return {
         background: 'bg-green-500/10',
-        text: 'text-green-400',
+        text: 'text-green-700 dark:text-green-400',
         border: 'border-green-500/30',
       };
     case 'out_of_service':
       return {
         background: 'bg-red-500/10',
-        text: 'text-red-400',
+        text: 'text-red-700 dark:text-red-400',
         border: 'border-red-500/30',
       };
     case 'in_maintenance':
       return {
         background: 'bg-yellow-500/10',
-        text: 'text-yellow-400',
+        text: 'text-yellow-700 dark:text-yellow-400',
         border: 'border-yellow-500/30',
       };
     case 'reserve':
       return {
         background: 'bg-blue-500/10',
-        text: 'text-blue-400',
+        text: 'text-blue-700 dark:text-blue-400',
         border: 'border-blue-500/30',
       };
     case 'on_order':
       return {
         background: 'bg-purple-500/10',
-        text: 'text-purple-400',
+        text: 'text-purple-700 dark:text-purple-400',
         border: 'border-purple-500/30',
       };
     case 'sold':
     case 'disposed':
       return {
         background: 'bg-slate-500/10',
-        text: 'text-slate-400',
+        text: 'text-theme-text-muted',
         border: 'border-slate-500/30',
       };
     default:
       return {
         background: 'bg-slate-500/10',
-        text: 'text-slate-400',
+        text: 'text-theme-text-muted',
         border: 'border-slate-500/30',
       };
   }

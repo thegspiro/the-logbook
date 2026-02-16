@@ -98,7 +98,7 @@ const PublicPortalAdmin: React.FC = () => {
                   <h1 className="text-2xl font-bold text-gray-900">
                     Public Portal
                   </h1>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-theme-text-muted">
                     Manage public API access for external websites
                   </p>
                 </div>
@@ -109,15 +109,15 @@ const PublicPortalAdmin: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   {config?.enabled ? (
                     <>
-                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-500" />
                       <span className="text-sm font-medium text-green-700">
                         Portal Enabled
                       </span>
                     </>
                   ) : (
                     <>
-                      <XCircle className="w-5 h-5 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-500">
+                      <XCircle className="w-5 h-5 text-theme-text-muted" />
+                      <span className="text-sm font-medium text-theme-text-muted">
                         Portal Disabled
                       </span>
                     </>
@@ -164,7 +164,7 @@ const PublicPortalAdmin: React.FC = () => {
                   className={`flex items-center space-x-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-theme-text-muted hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   <Icon className="w-4 h-4" />

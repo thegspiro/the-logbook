@@ -65,7 +65,7 @@ const EventQRCodePage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-slate-300">Loading QR code...</div>
+        <div className="text-theme-text-secondary">Loading QR code...</div>
       </div>
     );
   }
@@ -74,11 +74,11 @@ const EventQRCodePage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <p className="text-red-300">{error}</p>
+          <p className="text-red-700 dark:text-red-300">{error}</p>
         </div>
         <button
           onClick={() => navigate(`/events/${eventId}`)}
-          className="text-blue-600 hover:text-blue-300"
+          className="text-blue-600 hover:text-blue-700 dark:hover:text-blue-300"
         >
           ← Back to Event
         </button>
@@ -90,11 +90,11 @@ const EventQRCodePage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
-          <p className="text-yellow-300">No QR code data available</p>
+          <p className="text-yellow-700 dark:text-yellow-300">No QR code data available</p>
         </div>
         <button
           onClick={() => navigate(`/events/${eventId}`)}
-          className="text-blue-600 hover:text-blue-300"
+          className="text-blue-600 hover:text-blue-700 dark:hover:text-blue-300"
         >
           ← Back to Event
         </button>
@@ -108,16 +108,16 @@ const EventQRCodePage: React.FC = () => {
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-300 mb-4 inline-block"
+          className="text-blue-600 hover:text-blue-700 dark:hover:text-blue-300 mb-4 inline-block"
         >
           ← Back to Event
         </Link>
-        <h1 className="text-3xl font-bold text-white">Event Check-In QR Code</h1>
+        <h1 className="text-3xl font-bold text-theme-text-primary">Event Check-In QR Code</h1>
       </div>
 
       {/* Event Info */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-2xl font-semibold text-white mb-2">{qrData.event_name}</h2>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-2xl font-semibold text-theme-text-primary mb-2">{qrData.event_name}</h2>
 
         <div className="space-y-2 text-slate-200">
           {qrData.event_type && (
@@ -145,7 +145,7 @@ const EventQRCodePage: React.FC = () => {
       </div>
 
       {/* QR Code Section */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-8">
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-8">
         {qrData.is_valid ? (
           <div className="text-center">
             <div className="mb-6">
@@ -157,17 +157,17 @@ const EventQRCodePage: React.FC = () => {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
               Scan to Check In
             </h3>
 
-            <p className="text-slate-300 mb-6">
+            <p className="text-theme-text-secondary mb-6">
               Members can scan this QR code to check themselves in to the event
             </p>
 
             {/* QR Code */}
             <div className="flex justify-center mb-6">
-              <div className="bg-white p-8 rounded-lg border-4 border-white/20">
+              <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border">
                 <QRCodeSVG
                   value={getCheckInUrl()}
                   size={300}
@@ -179,8 +179,8 @@ const EventQRCodePage: React.FC = () => {
 
             {/* Instructions */}
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-left">
-              <h4 className="font-semibold text-blue-300 mb-2">Instructions:</h4>
-              <ol className="list-decimal list-inside space-y-1 text-blue-300">
+              <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-2">Instructions:</h4>
+              <ol className="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-300">
                 <li>Display this QR code at the event venue</li>
                 <li>Members scan the code with their phone camera</li>
                 <li>Members will be prompted to log in if not already logged in</li>
@@ -199,19 +199,19 @@ const EventQRCodePage: React.FC = () => {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
               QR Code Check-In Window
             </h3>
 
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-              <p className="text-yellow-300 mb-2">
+              <p className="text-yellow-700 dark:text-yellow-300 mb-2">
                 Check-in is only available during the following time window:
               </p>
-              <p className="font-semibold text-yellow-300">
+              <p className="font-semibold text-yellow-700 dark:text-yellow-300">
                 {formatDateTime(qrData.check_in_start)} - {formatDateTime(qrData.check_in_end)}
               </p>
               {qrData.actual_end_time && (
-                <p className="text-sm text-yellow-300 mt-2">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-2">
                   Note: Event was ended early by event manager
                 </p>
               )}
