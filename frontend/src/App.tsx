@@ -203,9 +203,9 @@ function App() {
               <Route path="/integrations" element={<IntegrationsPage />} />
 
               {/* Admin/Monitoring Routes */}
-              <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="admin.errors"><ErrorMonitoringPage /></ProtectedRoute>} />
+              <Route path="/admin/errors" element={<ProtectedRoute requiredPermission="settings.manage"><ErrorMonitoringPage /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
-              <Route path="/admin/public-portal" element={<ProtectedRoute requiredPermission="admin.settings"><PublicPortalAdmin /></ProtectedRoute>} />
+              <Route path="/admin/public-portal" element={<ProtectedRoute requiredPermission="settings.manage"><PublicPortalAdmin /></ProtectedRoute>} />
 
               {/* Settings Module */}
               <Route path="/settings" element={<SettingsPage />} />

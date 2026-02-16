@@ -176,7 +176,7 @@ docker-compose up -d
 
 ```bash
 # Test database connection
-docker exec -it mariadb mysql -u logbook_user -p
+docker exec -it logbook-db mysql -u logbook_user -p
 
 # Once logged in, verify database exists
 SHOW DATABASES;
@@ -350,8 +350,8 @@ docker-compose restart                          # Restart services
 docker-compose down && docker-compose up -d     # Full restart
 
 # Database
-docker exec -it mariadb mysql -u root -p        # Access database
-docker exec mariadb mysqldump -u root -p the_logbook > backup.sql  # Backup DB
+docker exec -it logbook-db mysql -u root -p        # Access database
+docker exec logbook-db mysqldump -u root -p the_logbook > backup.sql  # Backup DB
 
 # System Health
 curl http://localhost:7881/health               # Backend health check

@@ -29,6 +29,7 @@ This guide covers deploying The Logbook across various platforms, from small dev
 | Raspberry Pi 4/5 | 2GB | 4GB | standard |
 | Small VPS | 1GB | 2GB | minimal |
 | Standard VPS | 2GB | 4GB | standard |
+| Synology NAS (DS+/XS+) | 4GB | 8GB | standard |
 | Production Server | 4GB | 8GB+ | full |
 | Kubernetes | 2GB per pod | 4GB per pod | standard |
 
@@ -132,7 +133,7 @@ docker compose -f docker-compose.yml -f docker-compose.minimal.yml -f docker-com
 For Pi 3 with 1GB RAM:
 
 1. Use minimal profile
-2. Consider external database (MySQL/MariaDB on another machine)
+2. Consider external database (MySQL on another machine)
 3. Disable non-essential modules
 
 ```bash
@@ -172,7 +173,7 @@ curl -sSL https://raw.githubusercontent.com/thegspiro/the-logbook/main/scripts/u
 #### AWS with RDS (Production)
 
 1. Create RDS MySQL instance:
-   - Engine: MySQL 8.0 or MariaDB 10.11
+   - Engine: MySQL 8.0
    - Instance: db.t3.micro (testing) or db.t3.small (production)
    - Enable automated backups
 
@@ -199,7 +200,7 @@ docker compose -f docker-compose.yml up -d backend frontend
 
 #### AWS ECS/Fargate
 
-See `deploy/aws/` for CloudFormation templates.
+For container-native deployments, build and push Docker images to ECR, then deploy via ECS task definitions. See the [AWS Deployment Guide](../docs/deployment/aws.md) for details.
 
 ---
 

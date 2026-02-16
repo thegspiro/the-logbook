@@ -1129,7 +1129,8 @@ export interface MyTrainingSummary {
     expiration_date: string | null;
     instructor?: string;
   }>;
-  hours_summary?: { total_records: number; total_hours: number };
+  hours_summary?: { total_records: number; total_hours: number; completed_courses: number };
+  requirements_summary?: { total_requirements: number; met_requirements: number; avg_compliance: number | null };
   certifications?: Array<{
     id: string;
     course_name: string;

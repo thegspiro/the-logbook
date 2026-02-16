@@ -7,6 +7,7 @@ Endpoints for tracking and retrieving analytics data.
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+import sqlalchemy as sa
 from sqlalchemy import select, func, extract
 
 from app.core.database import get_db
@@ -94,14 +95,59 @@ async def get_metrics(
     hourly_map = {int(h): c for h, c in hourly_result.all()}
     hourly_activity = [{"hour": h, "count": hourly_map.get(h, 0)} for h in range(24)]
 
+    # Error breakdown from failure events
+    error_events = await db.execute(
+        select(AnalyticsEvent.event_metadata).where(
+            *base_filter, AnalyticsEvent.event_type == "check_in_failure"
+        ).limit(500)
+    )
+    error_breakdown: dict[str, int] = {}
+    for (metadata,) in error_events.all():
+        if metadata and isinstance(metadata, dict):
+            reason = metadata.get("error_reason") or metadata.get("reason") or "unknown"
+            error_breakdown[reason] = error_breakdown.get(reason, 0) + 1
+
+    # Avg time to check-in: compute from paired qr_scan→check_in_success
+    # by comparing timestamps for events with the same user_id and event_id
+    avg_time_to_check_in = 0.0
+    if total_scans > 0 and successful > 0:
+        from sqlalchemy.orm import aliased
+        scan = aliased(AnalyticsEvent)
+        checkin = aliased(AnalyticsEvent)
+        avg_result = await db.execute(
+            select(
+                func.avg(
+                    func.timestampdiff(
+                        sa.text("SECOND"), scan.created_at, checkin.created_at
+                    )
+                )
+            )
+            .select_from(scan)
+            .join(
+                checkin,
+                sa.and_(
+                    scan.organization_id == checkin.organization_id,
+                    scan.event_id == checkin.event_id,
+                    scan.user_id == checkin.user_id,
+                    scan.event_type == "qr_scan",
+                    checkin.event_type == "check_in_success",
+                    checkin.created_at > scan.created_at,
+                ),
+            )
+            .where(scan.organization_id == current_user.organization_id)
+        )
+        avg_seconds = avg_result.scalar()
+        if avg_seconds is not None:
+            avg_time_to_check_in = round(float(avg_seconds), 1)
+
     return {
         "total_scans": total_scans,
         "successful_check_ins": successful,
         "failed_check_ins": failed,
         "success_rate": success_rate,
-        "avg_time_to_check_in": 0,
+        "avg_time_to_check_in": avg_time_to_check_in,
         "device_breakdown": device_breakdown,
-        "error_breakdown": {},
+        "error_breakdown": error_breakdown,
         "hourly_activity": hourly_activity,
     }
 

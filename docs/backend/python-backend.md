@@ -16,7 +16,7 @@ The backend uses **Python 3.13+ with FastAPI** - a modern, high-performance fram
 | **Migrations** | Alembic |
 | **Validation** | Pydantic |
 | **Server** | Uvicorn (ASGI) |
-| **Database** | MySQL 8.0+ / MariaDB 10.11+ |
+| **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache** | Redis 7+ |
 | **Package Manager** | pip / pip-tools |
 

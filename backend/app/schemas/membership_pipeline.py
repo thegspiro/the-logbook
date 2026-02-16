@@ -23,6 +23,8 @@ class PipelineStepBase(BaseModel):
     sort_order: int = Field(default=0, ge=0)
     email_template_id: Optional[UUID] = None
     required: bool = True
+    config: Optional[Dict[str, Any]] = Field(None, description="Stage-specific configuration (form settings, election config, etc.)")
+    inactivity_timeout_days: Optional[int] = Field(None, description="Per-step inactivity timeout override in days")
 
 
 class PipelineStepCreate(PipelineStepBase):
@@ -41,6 +43,8 @@ class PipelineStepUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
     email_template_id: Optional[UUID] = None
     required: Optional[bool] = None
+    config: Optional[Dict[str, Any]] = None
+    inactivity_timeout_days: Optional[int] = None
 
 
 class PipelineStepResponse(PipelineStepBase):
@@ -59,7 +63,9 @@ class PipelineBase(BaseModel):
     description: Optional[str] = None
     is_template: bool = False
     is_default: bool = False
+    is_active: bool = True
     auto_transfer_on_approval: bool = False
+    inactivity_config: Optional[Dict[str, Any]] = Field(None, description="Inactivity timeout and notification settings")
 
 
 class PipelineCreate(PipelineBase):
@@ -72,7 +78,9 @@ class PipelineUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
     auto_transfer_on_approval: Optional[bool] = None
+    inactivity_config: Optional[Dict[str, Any]] = None
 
 
 class PipelineResponse(PipelineBase):
@@ -95,6 +103,7 @@ class PipelineListResponse(BaseModel):
     description: Optional[str] = None
     is_template: bool
     is_default: bool
+    is_active: bool = True
     auto_transfer_on_approval: bool
     step_count: Optional[int] = None
     prospect_count: Optional[int] = None
@@ -106,6 +115,41 @@ class PipelineListResponse(BaseModel):
 class StepReorderRequest(BaseModel):
     """Schema for reordering steps"""
     step_ids: List[UUID] = Field(..., description="Ordered list of step IDs")
+
+
+# --- Pipeline Stats Schema ---
+
+class PipelineStageStats(BaseModel):
+    """Stats for a single pipeline stage"""
+    stage_id: UUID
+    stage_name: str
+    count: int = 0
+
+
+class PipelineStatsResponse(BaseModel):
+    """Pipeline statistics"""
+    pipeline_id: UUID
+    total_prospects: int = 0
+    active_count: int = 0
+    approved_count: int = 0
+    rejected_count: int = 0
+    withdrawn_count: int = 0
+    transferred_count: int = 0
+    by_step: List[PipelineStageStats] = []
+    avg_days_to_transfer: Optional[float] = None
+    conversion_rate: Optional[float] = None
+
+
+class PurgeInactiveRequest(BaseModel):
+    """Schema for purging inactive prospects"""
+    prospect_ids: Optional[List[UUID]] = Field(None, description="Specific prospect IDs to purge, or all inactive if empty")
+    confirm: bool = Field(default=False, description="Must be true to execute purge")
+
+
+class PurgeInactiveResponse(BaseModel):
+    """Response after purging inactive prospects"""
+    purged_count: int
+    message: str
 
 
 # --- Prospective Member Schemas ---
@@ -271,3 +315,57 @@ class PipelineKanbanResponse(BaseModel):
     pipeline: PipelineListResponse
     columns: List[PipelineKanbanColumn] = []
     total_prospects: int = 0
+
+
+# --- Document Schemas ---
+
+class ProspectDocumentResponse(BaseModel):
+    """Schema for a prospect document"""
+    id: UUID
+    prospect_id: UUID
+    step_id: Optional[UUID] = None
+    document_type: str
+    file_name: str
+    file_path: str
+    file_size: int = 0
+    mime_type: Optional[str] = None
+    uploaded_by: Optional[UUID] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Election Package Schemas ---
+
+class ElectionPackageCreate(BaseModel):
+    """Schema for creating an election package"""
+    prospect_id: UUID
+    pipeline_id: Optional[UUID] = None
+    step_id: Optional[UUID] = None
+    coordinator_notes: Optional[str] = None
+    package_config: Optional[Dict[str, Any]] = None
+
+
+class ElectionPackageUpdate(BaseModel):
+    """Schema for updating an election package"""
+    status: Optional[str] = None
+    coordinator_notes: Optional[str] = None
+    package_config: Optional[Dict[str, Any]] = None
+    applicant_snapshot: Optional[Dict[str, Any]] = None
+
+
+class ElectionPackageResponse(BaseModel):
+    """Schema for an election package"""
+    id: UUID
+    prospect_id: UUID
+    pipeline_id: Optional[UUID] = None
+    step_id: Optional[UUID] = None
+    election_id: Optional[UUID] = None
+    status: str
+    applicant_snapshot: Optional[Dict[str, Any]] = None
+    coordinator_notes: Optional[str] = None
+    package_config: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

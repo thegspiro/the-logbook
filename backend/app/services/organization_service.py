@@ -7,6 +7,7 @@ Business logic for organization-related operations.
 from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 from uuid import UUID
 
 from app.models.user import Organization
@@ -117,8 +118,11 @@ class OrganizationService:
         # Update with new settings (merge dictionaries)
         updated_settings = {**current_settings, **settings_update}
 
-        # Update in database
+        # Update in database — flag_modified is required because the
+        # Organization.settings column uses plain JSON (not MutableDict),
+        # so SQLAlchemy may not detect the change without an explicit hint.
         org.settings = updated_settings
+        flag_modified(org, "settings")
         await self.db.commit()
         await self.db.refresh(org)
 
@@ -196,8 +200,9 @@ class OrganizationService:
         updated_modules = {**current_modules, **module_updates}
         current_settings["modules"] = updated_modules
 
-        # Update in database
+        # Update in database — flag_modified needed for plain JSON column
         org.settings = current_settings
+        flag_modified(org, "settings")
         await self.db.commit()
         await self.db.refresh(org)
 
