@@ -190,6 +190,143 @@ async def get_ballot_templates(
     return BallotTemplatesResponse(templates=templates)
 
 
+# ============================================
+# Anonymous Ballot Endpoints (Token-Based)
+# IMPORTANT: These must be defined BEFORE the /{election_id} wildcard
+# ============================================
+
+@router.get("/ballot", response_model=ElectionResponse)
+async def get_ballot_by_token(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get ballot information using a voting token
+
+    This endpoint is public (no authentication required) and uses the
+    secure hashed token from the email link.
+
+    **No authentication required**
+    """
+    service = ElectionService(db)
+    election, voting_token, error = await service.get_ballot_by_token(token)
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return election
+
+
+@router.get("/ballot/{token}/candidates", response_model=List[CandidateResponse])
+async def get_ballot_candidates(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get candidates for a ballot using voting token
+
+    **No authentication required**
+    """
+    service = ElectionService(db)
+    election, voting_token, error = await service.get_ballot_by_token(token)
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    # Get candidates for this election
+    result = await db.execute(
+        select(Candidate)
+        .where(Candidate.election_id == election.id)
+        .where(Candidate.accepted == True)
+        .order_by(Candidate.position, Candidate.display_order)
+    )
+
+    return result.scalars().all()
+
+
+@router.post("/ballot/vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
+async def cast_vote_with_token(
+    vote_data: VoteCreate,
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Cast a vote using a voting token
+
+    This endpoint is public (no authentication required) and uses the
+    secure hashed token to cast anonymous votes.
+
+    **No authentication required**
+    """
+    service = ElectionService(db)
+    vote, error = await service.cast_vote_with_token(
+        token=token,
+        candidate_id=vote_data.candidate_id,
+        position=vote_data.position,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    # Return vote without revealing voter information
+    return VoteResponse(
+        id=vote.id,
+        election_id=vote.election_id,
+        candidate_id=vote.candidate_id,
+        position=vote.position,
+        voted_at=vote.voted_at,
+        voter_id=None,  # Never reveal voter ID for anonymous voting
+    )
+
+
+@router.post("/ballot/vote/bulk", response_model=BallotSubmissionResponse, status_code=status.HTTP_201_CREATED)
+async def submit_ballot_with_token(
+    ballot: BallotSubmission,
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Submit an entire ballot using a voting token
+
+    Submits all ballot item votes atomically. Each vote can be an
+    approval, denial, candidate selection, write-in, or abstention.
+
+    **No authentication required** — uses voting token from email link.
+    """
+    service = ElectionService(db)
+    result, error = await service.submit_ballot_with_token(
+        token=token,
+        votes=[v.model_dump() for v in ballot.votes],
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return BallotSubmissionResponse(**result)
+
+
+# ============================================
+# Election Detail Endpoints
+# ============================================
+
 @router.get("/{election_id}", response_model=ElectionResponse)
 async def get_election(
     election_id: UUID,
@@ -941,138 +1078,6 @@ async def send_ballot_emails(
         failed_count=failed_count,
         message=f"Ballot emails sent to {recipients_count} recipient(s)" if failed_count == 0 else f"Sent to {recipients_count} recipients with {failed_count} failures",
     )
-
-
-# ============================================
-# Anonymous Ballot Endpoints (Token-Based)
-# ============================================
-
-@router.get("/ballot", response_model=ElectionResponse)
-async def get_ballot_by_token(
-    token: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Get ballot information using a voting token
-
-    This endpoint is public (no authentication required) and uses the
-    secure hashed token from the email link.
-
-    **No authentication required**
-    """
-    service = ElectionService(db)
-    election, voting_token, error = await service.get_ballot_by_token(token)
-
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-
-    return election
-
-
-@router.get("/ballot/{token}/candidates", response_model=List[CandidateResponse])
-async def get_ballot_candidates(
-    token: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Get candidates for a ballot using voting token
-
-    **No authentication required**
-    """
-    service = ElectionService(db)
-    election, voting_token, error = await service.get_ballot_by_token(token)
-
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-
-    # Get candidates for this election
-    result = await db.execute(
-        select(Candidate)
-        .where(Candidate.election_id == election.id)
-        .where(Candidate.accepted == True)
-        .order_by(Candidate.position, Candidate.display_order)
-    )
-
-    return result.scalars().all()
-
-
-@router.post("/ballot/vote", response_model=VoteResponse, status_code=status.HTTP_201_CREATED)
-async def cast_vote_with_token(
-    vote_data: VoteCreate,
-    token: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Cast a vote using a voting token
-
-    This endpoint is public (no authentication required) and uses the
-    secure hashed token to cast anonymous votes.
-
-    **No authentication required**
-    """
-    service = ElectionService(db)
-    vote, error = await service.cast_vote_with_token(
-        token=token,
-        candidate_id=vote_data.candidate_id,
-        position=vote_data.position,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-
-    # Return vote without revealing voter information
-    return VoteResponse(
-        id=vote.id,
-        election_id=vote.election_id,
-        candidate_id=vote.candidate_id,
-        position=vote.position,
-        voted_at=vote.voted_at,
-        voter_id=None,  # Never reveal voter ID for anonymous voting
-    )
-
-
-@router.post("/ballot/vote/bulk", response_model=BallotSubmissionResponse, status_code=status.HTTP_201_CREATED)
-async def submit_ballot_with_token(
-    ballot: BallotSubmission,
-    token: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Submit an entire ballot using a voting token
-
-    Submits all ballot item votes atomically. Each vote can be an
-    approval, denial, candidate selection, write-in, or abstention.
-
-    **No authentication required** — uses voting token from email link.
-    """
-    service = ElectionService(db)
-    result, error = await service.submit_ballot_with_token(
-        token=token,
-        votes=[v.model_dump() for v in ballot.votes],
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error
-        )
-
-    return BallotSubmissionResponse(**result)
 
 
 # ============================================

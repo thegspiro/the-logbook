@@ -39,6 +39,14 @@ class Location(Base):
     name = Column(String(200), nullable=False)  # e.g., "Main Meeting Hall", "Conference Room A"
     description = Column(Text, nullable=True)  # Additional info, amenities, equipment
 
+    # Address
+    address = Column(String(255), nullable=True)  # Street address
+    city = Column(String(100), nullable=True)
+    state = Column(String(50), nullable=True)
+    zip = Column(String(20), nullable=True)
+    latitude = Column(String(20), nullable=True)
+    longitude = Column(String(20), nullable=True)
+
     # Physical details
     building = Column(String(100), nullable=True)  # Building name or identifier
     floor = Column(String(20), nullable=True)  # Floor number or name
