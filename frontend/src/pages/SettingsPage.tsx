@@ -1,12 +1,13 @@
 /**
  * Settings Page
  *
- * Allows secretary to manage contact information visibility settings.
+ * Allows secretary to manage contact information visibility settings
+ * and membership ID configuration.
  */
 
 import React, { useEffect, useState } from 'react';
 import { organizationService } from '../services/api';
-import type { ContactInfoSettings } from '../types/user';
+import type { ContactInfoSettings, MembershipIdSettings } from '../types/user';
 
 export const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<ContactInfoSettings>({
@@ -15,8 +16,15 @@ export const SettingsPage: React.FC = () => {
     show_phone: true,
     show_mobile: true,
   });
+  const [membershipIdSettings, setMembershipIdSettings] = useState<MembershipIdSettings>({
+    enabled: false,
+    prefix: '',
+    next_number: 1,
+    zero_pad: 3,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingMembership, setSavingMembership] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -28,6 +36,9 @@ export const SettingsPage: React.FC = () => {
 
         const data = await organizationService.getSettings();
         setSettings(data.contact_info_visibility);
+        if (data.membership_ids) {
+          setMembershipIdSettings(data.membership_ids);
+        }
       } catch (err) {
         setError('Unable to load settings. Please check your connection and refresh the page.');
       } finally {
@@ -55,11 +66,34 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleSaveMembershipIds = async () => {
+    try {
+      setSavingMembership(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      await organizationService.updateMembershipIdSettings(membershipIdSettings);
+
+      setSuccessMessage('Membership ID settings saved successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError('Unable to save membership ID settings. Please try again.');
+    } finally {
+      setSavingMembership(false);
+    }
+  };
+
   const handleToggle = (field: keyof ContactInfoSettings) => {
     setSettings((prev) => ({
       ...prev,
       [field]: !prev[field],
     }));
+  };
+
+  // Preview the next membership number that will be assigned
+  const previewNextNumber = () => {
+    const numStr = String(membershipIdSettings.next_number).padStart(membershipIdSettings.zero_pad, '0');
+    return `${membershipIdSettings.prefix}${numStr}`;
   };
 
   if (loading) {
@@ -80,7 +114,7 @@ export const SettingsPage: React.FC = () => {
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
           <p className="mt-1 text-sm text-theme-text-muted">
-            Manage contact information visibility for department members.
+            Manage contact information visibility and membership ID configuration.
           </p>
         </div>
 
@@ -132,6 +166,7 @@ export const SettingsPage: React.FC = () => {
           </div>
         )}
 
+        {/* Contact Information Visibility */}
         <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-theme-text-primary mb-4">
             Contact Information Visibility
@@ -260,6 +295,143 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Membership ID Settings */}
+        <div className="mt-6 bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
+            Membership ID Numbers
+          </h3>
+          <p className="text-sm text-theme-text-muted mb-6">
+            Configure automatic membership ID assignment for new members. When enabled,
+            each member who joins the department will receive a sequential membership number.
+            The membership coordinator can also manually assign a number to former members
+            being reinstated.
+          </p>
+
+          <div className="space-y-4">
+            {/* Enable Toggle */}
+            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+              <div>
+                <label className="text-sm font-medium text-theme-text-primary">
+                  Auto-Assign Membership Numbers
+                </label>
+                <p className="text-sm text-theme-text-muted">
+                  Automatically assign the next sequential membership number when a new member joins
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setMembershipIdSettings((prev) => ({ ...prev, enabled: !prev.enabled }))
+                }
+                className={`${
+                  membershipIdSettings.enabled ? 'bg-blue-600' : 'bg-slate-600'
+                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                role="switch"
+                aria-checked={membershipIdSettings.enabled}
+              >
+                <span
+                  className={`${
+                    membershipIdSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+                  } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                />
+              </button>
+            </div>
+
+            {membershipIdSettings.enabled && (
+              <div className="pl-4 space-y-5">
+                {/* Prefix */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Prefix (optional)
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    Text prepended to each membership number (e.g. &quot;M-&quot;, &quot;FD-&quot;)
+                  </p>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={membershipIdSettings.prefix}
+                    onChange={(e) =>
+                      setMembershipIdSettings((prev) => ({ ...prev, prefix: e.target.value }))
+                    }
+                    placeholder="e.g. M-"
+                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Next Number */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Next Number
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    The next sequential number to assign to a new member
+                  </p>
+                  <input
+                    type="number"
+                    min={1}
+                    value={membershipIdSettings.next_number}
+                    onChange={(e) =>
+                      setMembershipIdSettings((prev) => ({
+                        ...prev,
+                        next_number: Math.max(1, parseInt(e.target.value) || 1),
+                      }))
+                    }
+                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Zero Padding */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Zero Padding
+                  </label>
+                  <p className="text-xs text-theme-text-muted mb-2">
+                    Pad the number with leading zeros to this many digits (e.g. 3 = &quot;001&quot;)
+                  </p>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={membershipIdSettings.zero_pad}
+                    onChange={(e) =>
+                      setMembershipIdSettings((prev) => ({
+                        ...prev,
+                        zero_pad: Math.min(10, Math.max(0, parseInt(e.target.value) || 0)),
+                      }))
+                    }
+                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Preview */}
+                <div className="pt-2 border-t border-theme-surface-border">
+                  <p className="text-sm text-theme-text-muted">
+                    Next membership number to be assigned:{' '}
+                    <span className="font-mono font-semibold text-theme-text-primary">
+                      {previewNextNumber()}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleSaveMembershipIds}
+              disabled={savingMembership}
+              className={`${
+                savingMembership
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
+            >
+              {savingMembership ? 'Saving...' : 'Save Membership ID Settings'}
+            </button>
+          </div>
+        </div>
+
         <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -280,7 +452,7 @@ export const SettingsPage: React.FC = () => {
               <h3 className="text-sm font-medium text-yellow-800">Note</h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  This setting requires <strong>secretary permissions</strong>. In a production environment,
+                  These settings require <strong>secretary permissions</strong>. In a production environment,
                   only users with the appropriate role will be able to modify these settings.
                 </p>
               </div>

@@ -5,7 +5,7 @@
  */
 
 import axios from 'axios';
-import type { User, ContactInfoSettings, ContactInfoUpdate } from '../types/user';
+import type { User, ContactInfoSettings, ContactInfoUpdate, MembershipIdSettings } from '../types/user';
 import type {
   Role,
   RoleWithUserCount,
@@ -319,7 +319,7 @@ export const organizationService = {
   /**
    * Get organization settings
    */
-  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings }> {
+  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_ids?: MembershipIdSettings }> {
     const response = await api.get('/organization/settings');
     return response.data;
   },
@@ -346,6 +346,23 @@ export const organizationService = {
   async isModuleEnabled(moduleId: string): Promise<boolean> {
     const response = await this.getEnabledModules();
     return response.enabled_modules.includes(moduleId);
+  },
+
+  /**
+   * Update membership ID settings
+   */
+  async updateMembershipIdSettings(settings: MembershipIdSettings): Promise<void> {
+    await api.patch('/organization/settings', { membership_ids: settings });
+  },
+
+  /**
+   * Assign membership number to a member (coordinator action)
+   */
+  async assignMembershipNumber(userId: string, membershipNumber: string): Promise<User> {
+    const response = await api.put(`/users/${userId}/membership-number`, {
+      membership_number: membershipNumber,
+    });
+    return response.data;
   },
 };
 
