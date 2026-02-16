@@ -168,8 +168,10 @@ function mapPipelineResponse(data: any): Pipeline {
     organization_id: data.organization_id,
     name: data.name,
     description: data.description ?? undefined,
-    is_active: !data.is_template,
-    inactivity_config: DEFAULT_INACTIVITY_CONFIG,
+    is_active: data.is_active ?? !data.is_template,
+    inactivity_config: data.inactivity_config && Object.keys(data.inactivity_config).length > 0
+      ? data.inactivity_config
+      : DEFAULT_INACTIVITY_CONFIG,
     stages: (data.steps || []).map(mapStepToStage),
     applicant_count: data.prospect_count ?? 0,
     created_at: data.created_at,
@@ -183,7 +185,7 @@ function mapPipelineListItem(data: any): PipelineListItem {
     id: data.id,
     name: data.name,
     description: data.description ?? undefined,
-    is_active: !data.is_template,
+    is_active: data.is_active ?? !data.is_template,
     stage_count: data.step_count ?? 0,
     applicant_count: data.prospect_count ?? 0,
     created_at: data.created_at,
@@ -270,6 +272,35 @@ function mapProspectListToApplicantList(data: any): any {
   };
 }
 
+/** Map a backend election package response to a frontend ElectionPackage */
+function mapElectionPackageResponse(data: any): ElectionPackage {
+  const snapshot = data.applicant_snapshot || {};
+  const config = data.package_config || {};
+  return {
+    id: data.id,
+    applicant_id: data.prospect_id,
+    pipeline_id: data.pipeline_id ?? '',
+    stage_id: data.step_id ?? '',
+    applicant_name: `${snapshot.first_name || ''} ${snapshot.last_name || ''}`.trim(),
+    applicant_email: snapshot.email,
+    applicant_phone: snapshot.phone,
+    target_membership_type: 'probationary',
+    coordinator_notes: data.coordinator_notes,
+    supporting_statement: config.supporting_statement,
+    documents: config.documents,
+    stage_summary: config.stage_summary,
+    custom_fields: config.custom_fields,
+    recommended_ballot_item: config.recommended_ballot_item,
+    status: data.status,
+    election_id: data.election_id,
+    candidate_id: config.candidate_id,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    submitted_at: config.submitted_at,
+    submitted_by: config.submitted_by,
+  };
+}
+
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 // =============================================================================
@@ -288,23 +319,23 @@ export const pipelineService = {
   },
 
   async createPipeline(data: PipelineCreate): Promise<Pipeline> {
-    // Map frontend fields to backend: drop is_active/inactivity_config
     const payload: Record<string, unknown> = {
       name: data.name,
       description: data.description,
+      is_active: data.is_active ?? true,
+      inactivity_config: data.inactivity_config,
     };
     const response = await api.post('/prospective-members/pipelines', payload);
     return mapPipelineResponse(response.data);
   },
 
   async updatePipeline(pipelineId: string, data: PipelineUpdate): Promise<Pipeline> {
-    // Map frontend fields to backend equivalents
     const payload: Record<string, unknown> = {};
     if (data.name !== undefined) payload.name = data.name;
     if (data.description !== undefined) payload.description = data.description;
-    // is_active and inactivity_config have no backend equivalent - skip
+    if (data.is_active !== undefined) payload.is_active = data.is_active;
+    if (data.inactivity_config !== undefined) payload.inactivity_config = data.inactivity_config;
 
-    // Backend uses PUT, not PATCH
     const response = await api.put(
       `/prospective-members/pipelines/${pipelineId}`,
       payload
@@ -317,25 +348,25 @@ export const pipelineService = {
   },
 
   async getPipelineStats(pipelineId: string): Promise<PipelineStats> {
-    // Stats endpoint doesn't exist in backend yet - return placeholder
-    const pipeline = await this.getPipeline(pipelineId);
+    const response = await api.get(`/prospective-members/pipelines/${pipelineId}/stats`);
+    const d = response.data;
     return {
-      pipeline_id: pipelineId,
-      total_applicants: pipeline.applicant_count ?? 0,
-      active_applicants: pipeline.applicant_count ?? 0,
-      converted_count: 0,
-      rejected_count: 0,
-      withdrawn_count: 0,
+      pipeline_id: d.pipeline_id,
+      total_applicants: d.total_prospects ?? 0,
+      active_applicants: d.active_count ?? 0,
+      converted_count: d.transferred_count ?? 0,
+      rejected_count: d.rejected_count ?? 0,
+      withdrawn_count: d.withdrawn_count ?? 0,
       on_hold_count: 0,
       inactive_count: 0,
       warning_count: 0,
-      avg_days_to_convert: 0,
-      by_stage: pipeline.stages.map(s => ({
-        stage_id: s.id,
-        stage_name: s.name,
-        count: 0,
+      avg_days_to_convert: d.avg_days_to_transfer ?? 0,
+      by_stage: (d.by_step || []).map((s: { stage_id: string; stage_name: string; count: number }) => ({
+        stage_id: s.stage_id,
+        stage_name: s.stage_name,
+        count: s.count,
       })),
-      conversion_rate: 0,
+      conversion_rate: d.conversion_rate ?? 0,
     };
   },
 
@@ -379,14 +410,15 @@ export const pipelineService = {
     return response.data.map(mapStepToStage);
   },
 
-  // Inactivity configuration - not supported by backend yet
   async updateInactivitySettings(
     pipelineId: string,
-    _config: InactivityConfig
+    config: InactivityConfig
   ): Promise<Pipeline> {
-    // Backend doesn't have inactivity config on pipelines yet.
-    // Return current pipeline so the UI still works.
-    return this.getPipeline(pipelineId);
+    const response = await api.put(
+      `/prospective-members/pipelines/${pipelineId}`,
+      { inactivity_config: config }
+    );
+    return mapPipelineResponse(response.data);
   },
 };
 
@@ -594,11 +626,20 @@ export const applicantService = {
   },
 
   async purgeInactiveApplicants(
-    _pipelineId: string,
-    _data: PurgeInactiveRequest
+    pipelineId: string,
+    data: PurgeInactiveRequest
   ): Promise<PurgeInactiveResponse> {
-    // Backend doesn't have a purge endpoint yet
-    return { purged_count: 0, message: 'Purge not yet supported by backend' };
+    const response = await api.post(
+      `/prospective-members/pipelines/${pipelineId}/purge-inactive`,
+      {
+        prospect_ids: data.applicant_ids,
+        confirm: data.confirm,
+      }
+    );
+    return {
+      purged_count: response.data.purged_count,
+      message: response.data.message,
+    };
   },
 
   async convertToMember(
@@ -624,15 +665,28 @@ export const applicantService = {
     };
   },
 
-  // Document management - not yet implemented in backend
-  async getDocuments(_applicantId: string): Promise<ApplicantDocument[]> {
-    return [];
+  async getDocuments(applicantId: string): Promise<ApplicantDocument[]> {
+    const response = await api.get(
+      `/prospective-members/prospects/${applicantId}/documents`
+    );
+    return (response.data || []).map((d: any) => ({
+      id: d.id,
+      applicant_id: d.prospect_id,
+      stage_id: d.step_id,
+      document_type: d.document_type,
+      file_name: d.file_name,
+      file_url: d.file_path,
+      file_size: d.file_size,
+      mime_type: d.mime_type,
+      uploaded_by: d.uploaded_by,
+      uploaded_at: d.created_at,
+    }));
   },
 
   async uploadDocument(
-    _applicantId: string,
-    _stageId: string,
-    _documentType: string,
+    applicantId: string,
+    stageId: string,
+    documentType: string,
     file: File
   ): Promise<ApplicantDocument> {
     // Client-side file validation
@@ -644,50 +698,120 @@ export const applicantService = {
         `File type "${file.type}" is not allowed. Accepted: ${FILE_UPLOAD_LIMITS.allowedExtensions.join(', ')}`
       );
     }
-    throw new Error('Document upload not yet supported by backend');
+
+    // For now, record the document metadata (actual file storage TBD)
+    const response = await api.post(
+      `/prospective-members/prospects/${applicantId}/documents`,
+      null,
+      {
+        params: {
+          document_type: documentType,
+          file_name: file.name,
+          file_path: `/uploads/prospects/${applicantId}/${file.name}`,
+          file_size: file.size,
+          mime_type: file.type || undefined,
+          step_id: stageId || undefined,
+        },
+      }
+    );
+    const d = response.data;
+    return {
+      id: d.id,
+      applicant_id: d.prospect_id,
+      stage_id: d.step_id,
+      document_type: d.document_type,
+      file_name: d.file_name,
+      file_url: d.file_path,
+      file_size: d.file_size,
+      mime_type: d.mime_type,
+      uploaded_by: d.uploaded_by,
+      uploaded_at: d.created_at,
+    };
   },
 
   async deleteDocument(
-    _applicantId: string,
-    _documentId: string
+    applicantId: string,
+    documentId: string
   ): Promise<void> {
-    // Not yet implemented in backend
+    await api.delete(
+      `/prospective-members/prospects/${applicantId}/documents/${documentId}`
+    );
   },
 
-  // Election package management - not yet implemented in backend
-  async getElectionPackage(_applicantId: string): Promise<ElectionPackage | null> {
-    return null;
+  async getElectionPackage(applicantId: string): Promise<ElectionPackage | null> {
+    try {
+      const response = await api.get(
+        `/prospective-members/prospects/${applicantId}/election-package`
+      );
+      return mapElectionPackageResponse(response.data);
+    } catch (err: any) {
+      if (err.response?.status === 404) return null;
+      throw err;
+    }
   },
 
   async createElectionPackage(
-    _applicantId: string,
-    _data: ElectionPackageCreate
+    applicantId: string,
+    data: ElectionPackageCreate
   ): Promise<ElectionPackage> {
-    throw new Error('Election packages not yet supported by backend');
+    const response = await api.post(
+      `/prospective-members/prospects/${applicantId}/election-package`,
+      {
+        prospect_id: applicantId,
+        pipeline_id: data.pipeline_id,
+        step_id: data.stage_id,
+        coordinator_notes: data.coordinator_notes,
+        package_config: {
+          supporting_statement: data.supporting_statement,
+        },
+      }
+    );
+    return mapElectionPackageResponse(response.data);
   },
 
   async updateElectionPackage(
-    _applicantId: string,
-    _data: ElectionPackageUpdate
+    applicantId: string,
+    data: ElectionPackageUpdate
   ): Promise<ElectionPackage> {
-    throw new Error('Election packages not yet supported by backend');
+    const payload: Record<string, unknown> = {};
+    if (data.status !== undefined) payload.status = data.status;
+    if (data.coordinator_notes !== undefined) payload.coordinator_notes = data.coordinator_notes;
+    // Pack extra fields into package_config
+    const configUpdates: Record<string, unknown> = {};
+    if (data.supporting_statement !== undefined) configUpdates.supporting_statement = data.supporting_statement;
+    if (data.custom_fields !== undefined) configUpdates.custom_fields = data.custom_fields;
+    if (Object.keys(configUpdates).length > 0) payload.package_config = configUpdates;
+
+    const response = await api.put(
+      `/prospective-members/prospects/${applicantId}/election-package`,
+      payload
+    );
+    return mapElectionPackageResponse(response.data);
   },
 };
 
 // =============================================================================
 // Election Package Service (cross-module query for Elections module)
-// Not yet implemented in backend
 // =============================================================================
 
 export const electionPackageService = {
-  async getPendingPackages(_pipelineId?: string): Promise<ElectionPackage[]> {
-    return [];
+  async getPendingPackages(pipelineId?: string): Promise<ElectionPackage[]> {
+    const params: Record<string, string> = { status: 'ready' };
+    if (pipelineId) params.pipeline_id = pipelineId;
+    const response = await api.get('/prospective-members/election-packages', { params });
+    return (response.data || []).map(mapElectionPackageResponse);
   },
 
-  async getAllPackages(_params?: {
+  async getAllPackages(params?: {
     pipeline_id?: string;
     status?: string;
   }): Promise<ElectionPackage[]> {
-    return [];
+    const response = await api.get('/prospective-members/election-packages', {
+      params: {
+        pipeline_id: params?.pipeline_id,
+        status: params?.status,
+      },
+    });
+    return (response.data || []).map(mapElectionPackageResponse);
   },
 };

@@ -32,6 +32,14 @@ from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     PipelineKanbanResponse,
     PipelineKanbanColumn,
+    PipelineStatsResponse,
+    PipelineStageStats,
+    PurgeInactiveRequest,
+    PurgeInactiveResponse,
+    ProspectDocumentResponse,
+    ElectionPackageCreate,
+    ElectionPackageUpdate,
+    ElectionPackageResponse,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.api.dependencies import get_current_user, require_permission
@@ -67,6 +75,7 @@ async def list_pipelines(
             description=p.description,
             is_template=p.is_template,
             is_default=p.is_default,
+            is_active=p.is_active if hasattr(p, 'is_active') else True,
             auto_transfer_on_approval=p.auto_transfer_on_approval,
             step_count=len(p.steps) if p.steps else 0,
             prospect_count=len(p.prospects) if hasattr(p, 'prospects') and p.prospects else 0,
@@ -97,7 +106,9 @@ async def create_pipeline(
         description=data.description,
         is_template=data.is_template,
         is_default=data.is_default,
+        is_active=data.is_active,
         auto_transfer_on_approval=data.auto_transfer_on_approval,
+        inactivity_config=data.inactivity_config,
         steps=steps,
         created_by=current_user.id,
     )
@@ -337,6 +348,66 @@ async def get_kanban_board(
     if not board:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
     return board
+
+
+# ============================================
+# Pipeline Statistics
+# ============================================
+
+@router.get("/pipelines/{pipeline_id}/stats", response_model=PipelineStatsResponse)
+async def get_pipeline_stats(
+    pipeline_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view")),
+):
+    """
+    Get statistics for a pipeline (counts by status, by step, conversion rate).
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    stats = await service.get_pipeline_stats(str(pipeline_id), current_user.organization_id)
+    if not stats:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+    return stats
+
+
+# ============================================
+# Purge Inactive Prospects
+# ============================================
+
+@router.post("/pipelines/{pipeline_id}/purge-inactive", response_model=PurgeInactiveResponse)
+async def purge_inactive_prospects(
+    pipeline_id: UUID,
+    data: PurgeInactiveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Purge withdrawn/inactive prospects from a pipeline.
+
+    Requires `confirm: true` in the request body to execute.
+
+    **Requires permission: members.manage**
+    """
+    if not data.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must set confirm=true to execute purge",
+        )
+
+    service = MembershipPipelineService(db)
+    prospect_ids = [str(pid) for pid in data.prospect_ids] if data.prospect_ids else None
+    count = await service.purge_inactive_prospects(
+        pipeline_id=str(pipeline_id),
+        organization_id=current_user.organization_id,
+        prospect_ids=prospect_ids,
+        purged_by=current_user.id,
+    )
+    return PurgeInactiveResponse(
+        purged_count=count,
+        message=f"Successfully purged {count} withdrawn prospect(s)",
+    )
 
 
 # ============================================
@@ -628,3 +699,191 @@ async def get_prospect_activity(
             created_at=log.created_at,
         ))
     return result
+
+
+# ============================================
+# Prospect Document Endpoints
+# ============================================
+
+@router.get("/prospects/{prospect_id}/documents", response_model=List[ProspectDocumentResponse])
+async def list_prospect_documents(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view")),
+):
+    """
+    List all documents for a prospect.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    docs = await service.get_prospect_documents(str(prospect_id), current_user.organization_id)
+    return docs
+
+
+@router.post(
+    "/prospects/{prospect_id}/documents",
+    response_model=ProspectDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_prospect_document(
+    prospect_id: UUID,
+    document_type: str = Query(..., description="Type of document (e.g. application, id, background_check)"),
+    file_name: str = Query(..., description="Original file name"),
+    file_path: str = Query(..., description="Storage path for the file"),
+    file_size: int = Query(0, ge=0, description="File size in bytes"),
+    mime_type: Optional[str] = Query(None, description="MIME type of the file"),
+    step_id: Optional[UUID] = Query(None, description="Associated pipeline step"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Add a document record for a prospect.
+
+    Note: The actual file upload should be handled by a separate file storage service.
+    This endpoint records the document metadata.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    doc = await service.add_prospect_document(
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        document_type=document_type,
+        file_name=file_name,
+        file_path=file_path,
+        file_size=file_size,
+        mime_type=mime_type,
+        step_id=str(step_id) if step_id else None,
+        uploaded_by=current_user.id,
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+    return doc
+
+
+@router.delete(
+    "/prospects/{prospect_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_prospect_document(
+    prospect_id: UUID,
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Delete a prospect document.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    deleted = await service.delete_prospect_document(
+        document_id=str(document_id),
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        deleted_by=current_user.id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+
+# ============================================
+# Election Package Endpoints
+# ============================================
+
+@router.get("/prospects/{prospect_id}/election-package", response_model=ElectionPackageResponse)
+async def get_election_package(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view")),
+):
+    """
+    Get the election package for a prospect.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    pkg = await service.get_election_package(str(prospect_id), current_user.organization_id)
+    if not pkg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found")
+    return pkg
+
+
+@router.post(
+    "/prospects/{prospect_id}/election-package",
+    response_model=ElectionPackageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_election_package(
+    prospect_id: UUID,
+    data: ElectionPackageCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Create an election package for a prospect.
+
+    This captures a snapshot of the applicant's information and prepares
+    it for the election/voting process.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    pkg = await service.create_election_package(
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        pipeline_id=str(data.pipeline_id) if data.pipeline_id else None,
+        step_id=str(data.step_id) if data.step_id else None,
+        coordinator_notes=data.coordinator_notes,
+        package_config=data.package_config,
+        created_by=current_user.id,
+    )
+    if not pkg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found")
+    return pkg
+
+
+@router.put("/prospects/{prospect_id}/election-package", response_model=ElectionPackageResponse)
+async def update_election_package(
+    prospect_id: UUID,
+    data: ElectionPackageUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Update an election package for a prospect.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    pkg = await service.update_election_package(
+        prospect_id=str(prospect_id),
+        organization_id=current_user.organization_id,
+        updates=data.model_dump(exclude_unset=True),
+        updated_by=current_user.id,
+    )
+    if not pkg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found")
+    return pkg
+
+
+@router.get("/election-packages", response_model=List[ElectionPackageResponse])
+async def list_election_packages(
+    pipeline_id: Optional[UUID] = Query(None, description="Filter by pipeline"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.view")),
+):
+    """
+    List election packages across all prospects, optionally filtered.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    packages = await service.list_election_packages(
+        organization_id=current_user.organization_id,
+        pipeline_id=str(pipeline_id) if pipeline_id else None,
+        status_filter=status_filter,
+    )
+    return packages
