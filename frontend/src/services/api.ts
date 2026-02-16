@@ -2133,7 +2133,7 @@ export const documentsService = {
   },
 
   async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/documents/', { params });
+    const response = await api.get('/documents', { params });
     return response.data;
   },
 
@@ -2229,12 +2229,12 @@ export interface MeetingsSummary {
 
 export const meetingsService = {
   async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/meetings/', { params });
+    const response = await api.get('/meetings', { params });
     return response.data;
   },
 
   async createMeeting(data: Record<string, unknown>): Promise<MeetingRecord> {
-    const response = await api.post<MeetingRecord>('/meetings/', data);
+    const response = await api.post<MeetingRecord>('/meetings', data);
     return response.data;
   },
 
