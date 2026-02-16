@@ -83,7 +83,7 @@ const ReviewPanel: React.FC<{
         action,
         reviewer_notes: notes || undefined,
         override_hours: overrideHours,
-        override_credit_hours: overrideCreditHours,
+        override_credit_hours: overrideHours ?? overrideCreditHours,
         override_training_type: overrideType,
       });
     } finally {
@@ -156,7 +156,7 @@ const ReviewPanel: React.FC<{
             {showOverrides ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {showOverrides && (
-            <div className="grid grid-cols-3 gap-3 mt-2">
+            <div className="grid grid-cols-2 gap-3 mt-2">
               <div>
                 <label className="text-xs text-gray-400">Hours</label>
                 <input
@@ -164,18 +164,6 @@ const ReviewPanel: React.FC<{
                   value={overrideHours ?? ''}
                   onChange={(e) => setOverrideHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder={String(submission.hours_completed)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                  min={0}
-                  step={0.5}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400">Credit Hours</label>
-                <input
-                  type="number"
-                  value={overrideCreditHours ?? ''}
-                  onChange={(e) => setOverrideCreditHours(e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder={String(submission.credit_hours || '')}
                   className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   min={0}
                   step={0.5}
@@ -270,12 +258,6 @@ const SubmissionCard: React.FC<{
                   <span className="text-gray-300">{submission.course_code}</span>
                 </div>
               )}
-              {submission.credit_hours != null && (
-                <div>
-                  <span className="text-gray-500">Credit Hours: </span>
-                  <span className="text-gray-300">{submission.credit_hours}</span>
-                </div>
-              )}
               {submission.instructor && (
                 <div className="flex items-center space-x-1">
                   <User className="w-3 h-3 text-gray-500" />
@@ -345,7 +327,6 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   training_type: { visible: true, required: true, label: 'Training Type' },
   completion_date: { visible: true, required: true, label: 'Date Completed' },
   hours_completed: { visible: true, required: true, label: 'Hours Completed' },
-  credit_hours: { visible: true, required: false, label: 'Credit Hours' },
   course_code: { visible: true, required: false, label: 'Course Code' },
   description: { visible: true, required: false, label: 'Description / Notes' },
   instructor: { visible: true, required: false, label: 'Instructor Name' },

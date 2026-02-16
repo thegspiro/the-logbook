@@ -417,7 +417,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-slate-200 mb-2">
-                        Credit Hours <span className="text-red-400">*</span>
+                        Hours <span className="text-red-400">*</span>
                       </label>
                       <input
                         type="number"
@@ -585,7 +585,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     value={formData.use_existing_course ? 'Using existing course' : formData.course_name || 'N/A'}
                   />
                   <ReviewItem label="Training Type" value={formData.training_type} />
-                  <ReviewItem label="Credit Hours" value={`${formData.credit_hours} hours`} />
+                  <ReviewItem label="Hours" value={`${formData.credit_hours} hours`} />
                   {formData.instructor && <ReviewItem label="Instructor" value={formData.instructor} />}
                   {formData.issues_certification && (
                     <>

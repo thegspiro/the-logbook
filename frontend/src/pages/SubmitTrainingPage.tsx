@@ -104,11 +104,13 @@ const SubmissionForm: React.FC<{
     setError('');
 
     try {
+      // Credit hours = hours completed (same concept for department training)
+      const submitData = { ...formData, credit_hours: formData.hours_completed };
       if (isEdit && editSubmission) {
-        await trainingSubmissionService.updateSubmission(editSubmission.id, formData);
+        await trainingSubmissionService.updateSubmission(editSubmission.id, submitData);
         toast.success('Submission updated');
       } else {
-        await trainingSubmissionService.createSubmission(formData);
+        await trainingSubmissionService.createSubmission(submitData);
         toast.success(config.require_approval ? 'Training submitted for review!' : 'Training recorded!');
       }
       onSuccess();
@@ -232,23 +234,6 @@ const SubmissionForm: React.FC<{
           </div>
         )}
 
-        {/* Credit hours */}
-        {isFieldVisible('credit_hours') && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('credit_hours', 'Credit Hours')} {isFieldRequired('credit_hours') && <span className="text-red-400">*</span>}
-            </label>
-            <input
-              type="number"
-              value={formData.credit_hours || ''}
-              onChange={(e) => setFormData({ ...formData, credit_hours: parseFloat(e.target.value) || undefined })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              required={isFieldRequired('credit_hours')}
-              min={0}
-              step={0.5}
-            />
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
