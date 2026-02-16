@@ -19,10 +19,10 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
   );
 
   return (
-    <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+    <div className="bg-theme-surface shadow overflow-hidden sm:rounded-lg">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-theme-surface-border">
+          <thead className="bg-theme-surface-secondary">
             <tr>
               <th
                 scope="col"
@@ -68,7 +68,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-theme-surface divide-y divide-theme-surface-border">
             {members.length === 0 ? (
               <tr>
                 <td
@@ -80,7 +80,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
               </tr>
             ) : (
               members.map((member) => (
-                <tr key={member.id} className="hover:bg-gray-50">
+                <tr key={member.id} className="hover:bg-theme-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Link to={`/members/${member.id}`} className="flex items-center group">
                       {member.photo_url ? (
@@ -92,14 +92,14 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                           />
                         </div>
                       ) : (
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface-secondary flex items-center justify-center">
                           <span className="text-theme-text-muted font-medium">
                             {(member.first_name?.[0] || member.username[0]).toUpperCase()}
                           </span>
                         </div>
                       )}
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900 group-hover:text-blue-600">
+                        <div className="text-sm font-medium text-theme-text-primary group-hover:text-blue-600">
                           {member.full_name || member.username}
                         </div>
                         <div className="text-sm text-theme-text-muted">@{member.username}</div>
@@ -110,7 +110,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                     {member.badge_number || '-'}
                   </td>
                   {contactSettings.enabled && contactSettings.show_email && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                       {member.email ? (
                         <a
                           href={`mailto:${member.email}`}
@@ -124,7 +124,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                     </td>
                   )}
                   {contactSettings.enabled && contactSettings.show_phone && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                       {member.phone ? (
                         <a
                           href={`tel:${member.phone}`}
@@ -138,7 +138,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                     </td>
                   )}
                   {contactSettings.enabled && contactSettings.show_mobile && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
                       {member.mobile ? (
                         <a
                           href={`tel:${member.mobile}`}

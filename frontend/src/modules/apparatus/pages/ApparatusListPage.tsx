@@ -417,15 +417,15 @@ export const ApparatusListPage: React.FC = () => {
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => navigate(`/apparatus/${apparatus.id}/maintenance`)}
+                                onClick={() => navigate(`/apparatus/${apparatus.id}`)}
                                 className="p-2 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
-                                title="Maintenance"
+                                title="View Details"
                               >
                                 <Wrench className="w-4 h-4" />
                               </button>
                               {!apparatus.isArchived && (
                                 <button
-                                  onClick={() => navigate(`/apparatus/${apparatus.id}/archive`)}
+                                  onClick={() => navigate(`/apparatus/${apparatus.id}`)}
                                   className="p-2 text-theme-text-muted hover:text-theme-text-secondary hover:bg-slate-500/10 rounded transition-colors"
                                   title="Archive"
                                 >

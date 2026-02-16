@@ -317,7 +317,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             label="Total Members"
             value={stats.totalMembers.toString()}
             color="blue"
-            onClick={() => navigate('/training/members')}
+            onClick={() => navigate('/members')}
           />
           <StatCard
             icon={CheckCircle}
@@ -325,7 +325,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             value={stats.compliantMembers.toString()}
             subtitle={`${stats.compliancePercentage}%`}
             color="green"
-            onClick={() => navigate('/training/compliance')}
+            onClick={() => navigate('/training/requirements')}
           />
           <StatCard
             icon={AlertTriangle}
@@ -333,7 +333,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             value={stats.expiringCount.toString()}
             subtitle="Expiring Soon"
             color="yellow"
-            onClick={() => navigate('/training/expirations')}
+            onClick={() => navigate('/training/requirements')}
           />
           <StatCard
             icon={Award}
@@ -357,14 +357,14 @@ const TrainingOfficerDashboard: React.FC = () => {
             icon={Users}
             title="Member Progress"
             description="Track individual member training progress and compliance"
-            onClick={() => navigate('/training/members')}
+            onClick={() => navigate('/members')}
             color="blue"
           />
           <NavigationCard
             icon={Calendar}
             title="Training Sessions"
             description="Schedule and manage upcoming training sessions"
-            onClick={() => navigate('/training/sessions')}
+            onClick={() => navigate('/training/sessions/new')}
             color="green"
           />
           <NavigationCard
@@ -378,7 +378,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             icon={TrendingUp}
             title="Reports & Analytics"
             description="Generate compliance reports and training analytics"
-            onClick={() => navigate('/training/reports')}
+            onClick={() => navigate('/reports')}
             color="orange"
           />
           <NavigationCard

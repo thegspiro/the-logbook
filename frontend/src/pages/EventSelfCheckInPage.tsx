@@ -106,24 +106,24 @@ const EventSelfCheckInPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-gray-600">Loading event...</div>
+      <div className="flex items-center justify-center min-h-screen bg-theme-surface-secondary">
+        <div className="text-theme-text-secondary">Loading event...</div>
       </div>
     );
   }
 
   if (error && !qrData) {
     return (
-      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-gray-50">
-        <div className="bg-white rounded-lg shadow-md p-8">
+      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
+        <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
               <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Unable to Load Event</h2>
-            <p className="text-gray-600 mb-6">{error}</p>
+            <h2 className="text-2xl font-bold text-theme-text-primary mb-2">Unable to Load Event</h2>
+            <p className="text-theme-text-secondary mb-6">{error}</p>
             <Link
               to="/events"
               className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -139,8 +139,8 @@ const EventSelfCheckInPage: React.FC = () => {
   // Show check-out prompt if already checked in
   if (showCheckOutPrompt && checkInData && !checkedIn) {
     return (
-      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-gray-50">
-        <div className="bg-white rounded-lg shadow-md p-8">
+      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
+        <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
             {/* Info Icon */}
             <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-6">
@@ -149,8 +149,8 @@ const EventSelfCheckInPage: React.FC = () => {
               </svg>
             </div>
 
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Already Checked In</h2>
-            <p className="text-xl text-gray-600 mb-8">You're already checked in to this event</p>
+            <h2 className="text-3xl font-bold text-theme-text-primary mb-2">Already Checked In</h2>
+            <p className="text-xl text-theme-text-secondary mb-8">You're already checked in to this event</p>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-left mb-8">
               <h3 className="text-2xl font-semibold text-blue-900 mb-4">{qrData?.event_name}</h3>
@@ -190,7 +190,7 @@ const EventSelfCheckInPage: React.FC = () => {
 
               <Link
                 to={`/events/${eventId}`}
-                className="block w-full px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium text-center"
+                className="block w-full px-6 py-3 bg-theme-surface-secondary text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition font-medium text-center"
               >
                 View Event Details
               </Link>
@@ -205,8 +205,8 @@ const EventSelfCheckInPage: React.FC = () => {
     const isCheckOut = checkInData.checked_out_at !== null && checkInData.checked_out_at !== undefined;
 
     return (
-      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-gray-50">
-        <div className="bg-white rounded-lg shadow-md p-8">
+      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
+        <div className="bg-theme-surface rounded-lg shadow-md p-8">
           <div className="text-center">
             {/* Success Icon */}
             <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
@@ -215,10 +215,10 @@ const EventSelfCheckInPage: React.FC = () => {
               </svg>
             </div>
 
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            <h2 className="text-3xl font-bold text-theme-text-primary mb-2">
               {isCheckOut ? 'Successfully Checked Out!' : 'Successfully Checked In!'}
             </h2>
-            <p className="text-xl text-gray-600 mb-8">
+            <p className="text-xl text-theme-text-secondary mb-8">
               {isCheckOut ? "You've been checked out of:" : "You've been checked in to:"}
             </p>
 
@@ -294,7 +294,7 @@ const EventSelfCheckInPage: React.FC = () => {
               </Link>
               <Link
                 to="/events"
-                className="block w-full px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+                className="block w-full px-6 py-3 bg-theme-surface-secondary text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition font-medium"
               >
                 View All Events
               </Link>
@@ -306,8 +306,8 @@ const EventSelfCheckInPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 min-h-screen bg-gray-50">
-      <div className="bg-white rounded-lg shadow-md p-8">
+    <div className="max-w-2xl mx-auto p-6 min-h-screen bg-theme-surface-secondary">
+      <div className="bg-theme-surface rounded-lg shadow-md p-8">
         {/* Event Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
@@ -315,14 +315,14 @@ const EventSelfCheckInPage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Event Check-In</h2>
+          <h2 className="text-3xl font-bold text-theme-text-primary mb-2">Event Check-In</h2>
         </div>
 
         {/* Event Details */}
-        <div className="bg-gray-50 rounded-lg p-6 mb-8">
-          <h3 className="text-2xl font-semibold text-gray-900 mb-4">{qrData?.event_name}</h3>
+        <div className="bg-theme-surface-secondary rounded-lg p-6 mb-8">
+          <h3 className="text-2xl font-semibold text-theme-text-primary mb-4">{qrData?.event_name}</h3>
 
-          <div className="space-y-3 text-gray-700">
+          <div className="space-y-3 text-theme-text-secondary">
             {qrData?.event_type && (
               <p className="flex items-start">
                 <span className="font-medium w-24">Type:</span>

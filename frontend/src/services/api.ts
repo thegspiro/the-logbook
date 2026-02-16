@@ -1948,7 +1948,7 @@ export const formsService = {
     skip?: number;
     limit?: number;
   }): Promise<FormsListResponse> {
-    const response = await api.get<FormsListResponse>('/forms/', { params });
+    const response = await api.get<FormsListResponse>('/forms', { params });
     return response.data;
   },
 
@@ -1958,7 +1958,7 @@ export const formsService = {
   },
 
   async createForm(data: FormCreate): Promise<FormDetailDef> {
-    const response = await api.post<FormDetailDef>('/forms/', data);
+    const response = await api.post<FormDetailDef>('/forms', data);
     return response.data;
   },
 

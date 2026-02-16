@@ -59,7 +59,7 @@ const NavigationChoice: React.FC = () => {
 
     if (data) {
       // Store navigation preference (backward compatibility)
-      sessionStorage.setItem('navigationLayout', navigationLayout);
+      localStorage.setItem('navigationLayout', navigationLayout);
 
       toast.success('Department information saved');
       // Navigate to email platform choice

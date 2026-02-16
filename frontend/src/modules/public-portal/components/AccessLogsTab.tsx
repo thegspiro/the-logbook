@@ -97,18 +97,18 @@ export const AccessLogsTab: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">Access Logs</h3>
-        <p className="text-sm text-gray-600 mt-1">
+        <h3 className="text-lg font-semibold text-theme-text-primary">Access Logs</h3>
+        <p className="text-sm text-theme-text-secondary mt-1">
           View all public portal access attempts with detailed request information
         </p>
       </div>
 
       {/* Filters */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* IP Address Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               IP Address
             </label>
             <input
@@ -116,13 +116,13 @@ export const AccessLogsTab: React.FC = () => {
               value={filters.ip_address || ''}
               onChange={(e) => handleFilterChange('ip_address', e.target.value)}
               placeholder="e.g., 192.168.1.1"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           {/* Endpoint Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               Endpoint
             </label>
             <input
@@ -130,19 +130,19 @@ export const AccessLogsTab: React.FC = () => {
               value={filters.endpoint || ''}
               onChange={(e) => handleFilterChange('endpoint', e.target.value)}
               placeholder="e.g., /api/public/v1/organization/info"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           {/* Status Code Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               Status Code
             </label>
             <select
               value={filters.status_code || ''}
               onChange={(e) => handleFilterChange('status_code', e.target.value ? parseInt(e.target.value) : undefined)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All</option>
               <option value="200">200 - OK</option>
@@ -156,13 +156,13 @@ export const AccessLogsTab: React.FC = () => {
 
           {/* Flagged Only Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               Suspicious Activity
             </label>
             <select
               value={filters.flagged_suspicious === undefined ? '' : filters.flagged_suspicious.toString()}
               onChange={(e) => handleFilterChange('flagged_suspicious', e.target.value === '' ? undefined : e.target.value === 'true')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All</option>
               <option value="true">Flagged Only</option>
@@ -172,13 +172,13 @@ export const AccessLogsTab: React.FC = () => {
 
           {/* Results Per Page */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               Results Per Page
             </label>
             <select
               value={filters.limit || 50}
               onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-theme-surface-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="25">25</option>
               <option value="50">50</option>
@@ -192,7 +192,7 @@ export const AccessLogsTab: React.FC = () => {
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="w-full px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="w-full px-3 py-2 text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
               >
                 Clear Filters
               </button>
@@ -203,20 +203,20 @@ export const AccessLogsTab: React.FC = () => {
 
       {/* Logs Table */}
       {logs.length === 0 ? (
-        <div className="bg-gray-50 border border-gray-200 rounded-md p-8 text-center">
+        <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-md p-8 text-center">
           <svg className="mx-auto h-12 w-12 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No access logs found</h3>
+          <h3 className="mt-2 text-sm font-medium text-theme-text-primary">No access logs found</h3>
           <p className="mt-1 text-sm text-theme-text-muted">
             {hasActiveFilters ? 'Try adjusting your filters' : 'Access logs will appear here once requests are made'}
           </p>
         </div>
       ) : (
         <>
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-theme-surface-border">
+              <thead className="bg-theme-surface-secondary">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Timestamp
@@ -244,11 +244,11 @@ export const AccessLogsTab: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-theme-surface divide-y divide-theme-surface-border">
                 {logs.map((log) => (
                   <React.Fragment key={log.id}>
                     <tr
-                      className={`hover:bg-gray-50 ${log.flagged_suspicious ? 'bg-red-50' : ''}`}
+                      className={`hover:bg-theme-surface-hover ${log.flagged_suspicious ? 'bg-red-50' : ''}`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                         {formatDate(log.timestamp)}
@@ -258,7 +258,7 @@ export const AccessLogsTab: React.FC = () => {
                           {log.method}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 font-mono">
+                      <td className="px-6 py-4 text-sm text-theme-text-primary font-mono">
                         {log.endpoint}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -289,19 +289,19 @@ export const AccessLogsTab: React.FC = () => {
                       </td>
                     </tr>
                     {expandedLog === log.id && (
-                      <tr className="bg-gray-50">
+                      <tr className="bg-theme-surface-secondary">
                         <td colSpan={8} className="px-6 py-4">
                           <div className="space-y-2 text-sm">
                             {log.user_agent && (
                               <div>
-                                <span className="font-semibold text-gray-700">User Agent:</span>
-                                <span className="ml-2 text-gray-600">{log.user_agent}</span>
+                                <span className="font-semibold text-theme-text-secondary">User Agent:</span>
+                                <span className="ml-2 text-theme-text-secondary">{log.user_agent}</span>
                               </div>
                             )}
                             {log.referer && (
                               <div>
-                                <span className="font-semibold text-gray-700">Referer:</span>
-                                <span className="ml-2 text-gray-600">{log.referer}</span>
+                                <span className="font-semibold text-theme-text-secondary">Referer:</span>
+                                <span className="ml-2 text-theme-text-secondary">{log.referer}</span>
                               </div>
                             )}
                             {log.flagged_suspicious && log.flag_reason && (
@@ -312,8 +312,8 @@ export const AccessLogsTab: React.FC = () => {
                             )}
                             {log.api_key_id && (
                               <div>
-                                <span className="font-semibold text-gray-700">API Key ID:</span>
-                                <span className="ml-2 text-gray-600 font-mono">{log.api_key_id}</span>
+                                <span className="font-semibold text-theme-text-secondary">API Key ID:</span>
+                                <span className="ml-2 text-theme-text-secondary font-mono">{log.api_key_id}</span>
                               </div>
                             )}
                           </div>
@@ -327,8 +327,8 @@ export const AccessLogsTab: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between bg-white px-4 py-3 border border-gray-200 rounded-lg">
-            <div className="text-sm text-gray-700">
+          <div className="flex items-center justify-between bg-theme-surface px-4 py-3 border border-theme-surface-border rounded-lg">
+            <div className="text-sm text-theme-text-secondary">
               Showing <span className="font-medium">{(filters.offset || 0) + 1}</span> to{' '}
               <span className="font-medium">{(filters.offset || 0) + logs.length}</span>
             </div>
@@ -336,14 +336,14 @@ export const AccessLogsTab: React.FC = () => {
               <button
                 onClick={handlePrevPage}
                 disabled={!filters.offset || filters.offset === 0}
-                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
               <button
                 onClick={handleNextPage}
                 disabled={logs.length < (filters.limit || 50)}
-                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
