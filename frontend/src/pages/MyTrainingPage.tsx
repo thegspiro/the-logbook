@@ -29,13 +29,7 @@ import {
 } from 'lucide-react';
 import { trainingModuleConfigService } from '../services/api';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
-
-// ==================== Helpers ====================
-
-const formatDate = (d: string | null | undefined) => {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
+import { formatDate } from '../utils/dateFormatting';
 
 const getStatusColor = (status: string) => {
   switch (status) {

@@ -96,9 +96,22 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const content = children ?? <Outlet />;
 
+  const footer = (
+    <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <p className="text-center text-theme-text-secondary text-sm">
+          &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
+        </p>
+        <p className="text-center text-theme-text-muted text-xs mt-1">
+          Powered by The Logbook
+        </p>
+      </div>
+    </footer>
+  );
+
   if (navigationLayout === 'left') {
     return (
-      <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+      <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
@@ -111,8 +124,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           logoPreview={logoPreview}
           onLogout={handleLogoutClick}
         />
-        <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0" id="main-content" role="main">
-          {content}
+        <div className="lg:ml-64 min-h-screen flex flex-col pt-16 lg:pt-0">
+          <div className="flex-1" id="main-content" role="main">
+            {content}
+          </div>
+          <div className="lg:ml-0">{footer}</div>
         </div>
         <LogoutConfirmModal
           isOpen={showLogoutModal}
@@ -124,7 +140,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"
@@ -137,9 +153,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         logoPreview={logoPreview}
         onLogout={handleLogoutClick}
       />
-      <div id="main-content" role="main">
+      <div className="flex-1" id="main-content" role="main">
         {content}
       </div>
+      {footer}
       <LogoutConfirmModal
         isOpen={showLogoutModal}
         onConfirm={handleLogoutConfirm}
