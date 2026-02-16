@@ -1527,6 +1527,17 @@ export const eventService = {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
     return response.data;
   },
+
+  // Module Settings
+  async getModuleSettings(): Promise<import('../types/event').EventModuleSettings> {
+    const response = await api.get<import('../types/event').EventModuleSettings>('/events/settings');
+    return response.data;
+  },
+
+  async updateModuleSettings(data: Partial<import('../types/event').EventModuleSettings>): Promise<import('../types/event').EventModuleSettings> {
+    const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
+    return response.data;
+  },
 };
 
 export interface UserInventoryItem {
