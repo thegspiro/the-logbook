@@ -184,7 +184,7 @@ function App() {
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
-              <Route path="/elections/:id" element={<ElectionDetailPage />} />
+              <Route path="/elections/:electionId" element={<ElectionDetailPage />} />
 
               {/* Minutes Module */}
               <Route path="/minutes" element={<MinutesPage />} />
