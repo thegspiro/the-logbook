@@ -162,7 +162,8 @@ function App() {
               <Route path="/documents" element={<DocumentsPage />} />
 
               {/* Training Module */}
-              <Route path="/training" element={<TrainingDashboardPage />} />
+              <Route path="/training" element={<Navigate to="/training/my-training" replace />} />
+              <Route path="/training/dashboard" element={<ProtectedRoute requiredPermission="training.manage"><TrainingDashboardPage /></ProtectedRoute>} />
               <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
               <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
               <Route path="/training/programs" element={<TrainingProgramsPage />} />

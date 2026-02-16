@@ -63,7 +63,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
-    { label: 'Training', path: '/training' },
+    {
+      label: 'Training',
+      path: '/training/my-training',
+      subItems: [
+        { label: 'My Training', path: '/training/my-training' },
+        { label: 'Dashboard', path: '/training/dashboard', permission: 'training.manage' },
+      ],
+    },
     {
       label: 'Operations',
       path: '/inventory',

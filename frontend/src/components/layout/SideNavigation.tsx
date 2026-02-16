@@ -90,7 +90,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
-    { label: 'Training', path: '/training', icon: GraduationCap },
+    {
+      label: 'Training',
+      path: '#',
+      icon: GraduationCap,
+      subItems: [
+        { label: 'My Training', path: '/training/my-training', icon: ClipboardList },
+        { label: 'Dashboard', path: '/training/dashboard', icon: BarChart3, permission: 'training.manage' },
+      ],
+    },
     {
       label: 'Operations',
       path: '#',
