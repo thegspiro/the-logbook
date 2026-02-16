@@ -1150,6 +1150,7 @@ export interface MyTrainingSummary {
     requirements?: Array<{
       id: string;
       requirement_id: string;
+      requirement_name?: string;
       status: string;
       progress_value: number;
       progress_percentage: number;

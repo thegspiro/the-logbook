@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
@@ -26,6 +26,7 @@ import {
   Bell,
   FormInput,
   Plug,
+  Send,
 } from 'lucide-react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -67,6 +68,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
 
+  // Auto-expand parent menu when navigating to a child route
+  useEffect(() => {
+    setExpandedMenus(prev => {
+      const activeParent = navItems.find(item =>
+        item.subItems?.some(sub => location.pathname === sub.path || location.pathname.startsWith(sub.path + '/'))
+      );
+      if (activeParent && !prev.includes(activeParent.label)) {
+        return [...prev, activeParent.label];
+      }
+      return prev;
+    });
+  }, [location.pathname]);
+
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
@@ -96,6 +110,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: GraduationCap,
       subItems: [
         { label: 'My Training', path: '/training/my-training', icon: ClipboardList },
+        { label: 'Submit Training', path: '/training/submit', icon: Send },
         { label: 'Dashboard', path: '/training/dashboard', icon: BarChart3, permission: 'training.manage' },
       ],
     },

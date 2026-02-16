@@ -63,6 +63,7 @@ const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
 const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
 const ShiftReportPage = lazy(() => import('./pages/ShiftReportPage'));
 const MyTrainingPage = lazy(() => import('./pages/MyTrainingPage'));
+const MemberProgressPage = lazy(() => import('./pages/MemberProgressPage'));
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
@@ -176,6 +177,7 @@ function App() {
               <Route path="/training/shift-reports" element={<ShiftReportPage />} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
               <Route path="/training/my-training" element={<MyTrainingPage />} />
+              <Route path="/training/my-progress" element={<MemberProgressPage />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
