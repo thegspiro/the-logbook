@@ -140,6 +140,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
+  const isSubItemActive = (path: string, siblings: { path: string }[]) => {
+    if (path === '#') return false;
+    if (location.pathname === path) return true;
+    if (!location.pathname.startsWith(path + '/')) return false;
+    // Don't prefix-match if a sibling is a more specific match
+    return !siblings.some(s =>
+      s.path !== path &&
+      s.path.length > path.length &&
+      (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
+    );
+  };
+
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
       return item.subItems.some(sub => isActive(sub.path));
@@ -328,7 +340,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
                         {visibleSubItems!.map((subItem) => {
                           const SubIcon = subItem.icon;
-                          const subActive = isActive(subItem.path);
+                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (
                             <li key={subItem.path}>
                               <button
