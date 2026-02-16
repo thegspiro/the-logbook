@@ -23,7 +23,7 @@ export interface MembershipIdSettings {
   enabled: boolean;
   prefix: string;
   next_number: number;
-  zero_pad: number;
+  padding: number;
 }
 
 export interface ContactInfoSettings {
@@ -48,11 +48,4 @@ export interface ContactInfoUpdate {
   phone?: string;
   mobile?: string;
   notification_preferences?: NotificationPreferences;
-}
-
-export interface MembershipIdSettings {
-  enabled: boolean;
-  prefix: string;
-  next_number: number;
-  padding: number;
 }

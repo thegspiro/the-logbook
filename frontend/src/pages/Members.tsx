@@ -323,13 +323,13 @@ const Members: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {member.membership_id && (
-                          <div className="text-theme-text-primary font-mono text-sm">{member.membership_id}</div>
+                        {member.membership_number && (
+                          <div className="text-theme-text-primary font-mono text-sm">{member.membership_number}</div>
                         )}
                         {member.badge_number && (
                           <div className="text-theme-text-muted font-mono text-xs">Badge #{member.badge_number}</div>
                         )}
-                        {!member.membership_id && !member.badge_number && (
+                        {!member.membership_number && !member.badge_number && (
                           <div className="text-theme-text-muted">-</div>
                         )}
                       </td>
