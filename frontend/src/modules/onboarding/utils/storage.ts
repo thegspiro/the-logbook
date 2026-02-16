@@ -51,7 +51,7 @@ export const getOnboardingData = (): Partial<OnboardingData> => {
   const departmentName = sessionStorage.getItem(STORAGE_KEYS.DEPARTMENT_NAME);
   const hasLogo = sessionStorage.getItem(STORAGE_KEYS.HAS_LOGO) === 'true';
   const logoData = sessionStorage.getItem(STORAGE_KEYS.LOGO_DATA);
-  const navigationLayout = sessionStorage.getItem(STORAGE_KEYS.NAVIGATION_LAYOUT) as 'top' | 'left' | null;
+  const navigationLayout = localStorage.getItem(STORAGE_KEYS.NAVIGATION_LAYOUT) as 'top' | 'left' | null;
   const emailPlatform = sessionStorage.getItem(STORAGE_KEYS.EMAIL_PLATFORM) as OnboardingData['emailPlatform'];
   const emailConfigMethod = sessionStorage.getItem(STORAGE_KEYS.EMAIL_CONFIG_METHOD) as 'oauth' | 'apppassword' | null;
   const fileStoragePlatform = sessionStorage.getItem(STORAGE_KEYS.FILE_STORAGE_PLATFORM) as OnboardingData['fileStoragePlatform'];
@@ -90,7 +90,7 @@ export const saveDepartmentInfo = (name: string, logoData?: string) => {
  * Save navigation layout preference (non-sensitive)
  */
 export const saveNavigationLayout = (layout: 'top' | 'left') => {
-  sessionStorage.setItem(STORAGE_KEYS.NAVIGATION_LAYOUT, layout);
+  localStorage.setItem(STORAGE_KEYS.NAVIGATION_LAYOUT, layout);
 };
 
 /**
