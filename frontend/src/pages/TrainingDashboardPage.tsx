@@ -159,7 +159,10 @@ export default function TrainingDashboardPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">Active Training Courses</h2>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                <button
+                  onClick={() => navigate('/training/courses')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
                   Add New Course
                 </button>
               </div>
