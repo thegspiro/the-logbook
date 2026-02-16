@@ -88,15 +88,42 @@ const SchedulingPage: React.FC = () => {
     });
   };
 
-  const weekDates = getWeekDates();
+  const getMonthDates = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    // Pad to start on Sunday
+    const startPad = firstDay.getDay();
+    const start = new Date(firstDay);
+    start.setDate(start.getDate() - startPad);
+    // Pad to fill complete weeks (up to 6 rows)
+    const totalDays = startPad + lastDay.getDate();
+    const rows = Math.ceil(totalDays / 7);
+    return Array.from({ length: rows * 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  };
 
-  const navigateWeek = (direction: number) => {
+  const weekDates = getWeekDates();
+  const monthDates = viewMode === 'month' ? getMonthDates() : [];
+
+  const navigate_ = (direction: number) => {
     const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + (direction * 7));
+    if (viewMode === 'month') {
+      newDate.setMonth(newDate.getMonth() + direction);
+    } else {
+      newDate.setDate(newDate.getDate() + (direction * 7));
+    }
     setCurrentDate(newDate);
   };
 
   const formatDateRange = () => {
+    if (viewMode === 'month') {
+      return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    }
     const start = weekDates[0];
     const end = weekDates[6];
     const startMonth = start.toLocaleString('en-US', { month: 'short' });
@@ -114,15 +141,23 @@ const SchedulingPage: React.FC = () => {
       date.getFullYear() === today.getFullYear();
   };
 
-  // Fetch shifts for the current week whenever weekDates change
+  // Fetch shifts for the current view whenever date or viewMode changes
   useEffect(() => {
     const fetchShifts = async () => {
       setLoading(true);
       setError(null);
       try {
-        const weekStartStr = formatDateISO(weekDates[0]);
-        const weekShifts = await schedulingService.getWeekCalendar(weekStartStr);
-        setShifts(weekShifts);
+        let fetchedShifts: ShiftRecord[];
+        if (viewMode === 'month') {
+          fetchedShifts = await schedulingService.getMonthCalendar(
+            currentDate.getFullYear(),
+            currentDate.getMonth() + 1
+          );
+        } else {
+          const weekStartStr = formatDateISO(weekDates[0]);
+          fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
+        }
+        setShifts(fetchedShifts);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to load shifts';
         setError(message);
@@ -133,7 +168,7 @@ const SchedulingPage: React.FC = () => {
 
     fetchShifts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate]);
+  }, [currentDate, viewMode]);
 
   // Fetch summary on mount
   useEffect(() => {
@@ -189,10 +224,18 @@ const SchedulingPage: React.FC = () => {
         notes: shiftForm.notes || undefined,
       });
 
-      // Refresh shifts for the current week
-      const weekStartStr = formatDateISO(weekDates[0]);
-      const weekShifts = await schedulingService.getWeekCalendar(weekStartStr);
-      setShifts(weekShifts);
+      // Refresh shifts for the current view
+      let refreshedShifts: ShiftRecord[];
+      if (viewMode === 'month') {
+        refreshedShifts = await schedulingService.getMonthCalendar(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 1
+        );
+      } else {
+        const weekStartStr = formatDateISO(weekDates[0]);
+        refreshedShifts = await schedulingService.getWeekCalendar(weekStartStr);
+      }
+      setShifts(refreshedShifts);
 
       // Refresh summary
       try {
@@ -289,17 +332,17 @@ const SchedulingPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => navigateWeek(-1)}
+                onClick={() => navigate_(-1)}
                 className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
-                aria-label="Previous week"
+                aria-label={viewMode === 'month' ? 'Previous month' : 'Previous week'}
               >
                 <ChevronLeft className="w-5 h-5" aria-hidden="true" />
               </button>
               <h2 className="text-theme-text-primary font-semibold text-lg">{formatDateRange()}</h2>
               <button
-                onClick={() => navigateWeek(1)}
+                onClick={() => navigate_(1)}
                 className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
-                aria-label="Next week"
+                aria-label={viewMode === 'month' ? 'Next month' : 'Next week'}
               >
                 <ChevronRight className="w-5 h-5" aria-hidden="true" />
               </button>
@@ -350,7 +393,7 @@ const SchedulingPage: React.FC = () => {
         )}
 
         {/* Week Calendar Grid */}
-        {!loading && (
+        {!loading && viewMode === 'week' && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
             <div className="grid grid-cols-7 border-b border-theme-surface-border">
               {weekDates.map((date, i) => (
@@ -394,6 +437,49 @@ const SchedulingPage: React.FC = () => {
                         {shift.attendee_count > 0 && (
                           <p className="mt-1 opacity-70">{shift.attendee_count} attendee{shift.attendee_count !== 1 ? 's' : ''}</p>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Month Calendar Grid */}
+        {!loading && viewMode === 'month' && (
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+            <div className="grid grid-cols-7 border-b border-theme-surface-border">
+              {DAYS_OF_WEEK.map((day) => (
+                <div key={day} className="p-3 text-center border-r border-theme-surface-border last:border-r-0">
+                  <p className="text-theme-text-muted text-xs uppercase">{day}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {monthDates.map((date, i) => {
+                const dayShifts = getShiftsForDate(date);
+                const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+                return (
+                  <div
+                    key={i}
+                    className={`p-2 border-r border-b border-theme-surface-border last:border-r-0 min-h-[100px] ${
+                      isToday(date) ? 'bg-violet-600/5' : ''
+                    } ${!isCurrentMonth ? 'opacity-40' : ''}`}
+                  >
+                    <p className={`text-sm font-medium mb-1 ${
+                      isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                    }`}>
+                      {date.getDate()}
+                    </p>
+                    {dayShifts.map((shift) => (
+                      <div
+                        key={shift.id}
+                        className={`mb-1 px-1.5 py-1 rounded border text-xs ${getShiftTemplateColor(shift)}`}
+                      >
+                        <p className="font-medium truncate">
+                          {formatTime(shift.start_time)}
+                        </p>
                       </div>
                     ))}
                   </div>
