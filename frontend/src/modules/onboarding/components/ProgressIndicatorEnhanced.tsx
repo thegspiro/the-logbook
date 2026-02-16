@@ -33,8 +33,8 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
     <div className={className}>
       {/* Current Step Label */}
       <div className="flex items-center justify-between text-sm mb-3">
-        <span className="text-slate-400">Setup Progress</span>
-        <span className="text-white font-medium">
+        <span className="text-theme-text-muted">Setup Progress</span>
+        <span className="text-theme-text-primary font-medium">
           Step {currentStep} of {totalSteps}: {currentStepInfo?.name || 'Setup'}
         </span>
       </div>
@@ -67,7 +67,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                     isCurrent
                       ? 'bg-red-600 text-white shadow-lg'
                       : isCompleted
-                      ? 'bg-green-600/20 text-green-400'
+                      ? 'bg-green-600/20 text-green-700 dark:text-green-400'
                       : 'bg-slate-800/50 text-slate-500'
                   }`}
                 >
@@ -78,7 +78,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                         ? 'bg-white text-red-600'
                         : isCompleted
                         ? 'bg-green-500 text-white'
-                        : 'bg-slate-700 text-slate-400'
+                        : 'bg-slate-700 text-theme-text-muted'
                     }`}
                   >
                     {isCompleted ? (
@@ -91,7 +91,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                   {/* Step Name (hide on very small screens for first/last steps) */}
                   <span
                     className={`text-xs font-medium whitespace-nowrap ${
-                      isCurrent ? 'text-white' : ''
+                      isCurrent ? 'text-theme-text-primary' : ''
                     }`}
                   >
                     <span className="hidden sm:inline">{step.name}</span>
@@ -103,7 +103,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                 {index < ONBOARDING_STEPS.length - 1 && (
                   <ChevronRight
                     className={`w-4 h-4 flex-shrink-0 ${
-                      isCompleted ? 'text-green-400' : 'text-slate-600'
+                      isCompleted ? 'text-green-700 dark:text-green-400' : 'text-slate-600'
                     }`}
                     aria-hidden="true"
                   />
@@ -117,7 +117,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       {/* Completion Message */}
       {percentage === 100 && (
         <div className="mt-3 text-center">
-          <p className="text-green-400 text-sm font-medium flex items-center justify-center space-x-2">
+          <p className="text-green-700 dark:text-green-400 text-sm font-medium flex items-center justify-center space-x-2">
             <Check className="w-4 h-4" aria-hidden="true" />
             <span>Setup Complete!</span>
           </p>

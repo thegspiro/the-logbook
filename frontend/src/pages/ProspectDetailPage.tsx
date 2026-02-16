@@ -145,11 +145,11 @@ export const ProspectDetailPage: React.FC = () => {
     if (!progress) return <Circle className="h-5 w-5 text-slate-500" />;
     switch (progress.status) {
       case 'completed':
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+        return <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-500" />;
       case 'in_progress':
-        return <Clock className="h-5 w-5 text-blue-500" />;
+        return <Clock className="h-5 w-5 text-blue-700 dark:text-blue-500" />;
       case 'skipped':
-        return <SkipForward className="h-5 w-5 text-yellow-500" />;
+        return <SkipForward className="h-5 w-5 text-yellow-700 dark:text-yellow-500" />;
       default:
         return <Circle className="h-5 w-5 text-slate-500" />;
     }
@@ -157,11 +157,11 @@ export const ProspectDetailPage: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      active: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      approved: 'bg-green-500/20 text-green-400 border-green-500/30',
-      rejected: 'bg-red-500/20 text-red-400 border-red-500/30',
-      withdrawn: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-      transferred: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+      active: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30',
+      approved: 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30',
+      rejected: 'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30',
+      withdrawn: 'bg-gray-500/20 text-theme-text-muted border-gray-500/30',
+      transferred: 'bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/30',
     };
     return (
       <span className={`px-3 py-1 rounded-full text-sm font-medium border ${styles[status] || styles.active}`}>
@@ -181,10 +181,10 @@ export const ProspectDetailPage: React.FC = () => {
   if (error || !prospect) {
     return (
       <div className="space-y-4">
-        <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white">
+        <Link to="/membership-pipeline" className="flex items-center gap-2 text-theme-text-muted hover:text-theme-text-primary">
           <ArrowLeft className="h-4 w-4" /> Back to Pipeline
         </Link>
-        <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-4">
+        <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-4">
           {error || 'Prospect not found'}
         </div>
       </div>
@@ -200,30 +200,30 @@ export const ProspectDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen space-y-6">
       {/* Back link */}
-      <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+      <Link to="/membership-pipeline" className="flex items-center gap-2 text-theme-text-muted hover:text-theme-text-primary transition-colors">
         <ArrowLeft className="h-4 w-4" /> Back to Pipeline
       </Link>
 
       {/* Header */}
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+      <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 bg-slate-700 rounded-full flex items-center justify-center text-2xl font-bold text-white">
+            <div className="h-16 w-16 bg-slate-700 rounded-full flex items-center justify-center text-2xl font-bold text-theme-text-primary">
               {prospect.first_name[0]}{prospect.last_name[0]}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">
+              <h1 className="text-2xl font-bold text-theme-text-primary">
                 {prospect.first_name} {prospect.last_name}
               </h1>
               <div className="flex items-center gap-3 mt-1">
                 {getStatusBadge(prospect.status)}
                 {prospect.pipeline_name && (
-                  <span className="text-sm text-slate-400">{prospect.pipeline_name}</span>
+                  <span className="text-sm text-theme-text-muted">{prospect.pipeline_name}</span>
                 )}
                 {prospect.current_step && (
                   <>
                     <ChevronRight className="h-4 w-4 text-slate-500" />
-                    <span className="text-sm text-gray-300">{prospect.current_step.name}</span>
+                    <span className="text-sm text-theme-text-secondary">{prospect.current_step.name}</span>
                   </>
                 )}
               </div>
@@ -247,7 +247,7 @@ export const ProspectDetailPage: React.FC = () => {
               </button>
               <button
                 onClick={handleReject}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-red-400 rounded-lg hover:bg-slate-600 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-red-700 dark:text-red-400 rounded-lg hover:bg-slate-600 transition-colors text-sm"
               >
                 <X className="h-4 w-4" />
                 Reject
@@ -257,7 +257,7 @@ export const ProspectDetailPage: React.FC = () => {
           {prospect.status === 'transferred' && prospect.transferred_user_id && (
             <Link
               to={`/members/${prospect.transferred_user_id}`}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-600/30 transition-colors text-sm border border-purple-500/30"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-600/30 transition-colors text-sm border border-purple-500/30"
             >
               <User className="h-4 w-4" />
               View Member Profile
@@ -267,7 +267,7 @@ export const ProspectDetailPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-700">
+      <div className="border-b border-theme-surface-border">
         <div className="flex gap-6">
           {(['progress', 'info', 'activity'] as const).map(tab => (
             <button
@@ -275,8 +275,8 @@ export const ProspectDetailPage: React.FC = () => {
               onClick={() => setActiveTab(tab)}
               className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
-                  ? 'border-red-500 text-white'
-                  : 'border-transparent text-slate-400 hover:text-white'
+                  ? 'border-red-500 text-theme-text-primary'
+                  : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               {tab === 'progress' && <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Pipeline Progress</span>}
@@ -289,8 +289,8 @@ export const ProspectDetailPage: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'progress' && (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Pipeline Steps</h2>
+        <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Pipeline Steps</h2>
           <div className="space-y-1">
             {sortedProgress.map((progress, idx) => (
               <div
@@ -303,34 +303,34 @@ export const ProspectDetailPage: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-medium text-white">{progress.step?.name || 'Unknown Step'}</span>
+                      <span className="font-medium text-theme-text-primary">{progress.step?.name || 'Unknown Step'}</span>
                       {progress.step?.step_type && (
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                           progress.step.step_type === 'action'
-                            ? 'bg-blue-500/20 text-blue-400'
+                            ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                             : progress.step.step_type === 'note'
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : 'bg-green-500/20 text-green-400'
+                            ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                            : 'bg-green-500/20 text-green-700 dark:text-green-400'
                         }`}>
                           {progress.step.step_type}
                         </span>
                       )}
                       {progress.step?.required && (
-                        <span className="ml-1 text-xs text-red-400">*</span>
+                        <span className="ml-1 text-xs text-red-700 dark:text-red-400">*</span>
                       )}
                     </div>
                     {progress.completed_at && (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-theme-text-muted">
                         {new Date(progress.completed_at).toLocaleDateString()}
                       </span>
                     )}
                   </div>
                   {progress.step?.description && (
-                    <p className="text-sm text-slate-400 mt-1">{progress.step.description}</p>
+                    <p className="text-sm text-theme-text-muted mt-1">{progress.step.description}</p>
                   )}
                   {progress.notes && (
-                    <div className="mt-2 bg-slate-700/50 rounded-lg p-2 text-sm text-gray-300">
-                      <MessageSquare className="h-3 w-3 inline mr-1 text-slate-400" />
+                    <div className="mt-2 bg-slate-700/50 rounded-lg p-2 text-sm text-theme-text-secondary">
+                      <MessageSquare className="h-3 w-3 inline mr-1 text-theme-text-muted" />
                       {progress.notes}
                     </div>
                   )}
@@ -345,7 +345,7 @@ export const ProspectDetailPage: React.FC = () => {
                             value={stepNotes}
                             onChange={e => setStepNotes(e.target.value)}
                             rows={2}
-                            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                           />
                           <div className="flex gap-2">
                             <button
@@ -356,7 +356,7 @@ export const ProspectDetailPage: React.FC = () => {
                             </button>
                             <button
                               onClick={() => { setCompletingStepId(null); setStepNotes(''); }}
-                              className="px-3 py-1.5 bg-slate-700 text-gray-300 rounded-lg text-xs hover:bg-slate-600 transition-colors"
+                              className="px-3 py-1.5 bg-slate-700 text-theme-text-secondary rounded-lg text-xs hover:bg-slate-600 transition-colors"
                             >
                               Cancel
                             </button>
@@ -365,7 +365,7 @@ export const ProspectDetailPage: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => setCompletingStepId(progress.step_id)}
-                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                          className="text-xs text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                         >
                           Mark as complete
                         </button>
@@ -381,89 +381,89 @@ export const ProspectDetailPage: React.FC = () => {
 
       {activeTab === 'info' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Contact Information</h2>
+          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Contact Information</h2>
             <dl className="space-y-3">
               <div className="flex items-center gap-3">
-                <Mail className="h-4 w-4 text-slate-400" />
-                <dt className="text-sm text-slate-400 w-20">Email</dt>
-                <dd className="text-sm text-white">{prospect.email}</dd>
+                <Mail className="h-4 w-4 text-theme-text-muted" />
+                <dt className="text-sm text-theme-text-muted w-20">Email</dt>
+                <dd className="text-sm text-theme-text-primary">{prospect.email}</dd>
               </div>
               {prospect.phone && (
                 <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                  <dt className="text-sm text-slate-400 w-20">Phone</dt>
-                  <dd className="text-sm text-white">{prospect.phone}</dd>
+                  <Phone className="h-4 w-4 text-theme-text-muted" />
+                  <dt className="text-sm text-theme-text-muted w-20">Phone</dt>
+                  <dd className="text-sm text-theme-text-primary">{prospect.phone}</dd>
                 </div>
               )}
               {prospect.mobile && (
                 <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                  <dt className="text-sm text-slate-400 w-20">Mobile</dt>
-                  <dd className="text-sm text-white">{prospect.mobile}</dd>
+                  <Phone className="h-4 w-4 text-theme-text-muted" />
+                  <dt className="text-sm text-theme-text-muted w-20">Mobile</dt>
+                  <dd className="text-sm text-theme-text-primary">{prospect.mobile}</dd>
                 </div>
               )}
               {prospect.date_of_birth && (
                 <div className="flex items-center gap-3">
-                  <Calendar className="h-4 w-4 text-slate-400" />
-                  <dt className="text-sm text-slate-400 w-20">DOB</dt>
-                  <dd className="text-sm text-white">{new Date(prospect.date_of_birth).toLocaleDateString()}</dd>
+                  <Calendar className="h-4 w-4 text-theme-text-muted" />
+                  <dt className="text-sm text-theme-text-muted w-20">DOB</dt>
+                  <dd className="text-sm text-theme-text-primary">{new Date(prospect.date_of_birth).toLocaleDateString()}</dd>
                 </div>
               )}
             </dl>
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Address</h2>
+          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Address</h2>
             {prospect.address_street ? (
               <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
-                <div className="text-sm text-white">
+                <MapPin className="h-4 w-4 text-theme-text-muted mt-0.5" />
+                <div className="text-sm text-theme-text-primary">
                   <div>{prospect.address_street}</div>
                   <div>{prospect.address_city}{prospect.address_state ? `, ${prospect.address_state}` : ''} {prospect.address_zip}</div>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">No address provided</p>
+              <p className="text-sm text-theme-text-muted">No address provided</p>
             )}
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Application Details</h2>
+          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Application Details</h2>
             <dl className="space-y-3">
               {prospect.interest_reason && (
                 <div>
-                  <dt className="text-sm text-slate-400 mb-1">Interest / Reason</dt>
-                  <dd className="text-sm text-white bg-slate-700/50 rounded-lg p-3">{prospect.interest_reason}</dd>
+                  <dt className="text-sm text-theme-text-muted mb-1">Interest / Reason</dt>
+                  <dd className="text-sm text-theme-text-primary bg-slate-700/50 rounded-lg p-3">{prospect.interest_reason}</dd>
                 </div>
               )}
               {prospect.referral_source && (
                 <div>
-                  <dt className="text-sm text-slate-400">Referral Source</dt>
-                  <dd className="text-sm text-white">{prospect.referral_source}</dd>
+                  <dt className="text-sm text-theme-text-muted">Referral Source</dt>
+                  <dd className="text-sm text-theme-text-primary">{prospect.referral_source}</dd>
                 </div>
               )}
               {prospect.notes && (
                 <div>
-                  <dt className="text-sm text-slate-400 mb-1">Notes</dt>
-                  <dd className="text-sm text-white bg-slate-700/50 rounded-lg p-3">{prospect.notes}</dd>
+                  <dt className="text-sm text-theme-text-muted mb-1">Notes</dt>
+                  <dd className="text-sm text-theme-text-primary bg-slate-700/50 rounded-lg p-3">{prospect.notes}</dd>
                 </div>
               )}
             </dl>
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Dates</h2>
+          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Dates</h2>
             <dl className="space-y-3">
               <div className="flex justify-between">
-                <dt className="text-sm text-slate-400">Added</dt>
-                <dd className="text-sm text-white">{new Date(prospect.created_at).toLocaleString()}</dd>
+                <dt className="text-sm text-theme-text-muted">Added</dt>
+                <dd className="text-sm text-theme-text-primary">{new Date(prospect.created_at).toLocaleString()}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm text-slate-400">Last Updated</dt>
-                <dd className="text-sm text-white">{new Date(prospect.updated_at).toLocaleString()}</dd>
+                <dt className="text-sm text-theme-text-muted">Last Updated</dt>
+                <dd className="text-sm text-theme-text-primary">{new Date(prospect.updated_at).toLocaleString()}</dd>
               </div>
               {prospect.transferred_at && (
                 <div className="flex justify-between">
-                  <dt className="text-sm text-slate-400">Transferred</dt>
-                  <dd className="text-sm text-white">{new Date(prospect.transferred_at).toLocaleString()}</dd>
+                  <dt className="text-sm text-theme-text-muted">Transferred</dt>
+                  <dd className="text-sm text-theme-text-primary">{new Date(prospect.transferred_at).toLocaleString()}</dd>
                 </div>
               )}
             </dl>
@@ -472,29 +472,29 @@ export const ProspectDetailPage: React.FC = () => {
       )}
 
       {activeTab === 'activity' && (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Activity Log</h2>
+        <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Activity Log</h2>
           {activityLog.length === 0 ? (
-            <p className="text-slate-400 text-sm">No activity recorded yet.</p>
+            <p className="text-theme-text-muted text-sm">No activity recorded yet.</p>
           ) : (
             <div className="space-y-3">
               {activityLog.map(entry => (
                 <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-700/50">
-                  <Activity className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                  <Activity className="h-4 w-4 text-theme-text-muted mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">
+                      <span className="text-sm font-medium text-theme-text-primary">
                         {entry.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-theme-text-muted">
                         {new Date(entry.created_at).toLocaleString()}
                       </span>
                     </div>
                     {entry.performer_name && (
-                      <span className="text-xs text-slate-400">by {entry.performer_name}</span>
+                      <span className="text-xs text-theme-text-muted">by {entry.performer_name}</span>
                     )}
                     {entry.details && (
-                      <div className="mt-1 text-xs text-slate-400">
+                      <div className="mt-1 text-xs text-theme-text-muted">
                         {entry.details.notes ? <span>Note: {String(entry.details.notes)}</span> : null}
                         {entry.details.to_step_name ? <span>Moved to: {String(entry.details.to_step_name)}</span> : null}
                       </div>
@@ -510,55 +510,55 @@ export const ProspectDetailPage: React.FC = () => {
       {/* Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
-              <h2 className="text-lg font-semibold text-white">Transfer to Membership</h2>
-              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white">
+          <div className="bg-slate-800 rounded-xl border border-theme-surface-border w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
+              <h2 className="text-lg font-semibold text-theme-text-primary">Transfer to Membership</h2>
+              <button onClick={() => setShowTransferModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={handleTransfer} className="p-6 space-y-4">
               <div className="bg-blue-900/30 border border-blue-700/30 rounded-lg p-3 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-blue-300">
+                <AlertCircle className="h-4 w-4 text-blue-700 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">
                   This will create a new member account for <strong>{prospect.first_name} {prospect.last_name}</strong> and
                   mark this prospect as transferred.
                 </p>
               </div>
               {transferError && (
-                <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-3 text-sm">
+                <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-3 text-sm">
                   {transferError}
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Username</label>
                 <input
                   type="text"
                   value={transferData.username || ''}
                   onChange={e => setTransferData(prev => ({ ...prev, username: e.target.value }))}
                   placeholder="Auto-generated if left blank"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Rank</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Rank</label>
                   <input
                     type="text"
                     value={transferData.rank || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, rank: e.target.value }))}
                     placeholder="e.g., Probationary"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Station</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
                   <input
                     type="text"
                     value={transferData.station || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, station: e.target.value }))}
                     placeholder="e.g., Station 1"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -568,17 +568,17 @@ export const ProspectDetailPage: React.FC = () => {
                   id="send_welcome"
                   checked={transferData.send_welcome_email}
                   onChange={e => setTransferData(prev => ({ ...prev, send_welcome_email: e.target.checked }))}
-                  className="rounded border-slate-600 bg-slate-700 text-red-500 focus:ring-red-500"
+                  className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
                 />
-                <label htmlFor="send_welcome" className="text-sm text-gray-300">
+                <label htmlFor="send_welcome" className="text-sm text-theme-text-secondary">
                   Send welcome email with login credentials
                 </label>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+              <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
                 <button
                   type="button"
                   onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 bg-slate-700 text-gray-300 rounded-lg hover:bg-slate-600 transition-colors"
+                  className="px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
                 >
                   Cancel
                 </button>

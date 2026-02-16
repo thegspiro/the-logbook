@@ -11,11 +11,19 @@ export interface User {
   last_name?: string;
   full_name?: string;
   badge_number?: string;
+  membership_number?: string;
   phone?: string;
   mobile?: string;
   photo_url?: string;
   status: string;
   hire_date?: string;
+}
+
+export interface MembershipIdSettings {
+  enabled: boolean;
+  prefix: string;
+  next_number: number;
+  padding: number;
 }
 
 export interface ContactInfoSettings {

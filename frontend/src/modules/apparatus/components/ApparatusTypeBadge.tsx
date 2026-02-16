@@ -18,55 +18,55 @@ const getCategoryColors = (category: ApparatusCategory) => {
     case 'fire':
       return {
         background: 'bg-red-500/10',
-        text: 'text-red-400',
+        text: 'text-red-700 dark:text-red-400',
         border: 'border-red-500/30',
       };
     case 'ems':
       return {
         background: 'bg-blue-500/10',
-        text: 'text-blue-400',
+        text: 'text-blue-700 dark:text-blue-400',
         border: 'border-blue-500/30',
       };
     case 'rescue':
       return {
         background: 'bg-orange-500/10',
-        text: 'text-orange-400',
+        text: 'text-orange-700 dark:text-orange-400',
         border: 'border-orange-500/30',
       };
     case 'support':
       return {
         background: 'bg-green-500/10',
-        text: 'text-green-400',
+        text: 'text-green-700 dark:text-green-400',
         border: 'border-green-500/30',
       };
     case 'command':
       return {
         background: 'bg-purple-500/10',
-        text: 'text-purple-400',
+        text: 'text-purple-700 dark:text-purple-400',
         border: 'border-purple-500/30',
       };
     case 'marine':
       return {
         background: 'bg-cyan-500/10',
-        text: 'text-cyan-400',
+        text: 'text-cyan-700 dark:text-cyan-400',
         border: 'border-cyan-500/30',
       };
     case 'aircraft':
       return {
         background: 'bg-indigo-500/10',
-        text: 'text-indigo-400',
+        text: 'text-indigo-700 dark:text-indigo-400',
         border: 'border-indigo-500/30',
       };
     case 'admin':
       return {
         background: 'bg-slate-500/10',
-        text: 'text-slate-400',
+        text: 'text-theme-text-muted',
         border: 'border-slate-500/30',
       };
     default:
       return {
         background: 'bg-slate-500/10',
-        text: 'text-slate-400',
+        text: 'text-theme-text-muted',
         border: 'border-slate-500/30',
       };
   }

@@ -33,11 +33,11 @@ interface PipelineTableProps {
 }
 
 const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string }> = {
-  active: { label: 'Active', className: 'bg-emerald-500/20 text-emerald-400' },
-  on_hold: { label: 'On Hold', className: 'bg-amber-500/20 text-amber-400' },
-  withdrawn: { label: 'Withdrawn', className: 'bg-slate-500/20 text-slate-400' },
-  converted: { label: 'Converted', className: 'bg-blue-500/20 text-blue-400' },
-  rejected: { label: 'Rejected', className: 'bg-red-500/20 text-red-400' },
+  active: { label: 'Active', className: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' },
+  on_hold: { label: 'On Hold', className: 'bg-amber-500/20 text-amber-700 dark:text-amber-400' },
+  withdrawn: { label: 'Withdrawn', className: 'bg-slate-500/20 text-theme-text-muted' },
+  converted: { label: 'Converted', className: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' },
+  rejected: { label: 'Rejected', className: 'bg-red-500/20 text-red-700 dark:text-red-400' },
   inactive: { label: 'Inactive', className: 'bg-slate-500/20 text-slate-500' },
 };
 
@@ -135,8 +135,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
-        <div className="mb-3 flex items-center gap-3 p-3 bg-slate-800 border border-white/10 rounded-lg">
-          <span className="text-sm text-slate-300">
+        <div className="mb-3 flex items-center gap-3 p-3 bg-slate-800 border border-theme-surface-border rounded-lg">
+          <span className="text-sm text-theme-text-secondary">
             {selected.size} selected
           </span>
           <div className="flex items-center gap-2 ml-auto">
@@ -168,13 +168,13 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       {/* Bulk Reject Confirmation */}
       {showBulkRejectConfirm && (
         <div className="mb-3 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <p className="text-sm text-red-300 mb-3">
-            Are you sure you want to reject <strong className="text-white">{selected.size}</strong> applicant(s)? This action cannot be easily undone.
+          <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+            Are you sure you want to reject <strong className="text-theme-text-primary">{selected.size}</strong> applicant(s)? This action cannot be easily undone.
           </p>
           <div className="flex items-center gap-2 justify-end">
             <button
               onClick={() => setShowBulkRejectConfirm(false)}
-              className="px-3 py-1.5 text-sm text-slate-300 hover:text-white transition-colors"
+              className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
             >
               Cancel
             </button>
@@ -192,41 +192,41 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       )}
 
       {/* Table */}
-      <div className="bg-slate-800/50 border border-white/10 rounded-lg overflow-hidden">
+      <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-white/10">
+              <tr className="border-b border-theme-surface-border">
                 <th className="w-10 p-3">
-                  <button onClick={toggleAll} className="text-slate-400 hover:text-white">
+                  <button onClick={toggleAll} className="text-theme-text-muted hover:text-theme-text-primary">
                     {allSelected ? (
-                      <CheckSquare className="w-4 h-4 text-red-400" />
+                      <CheckSquare className="w-4 h-4 text-red-700 dark:text-red-400" />
                     ) : someSelected ? (
-                      <CheckSquare className="w-4 h-4 text-red-400/50" />
+                      <CheckSquare className="w-4 h-4 text-red-700 dark:text-red-400/50" />
                     ) : (
                       <Square className="w-4 h-4" />
                     )}
                   </button>
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Name
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Email
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Current Stage
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Days in Stage
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Target Type
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Applied
                 </th>
                 <th className="w-12 p-3"></th>
@@ -235,7 +235,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             <tbody>
               {applicants.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-slate-400">
+                  <td colSpan={9} className="text-center py-12 text-theme-text-muted">
                     No applicants found
                   </td>
                 </tr>
@@ -247,17 +247,17 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   return (
                     <tr
                       key={applicant.id}
-                      className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${
+                      className={`border-b border-white/5 hover:bg-theme-surface-secondary transition-colors cursor-pointer ${
                         isSelected ? 'bg-red-500/5' : ''
                       }`}
                     >
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggleOne(applicant.id)}
-                          className="text-slate-400 hover:text-white"
+                          className="text-theme-text-muted hover:text-theme-text-primary"
                         >
                           {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-red-400" />
+                            <CheckSquare className="w-4 h-4 text-red-700 dark:text-red-400" />
                           ) : (
                             <Square className="w-4 h-4" />
                           )}
@@ -268,22 +268,22 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         onClick={() => onApplicantClick(applicant)}
                       >
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-theme-text-primary flex-shrink-0">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
-                          <span className="text-sm font-medium text-white">
+                          <span className="text-sm font-medium text-theme-text-primary">
                             {applicant.first_name} {applicant.last_name}
                           </span>
                         </div>
                       </td>
                       <td
-                        className="p-3 text-sm text-slate-400"
+                        className="p-3 text-sm text-theme-text-muted"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.email}
                       </td>
                       <td
-                        className="p-3 text-sm text-slate-300"
+                        className="p-3 text-sm text-theme-text-secondary"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.current_stage_name ?? '—'}
@@ -297,27 +297,27 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         </span>
                       </td>
                       <td
-                        className="p-3 text-sm text-slate-400"
+                        className="p-3 text-sm text-theme-text-muted"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         <span className="flex items-center gap-1">
                           {applicant.days_in_stage}d
                           {applicant.inactivity_alert_level === 'critical' && (
-                            <AlertTriangle className="w-3 h-3 text-red-400" aria-label="Approaching timeout" />
+                            <AlertTriangle className="w-3 h-3 text-red-700 dark:text-red-400" aria-label="Approaching timeout" />
                           )}
                           {applicant.inactivity_alert_level === 'warning' && (
-                            <AlertTriangle className="w-3 h-3 text-amber-400" aria-label="Activity slowing" />
+                            <AlertTriangle className="w-3 h-3 text-amber-700 dark:text-amber-400" aria-label="Activity slowing" />
                           )}
                         </span>
                       </td>
                       <td
-                        className="p-3 text-sm text-slate-400 capitalize"
+                        className="p-3 text-sm text-theme-text-muted capitalize"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.target_membership_type}
                       </td>
                       <td
-                        className="p-3 text-sm text-slate-400"
+                        className="p-3 text-sm text-theme-text-muted"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {formatDate(applicant.created_at)}
@@ -329,18 +329,18 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                               actionMenuId === applicant.id ? null : applicant.id
                             )
                           }
-                          className="p-1 text-slate-400 hover:text-white transition-colors"
+                          className="p-1 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="absolute right-0 top-full mt-1 w-40 bg-slate-700 border border-white/10 rounded-lg shadow-xl z-10 py-1">
+                          <div className="absolute right-0 top-full mt-1 w-40 bg-slate-700 border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);
                                 setActionMenuId(null);
                               }}
-                              className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
+                              className="w-full text-left px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary"
                             >
                               View Details
                             </button>
@@ -351,7 +351,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                     advanceApplicant(applicant.id);
                                     setActionMenuId(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-emerald-400 hover:bg-white/5"
+                                  className="w-full text-left px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400 hover:bg-theme-surface-secondary"
                                 >
                                   Advance Stage
                                 </button>
@@ -360,17 +360,17 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                     holdApplicant(applicant.id);
                                     setActionMenuId(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-amber-400 hover:bg-white/5"
+                                  className="w-full text-left px-4 py-2 text-sm text-amber-700 dark:text-amber-400 hover:bg-theme-surface-secondary"
                                 >
                                   Put on Hold
                                 </button>
                                 {withdrawConfirmId === applicant.id ? (
                                   <div className="px-4 py-2 space-y-2">
-                                    <p className="text-xs text-slate-300">Confirm withdraw?</p>
+                                    <p className="text-xs text-theme-text-secondary">Confirm withdraw?</p>
                                     <div className="flex items-center gap-2">
                                       <button
                                         onClick={() => setWithdrawConfirmId(null)}
-                                        className="text-xs text-slate-400 hover:text-white"
+                                        className="text-xs text-theme-text-muted hover:text-theme-text-primary"
                                       >
                                         Cancel
                                       </button>
@@ -381,7 +381,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                           setActionMenuId(null);
                                         }}
                                         disabled={isWithdrawing}
-                                        className="flex items-center gap-1 text-xs text-slate-300 hover:text-white disabled:opacity-50"
+                                        className="flex items-center gap-1 text-xs text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
                                       >
                                         {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
                                         Confirm
@@ -391,18 +391,18 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 ) : (
                                   <button
                                     onClick={() => setWithdrawConfirmId(applicant.id)}
-                                    className="w-full text-left px-4 py-2 text-sm text-slate-400 hover:bg-white/5"
+                                    className="w-full text-left px-4 py-2 text-sm text-theme-text-muted hover:bg-theme-surface-secondary"
                                   >
                                     Withdraw
                                   </button>
                                 )}
                                 {rejectConfirmId === applicant.id ? (
                                   <div className="px-4 py-2 space-y-2">
-                                    <p className="text-xs text-red-300">Confirm reject?</p>
+                                    <p className="text-xs text-red-700 dark:text-red-300">Confirm reject?</p>
                                     <div className="flex items-center gap-2">
                                       <button
                                         onClick={() => setRejectConfirmId(null)}
-                                        className="text-xs text-slate-400 hover:text-white"
+                                        className="text-xs text-theme-text-muted hover:text-theme-text-primary"
                                       >
                                         Cancel
                                       </button>
@@ -413,7 +413,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                           setActionMenuId(null);
                                         }}
                                         disabled={isRejecting}
-                                        className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                                        className="flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
                                       >
                                         {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
                                         Confirm
@@ -423,7 +423,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 ) : (
                                   <button
                                     onClick={() => setRejectConfirmId(applicant.id)}
-                                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-white/5"
+                                    className="w-full text-left px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-theme-surface-secondary"
                                   >
                                     Reject
                                   </button>
@@ -443,15 +443,15 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 border-t border-white/10">
-            <p className="text-sm text-slate-400">
+          <div className="flex items-center justify-between p-3 border-t border-theme-surface-border">
+            <p className="text-sm text-theme-text-muted">
               Page {currentPage} of {totalPages} ({totalApplicants} total)
             </p>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -462,7 +462,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   className={`w-8 h-8 text-sm rounded ${
                     p === currentPage
                       ? 'bg-red-600 text-white'
-                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                      : 'text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary'
                   } transition-colors`}
                 >
                   {p}
@@ -471,7 +471,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
               <button
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage >= totalPages}
-                className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

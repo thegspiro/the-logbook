@@ -82,7 +82,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
       <div className="relative inline-block">
         <button
           onClick={handleClick}
-          className="text-slate-400 hover:text-white transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
           aria-label={`Help: ${topic}`}
           type="button"
         >
@@ -92,12 +92,12 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         {/* Tooltip */}
         {showTooltip && tooltip && (
           <div className={`absolute z-50 ${getTooltipPositionClasses()}`}>
-            <div className="bg-slate-800 text-white text-sm rounded-lg p-3 shadow-xl border border-white/20 max-w-xs">
+            <div className="bg-slate-800 text-theme-text-primary text-sm rounded-lg p-3 shadow-xl border border-theme-surface-border max-w-xs">
               <div className="flex items-start justify-between space-x-2 mb-2">
                 <p>{tooltip}</p>
                 <button
                   onClick={() => setShowTooltip(false)}
-                  className="text-slate-400 hover:text-white flex-shrink-0"
+                  className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0"
                   aria-label="Close help"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
@@ -107,7 +107,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
                 href={getDocUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
+                className="text-xs text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 flex items-center space-x-1"
               >
                 <span>View full documentation</span>
                 <ExternalLink className="w-3 h-3" aria-hidden="true" />
@@ -126,7 +126,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-theme-text-primary text-sm rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
       >
         <HelpCircle className="w-4 h-4" aria-hidden="true" />
         <span>{label}</span>
@@ -142,7 +142,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-1 text-cyan-400 hover:text-cyan-300 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+        className="inline-flex items-center space-x-1 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
       >
         <HelpCircle className="w-4 h-4" aria-hidden="true" />
         <span>{label}</span>

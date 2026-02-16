@@ -21,24 +21,24 @@ import type {
 const getStatusColor = (status: RequirementProgressStatus) => {
   switch (status) {
     case 'completed':
-      return 'text-green-400 bg-green-500/10';
+      return 'text-green-700 dark:text-green-400 bg-green-500/10';
     case 'in_progress':
-      return 'text-blue-400 bg-blue-500/10';
+      return 'text-blue-700 dark:text-blue-400 bg-blue-500/10';
     case 'waived':
-      return 'text-gray-400 bg-gray-500/10';
+      return 'text-theme-text-muted bg-gray-500/10';
     default:
-      return 'text-gray-500 bg-gray-500/10';
+      return 'text-theme-text-muted bg-gray-500/10';
   }
 };
 
 const getStatusIcon = (status: RequirementProgressStatus) => {
   switch (status) {
     case 'completed':
-      return <CheckCircle2 className="w-5 h-5 text-green-400" />;
+      return <CheckCircle2 className="w-5 h-5 text-green-700 dark:text-green-400" />;
     case 'in_progress':
-      return <Play className="w-5 h-5 text-blue-400" />;
+      return <Play className="w-5 h-5 text-blue-700 dark:text-blue-400" />;
     default:
-      return <Circle className="w-5 h-5 text-gray-500" />;
+      return <Circle className="w-5 h-5 text-theme-text-muted" />;
   }
 };
 
@@ -60,32 +60,32 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 cursor-pointer transition-colors"
+      className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover cursor-pointer transition-colors"
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center space-x-3 mb-2">
-            <h3 className="text-xl font-semibold text-white">{program.name}</h3>
+            <h3 className="text-xl font-semibold text-theme-text-primary">{program.name}</h3>
             <span className={`px-2 py-1 text-xs rounded ${
-              enrollment.status === 'active' ? 'bg-green-500/20 text-green-400' :
-              enrollment.status === 'completed' ? 'bg-blue-500/20 text-blue-400' :
-              'bg-gray-500/20 text-gray-400'
+              enrollment.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+              enrollment.status === 'completed' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
+              'bg-gray-500/20 text-theme-text-muted'
             }`}>
               {enrollment.status}
             </span>
           </div>
           {program.description && (
-            <p className="text-gray-400 text-sm">{program.description}</p>
+            <p className="text-theme-text-muted text-sm">{program.description}</p>
           )}
         </div>
-        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+        <ChevronRight className="w-5 h-5 text-theme-text-muted flex-shrink-0" />
       </div>
 
       {/* Progress Bar */}
       <div className="mb-4">
         <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-gray-400">Overall Progress</span>
-          <span className="text-white font-semibold">{Math.round(enrollment.progress_percentage)}%</span>
+          <span className="text-theme-text-muted">Overall Progress</span>
+          <span className="text-theme-text-primary font-semibold">{Math.round(enrollment.progress_percentage)}%</span>
         </div>
         <div className="w-full bg-gray-700 rounded-full h-2">
           <div
@@ -97,24 +97,24 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-700/50 rounded-lg p-3">
+        <div className="bg-theme-surface rounded-lg p-3">
           <div className="flex items-center space-x-2 mb-1">
-            <CheckCircle2 className="w-4 h-4 text-green-400" />
-            <span className="text-xs text-gray-400">Completed</span>
+            <CheckCircle2 className="w-4 h-4 text-green-700 dark:text-green-400" />
+            <span className="text-xs text-theme-text-muted">Completed</span>
           </div>
-          <p className="text-lg font-bold text-white">{completed_requirements}/{total_requirements}</p>
+          <p className="text-lg font-bold text-theme-text-primary">{completed_requirements}/{total_requirements}</p>
         </div>
 
         {time_remaining_days !== null && time_remaining_days !== undefined && (
-          <div className="bg-gray-700/50 rounded-lg p-3">
+          <div className="bg-theme-surface rounded-lg p-3">
             <div className="flex items-center space-x-2 mb-1">
-              <Calendar className="w-4 h-4 text-blue-400" />
-              <span className="text-xs text-gray-400">Days Left</span>
+              <Calendar className="w-4 h-4 text-blue-700 dark:text-blue-400" />
+              <span className="text-xs text-theme-text-muted">Days Left</span>
             </div>
             <p className={`text-lg font-bold ${
-              time_remaining_days < 30 ? 'text-red-400' :
-              time_remaining_days < 90 ? 'text-yellow-400' :
-              'text-white'
+              time_remaining_days < 30 ? 'text-red-700 dark:text-red-400' :
+              time_remaining_days < 90 ? 'text-yellow-700 dark:text-yellow-400' :
+              'text-theme-text-primary'
             }`}>
               {time_remaining_days}
             </p>
@@ -122,36 +122,36 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
         )}
 
         {progress.current_phase && (
-          <div className="bg-gray-700/50 rounded-lg p-3">
+          <div className="bg-theme-surface rounded-lg p-3">
             <div className="flex items-center space-x-2 mb-1">
-              <Target className="w-4 h-4 text-purple-400" />
-              <span className="text-xs text-gray-400">Current Phase</span>
+              <Target className="w-4 h-4 text-purple-700 dark:text-purple-400" />
+              <span className="text-xs text-theme-text-muted">Current Phase</span>
             </div>
-            <p className="text-sm font-semibold text-white truncate">{progress.current_phase.name}</p>
+            <p className="text-sm font-semibold text-theme-text-primary truncate">{progress.current_phase.name}</p>
           </div>
         )}
 
         {is_behind_schedule && (
           <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/20">
             <div className="flex items-center space-x-2 mb-1">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              <span className="text-xs text-red-400">Behind Schedule</span>
+              <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-400" />
+              <span className="text-xs text-red-700 dark:text-red-400">Behind Schedule</span>
             </div>
-            <p className="text-sm font-semibold text-red-400">Action Needed</p>
+            <p className="text-sm font-semibold text-red-700 dark:text-red-400">Action Needed</p>
           </div>
         )}
       </div>
 
       {/* Next Milestones */}
       {progress.next_milestones.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-700">
+        <div className="mt-4 pt-4 border-t border-theme-surface-border">
           <div className="flex items-center space-x-2 mb-2">
-            <Award className="w-4 h-4 text-yellow-400" />
-            <span className="text-sm font-medium text-gray-300">Next Milestone</span>
+            <Award className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />
+            <span className="text-sm font-medium text-theme-text-secondary">Next Milestone</span>
           </div>
-          <div className="bg-gray-700/30 rounded p-2">
-            <p className="text-sm text-white font-medium">{progress.next_milestones[0].name}</p>
-            <p className="text-xs text-gray-400 mt-1">
+          <div className="bg-theme-surface rounded p-2">
+            <p className="text-sm text-theme-text-primary font-medium">{progress.next_milestones[0].name}</p>
+            <p className="text-xs text-theme-text-muted mt-1">
               At {progress.next_milestones[0].completion_percentage_threshold}% completion
             </p>
           </div>
@@ -179,10 +179,10 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-theme-surface-secondary rounded-lg p-6">
         <button
           onClick={onBack}
-          className="text-gray-400 hover:text-white mb-4 flex items-center space-x-2"
+          className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center space-x-2"
         >
           <ChevronRight className="w-4 h-4 rotate-180" />
           <span>Back to Programs</span>
@@ -190,15 +190,15 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
 
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">{program.name}</h2>
+            <h2 className="text-2xl font-bold text-theme-text-primary mb-2">{program.name}</h2>
             {program.description && (
-              <p className="text-gray-400">{program.description}</p>
+              <p className="text-theme-text-muted">{program.description}</p>
             )}
           </div>
           <span className={`px-3 py-1 text-sm rounded ${
-            enrollment.status === 'active' ? 'bg-green-500/20 text-green-400' :
-            enrollment.status === 'completed' ? 'bg-blue-500/20 text-blue-400' :
-            'bg-gray-500/20 text-gray-400'
+            enrollment.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+            enrollment.status === 'completed' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
+            'bg-gray-500/20 text-theme-text-muted'
           }`}>
             {enrollment.status}
           </span>
@@ -207,8 +207,8 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
         {/* Progress Bar */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">Overall Progress</span>
-            <span className="text-lg font-bold text-white">{Math.round(enrollment.progress_percentage)}%</span>
+            <span className="text-sm font-medium text-theme-text-secondary">Overall Progress</span>
+            <span className="text-lg font-bold text-theme-text-primary">{Math.round(enrollment.progress_percentage)}%</span>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-3">
             <div
@@ -226,23 +226,23 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
         {/* Key Dates */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
           <div>
-            <p className="text-xs text-gray-400 mb-1">Enrolled</p>
-            <p className="text-sm font-medium text-white">
+            <p className="text-xs text-theme-text-muted mb-1">Enrolled</p>
+            <p className="text-sm font-medium text-theme-text-primary">
               {new Date(enrollment.enrolled_at).toLocaleDateString()}
             </p>
           </div>
           {enrollment.target_completion_date && (
             <div>
-              <p className="text-xs text-gray-400 mb-1">Target Completion</p>
-              <p className="text-sm font-medium text-white">
+              <p className="text-xs text-theme-text-muted mb-1">Target Completion</p>
+              <p className="text-sm font-medium text-theme-text-primary">
                 {new Date(enrollment.target_completion_date).toLocaleDateString()}
               </p>
             </div>
           )}
           {enrollment.completed_at && (
             <div>
-              <p className="text-xs text-gray-400 mb-1">Completed</p>
-              <p className="text-sm font-medium text-green-400">
+              <p className="text-xs text-theme-text-muted mb-1">Completed</p>
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
                 {new Date(enrollment.completed_at).toLocaleDateString()}
               </p>
             </div>
@@ -252,22 +252,22 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
 
       {/* Milestones */}
       {next_milestones.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center space-x-2">
-            <Award className="w-5 h-5 text-yellow-400" />
+        <div className="bg-theme-surface-secondary rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-theme-text-primary mb-4 flex items-center space-x-2">
+            <Award className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
             <span>Upcoming Milestones</span>
           </h3>
           <div className="space-y-3">
             {next_milestones.map((milestone, _index) => (
-              <div key={milestone.id} className="bg-gray-700/50 rounded-lg p-4">
+              <div key={milestone.id} className="bg-theme-surface rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium text-white">{milestone.name}</h4>
-                  <span className="text-sm text-gray-400">
+                  <h4 className="font-medium text-theme-text-primary">{milestone.name}</h4>
+                  <span className="text-sm text-theme-text-muted">
                     {milestone.completion_percentage_threshold}%
                   </span>
                 </div>
                 {milestone.description && (
-                  <p className="text-sm text-gray-400">{milestone.description}</p>
+                  <p className="text-sm text-theme-text-muted">{milestone.description}</p>
                 )}
               </div>
             ))}
@@ -276,24 +276,24 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
       )}
 
       {/* Requirements */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Requirements</h3>
+      <div className="bg-theme-surface-secondary rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Requirements</h3>
         <div className="space-y-6">
           {Object.entries(requirementsByPhase).map(([phase, requirements]) => (
             <div key={phase}>
-              <h4 className="text-sm font-medium text-gray-300 mb-3">{phase}</h4>
+              <h4 className="text-sm font-medium text-theme-text-secondary mb-3">{phase}</h4>
               <div className="space-y-2">
                 {requirements.map((rp) => (
                   <div
                     key={rp.id}
-                    className="bg-gray-700/30 rounded-lg p-4 flex items-start space-x-4"
+                    className="bg-theme-surface rounded-lg p-4 flex items-start space-x-4"
                   >
                     <div className="flex-shrink-0 mt-1">
                       {getStatusIcon(rp.status)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <h5 className="font-medium text-white truncate">
+                        <h5 className="font-medium text-theme-text-primary truncate">
                           {rp.requirement?.name || 'Requirement'}
                         </h5>
                         <span className={`px-2 py-1 text-xs rounded ml-2 ${getStatusColor(rp.status)}`}>
@@ -301,13 +301,13 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
                         </span>
                       </div>
                       {rp.requirement?.description && (
-                        <p className="text-sm text-gray-400 mb-2">{rp.requirement.description}</p>
+                        <p className="text-sm text-theme-text-muted mb-2">{rp.requirement.description}</p>
                       )}
 
                       {/* Progress bar for this requirement */}
                       <div className="mt-2">
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-gray-400">
+                          <span className="text-theme-text-muted">
                             {rp.requirement?.requirement_type === 'hours' && rp.requirement.required_hours && (
                               `${rp.progress_value} / ${rp.requirement.required_hours} hours`
                             )}
@@ -318,7 +318,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
                               `${rp.progress_value} / ${rp.requirement.required_calls} calls`
                             )}
                           </span>
-                          <span className="text-white font-medium">{Math.round(rp.progress_percentage)}%</span>
+                          <span className="text-theme-text-primary font-medium">{Math.round(rp.progress_percentage)}%</span>
                         </div>
                         <div className="w-full bg-gray-600 rounded-full h-1.5">
                           <div
@@ -333,7 +333,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
                       </div>
 
                       {rp.completed_at && (
-                        <p className="text-xs text-green-400 mt-2">
+                        <p className="text-xs text-green-700 dark:text-green-400 mt-2">
                           Completed on {new Date(rp.completed_at).toLocaleDateString()}
                         </p>
                       )}
@@ -401,11 +401,11 @@ const MemberProgressPage: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white flex items-center space-x-3 mb-2">
-            <TrendingUp className="w-8 h-8 text-red-500" />
+          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3 mb-2">
+            <TrendingUp className="w-8 h-8 text-red-700 dark:text-red-500" />
             <span>My Training Progress</span>
           </h1>
-          <p className="text-gray-400">
+          <p className="text-theme-text-muted">
             Track your progress through training programs and requirements
           </p>
         </div>
@@ -419,7 +419,7 @@ const MemberProgressPage: React.FC = () => {
               className={`px-4 py-2 rounded-lg font-medium transition-colors capitalize ${
                 filter === status
                   ? 'bg-red-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                  : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
               {status}
@@ -431,13 +431,13 @@ const MemberProgressPage: React.FC = () => {
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
-            <p className="text-gray-400 mt-4">Loading your programs...</p>
+            <p className="text-theme-text-muted mt-4">Loading your programs...</p>
           </div>
         ) : enrollments.length === 0 ? (
-          <div className="text-center py-12 bg-gray-800 rounded-lg">
+          <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
             <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400">No {filter !== 'all' && filter} programs found</p>
-            <p className="text-gray-500 mt-2 text-sm">
+            <p className="text-theme-text-muted">No {filter !== 'all' && filter} programs found</p>
+            <p className="text-theme-text-muted mt-2 text-sm">
               Contact your training officer to enroll in a program
             </p>
           </div>
@@ -452,7 +452,7 @@ const MemberProgressPage: React.FC = () => {
                   onClick={() => setSelectedEnrollment(enrollment.id)}
                 />
               ) : (
-                <div key={enrollment.id} className="bg-gray-800 rounded-lg p-6">
+                <div key={enrollment.id} className="bg-theme-surface-secondary rounded-lg p-6">
                   <div className="animate-pulse">
                     <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
                     <div className="h-4 bg-gray-700 rounded w-full mb-2"></div>

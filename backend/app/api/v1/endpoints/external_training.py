@@ -149,7 +149,7 @@ async def get_provider(
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
-        .where(ExternalTrainingProvider.organization_id == str(current_user.organization_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
 
@@ -178,7 +178,7 @@ async def update_provider(
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
-        .where(ExternalTrainingProvider.organization_id == str(current_user.organization_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
 
@@ -228,7 +228,7 @@ async def delete_provider(
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
-        .where(ExternalTrainingProvider.organization_id == str(current_user.organization_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
 
@@ -259,7 +259,7 @@ async def test_provider_connection(
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
-        .where(ExternalTrainingProvider.organization_id == str(current_user.organization_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
     )
     provider = result.scalar_one_or_none()
 
@@ -382,7 +382,7 @@ async def trigger_sync(
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
-        .where(ExternalTrainingProvider.organization_id == str(current_user.organization_id))
+        .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
         .where(ExternalTrainingProvider.active == True)
     )
     provider = result.scalar_one_or_none()

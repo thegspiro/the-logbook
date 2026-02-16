@@ -63,7 +63,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
-    { label: 'Training', path: '/training' },
+    {
+      label: 'Training',
+      path: '/training/my-training',
+      subItems: [
+        { label: 'My Training', path: '/training/my-training' },
+        { label: 'Submit Training', path: '/training/submit' },
+        { label: 'Dashboard', path: '/training/dashboard', permission: 'training.manage' },
+      ],
+    },
     {
       label: 'Operations',
       path: '/inventory',
@@ -148,7 +156,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}
-          <a href="/dashboard" className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900 rounded-lg">
+          <a href="/dashboard" className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg">
             {logoPreview ? (
               <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
@@ -163,8 +171,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               </div>
             )}
             <div className="ml-3">
-              <span className="text-white text-lg font-semibold">{departmentName}</span>
-              <p className="text-slate-300 text-xs">Dashboard</p>
+              <span className="text-theme-text-primary text-lg font-semibold">{departmentName}</span>
+              <p className="text-theme-text-secondary text-xs">Dashboard</p>
             </div>
           </a>
 
@@ -239,7 +247,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
             })}
             <button
               onClick={cycleTheme}
-              className="text-slate-300 p-2 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
               title={`Theme: ${themeLabel}`}
               aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
             >
@@ -247,7 +255,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
             </button>
             <button
               onClick={onLogout}
-              className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <LogOut className="w-4 h-4" aria-hidden="true" />
               <span>Logout</span>
@@ -257,7 +265,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden text-white p-2 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="md:hidden text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
             aria-label={mobileMenuOpen ? 'Close main menu' : 'Open main menu'}
@@ -337,14 +345,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               })}
               <button
                 onClick={cycleTheme}
-                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <ThemeIcon className="w-4 h-4" aria-hidden="true" />
                 <span>Theme: {themeLabel}</span>
               </button>
               <button
                 onClick={onLogout}
-                className="text-slate-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <LogOut className="w-4 h-4" aria-hidden="true" />
                 <span>Logout</span>

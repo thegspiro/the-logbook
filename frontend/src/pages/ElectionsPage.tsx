@@ -187,7 +187,7 @@ export const ElectionsPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-            <div className="text-slate-400">Loading elections...</div>
+            <div className="text-theme-text-muted">Loading elections...</div>
           </div>
         </div>
       </div>
@@ -199,8 +199,8 @@ export const ElectionsPage: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-white">Elections</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Elections</h2>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Manage elections and view results
           </p>
         </div>
@@ -219,7 +219,7 @@ export const ElectionsPage: React.FC = () => {
 
       {error && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-300">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
@@ -231,7 +231,7 @@ export const ElectionsPage: React.FC = () => {
             className={`px-4 py-2 rounded-md text-sm font-medium ${
               statusFilter === status
                 ? 'bg-blue-600 text-white'
-                : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -239,10 +239,10 @@ export const ElectionsPage: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-md">
+      <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-md">
         {filteredElections.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-slate-400">No elections found</p>
+            <p className="text-theme-text-muted">No elections found</p>
           </div>
         ) : (
           <ul className="divide-y divide-white/10">
@@ -250,7 +250,7 @@ export const ElectionsPage: React.FC = () => {
               <li key={election.id}>
                 <Link
                   to={`/elections/${election.id}`}
-                  className="block hover:bg-white/5 transition"
+                  className="block hover:bg-theme-surface-secondary transition"
                 >
                   <div className="px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between">
@@ -269,7 +269,7 @@ export const ElectionsPage: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="mt-2 flex items-center text-sm text-slate-400">
+                        <div className="mt-2 flex items-center text-sm text-theme-text-muted">
                           <svg
                             className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-500"
                             fill="none"
@@ -289,13 +289,13 @@ export const ElectionsPage: React.FC = () => {
                           </span>
                         </div>
                         {election.positions && election.positions.length > 0 && (
-                          <div className="mt-2 flex items-center text-sm text-slate-400">
+                          <div className="mt-2 flex items-center text-sm text-theme-text-muted">
                             <span className="font-medium mr-2">Positions:</span>
                             {election.positions.join(', ')}
                           </div>
                         )}
                         {election.total_votes !== undefined && (
-                          <div className="mt-2 text-sm text-slate-400">
+                          <div className="mt-2 text-sm text-theme-text-muted">
                             {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'} cast
                           </div>
                         )}
@@ -318,14 +318,14 @@ export const ElectionsPage: React.FC = () => {
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
         >
           <div className="bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="create-election-title" className="text-lg font-medium text-white">Create New Election</h3>
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="create-election-title" className="text-lg font-medium text-theme-text-primary">Create New Election</h3>
             </div>
 
             <form onSubmit={handleCreateElection} className="px-6 py-4">
               {createError && (
                 <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3" role="alert">
-                  <p className="text-sm text-red-300">{createError}</p>
+                  <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
                 </div>
               )}
 
@@ -341,7 +341,7 @@ export const ElectionsPage: React.FC = () => {
                     aria-required="true"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -354,7 +354,7 @@ export const ElectionsPage: React.FC = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -370,7 +370,7 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.start_date}
                       onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
@@ -385,31 +385,31 @@ export const ElectionsPage: React.FC = () => {
                       aria-required="true"
                       value={formData.end_date}
                       onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
 
                     {formData.start_date && (
                       <div className="mt-2">
-                        <p className="text-xs text-slate-400 mb-2">Quick duration:</p>
+                        <p className="text-xs text-theme-text-muted mb-2">Quick duration:</p>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => setDuration(1)}
-                            className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
+                            className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
                           >
                             1 Hour
                           </button>
                           <button
                             type="button"
                             onClick={() => setDuration(2)}
-                            className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
+                            className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
                           >
                             2 Hours
                           </button>
                           <button
                             type="button"
                             onClick={() => setDuration(4)}
-                            className="px-3 py-1 text-xs bg-white/10 text-slate-300 rounded hover:bg-white/20"
+                            className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover"
                           >
                             4 Hours
                           </button>
@@ -439,12 +439,12 @@ export const ElectionsPage: React.FC = () => {
                       onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPosition())}
                       placeholder="e.g., Chief, President"
                       aria-label="Position name"
-                      className="flex-1 bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
                       onClick={addPosition}
-                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                      className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
                     >
                       Add
                     </button>
@@ -520,9 +520,9 @@ export const ElectionsPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, victory_threshold: e.target.value ? parseInt(e.target.value) : undefined })}
                         placeholder="e.g., 10 votes required"
                         aria-label="Numerical threshold"
-                        className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
-                      <p className="mt-1 text-xs text-slate-400">Minimum votes needed to win</p>
+                      <p className="mt-1 text-xs text-theme-text-muted">Minimum votes needed to win</p>
                     </div>
 
                     <div>
@@ -538,9 +538,9 @@ export const ElectionsPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : undefined })}
                         placeholder="e.g., 60%"
                         aria-label="Percentage threshold"
-                        className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
-                      <p className="mt-1 text-xs text-slate-400">Percentage of votes needed to win</p>
+                      <p className="mt-1 text-xs text-theme-text-muted">Percentage of votes needed to win</p>
                     </div>
                   </div>
                 )}
@@ -557,26 +557,26 @@ export const ElectionsPage: React.FC = () => {
                       max="100"
                       value={formData.victory_percentage || 67}
                       onChange={(e) => setFormData({ ...formData, victory_percentage: e.target.value ? parseInt(e.target.value) : 67 })}
-                      className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <p className="mt-1 text-xs text-slate-400">Percentage of votes needed (typically 67% for 2/3 majority)</p>
+                    <p className="mt-1 text-xs text-theme-text-muted">Percentage of votes needed (typically 67% for 2/3 majority)</p>
                   </div>
                 )}
 
-                <div className="border-t border-white/20 pt-4">
+                <div className="border-t border-theme-surface-border pt-4">
                   <label className="flex items-center mb-3">
                     <input
                       type="checkbox"
                       id="election-enable-runoffs"
                       checked={formData.enable_runoffs}
                       onChange={(e) => setFormData({ ...formData, enable_runoffs: e.target.checked })}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm font-medium text-slate-200">Enable Automatic Runoffs</span>
                   </label>
 
                   {formData.enable_runoffs && (
-                    <div className="ml-6 space-y-3 bg-white/5 p-3 rounded">
+                    <div className="ml-6 space-y-3 bg-theme-surface-secondary p-3 rounded">
                       <div>
                         <label htmlFor="election-runoff-type" className="block text-sm font-medium text-slate-200">
                           Runoff Type
@@ -585,12 +585,12 @@ export const ElectionsPage: React.FC = () => {
                           id="election-runoff-type"
                           value={formData.runoff_type}
                           onChange={(e) => setFormData({ ...formData, runoff_type: e.target.value })}
-                          className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="top_two">Top Two (top 2 candidates advance)</option>
                           <option value="eliminate_lowest">Eliminate Lowest (remove lowest, others continue)</option>
                         </select>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-theme-text-muted">
                           How to handle runoffs when no candidate meets victory condition
                         </p>
                       </div>
@@ -606,9 +606,9 @@ export const ElectionsPage: React.FC = () => {
                           max="10"
                           value={formData.max_runoff_rounds}
                           onChange={(e) => setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })}
-                          className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
-                        <p className="mt-1 text-xs text-slate-400">Maximum number of runoff rounds before declaring winner</p>
+                        <p className="mt-1 text-xs text-theme-text-muted">Maximum number of runoff rounds before declaring winner</p>
                       </div>
                     </div>
                   )}
@@ -623,7 +623,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, anonymous_voting: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm text-slate-200">Anonymous Voting</span>
                   </label>
@@ -636,7 +636,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, allow_write_ins: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm text-slate-200">Allow Write-in Candidates</span>
                   </label>
@@ -649,7 +649,7 @@ export const ElectionsPage: React.FC = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, results_visible_immediately: e.target.checked })
                       }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                     />
                     <span className="ml-2 text-sm text-slate-200">Show Results Immediately</span>
                   </label>
@@ -660,7 +660,7 @@ export const ElectionsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
+                  className="px-4 py-2 border border-white/30 rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
                 >
                   Cancel
                 </button>

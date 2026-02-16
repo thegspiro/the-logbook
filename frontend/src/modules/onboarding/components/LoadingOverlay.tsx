@@ -40,8 +40,8 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
       aria-busy="true"
     >
       <div className="text-center">
-        <Loader2 className="w-8 h-8 text-red-500 animate-spin mx-auto mb-3" />
-        <p className="text-white text-sm font-medium">{message}</p>
+        <Loader2 className="w-8 h-8 text-red-700 dark:text-red-500 animate-spin mx-auto mb-3" />
+        <p className="text-theme-text-primary text-sm font-medium">{message}</p>
       </div>
     </div>
   );

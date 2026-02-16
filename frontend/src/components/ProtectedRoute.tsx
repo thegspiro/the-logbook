@@ -62,10 +62,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check for required permission
   if (requiredPermission && !checkPermission(requiredPermission)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Access Denied</h2>
+          <p className="text-theme-text-secondary mb-6">
             You do not have the required permissions to access this page.
           </p>
           <a
@@ -82,10 +82,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check for required role
   if (requiredRole && !hasRole(requiredRole)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Access Denied</h2>
+          <p className="text-theme-text-secondary mb-6">
             You do not have the required role to access this page.
           </p>
           <a

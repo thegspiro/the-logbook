@@ -27,11 +27,11 @@ import type {
 // ==================== Helpers ====================
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; icon: React.ElementType }> = {
-  draft: { label: 'Draft', color: 'bg-gray-500/20 text-gray-400', icon: FileText },
-  pending_review: { label: 'Pending Review', color: 'bg-yellow-500/20 text-yellow-400', icon: Clock },
-  approved: { label: 'Approved', color: 'bg-green-500/20 text-green-400', icon: CheckCircle2 },
-  rejected: { label: 'Rejected', color: 'bg-red-500/20 text-red-400', icon: XCircle },
-  revision_requested: { label: 'Revision Requested', color: 'bg-orange-500/20 text-orange-400', icon: RotateCcw },
+  draft: { label: 'Draft', color: 'bg-gray-500/20 text-theme-text-muted', icon: FileText },
+  pending_review: { label: 'Pending Review', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400', icon: Clock },
+  approved: { label: 'Approved', color: 'bg-green-500/20 text-green-700 dark:text-green-400', icon: CheckCircle2 },
+  rejected: { label: 'Rejected', color: 'bg-red-500/20 text-red-700 dark:text-red-400', icon: XCircle },
+  revision_requested: { label: 'Revision Requested', color: 'bg-orange-500/20 text-orange-700 dark:text-orange-400', icon: RotateCcw },
 };
 
 const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
@@ -138,34 +138,34 @@ const SubmissionForm: React.FC<{
   const parentCategories = categories.filter((c) => !c.parent_category_id);
 
   return (
-    <form onSubmit={handleSubmit} className="bg-gray-800 rounded-lg border border-gray-700 p-6 space-y-4">
-      <h2 className="text-lg font-semibold text-white mb-2">
+    <form onSubmit={handleSubmit} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 space-y-4">
+      <h2 className="text-lg font-semibold text-theme-text-primary mb-2">
         {isEdit ? 'Edit Submission' : 'Report External Training'}
       </h2>
 
       {config.member_instructions && (
         <div className="flex items-start space-x-2 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-          <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-          <p className="text-blue-300 text-sm">{config.member_instructions}</p>
+          <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <p className="text-blue-700 dark:text-blue-300 text-sm">{config.member_instructions}</p>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded text-sm">
+        <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
           {error}
         </div>
       )}
 
       {/* Course name - always visible */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-1">
-          {fieldLabel('course_name', 'Course / Class Name')} {isFieldRequired('course_name') && <span className="text-red-400">*</span>}
+        <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+          {fieldLabel('course_name', 'Course / Class Name')} {isFieldRequired('course_name') && <span className="text-red-700 dark:text-red-400">*</span>}
         </label>
         <input
           type="text"
           value={formData.course_name}
           onChange={(e) => setFormData({ ...formData, course_name: e.target.value })}
-          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
           placeholder="e.g., Wildland Firefighting - S130/S190"
           required
         />
@@ -175,13 +175,13 @@ const SubmissionForm: React.FC<{
         {/* Training type */}
         {isFieldVisible('training_type') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('training_type', 'Training Type')} {isFieldRequired('training_type') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('training_type', 'Training Type')} {isFieldRequired('training_type') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <select
               value={formData.training_type}
               onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('training_type')}
             >
               {allowedTypes.map((t) => (
@@ -194,14 +194,14 @@ const SubmissionForm: React.FC<{
         {/* Completion date */}
         {isFieldVisible('completion_date') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('completion_date', 'Date Completed')} {isFieldRequired('completion_date') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('completion_date', 'Date Completed')} {isFieldRequired('completion_date') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="date"
               value={formData.completion_date}
               onChange={(e) => setFormData({ ...formData, completion_date: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('completion_date')}
               max={new Date().toISOString().split('T')[0]}
             />
@@ -213,17 +213,17 @@ const SubmissionForm: React.FC<{
         {/* Hours completed */}
         {isFieldVisible('hours_completed') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('hours_completed', 'Hours Completed')} {isFieldRequired('hours_completed') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('hours_completed', 'Hours Completed')} {isFieldRequired('hours_completed') && <span className="text-red-700 dark:text-red-400">*</span>}
               {config.max_hours_per_submission && (
-                <span className="text-gray-500 text-xs ml-1">(max {config.max_hours_per_submission})</span>
+                <span className="text-theme-text-muted text-xs ml-1">(max {config.max_hours_per_submission})</span>
               )}
             </label>
             <input
               type="number"
               value={formData.hours_completed || ''}
               onChange={(e) => setFormData({ ...formData, hours_completed: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('hours_completed')}
               min={0.5}
               step={0.5}
@@ -235,14 +235,14 @@ const SubmissionForm: React.FC<{
         {/* Credit hours */}
         {isFieldVisible('credit_hours') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('credit_hours', 'Credit Hours')} {isFieldRequired('credit_hours') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('credit_hours', 'Credit Hours')} {isFieldRequired('credit_hours') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="number"
               value={formData.credit_hours || ''}
               onChange={(e) => setFormData({ ...formData, credit_hours: parseFloat(e.target.value) || undefined })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('credit_hours')}
               min={0}
               step={0.5}
@@ -255,14 +255,14 @@ const SubmissionForm: React.FC<{
         {/* Instructor */}
         {isFieldVisible('instructor') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('instructor', 'Instructor Name')} {isFieldRequired('instructor') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('instructor', 'Instructor Name')} {isFieldRequired('instructor') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
               value={formData.instructor || ''}
               onChange={(e) => setFormData({ ...formData, instructor: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('instructor')}
             />
           </div>
@@ -271,14 +271,14 @@ const SubmissionForm: React.FC<{
         {/* Location */}
         {isFieldVisible('location') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('location', 'Location / Facility')} {isFieldRequired('location') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('location', 'Location / Facility')} {isFieldRequired('location') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
               value={formData.location || ''}
               onChange={(e) => setFormData({ ...formData, location: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('location')}
             />
           </div>
@@ -288,13 +288,13 @@ const SubmissionForm: React.FC<{
       {/* Category */}
       {isFieldVisible('category_id') && parentCategories.length > 0 && (
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            {fieldLabel('category_id', 'Training Category')} {isFieldRequired('category_id') && <span className="text-red-400">*</span>}
+          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            {fieldLabel('category_id', 'Training Category')} {isFieldRequired('category_id') && <span className="text-red-700 dark:text-red-400">*</span>}
           </label>
           <select
             value={formData.category_id || ''}
             onChange={(e) => setFormData({ ...formData, category_id: e.target.value || undefined })}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             required={isFieldRequired('category_id')}
           >
             <option value="">Select a category...</option>
@@ -308,14 +308,14 @@ const SubmissionForm: React.FC<{
       {/* Description */}
       {isFieldVisible('description') && (
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            {fieldLabel('description', 'Description / Notes')} {isFieldRequired('description') && <span className="text-red-400">*</span>}
+          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            {fieldLabel('description', 'Description / Notes')} {isFieldRequired('description') && <span className="text-red-700 dark:text-red-400">*</span>}
           </label>
           <textarea
             value={formData.description || ''}
             onChange={(e) => setFormData({ ...formData, description: e.target.value || undefined })}
             rows={3}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             required={isFieldRequired('description')}
             placeholder="Describe what the training covered..."
           />
@@ -326,14 +326,14 @@ const SubmissionForm: React.FC<{
         {/* Certification Number */}
         {isFieldVisible('certification_number') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('certification_number', 'Certificate / ID Number')} {isFieldRequired('certification_number') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('certification_number', 'Certificate / ID Number')} {isFieldRequired('certification_number') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
               value={formData.certification_number || ''}
               onChange={(e) => setFormData({ ...formData, certification_number: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('certification_number')}
             />
           </div>
@@ -342,14 +342,14 @@ const SubmissionForm: React.FC<{
         {/* Issuing Agency */}
         {isFieldVisible('issuing_agency') && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              {fieldLabel('issuing_agency', 'Issuing Agency')} {isFieldRequired('issuing_agency') && <span className="text-red-400">*</span>}
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              {fieldLabel('issuing_agency', 'Issuing Agency')} {isFieldRequired('issuing_agency') && <span className="text-red-700 dark:text-red-400">*</span>}
             </label>
             <input
               type="text"
               value={formData.issuing_agency || ''}
               onChange={(e) => setFormData({ ...formData, issuing_agency: e.target.value || undefined })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('issuing_agency')}
             />
           </div>
@@ -357,8 +357,8 @@ const SubmissionForm: React.FC<{
       </div>
 
       {/* Buttons */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-        <div className="text-xs text-gray-500">
+      <div className="flex items-center justify-between pt-4 border-t border-theme-surface-border">
+        <div className="text-xs text-theme-text-muted">
           {config.require_approval
             ? 'Your submission will be reviewed by a training officer.'
             : 'Training will be recorded immediately.'}
@@ -368,7 +368,7 @@ const SubmissionForm: React.FC<{
             <button
               type="button"
               onClick={onCancelEdit}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm"
+              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
             >
               Cancel
             </button>
@@ -433,7 +433,7 @@ const SubmitTrainingPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
-          <p className="text-gray-400 mt-4">Loading...</p>
+          <p className="text-theme-text-muted mt-4">Loading...</p>
         </div>
       </div>
     );
@@ -446,16 +446,16 @@ const SubmitTrainingPage: React.FC = () => {
         <div className="flex items-center space-x-4 mb-8">
           <button
             onClick={() => navigate('/training')}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-secondary"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center space-x-2">
-              <FileText className="w-7 h-7 text-red-500" />
+            <h1 className="text-2xl font-bold text-theme-text-primary flex items-center space-x-2">
+              <FileText className="w-7 h-7 text-red-700 dark:text-red-500" />
               <span>Submit External Training</span>
             </h1>
-            <p className="text-gray-400 text-sm">
+            <p className="text-theme-text-muted text-sm">
               Report training completed at other locations or organizations
             </p>
           </div>
@@ -473,28 +473,28 @@ const SubmitTrainingPage: React.FC = () => {
         {/* My Submissions History */}
         {submissions.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-lg font-semibold text-white mb-4">My Submissions ({submissions.length})</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">My Submissions ({submissions.length})</h2>
             <div className="space-y-3">
               {submissions.map((sub) => {
                 const canEdit = ['draft', 'pending_review', 'revision_requested'].includes(sub.status);
                 return (
-                  <div key={sub.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                  <div key={sub.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="text-white font-medium">{sub.course_name}</h3>
+                          <h3 className="text-theme-text-primary font-medium">{sub.course_name}</h3>
                           <StatusBadge status={sub.status} />
                         </div>
-                        <div className="flex items-center space-x-4 text-xs text-gray-400">
+                        <div className="flex items-center space-x-4 text-xs text-theme-text-muted">
                           <span>{sub.hours_completed}h</span>
                           <span>{sub.completion_date}</span>
                           {sub.instructor && <span>Instructor: {sub.instructor}</span>}
                           {sub.location && <span>at {sub.location}</span>}
                         </div>
                         {sub.reviewer_notes && (
-                          <div className="mt-2 bg-gray-700/50 rounded p-2 text-sm">
-                            <span className="text-gray-400 text-xs">Officer notes: </span>
-                            <span className="text-gray-300">{sub.reviewer_notes}</span>
+                          <div className="mt-2 bg-theme-surface rounded p-2 text-sm">
+                            <span className="text-theme-text-muted text-xs">Officer notes: </span>
+                            <span className="text-theme-text-secondary">{sub.reviewer_notes}</span>
                           </div>
                         )}
                       </div>
@@ -502,14 +502,14 @@ const SubmitTrainingPage: React.FC = () => {
                         <div className="flex items-center space-x-1 ml-4">
                           <button
                             onClick={() => setEditingSubmission(sub)}
-                            className="p-1.5 text-gray-400 hover:text-white rounded"
+                            className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded"
                             aria-label="Edit submission"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(sub.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-400 rounded"
+                            className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded"
                             aria-label="Delete submission"
                           >
                             <Trash2 className="w-4 h-4" />
