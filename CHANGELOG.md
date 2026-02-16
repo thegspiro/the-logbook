@@ -113,6 +113,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ESLint**: Changed 5 `no-unsafe-*` rules from `"off"` to `"warn"` in `.eslintrc.json`
 - **`package.json`**: Removed non-existent `"mobile"` workspace
 
+### Fixed - Members Page & Dark Theme Unification (2026-02-15)
+
+#### Members Page
+- **Zero-count bug**: Fixed `/api/v1/users` endpoint to handle missing organization settings gracefully; dashboard stats fallback changed from hardcoded 1 to 0
+
+#### Dark Theme Unification
+- **Centralized dark gradient**: Moved background gradient from per-page declarations to `AppLayout`, eliminating duplicate gradient CSS across 23 pages
+- **17 light-themed pages converted**: Converted all remaining light-themed authenticated pages to consistent dark theme (white text, translucent cards, dark form inputs)
+- **48 pages updated**: Unified dark theme across all authenticated pages for consistent visual experience
+
+### Fixed - Role Sync & Onboarding Bugs (2026-02-15)
+
+#### Role System
+- **Frontend-backend role sync**: Added Administrator, Treasurer, Safety Officer to backend `DEFAULT_ROLES`; added Assistant Secretary, Meeting Hall Coordinator, Facilities Manager to frontend `RoleSetup.tsx`
+- **Removed membership-tier entries from onboarding**: Tier roles (probationary, active, senior, life) removed from onboarding role selection as they are membership stages, not assignable roles
+
+#### Onboarding Fixes
+- **Prospective members module**: Added `prospective_members` to available modules list in onboarding
+- **SQLAlchemy JSON mutation detection**: Fixed `_mark_step_completed()` dict mutation being silently lost by SQLAlchemy (in-place dict modification not tracked); now creates new dict to trigger change detection
+- **Prospective members route prefix**: Fixed API route prefix mismatch preventing module endpoints from loading
+
+### Improved - Database Startup Reliability (2026-02-15)
+
+#### Fast-Path Initialization Hardening
+- **Self-healing database startup**: Added three recovery mechanisms — fast-path retry after 2s on failure, schema repair via `create_all(checkfirst=True)` if validation finds missing tables, and `FK_CHECKS` re-enabled in `finally` block to prevent stuck states
+- **Resource-constrained environment optimizations**: Single connection for all DDL, batched `DROP TABLE`, `checkfirst=False` on `create_all()`, `NullPool` for migration engine, and MySQL DDL flags (`innodb_autoinc_lock_mode=2`, `innodb_file_per_table=1`)
+- **Slimmed init SQL**: Reduced `001_initial_schema.sql` to only create `alembic_version` table (removed 7 redundant tables that are now created by `create_all()`)
+- **Dynamic schema validation**: `validate_schema()` now dynamically checks all 127+ expected tables from SQLAlchemy metadata instead of hardcoding 5 table names
+- **Progress logging**: Logs progress every 25 tables during `create_all()` for visibility on slow environments
+- **Init timeout increased**: Raised `create_all()` timeout from 600s to 1200s with `checkfirst=False` and `SET FOREIGN_KEY_CHECKS=0` for slow environments
+- **Leftover table cleanup**: `_fast_path_init()` now dynamically discovers and drops ALL tables (except `alembic_version`) before `create_all()`, preventing "Duplicate key name" errors from partial previous boots
+
+#### Docker & Health Check Fixes
+- **MySQL health check false-positive fix**: Changed healthcheck from `-h localhost` (Unix socket, which connects to temporary init server on port 0) to `-h 127.0.0.1 --port=3306` (TCP), preventing premature "healthy" status during MySQL initialization
+- **Backend start_period**: Increased to 600s with 10 retries to accommodate slow first-boot scenarios
+- **Connection retries**: Increased from 20 (~4 min) to 40 (~10 min) to exceed MySQL first-time init duration (~6 min)
+- **Startup reliability**: Six fixes — health check `start_period` 5s→300s, Docker dependency changed to `service_healthy`, schema validation raises `RuntimeError` instead of silently continuing, onboarding endpoints handle missing tables gracefully, nginx proxy timeouts added, `50x.html` auto-retry error page added
+
+#### Backend Startup Fixes
+- **Silent migration failure**: Moved `_fast_path_init()` outside forgiving try/except that swallowed all exceptions, added schema validation after fast-path, made validation failures crash the app
+- **Fast-path timeout**: Added 10-minute timeout to `_fast_path_init()` to prevent hung `create_all()` from freezing the backend forever
+- **Axios client timeout**: Added 30-second timeout to frontend Axios API client
+- **Duplicate Alembic revision IDs**: Fixed two pairs of migrations sharing the same revision IDs (20260212_0300 and 20260212_0400), causing Alembic to crash with "overlaps with other requested revisions"
+- **Backend crash on cold MySQL init**: Increased connection retries to cover MySQL's ~6 min first-time initialization
+- **NameError fix**: Moved `get_current_user` above `PermissionChecker` classes in `dependencies.py` — function was defined after classes that reference it in `Depends()` default arguments
+
+### Added - Hierarchical Document Folder System (2026-02-15)
+
+#### Per-Member Document Folders
+- **Folder access control**: Added `FolderVisibility` enum (organization/leadership/owner) and access control columns (`visibility`, `owner_user_id`, `allowed_roles`) to `DocumentFolder`
+- **Member Files system folder**: Auto-creates per-member subfolders on first access; members can only see their own folder
+- **My folder endpoint**: `GET /documents/my-folder` returns the current user's personal folder
+- **Access enforcement**: Folder visibility checks enforced on list, view, upload, and download endpoints
+
+#### Per-Apparatus Document Folders
+- **Apparatus file organization**: "Apparatus Files" system folder with per-vehicle subfolders named by unit number
+- **Categorized sub-folders**: Photos, Registration & Insurance, Maintenance Records, Inspection & Compliance, Manuals & References
+- **Lazy creation**: Folder hierarchy created on first access via `GET /apparatus/{id}/folders`
+
+#### Per-Facility & Per-Event Document Folders
+- **Facility folders**: Per-facility folders with Photos, Blueprints & Permits, Maintenance Records, Inspection Reports, Insurance & Leases, Capital Projects sub-folders
+- **Event folders**: Per-event folders created automatically for file attachments
+- **New endpoints**: `GET /facilities/{id}/folders` and `GET /events/{id}/folder`
+- **Migration**: Seeds all three new system folders for existing organizations
+
+### Added - Form & Security Enhancements (2026-02-15)
+
+#### Forms Module
+- **File upload field**: Drag-and-drop file upload support in `FieldRenderer` for form fields of type `file`
+- **Signature capture pad**: Canvas-based signature input with mouse and touch support for form fields of type `signature`
+
+#### Security Improvements
+- **Password rehashing on login**: Automatically rehashes password when argon2 parameters change, keeping passwords up to date with latest security settings
+- **Async database audit logging**: Blocked IP security events now logged asynchronously to the database instead of only to file logs
+- **Training enrollment permission check**: Added `training.view_all` permission check to enrollment endpoint
+- **TypeScript type safety**: Fixed `any` types in `AccessLogsTab` and `APIKeysTab` with proper TypeScript interfaces
+
+### Added - Testing & Quality (2026-02-15)
+
+#### New Test Suites
+- **Alembic migration chain tests**: 9 tests validating no duplicate revision IDs, no forked chains, single base/head, no orphan migrations, and valid `down_revision` references (`test_alembic_migrations.py`)
+- **Changelog regression tests**: 29-test suite (`test_changelog_fixes.py`) covering duplicate index detection, dependency ordering, documents service API, public portal queries, fast-path init logic, frontend error handling, Makefile correctness, migration chain integrity, and model import completeness
+
+#### Bug Fixes Found During Testing
+- **Missing facilities model import**: Fixed `models/__init__.py` to include facilities models — without this fix, `create_all()` would silently skip 20 facility tables
+- **pytest-asyncio scope mismatch**: Fixed `asyncio_default_fixture_loop_scope` from "function" to "session" in `pytest.ini` to match session-scoped async fixtures
+- **Standalone enum verification function**: Added `verify_enum_consistency()` to `test_enum_consistency.py` for CI/pre-commit integration
+
 ### Added - Shift Module Enhancement: Full Scheduling System (2026-02-14)
 
 #### Shift Templates & Recurring Patterns
