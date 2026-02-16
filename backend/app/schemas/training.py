@@ -19,6 +19,17 @@ class DueDateType(str, Enum):
     FIXED_DATE = "fixed_date"  # Due by a specific fixed date
 
 
+class RequirementType(str, Enum):
+    """Type of training requirement"""
+    HOURS = "hours"
+    COURSES = "courses"
+    CERTIFICATION = "certification"
+    SHIFTS = "shifts"
+    CALLS = "calls"
+    SKILLS_EVALUATION = "skills_evaluation"
+    CHECKLIST = "checklist"
+
+
 # Training Category Schemas
 
 class TrainingCategoryBase(BaseModel):
@@ -185,6 +196,7 @@ class TrainingRequirementBase(BaseModel):
     """Base training requirement schema"""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    requirement_type: RequirementType
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None
@@ -212,6 +224,7 @@ class TrainingRequirementUpdate(BaseModel):
     """Schema for updating a training requirement"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    requirement_type: Optional[RequirementType] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None
