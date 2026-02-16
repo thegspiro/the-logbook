@@ -22,6 +22,8 @@ from app.models.membership_pipeline import (
     ProspectiveMember,
     ProspectStepProgress,
     ProspectActivityLog,
+    ProspectDocument,
+    ProspectElectionPackage,
     ProspectStatus,
     StepProgressStatus,
     PipelineStepType,
@@ -79,7 +81,9 @@ class MembershipPipelineService:
         description: Optional[str] = None,
         is_template: bool = False,
         is_default: bool = False,
+        is_active: bool = True,
         auto_transfer_on_approval: bool = False,
+        inactivity_config: Optional[Dict[str, Any]] = None,
         steps: Optional[List[Dict[str, Any]]] = None,
         created_by: Optional[str] = None,
     ) -> MembershipPipeline:
@@ -95,7 +99,9 @@ class MembershipPipelineService:
             description=description,
             is_template=is_template,
             is_default=is_default,
+            is_active=is_active,
             auto_transfer_on_approval=auto_transfer_on_approval,
+            inactivity_config=inactivity_config or {},
             created_by=created_by,
         )
         self.db.add(pipeline)
@@ -115,6 +121,8 @@ class MembershipPipelineService:
                     sort_order=step_data.get("sort_order", i),
                     email_template_id=step_data.get("email_template_id"),
                     required=step_data.get("required", True),
+                    config=step_data.get("config", {}),
+                    inactivity_timeout_days=step_data.get("inactivity_timeout_days"),
                 )
                 self.db.add(step)
 
@@ -168,6 +176,8 @@ class MembershipPipelineService:
                 "sort_order": step.sort_order,
                 "email_template_id": step.email_template_id,
                 "required": step.required,
+                "config": step.config or {},
+                "inactivity_timeout_days": step.inactivity_timeout_days,
             }
             for step in source.steps
         ]
@@ -178,7 +188,9 @@ class MembershipPipelineService:
             description=source.description,
             is_template=False,
             is_default=False,
+            is_active=source.is_active,
             auto_transfer_on_approval=source.auto_transfer_on_approval,
+            inactivity_config=source.inactivity_config,
             steps=steps,
             created_by=created_by,
         )
@@ -225,6 +237,8 @@ class MembershipPipelineService:
             sort_order=data["sort_order"],
             email_template_id=data.get("email_template_id"),
             required=data.get("required", True),
+            config=data.get("config", {}),
+            inactivity_timeout_days=data.get("inactivity_timeout_days"),
         )
         self.db.add(step)
         await self.db.commit()
@@ -1032,3 +1046,340 @@ class MembershipPipelineService:
                 status=status,
             )
             self.db.add(progress)
+
+    # =========================================================================
+    # Pipeline Statistics
+    # =========================================================================
+
+    async def get_pipeline_stats(self, pipeline_id: str, organization_id: str) -> Optional[Dict[str, Any]]:
+        """Get statistics for a pipeline"""
+        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        if not pipeline:
+            return None
+
+        # Count prospects by status
+        status_counts = {}
+        for status_val in ProspectStatus:
+            count_query = (
+                select(func.count(ProspectiveMember.id))
+                .where(
+                    and_(
+                        ProspectiveMember.pipeline_id == pipeline_id,
+                        ProspectiveMember.status == status_val,
+                    )
+                )
+            )
+            result = await self.db.execute(count_query)
+            status_counts[status_val.value] = result.scalar() or 0
+
+        total = sum(status_counts.values())
+
+        # Count prospects by current step
+        by_step = []
+        for step in sorted(pipeline.steps, key=lambda s: s.sort_order):
+            step_count_query = (
+                select(func.count(ProspectiveMember.id))
+                .where(
+                    and_(
+                        ProspectiveMember.pipeline_id == pipeline_id,
+                        ProspectiveMember.current_step_id == step.id,
+                        ProspectiveMember.status == ProspectStatus.ACTIVE,
+                    )
+                )
+            )
+            result = await self.db.execute(step_count_query)
+            by_step.append({
+                "stage_id": step.id,
+                "stage_name": step.name,
+                "count": result.scalar() or 0,
+            })
+
+        # Calculate avg days to transfer
+        avg_days = None
+        transferred_count = status_counts.get("transferred", 0)
+        if transferred_count > 0:
+            avg_query = (
+                select(
+                    func.avg(
+                        func.datediff(
+                            ProspectiveMember.transferred_at,
+                            ProspectiveMember.created_at,
+                        )
+                    )
+                )
+                .where(
+                    and_(
+                        ProspectiveMember.pipeline_id == pipeline_id,
+                        ProspectiveMember.status == ProspectStatus.TRANSFERRED,
+                        ProspectiveMember.transferred_at.isnot(None),
+                    )
+                )
+            )
+            result = await self.db.execute(avg_query)
+            avg_days = result.scalar()
+
+        conversion_rate = (transferred_count / total * 100) if total > 0 else 0
+
+        return {
+            "pipeline_id": pipeline_id,
+            "total_prospects": total,
+            "active_count": status_counts.get("active", 0),
+            "approved_count": status_counts.get("approved", 0),
+            "rejected_count": status_counts.get("rejected", 0),
+            "withdrawn_count": status_counts.get("withdrawn", 0),
+            "transferred_count": transferred_count,
+            "by_step": by_step,
+            "avg_days_to_transfer": float(avg_days) if avg_days else None,
+            "conversion_rate": round(conversion_rate, 1),
+        }
+
+    # =========================================================================
+    # Purge Inactive Prospects
+    # =========================================================================
+
+    async def purge_inactive_prospects(
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        prospect_ids: Optional[List[str]] = None,
+        purged_by: Optional[str] = None,
+    ) -> int:
+        """Delete withdrawn/inactive prospects from a pipeline"""
+        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        if not pipeline:
+            return 0
+
+        conditions = [
+            ProspectiveMember.pipeline_id == pipeline_id,
+            ProspectiveMember.status == ProspectStatus.WITHDRAWN,
+        ]
+        if prospect_ids:
+            conditions.append(ProspectiveMember.id.in_(prospect_ids))
+
+        # Count first
+        count_query = select(func.count(ProspectiveMember.id)).where(and_(*conditions))
+        result = await self.db.execute(count_query)
+        count = result.scalar() or 0
+
+        if count > 0:
+            # Delete (cascade will handle related records)
+            del_query = delete(ProspectiveMember).where(and_(*conditions))
+            await self.db.execute(del_query)
+            await self.db.commit()
+
+        return count
+
+    # =========================================================================
+    # Document Management
+    # =========================================================================
+
+    async def get_prospect_documents(
+        self, prospect_id: str, organization_id: str
+    ) -> List[ProspectDocument]:
+        """Get all documents for a prospect"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return []
+
+        query = (
+            select(ProspectDocument)
+            .where(ProspectDocument.prospect_id == prospect_id)
+            .order_by(ProspectDocument.created_at.desc())
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def add_prospect_document(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        document_type: str,
+        file_name: str,
+        file_path: str,
+        file_size: int = 0,
+        mime_type: Optional[str] = None,
+        step_id: Optional[str] = None,
+        uploaded_by: Optional[str] = None,
+    ) -> Optional[ProspectDocument]:
+        """Add a document to a prospect"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        doc = ProspectDocument(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            step_id=step_id,
+            document_type=document_type,
+            file_name=file_name,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            uploaded_by=uploaded_by,
+        )
+        self.db.add(doc)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="document_uploaded",
+            details={"document_type": document_type, "file_name": file_name},
+            performed_by=uploaded_by,
+        )
+
+        await self.db.commit()
+        return doc
+
+    async def delete_prospect_document(
+        self,
+        document_id: str,
+        prospect_id: str,
+        organization_id: str,
+        deleted_by: Optional[str] = None,
+    ) -> bool:
+        """Delete a prospect document"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return False
+
+        query = (
+            select(ProspectDocument)
+            .where(
+                and_(
+                    ProspectDocument.id == document_id,
+                    ProspectDocument.prospect_id == prospect_id,
+                )
+            )
+        )
+        result = await self.db.execute(query)
+        doc = result.scalars().first()
+        if not doc:
+            return False
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="document_deleted",
+            details={"document_type": doc.document_type, "file_name": doc.file_name},
+            performed_by=deleted_by,
+        )
+
+        await self.db.delete(doc)
+        await self.db.commit()
+        return True
+
+    # =========================================================================
+    # Election Package Management
+    # =========================================================================
+
+    async def get_election_package(
+        self, prospect_id: str, organization_id: str
+    ) -> Optional[ProspectElectionPackage]:
+        """Get the election package for a prospect"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        query = (
+            select(ProspectElectionPackage)
+            .where(ProspectElectionPackage.prospect_id == prospect_id)
+            .order_by(ProspectElectionPackage.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()
+
+    async def create_election_package(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        pipeline_id: Optional[str] = None,
+        step_id: Optional[str] = None,
+        coordinator_notes: Optional[str] = None,
+        package_config: Optional[Dict[str, Any]] = None,
+        created_by: Optional[str] = None,
+    ) -> Optional[ProspectElectionPackage]:
+        """Create an election package for a prospect"""
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        # Build applicant snapshot
+        snapshot = {
+            "first_name": prospect.first_name,
+            "last_name": prospect.last_name,
+            "email": prospect.email,
+            "phone": prospect.phone,
+            "date_of_birth": str(prospect.date_of_birth) if prospect.date_of_birth else None,
+            "interest_reason": prospect.interest_reason,
+            "referral_source": prospect.referral_source,
+            "created_at": str(prospect.created_at) if prospect.created_at else None,
+        }
+
+        pkg = ProspectElectionPackage(
+            id=generate_uuid(),
+            prospect_id=prospect_id,
+            pipeline_id=pipeline_id or prospect.pipeline_id,
+            step_id=step_id,
+            status="draft",
+            applicant_snapshot=snapshot,
+            coordinator_notes=coordinator_notes,
+            package_config=package_config or {},
+        )
+        self.db.add(pkg)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="election_package_created",
+            details={"package_id": pkg.id},
+            performed_by=created_by,
+        )
+
+        await self.db.commit()
+        return pkg
+
+    async def update_election_package(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        updates: Dict[str, Any],
+        updated_by: Optional[str] = None,
+    ) -> Optional[ProspectElectionPackage]:
+        """Update an election package for a prospect"""
+        pkg = await self.get_election_package(prospect_id, organization_id)
+        if not pkg:
+            return None
+
+        for key, value in updates.items():
+            if hasattr(pkg, key) and value is not None:
+                setattr(pkg, key, value)
+
+        await self._log_activity(
+            prospect_id=prospect_id,
+            action="election_package_updated",
+            details={"updates": list(updates.keys())},
+            performed_by=updated_by,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(pkg)
+        return pkg
+
+    async def list_election_packages(
+        self,
+        organization_id: str,
+        pipeline_id: Optional[str] = None,
+        status_filter: Optional[str] = None,
+    ) -> List[ProspectElectionPackage]:
+        """List election packages, optionally filtered by pipeline and status"""
+        query = (
+            select(ProspectElectionPackage)
+            .join(ProspectiveMember, ProspectElectionPackage.prospect_id == ProspectiveMember.id)
+            .where(ProspectiveMember.organization_id == organization_id)
+        )
+        if pipeline_id:
+            query = query.where(ProspectElectionPackage.pipeline_id == pipeline_id)
+        if status_filter:
+            query = query.where(ProspectElectionPackage.status == status_filter)
+
+        query = query.order_by(ProspectElectionPackage.created_at.desc())
+        result = await self.db.execute(query)
+        return list(result.scalars().all())

@@ -14,6 +14,12 @@ class LocationBase(BaseModel):
     """Base location schema"""
     name: str = Field(..., min_length=1, max_length=200, description="Location name (e.g., Main Meeting Hall)")
     description: Optional[str] = Field(None, description="Additional details about the location")
+    address: Optional[str] = Field(None, max_length=255, description="Street address")
+    city: Optional[str] = Field(None, max_length=100, description="City")
+    state: Optional[str] = Field(None, max_length=50, description="State/province")
+    zip: Optional[str] = Field(None, max_length=20, description="ZIP/postal code")
+    latitude: Optional[str] = Field(None, max_length=20, description="GPS latitude")
+    longitude: Optional[str] = Field(None, max_length=20, description="GPS longitude")
     building: Optional[str] = Field(None, max_length=100, description="Building name or identifier")
     floor: Optional[str] = Field(None, max_length=20, description="Floor number or name")
     room_number: Optional[str] = Field(None, max_length=50, description="Room number or identifier")
@@ -30,6 +36,12 @@ class LocationUpdate(BaseModel):
     """Schema for updating a location"""
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    address: Optional[str] = Field(None, max_length=255)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=50)
+    zip: Optional[str] = Field(None, max_length=20)
+    latitude: Optional[str] = Field(None, max_length=20)
+    longitude: Optional[str] = Field(None, max_length=20)
     building: Optional[str] = Field(None, max_length=100)
     floor: Optional[str] = Field(None, max_length=20)
     room_number: Optional[str] = Field(None, max_length=50)

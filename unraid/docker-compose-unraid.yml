@@ -5,7 +5,7 @@
 #
 # This file provides a complete stack including database and Redis
 # Use this if you want a self-contained installation without
-# using Unraid's MariaDB or Redis containers
+# using Unraid's MySQL or Redis containers
 #
 # Installation:
 #   1. Copy this file to: /mnt/user/appdata/the-logbook/docker-compose.yml
@@ -15,16 +15,16 @@
 # Ports (conflict-free defaults):
 #   - Frontend: 7880
 #   - Backend API: 7881
-#   - Database: 3307 (internal only)
-#   - Redis: 6380 (internal only)
+#   - Database: 3306 (internal only)
+#   - Redis: 6379 (internal only)
 # ============================================
 
 services:
   # ============================================
-  # Database - MariaDB
+  # Database - MySQL 8.0
   # ============================================
   db:
-    image: mariadb:10.11
+    image: mysql:8.0
     container_name: logbook-db
     restart: unless-stopped
     environment:
@@ -39,20 +39,29 @@ services:
       --max_connections=200
       --max_allowed_packet=256M
       --innodb_buffer_pool_size=512M
+      --innodb_redo_log_capacity=134217728
+      --skip-name-resolve
+      --skip-log-bin
+      --innodb_flush_log_at_trx_commit=2
     volumes:
       - /mnt/user/appdata/the-logbook/mysql:/var/lib/mysql
     # Internal port only - not exposed to host to avoid conflicts
     expose:
       - "3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER:-logbook_user}", "-p${DB_PASSWORD:-change_me_strong_password}"]
+      test:
+        - "CMD-SHELL"
+        - |
+          mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_strong_password} &&
+          mysql -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_strong_password} -e 'SELECT 1' $${MYSQL_DATABASE:-the_logbook}
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 60s
     networks:
       - logbook-internal
     labels:
-      - "com.unraid.docker.icon=https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/mariadb-icon.png"
+      - "com.unraid.docker.icon=https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/mysql-icon.png"
 
   # ============================================
   # Cache - Redis

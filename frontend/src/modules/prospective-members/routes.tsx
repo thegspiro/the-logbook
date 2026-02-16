@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { Route } from 'react-router-dom';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
 import {
   ProspectiveMembersPage,
   PipelineSettingsPage,
@@ -17,10 +18,10 @@ export const getProspectiveMembersRoutes = () => {
   return (
     <React.Fragment>
       {/* Prospective Members Pipeline */}
-      <Route path="/prospective-members" element={<ProspectiveMembersPage />} />
+      <Route path="/prospective-members" element={<ProtectedRoute requiredPermission="prospective_members.manage"><ProspectiveMembersPage /></ProtectedRoute>} />
 
       {/* Pipeline Settings */}
-      <Route path="/prospective-members/settings" element={<PipelineSettingsPage />} />
+      <Route path="/prospective-members/settings" element={<ProtectedRoute requiredPermission="prospective_members.manage"><PipelineSettingsPage /></ProtectedRoute>} />
     </React.Fragment>
   );
 };

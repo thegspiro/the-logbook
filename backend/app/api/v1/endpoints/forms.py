@@ -144,7 +144,7 @@ async def create_form(
         severity="info",
         event_data={
             "form_id": str(new_form.id),
-            "form_title": new_form.title,
+            "form_title": new_form.name,
         },
         user_id=str(current_user.id),
         username=current_user.username,

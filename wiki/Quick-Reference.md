@@ -93,7 +93,7 @@ docker inspect logbook-backend
 
 ### Database Access
 ```bash
-# MySQL/MariaDB shell
+# MySQL shell
 docker exec -it logbook-db mysql -u logbook_user -p
 
 # Once in MySQL:

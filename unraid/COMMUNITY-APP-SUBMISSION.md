@@ -252,7 +252,7 @@ https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/screenshots/
    ## System Requirements
    - Unraid 6.9.0+
    - 8GB RAM minimum
-   - MySQL/MariaDB database
+   - MySQL 8.0 database
 
    ## Support
    Post questions and issues in this thread. For bugs, please use

@@ -5,10 +5,10 @@
 
 services:
   # ============================================
-  # Database (MariaDB)
+  # Database (MySQL 8.0)
   # ============================================
   db:
-    image: mariadb:10.11
+    image: mysql:8.0
     container_name: logbook-db
     restart: unless-stopped
     environment:
@@ -26,12 +26,20 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --innodb_buffer_pool_size=512M
       --max_connections=200
+      --innodb_redo_log_capacity=134217728
+      --skip-name-resolve
+      --skip-log-bin
+      --innodb_flush_log_at_trx_commit=2
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test:
+        - "CMD-SHELL"
+        - |
+          mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} &&
+          mysql -uroot -p$${MYSQL_ROOT_PASSWORD} -e 'SELECT 1' $${MYSQL_DATABASE:-the_logbook}
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
   # ============================================
   # Redis Cache
@@ -151,7 +159,7 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        VITE_API_URL: http://${ALLOWED_ORIGINS:-192.168.1.10}:${BACKEND_PORT:-7881}
+        VITE_API_URL: /api/v1
     container_name: logbook-frontend
     restart: unless-stopped
     depends_on:

@@ -471,40 +471,39 @@ export const ElectionsPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="election-voting-method" className="block text-sm font-medium text-slate-200">
-                      Voting Method
-                    </label>
-                    <select
-                      id="election-voting-method"
-                      value={formData.voting_method}
-                      onChange={(e) => setFormData({ ...formData, voting_method: e.target.value as VotingMethod })}
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="simple_majority">Simple Majority</option>
-                      <option value="ranked_choice">Ranked Choice</option>
-                      <option value="approval">Approval Voting</option>
-                      <option value="supermajority">Supermajority</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="election-victory-condition" className="block text-sm font-medium text-slate-200">
-                      Victory Condition
-                    </label>
-                    <select
-                      id="election-victory-condition"
-                      value={formData.victory_condition}
-                      onChange={(e) => setFormData({ ...formData, victory_condition: e.target.value as VictoryCondition })}
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="most_votes">Most Votes (Plurality)</option>
-                      <option value="majority">Majority (&gt;50%)</option>
-                      <option value="supermajority">Supermajority (2/3)</option>
-                      <option value="threshold">Threshold</option>
-                    </select>
-                  </div>
+                <div>
+                  <label htmlFor="election-voting-method" className="block text-sm font-medium text-slate-200">
+                    How is the Winner Determined?
+                  </label>
+                  <select
+                    id="election-voting-method"
+                    value={`${formData.voting_method}|${formData.victory_condition}`}
+                    onChange={(e) => {
+                      const [method, condition] = e.target.value.split('|') as [VotingMethod, VictoryCondition];
+                      setFormData({ ...formData, voting_method: method, victory_condition: condition, victory_percentage: undefined, victory_threshold: undefined });
+                    }}
+                    className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="simple_majority|most_votes">Most Votes Wins (Plurality)</option>
+                    <option value="simple_majority|majority">Majority Required (&gt;50%)</option>
+                    <option value="simple_majority|supermajority">Supermajority Required (2/3)</option>
+                    <option value="ranked_choice|majority">Ranked Choice Voting</option>
+                    <option value="approval|most_votes">Approval Voting (Yes/No per candidate)</option>
+                    <option value="simple_majority|threshold">Custom Threshold</option>
+                  </select>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {formData.voting_method === 'ranked_choice'
+                      ? 'Voters rank candidates in order of preference. Lowest-ranked candidates are eliminated until one has a majority.'
+                      : formData.voting_method === 'approval'
+                      ? 'Voters approve or disapprove each candidate. The candidate with the most approvals wins.'
+                      : formData.victory_condition === 'majority'
+                      ? 'Each voter picks one candidate. Winner must receive more than 50% of the votes.'
+                      : formData.victory_condition === 'supermajority'
+                      ? 'Each voter picks one candidate. Winner must receive at least 2/3 of the votes.'
+                      : formData.victory_condition === 'threshold'
+                      ? 'Each voter picks one candidate. Winner must meet the custom threshold you set below.'
+                      : 'Each voter picks one candidate. The candidate with the most votes wins, even without a majority.'}
+                  </p>
                 </div>
 
                 {formData.victory_condition === 'threshold' && (
