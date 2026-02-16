@@ -10,9 +10,12 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { trainingService, userService } from '../services/api';
-import type { TrainingRecord } from '../types/training';
+import type { TrainingRecord, TrainingRecordCreate, TrainingType } from '../types/training';
 import type { UserWithRoles } from '../types/role';
+import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -32,6 +35,24 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Add certification modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addForm, setAddForm] = useState({
+    course_name: '',
+    training_type: 'certification' as TrainingType,
+    hours_completed: 0,
+    completion_date: '',
+    expiration_date: '',
+    certification_number: '',
+    issuing_agency: '',
+    instructor: '',
+    notes: '',
+  });
+
+  const { checkPermission } = useAuthStore();
+  const canManage = checkPermission('training.manage');
 
   useEffect(() => {
     if (userId) {
@@ -55,6 +76,48 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       setError('Unable to load training history. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId) return;
+
+    try {
+      setAddSubmitting(true);
+      const record: TrainingRecordCreate = {
+        user_id: userId,
+        course_name: addForm.course_name,
+        training_type: addForm.training_type,
+        hours_completed: addForm.hours_completed,
+        status: 'completed',
+        ...(addForm.completion_date && { completion_date: addForm.completion_date }),
+        ...(addForm.expiration_date && { expiration_date: addForm.expiration_date }),
+        ...(addForm.certification_number && { certification_number: addForm.certification_number }),
+        ...(addForm.issuing_agency && { issuing_agency: addForm.issuing_agency }),
+        ...(addForm.instructor && { instructor: addForm.instructor }),
+        ...(addForm.notes && { notes: addForm.notes }),
+        passed: true,
+      };
+      await trainingService.createRecord(record);
+      toast.success('Training record added successfully');
+      setShowAddModal(false);
+      setAddForm({
+        course_name: '',
+        training_type: 'certification',
+        hours_completed: 0,
+        completion_date: '',
+        expiration_date: '',
+        certification_number: '',
+        issuing_agency: '',
+        instructor: '',
+        notes: '',
+      });
+      fetchData();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to add training record'));
+    } finally {
+      setAddSubmitting(false);
     }
   };
 
@@ -211,6 +274,15 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 {user.full_name || user.username}
               </p>
             </div>
+            {canManage && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Record Training
+              </button>
+            )}
           </div>
         </div>
 
@@ -388,6 +460,170 @@ export const MemberTrainingHistoryPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Add Training Record Modal */}
+      {showAddModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowAddModal(false); }}
+        >
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-theme-surface-border">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 className="text-lg font-medium text-theme-text-primary">
+                Record Training / Certification
+              </h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Add a training record for {user.full_name || user.username}
+              </p>
+            </div>
+
+            <form onSubmit={handleAddRecord} className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                  Course / Certification Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={addForm.course_name}
+                  onChange={(e) => setAddForm({ ...addForm, course_name: e.target.value })}
+                  placeholder="e.g., CPR/AED Certification"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Type *
+                  </label>
+                  <select
+                    value={addForm.training_type}
+                    onChange={(e) => setAddForm({ ...addForm, training_type: e.target.value as TrainingType })}
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="certification">Certification</option>
+                    <option value="continuing_education">Continuing Education</option>
+                    <option value="skills_practice">Skills Practice</option>
+                    <option value="orientation">Orientation</option>
+                    <option value="refresher">Refresher</option>
+                    <option value="specialty">Specialty</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Hours *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.5"
+                    value={addForm.hours_completed}
+                    onChange={(e) => setAddForm({ ...addForm, hours_completed: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Completion Date
+                  </label>
+                  <input
+                    type="date"
+                    value={addForm.completion_date}
+                    onChange={(e) => setAddForm({ ...addForm, completion_date: e.target.value })}
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Expiration Date
+                  </label>
+                  <input
+                    type="date"
+                    value={addForm.expiration_date}
+                    onChange={(e) => setAddForm({ ...addForm, expiration_date: e.target.value })}
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Certification Number
+                  </label>
+                  <input
+                    type="text"
+                    value={addForm.certification_number}
+                    onChange={(e) => setAddForm({ ...addForm, certification_number: e.target.value })}
+                    placeholder="e.g., CPR-12345"
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    Issuing Agency
+                  </label>
+                  <input
+                    type="text"
+                    value={addForm.issuing_agency}
+                    onChange={(e) => setAddForm({ ...addForm, issuing_agency: e.target.value })}
+                    placeholder="e.g., American Red Cross"
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                  Instructor
+                </label>
+                <input
+                  type="text"
+                  value={addForm.instructor}
+                  onChange={(e) => setAddForm({ ...addForm, instructor: e.target.value })}
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={addForm.notes}
+                  onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary border border-theme-surface-border rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addSubmitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {addSubmitting ? 'Saving...' : 'Save Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
