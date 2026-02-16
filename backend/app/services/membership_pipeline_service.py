@@ -28,7 +28,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
     PipelineStepType,
 )
-from app.models.user import User, UserStatus, generate_uuid
+from app.models.user import User, UserStatus, Organization, generate_uuid
 
 
 class MembershipPipelineService:
@@ -730,15 +730,27 @@ class MembershipPipelineService:
         )
         self.db.add(new_user)
 
+        # Auto-assign membership number if enabled for this organization
+        from app.services.organization_service import OrganizationService
+        org_service = OrganizationService(self.db)
+        membership_number = await org_service.assign_next_membership_number(
+            organization_id=prospect.organization_id,
+            user=new_user,
+        )
+
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
         prospect.transferred_user_id = user_id
         prospect.transferred_at = datetime.utcnow()
 
+        transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
+        if membership_number:
+            transfer_details["membership_number"] = membership_number
+
         await self._log_activity(
             prospect_id=prospect.id,
             action="transferred_to_membership",
-            details={"user_id": user_id, "username": username},
+            details=transfer_details,
             performed_by=transferred_by,
         )
 
@@ -759,6 +771,7 @@ class MembershipPipelineService:
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
+            "membership_number": membership_number,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
         }

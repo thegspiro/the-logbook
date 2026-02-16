@@ -230,6 +230,36 @@ class MembershipTierSettings(BaseModel):
     )
 
 
+class MembershipIdSettings(BaseModel):
+    """
+    Organization-level settings for auto-assigning membership ID numbers.
+
+    When enabled, new members receive the next sequential membership number
+    upon joining the department. The membership coordinator can also manually
+    assign a number (e.g. when reinstating a former member).
+    """
+    enabled: bool = Field(
+        default=False,
+        description="Whether to auto-assign membership numbers to new members",
+    )
+    prefix: str = Field(
+        default="",
+        max_length=10,
+        description="Optional prefix prepended to the number (e.g. 'M-', 'FD-')",
+    )
+    next_number: int = Field(
+        default=1,
+        ge=1,
+        description="The next sequential number to assign (auto-incremented after each assignment)",
+    )
+    zero_pad: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Pad the numeric part with leading zeros to this width (e.g. 3 → '001')",
+    )
+
+
 class ITTeamMember(BaseModel):
     """An IT team member stored in organization settings"""
     name: str = ""
@@ -355,6 +385,10 @@ class OrganizationSettings(BaseModel):
         default_factory=MembershipTierSettings,
         description="Membership tier definitions, years-of-service thresholds, and tier benefits",
     )
+    membership_ids: MembershipIdSettings = Field(
+        default_factory=MembershipIdSettings,
+        description="Auto-assignment settings for sequential membership ID numbers",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -390,6 +424,7 @@ class OrganizationSettingsUpdate(BaseModel):
     it_team: Optional[ITTeamSettings] = None
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
+    membership_ids: Optional[MembershipIdSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -413,6 +448,7 @@ class OrganizationSettingsResponse(BaseModel):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
+    membership_ids: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')
 
