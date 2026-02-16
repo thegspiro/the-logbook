@@ -92,7 +92,7 @@ const ReviewPanel: React.FC<{
   };
 
   return (
-    <div className="border-t border-gray-700 pt-4 mt-4">
+    <div className="border-t border-theme-surface-border pt-4 mt-4">
       {/* Action Buttons */}
       <div className="flex items-center space-x-2 mb-3">
         <button
@@ -100,7 +100,7 @@ const ReviewPanel: React.FC<{
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             action === 'approve'
               ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
           <CheckCircle2 className="w-4 h-4" />
@@ -111,7 +111,7 @@ const ReviewPanel: React.FC<{
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             action === 'revision_requested'
               ? 'bg-orange-600 text-white'
-              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
           <RotateCcw className="w-4 h-4" />
@@ -122,7 +122,7 @@ const ReviewPanel: React.FC<{
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             action === 'reject'
               ? 'bg-red-600 text-white'
-              : 'bg-gray-700 text-theme-text-secondary hover:bg-gray-600'
+              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
           <XCircle className="w-4 h-4" />
@@ -140,7 +140,7 @@ const ReviewPanel: React.FC<{
             ? 'Optional notes for the member...'
             : 'Explain why (required for rejection or revision request)...'
         }
-        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-3"
+        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-3"
         required={action !== 'approve'}
       />
 
@@ -164,7 +164,7 @@ const ReviewPanel: React.FC<{
                   value={overrideHours ?? ''}
                   onChange={(e) => setOverrideHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder={String(submission.hours_completed)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm"
+                  className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={0}
                   step={0.5}
                 />
@@ -176,7 +176,7 @@ const ReviewPanel: React.FC<{
                   value={overrideCreditHours ?? ''}
                   onChange={(e) => setOverrideCreditHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder={String(submission.credit_hours || '')}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm"
+                  className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={0}
                   step={0.5}
                 />
@@ -186,7 +186,7 @@ const ReviewPanel: React.FC<{
                 <select
                   value={overrideType || ''}
                   onChange={(e) => setOverrideType(e.target.value as TrainingType || undefined)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm"
+                  className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                 >
                   <option value="">No change</option>
                   {Object.entries(TRAINING_TYPE_LABELS).map(([val, label]) => (
@@ -221,7 +221,7 @@ const SubmissionCard: React.FC<{
   const isPending = submission.status === 'pending_review';
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -262,7 +262,7 @@ const SubmissionCard: React.FC<{
       {/* Expanded Details */}
       {expanded && (
         <div className="px-4 pb-4">
-          <div className="border-t border-gray-700 pt-3">
+          <div className="border-t border-theme-surface-border pt-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               {submission.course_code && (
                 <div>
@@ -321,7 +321,7 @@ const SubmissionCard: React.FC<{
               </div>
             )}
             {submission.reviewer_notes && (
-              <div className="mt-3 bg-gray-700/50 rounded p-2">
+              <div className="mt-3 bg-theme-surface rounded p-2">
                 <span className="text-theme-text-muted text-xs">Previous reviewer notes: </span>
                 <p className="text-theme-text-secondary text-sm">{submission.reviewer_notes}</p>
               </div>
@@ -405,7 +405,7 @@ const ConfigEditor: React.FC<{
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 space-y-6">
+    <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 space-y-6">
       <h2 className="text-lg font-semibold text-theme-text-primary flex items-center space-x-2">
         <Settings className="w-5 h-5 text-theme-text-muted" />
         <span>Self-Report Configuration</span>
@@ -420,7 +420,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={requireApproval}
               onChange={(e) => setRequireApproval(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
             />
             <span className="text-theme-text-secondary text-sm">Require officer approval for submissions</span>
           </label>
@@ -434,7 +434,7 @@ const ConfigEditor: React.FC<{
                   value={autoApproveHours ?? ''}
                   onChange={(e) => setAutoApproveHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder="Disabled"
-                  className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm"
+                  className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={0}
                   step={0.5}
                 />
@@ -446,7 +446,7 @@ const ConfigEditor: React.FC<{
                   type="number"
                   value={deadlineDays}
                   onChange={(e) => setDeadlineDays(parseInt(e.target.value) || 14)}
-                  className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm"
+                  className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={1}
                   max={90}
                 />
@@ -465,7 +465,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={notifyOfficer}
               onChange={(e) => setNotifyOfficer(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
             />
             <span className="text-theme-text-secondary text-sm">Notify officer when a submission is created</span>
           </label>
@@ -474,7 +474,7 @@ const ConfigEditor: React.FC<{
               type="checkbox"
               checked={notifyMember}
               onChange={(e) => setNotifyMember(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
             />
             <span className="text-theme-text-secondary text-sm">Notify member when their submission is reviewed</span>
           </label>
@@ -491,7 +491,7 @@ const ConfigEditor: React.FC<{
             value={maxHours ?? ''}
             onChange={(e) => setMaxHours(e.target.value ? parseFloat(e.target.value) : undefined)}
             placeholder="No limit"
-            className="w-48 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm"
+            className="w-48 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
             min={0.5}
             step={0.5}
           />
@@ -506,7 +506,7 @@ const ConfigEditor: React.FC<{
           onChange={(e) => setInstructions(e.target.value)}
           rows={3}
           placeholder="Optional instructions displayed to members when submitting training..."
-          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         />
       </div>
 
@@ -516,13 +516,13 @@ const ConfigEditor: React.FC<{
         <p className="text-xs text-theme-text-muted mb-3">Control which fields are visible and required on the submission form.</p>
         <div className="space-y-2">
           {Object.entries(fieldConfig).map(([name, fc]) => (
-            <div key={name} className="flex items-center justify-between py-2 px-3 bg-gray-700/50 rounded">
+            <div key={name} className="flex items-center justify-between py-2 px-3 bg-theme-surface rounded">
               <div className="flex items-center space-x-3 flex-1 min-w-0">
                 <input
                   type="checkbox"
                   checked={fc.visible}
                   onChange={(e) => updateField(name, 'visible', e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   disabled={['course_name', 'training_type', 'completion_date', 'hours_completed'].includes(name)}
                 />
                 <input
@@ -537,7 +537,7 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.required}
                   onChange={(e) => updateField(name, 'required', e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-orange-600 focus:ring-orange-500"
+                  className="w-3.5 h-3.5 rounded border-theme-input-border bg-theme-input-bg text-orange-600 focus:ring-orange-500"
                   disabled={!fc.visible}
                 />
                 <span className="text-xs text-theme-text-muted">Required</span>
@@ -637,7 +637,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         <div className="flex items-center space-x-4 mb-6">
           <button
             onClick={() => navigate('/training/officer')}
-            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-gray-800"
+            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-secondary"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -659,13 +659,13 @@ const ReviewSubmissionsPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6">
+        <div className="flex space-x-1 bg-theme-surface-secondary p-1 rounded-lg mb-6">
           <button
             onClick={() => setActiveView('pending')}
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'pending'
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Clock className="w-4 h-4 inline mr-2" />
@@ -681,7 +681,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'all'
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <FileText className="w-4 h-4 inline mr-2" />
@@ -692,7 +692,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'config'
                 ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Settings className="w-4 h-4 inline mr-2" />
@@ -707,7 +707,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="px-3 py-1.5 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <option value="">All statuses</option>
               <option value="pending_review">Pending Review</option>
@@ -728,7 +728,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             <p className="text-theme-text-muted mt-4">Loading submissions...</p>
           </div>
         ) : submissions.length === 0 ? (
-          <div className="text-center py-16 bg-gray-800 rounded-lg border border-gray-700">
+          <div className="text-center py-16 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
             {activeView === 'pending' ? (
               <>
                 <CheckCircle2 className="w-16 h-16 text-green-700 dark:text-green-500/50 mx-auto mb-4" />

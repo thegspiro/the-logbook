@@ -548,7 +548,7 @@ export const MinutesDetailPage: React.FC = () => {
             {minutes.status === 'draft' && (
               <button
                 onClick={handleDelete}
-                className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-md hover:bg-gray-700"
+                className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
               >
                 Delete Draft
               </button>

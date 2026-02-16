@@ -57,7 +57,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
         aria-labelledby="logout-modal-title"
         aria-describedby="logout-modal-description"
       >
-        <div className="bg-slate-900 border border-theme-surface-border rounded-lg shadow-xl max-w-md w-full p-6 relative">
+        <div className="bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl max-w-md w-full p-6 relative">
           {/* Close button */}
           <button
             onClick={onCancel}
@@ -98,7 +98,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors"
+              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-[var(--ring-offset-bg)] transition-colors"
               autoFocus
             >
               Logout

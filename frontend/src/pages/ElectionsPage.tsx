@@ -444,7 +444,7 @@ export const ElectionsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={addPosition}
-                      className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-md hover:bg-gray-700"
+                      className="px-4 py-2 bg-gray-600 text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
                     >
                       Add
                     </button>

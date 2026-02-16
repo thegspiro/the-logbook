@@ -139,7 +139,7 @@ const StepInfo: React.FC<{
         type="text"
         value={data.name}
         onChange={(e) => onChange('name', e.target.value)}
-        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
         placeholder="e.g., Recruit / Probationary Firefighter"
         required
       />
@@ -154,7 +154,7 @@ const StepInfo: React.FC<{
         value={data.description}
         onChange={(e) => onChange('description', e.target.value)}
         rows={3}
-        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
         placeholder="Describe what this program covers and who it's for..."
       />
     </div>
@@ -169,7 +169,7 @@ const StepInfo: React.FC<{
           type="text"
           value={data.code}
           onChange={(e) => onChange('code', e.target.value.toUpperCase())}
-          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
           placeholder="e.g., RECRUIT"
           maxLength={50}
         />
@@ -183,7 +183,7 @@ const StepInfo: React.FC<{
           id="prog-target"
           value={data.target_position}
           onChange={(e) => onChange('target_position', e.target.value)}
-          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           <option value="">All Positions</option>
           <option value="probationary">Probationary</option>
@@ -205,7 +205,7 @@ const StepInfo: React.FC<{
           id="prog-structure"
           value={data.structure_type}
           onChange={(e) => onChange('structure_type', e.target.value)}
-          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           <option value="phases">Phases (stages in order)</option>
           <option value="sequential">Sequential (strict order)</option>
@@ -222,7 +222,7 @@ const StepInfo: React.FC<{
           type="number"
           value={data.time_limit_days}
           onChange={(e) => onChange('time_limit_days', e.target.value)}
-          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
           placeholder="e.g., 365"
           min={1}
         />
@@ -237,7 +237,7 @@ const StepInfo: React.FC<{
           type="number"
           value={data.warning_days_before}
           onChange={(e) => onChange('warning_days_before', e.target.value)}
-          className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
           placeholder="30"
           min={1}
         />
@@ -250,7 +250,7 @@ const StepInfo: React.FC<{
         id="is-template"
         checked={data.is_template}
         onChange={(e) => onChange('is_template', e.target.checked)}
-        className="w-4 h-4 text-red-700 dark:text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
+        className="w-4 h-4 text-red-700 dark:text-red-500 bg-theme-input-bg border-theme-input-border rounded focus:ring-red-500"
       />
       <label htmlFor="is-template" className="text-sm text-theme-text-secondary">
         Save as template (can be cloned for future use)
@@ -282,7 +282,7 @@ const StepPhases: React.FC<{
     </div>
 
     {phases.length === 0 ? (
-      <div className="text-center py-12 bg-gray-800/50 rounded-lg border border-dashed border-gray-600">
+      <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
         <Layers className="w-12 h-12 text-gray-600 mx-auto mb-3" />
         <p className="text-theme-text-muted mb-2">No phases defined yet</p>
         <p className="text-theme-text-muted text-sm mb-4">Add phases to structure your training pipeline</p>
@@ -296,7 +296,7 @@ const StepPhases: React.FC<{
     ) : (
       <div className="space-y-3">
         {phases.map((phase) => (
-          <div key={phase.id} className="bg-gray-800 rounded-lg border border-gray-700">
+          <div key={phase.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
             <div
               className="flex items-center justify-between p-4 cursor-pointer"
               onClick={() => onToggleExpand(phase.id)}
@@ -324,14 +324,14 @@ const StepPhases: React.FC<{
             </div>
 
             {phase.isExpanded && (
-              <div className="px-4 pb-4 space-y-4 border-t border-gray-700 pt-4">
+              <div className="px-4 pb-4 space-y-4 border-t border-theme-surface-border pt-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Phase Name *</label>
                   <input
                     type="text"
                     value={phase.name}
                     onChange={(e) => onUpdate(phase.id, 'name', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                     placeholder="e.g., Engine Company Operations"
                   />
                 </div>
@@ -341,7 +341,7 @@ const StepPhases: React.FC<{
                     value={phase.description}
                     onChange={(e) => onUpdate(phase.id, 'description', e.target.value)}
                     rows={2}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                     placeholder="Describe what this phase covers..."
                   />
                 </div>
@@ -352,7 +352,7 @@ const StepPhases: React.FC<{
                       type="number"
                       value={phase.time_limit_days}
                       onChange={(e) => onUpdate(phase.id, 'time_limit_days', e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                       placeholder="Optional"
                       min={1}
                     />
@@ -363,7 +363,7 @@ const StepPhases: React.FC<{
                         type="checkbox"
                         checked={phase.requires_manual_advancement}
                         onChange={(e) => onUpdate(phase.id, 'requires_manual_advancement', e.target.checked)}
-                        className="w-4 h-4 text-red-700 dark:text-red-500 bg-gray-700 border-gray-600 rounded"
+                        className="w-4 h-4 text-red-700 dark:text-red-500 bg-theme-input-bg border-theme-input-border rounded"
                       />
                       <span>Require officer approval to advance</span>
                     </label>
@@ -391,20 +391,20 @@ const StepRequirements: React.FC<{
     </div>
 
     {phases.length === 0 ? (
-      <div className="text-center py-12 bg-gray-800/50 rounded-lg border border-dashed border-gray-600">
+      <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
         <ListChecks className="w-12 h-12 text-gray-600 mx-auto mb-3" />
         <p className="text-theme-text-muted">Add phases first before defining requirements.</p>
       </div>
     ) : (
       phases.map((phase) => (
-        <div key={phase.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <div key={phase.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-theme-text-primary font-medium">
               <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
             </h3>
             <button
               onClick={() => onAddRequirement(phase.id)}
-              className="flex items-center space-x-1 px-2 py-1 bg-gray-700 text-theme-text-secondary rounded hover:bg-gray-600 text-xs"
+              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover text-xs"
             >
               <Plus className="w-3 h-3" />
               <span>Add Requirement</span>
@@ -416,7 +416,7 @@ const StepRequirements: React.FC<{
           ) : (
             <div className="space-y-3">
               {phase.requirements.map((req) => (
-                <div key={req.id} className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+                <div key={req.id} className="bg-theme-surface rounded-lg p-3 space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
@@ -425,7 +425,7 @@ const StepRequirements: React.FC<{
                           type="text"
                           value={req.name}
                           onChange={(e) => onUpdateRequirement(phase.id, req.id, 'name', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                           placeholder="e.g., Hose Operations Skills"
                         />
                       </div>
@@ -434,7 +434,7 @@ const StepRequirements: React.FC<{
                         <select
                           value={req.requirement_type}
                           onChange={(e) => onUpdateRequirement(phase.id, req.id, 'requirement_type', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                         >
                           <option value="hours">Training Hours</option>
                           <option value="courses">Course Completion</option>
@@ -461,7 +461,7 @@ const StepRequirements: React.FC<{
                       value={req.description}
                       onChange={(e) => onUpdateRequirement(phase.id, req.id, 'description', e.target.value)}
                       rows={2}
-                      className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                       placeholder="Describe what this requirement entails..."
                     />
                   </div>
@@ -475,7 +475,7 @@ const StepRequirements: React.FC<{
                           type="number"
                           value={req.required_hours}
                           onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_hours', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                           placeholder="e.g., 40"
                           min={0}
                           step={0.5}
@@ -487,7 +487,7 @@ const StepRequirements: React.FC<{
                             type="checkbox"
                             checked={req.is_required}
                             onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                            className="w-3 h-3 text-red-700 dark:text-red-500 bg-gray-700 border-gray-600 rounded"
+                            className="w-3 h-3 text-red-700 dark:text-red-500 bg-theme-input-bg border-theme-input-border rounded"
                           />
                           <span>Required</span>
                         </label>
@@ -502,7 +502,7 @@ const StepRequirements: React.FC<{
                         type="number"
                         value={req.required_shifts}
                         onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_shifts', e.target.value)}
-                        className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                        className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                         placeholder="e.g., 10"
                         min={1}
                       />
@@ -516,7 +516,7 @@ const StepRequirements: React.FC<{
                         type="number"
                         value={req.required_calls}
                         onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_calls', e.target.value)}
-                        className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                        className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                         placeholder="e.g., 20"
                         min={1}
                       />
@@ -532,7 +532,7 @@ const StepRequirements: React.FC<{
                         value={req.checklist_items.join('\n')}
                         onChange={(e) => onUpdateRequirement(phase.id, req.id, 'checklist_items', e.target.value.split('\n'))}
                         rows={4}
-                        className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                        className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                         placeholder="Enter each checklist item on a new line..."
                       />
                     </div>
@@ -560,20 +560,20 @@ const StepMilestones: React.FC<{
     </div>
 
     {phases.length === 0 ? (
-      <div className="text-center py-12 bg-gray-800/50 rounded-lg border border-dashed border-gray-600">
+      <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
         <Flag className="w-12 h-12 text-gray-600 mx-auto mb-3" />
         <p className="text-theme-text-muted">Add phases first before defining milestones.</p>
       </div>
     ) : (
       phases.map((phase) => (
-        <div key={phase.id} className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <div key={phase.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-theme-text-primary font-medium">
               <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
             </h3>
             <button
               onClick={() => onAddMilestone(phase.id)}
-              className="flex items-center space-x-1 px-2 py-1 bg-gray-700 text-theme-text-secondary rounded hover:bg-gray-600 text-xs"
+              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded hover:bg-theme-surface-hover text-xs"
             >
               <Plus className="w-3 h-3" />
               <span>Add Milestone</span>
@@ -585,7 +585,7 @@ const StepMilestones: React.FC<{
           ) : (
             <div className="space-y-3">
               {phase.milestones.map((ms) => (
-                <div key={ms.id} className="bg-gray-700/50 rounded-lg p-3 space-y-3">
+                <div key={ms.id} className="bg-theme-surface rounded-lg p-3 space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
@@ -594,7 +594,7 @@ const StepMilestones: React.FC<{
                           type="text"
                           value={ms.name}
                           onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'name', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                           placeholder="e.g., Halfway Complete"
                         />
                       </div>
@@ -604,7 +604,7 @@ const StepMilestones: React.FC<{
                           type="number"
                           value={ms.completion_percentage_threshold}
                           onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'completion_percentage_threshold', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                           placeholder="e.g., 50"
                           min={1}
                           max={100}
@@ -624,7 +624,7 @@ const StepMilestones: React.FC<{
                       type="text"
                       value={ms.notification_message}
                       onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'notification_message', e.target.value)}
-                      className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
                       placeholder="Message sent when this milestone is reached..."
                     />
                   </div>
@@ -663,30 +663,30 @@ const StepReview: React.FC<{
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-800 rounded-lg p-4 text-center">
+        <div className="bg-theme-surface-secondary rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{phases.length}</p>
           <p className="text-theme-text-muted text-sm">Phases</p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-4 text-center">
+        <div className="bg-theme-surface-secondary rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{totalReqs}</p>
           <p className="text-theme-text-muted text-sm">Requirements</p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-4 text-center">
+        <div className="bg-theme-surface-secondary rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{totalMs}</p>
           <p className="text-theme-text-muted text-sm">Milestones</p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-4 text-center">
+        <div className="bg-theme-surface-secondary rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{info.time_limit_days || '—'}</p>
           <p className="text-theme-text-muted text-sm">Days Limit</p>
         </div>
       </div>
 
       {/* Program info */}
-      <div className="bg-gray-800 rounded-lg p-4">
+      <div className="bg-theme-surface-secondary rounded-lg p-4">
         <h3 className="text-lg font-semibold text-theme-text-primary mb-3">{info.name || 'Untitled Program'}</h3>
         {info.description && <p className="text-theme-text-muted text-sm mb-3">{info.description}</p>}
         <div className="flex flex-wrap gap-2 text-xs">
-          {info.code && <span className="px-2 py-1 bg-gray-700 text-theme-text-secondary rounded">{info.code}</span>}
+          {info.code && <span className="px-2 py-1 bg-theme-surface text-theme-text-secondary rounded">{info.code}</span>}
           {info.target_position && <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 rounded">{info.target_position}</span>}
           <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded">{info.structure_type}</span>
           {info.is_template && <span className="px-2 py-1 bg-green-500/20 text-green-700 dark:text-green-400 rounded">Template</span>}
@@ -695,13 +695,13 @@ const StepReview: React.FC<{
 
       {/* Phase details */}
       {phases.map((phase) => (
-        <div key={phase.id} className="bg-gray-800 rounded-lg p-4">
+        <div key={phase.id} className="bg-theme-surface-secondary rounded-lg p-4">
           <h4 className="font-medium text-theme-text-primary mb-2">
             <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
           </h4>
           {phase.description && <p className="text-theme-text-muted text-sm mb-3">{phase.description}</p>}
           <div className="flex flex-wrap gap-2 text-xs mb-3">
-            {phase.time_limit_days && <span className="px-2 py-1 bg-gray-700 text-theme-text-secondary rounded">{phase.time_limit_days} day limit</span>}
+            {phase.time_limit_days && <span className="px-2 py-1 bg-theme-surface text-theme-text-secondary rounded">{phase.time_limit_days} day limit</span>}
             {phase.requires_manual_advancement && <span className="px-2 py-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded">Manual advancement</span>}
           </div>
 
@@ -966,7 +966,7 @@ const CreatePipelinePage: React.FC = () => {
         <div className="flex items-center space-x-4 mb-8">
           <button
             onClick={() => navigate('/training/programs')}
-            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-gray-800"
+            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
             aria-label="Back to programs"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -981,7 +981,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center mb-8 bg-gray-800 rounded-lg p-3">
+        <div className="flex items-center mb-8 bg-theme-surface-secondary rounded-lg p-3">
           {WIZARD_STEPS.map((step, i) => {
             const StepIcon = step.icon;
             const isActive = step.key === currentStep;
@@ -998,7 +998,7 @@ const CreatePipelinePage: React.FC = () => {
                     isActive
                       ? 'bg-red-600 text-white'
                       : isComplete
-                      ? 'text-red-700 dark:text-red-400 hover:bg-gray-700'
+                      ? 'text-red-700 dark:text-red-400 hover:bg-theme-surface-hover'
                       : 'text-theme-text-muted hover:text-theme-text-muted'
                   }`}
                 >
@@ -1015,7 +1015,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Step content */}
-        <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6 mb-6">
+        <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-6 mb-6">
           {error && (
             <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
               {error}
@@ -1056,7 +1056,7 @@ const CreatePipelinePage: React.FC = () => {
           <button
             onClick={goBack}
             disabled={stepIndex === 0}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back</span>

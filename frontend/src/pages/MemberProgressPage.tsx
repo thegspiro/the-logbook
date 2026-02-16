@@ -60,7 +60,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 cursor-pointer transition-colors"
+      className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover cursor-pointer transition-colors"
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
@@ -97,7 +97,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-700/50 rounded-lg p-3">
+        <div className="bg-theme-surface rounded-lg p-3">
           <div className="flex items-center space-x-2 mb-1">
             <CheckCircle2 className="w-4 h-4 text-green-700 dark:text-green-400" />
             <span className="text-xs text-theme-text-muted">Completed</span>
@@ -106,7 +106,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
         </div>
 
         {time_remaining_days !== null && time_remaining_days !== undefined && (
-          <div className="bg-gray-700/50 rounded-lg p-3">
+          <div className="bg-theme-surface rounded-lg p-3">
             <div className="flex items-center space-x-2 mb-1">
               <Calendar className="w-4 h-4 text-blue-700 dark:text-blue-400" />
               <span className="text-xs text-theme-text-muted">Days Left</span>
@@ -122,7 +122,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
         )}
 
         {progress.current_phase && (
-          <div className="bg-gray-700/50 rounded-lg p-3">
+          <div className="bg-theme-surface rounded-lg p-3">
             <div className="flex items-center space-x-2 mb-1">
               <Target className="w-4 h-4 text-purple-700 dark:text-purple-400" />
               <span className="text-xs text-theme-text-muted">Current Phase</span>
@@ -144,12 +144,12 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
 
       {/* Next Milestones */}
       {progress.next_milestones.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-700">
+        <div className="mt-4 pt-4 border-t border-theme-surface-border">
           <div className="flex items-center space-x-2 mb-2">
             <Award className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />
             <span className="text-sm font-medium text-theme-text-secondary">Next Milestone</span>
           </div>
-          <div className="bg-gray-700/30 rounded p-2">
+          <div className="bg-theme-surface rounded p-2">
             <p className="text-sm text-theme-text-primary font-medium">{progress.next_milestones[0].name}</p>
             <p className="text-xs text-theme-text-muted mt-1">
               At {progress.next_milestones[0].completion_percentage_threshold}% completion
@@ -179,7 +179,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-theme-surface-secondary rounded-lg p-6">
         <button
           onClick={onBack}
           className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center space-x-2"
@@ -252,14 +252,14 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
 
       {/* Milestones */}
       {next_milestones.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6">
+        <div className="bg-theme-surface-secondary rounded-lg p-6">
           <h3 className="text-lg font-semibold text-theme-text-primary mb-4 flex items-center space-x-2">
             <Award className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
             <span>Upcoming Milestones</span>
           </h3>
           <div className="space-y-3">
             {next_milestones.map((milestone, _index) => (
-              <div key={milestone.id} className="bg-gray-700/50 rounded-lg p-4">
+              <div key={milestone.id} className="bg-theme-surface rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-medium text-theme-text-primary">{milestone.name}</h4>
                   <span className="text-sm text-theme-text-muted">
@@ -276,7 +276,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
       )}
 
       {/* Requirements */}
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-theme-surface-secondary rounded-lg p-6">
         <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Requirements</h3>
         <div className="space-y-6">
           {Object.entries(requirementsByPhase).map(([phase, requirements]) => (
@@ -286,7 +286,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
                 {requirements.map((rp) => (
                   <div
                     key={rp.id}
-                    className="bg-gray-700/30 rounded-lg p-4 flex items-start space-x-4"
+                    className="bg-theme-surface rounded-lg p-4 flex items-start space-x-4"
                   >
                     <div className="flex-shrink-0 mt-1">
                       {getStatusIcon(rp.status)}
@@ -419,7 +419,7 @@ const MemberProgressPage: React.FC = () => {
               className={`px-4 py-2 rounded-lg font-medium transition-colors capitalize ${
                 filter === status
                   ? 'bg-red-600 text-white'
-                  : 'bg-gray-800 text-theme-text-muted hover:text-theme-text-primary hover:bg-gray-700'
+                  : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
             >
               {status}
@@ -434,7 +434,7 @@ const MemberProgressPage: React.FC = () => {
             <p className="text-theme-text-muted mt-4">Loading your programs...</p>
           </div>
         ) : enrollments.length === 0 ? (
-          <div className="text-center py-12 bg-gray-800 rounded-lg">
+          <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
             <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <p className="text-theme-text-muted">No {filter !== 'all' && filter} programs found</p>
             <p className="text-theme-text-muted mt-2 text-sm">
@@ -452,7 +452,7 @@ const MemberProgressPage: React.FC = () => {
                   onClick={() => setSelectedEnrollment(enrollment.id)}
                 />
               ) : (
-                <div key={enrollment.id} className="bg-gray-800 rounded-lg p-6">
+                <div key={enrollment.id} className="bg-theme-surface-secondary rounded-lg p-6">
                   <div className="animate-pulse">
                     <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
                     <div className="h-4 bg-gray-700 rounded w-full mb-2"></div>
