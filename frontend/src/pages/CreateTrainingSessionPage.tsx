@@ -88,7 +88,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
       // Navigate to the event page to view QR code
       // navigate(`/events/${response.event_id}`);
-      navigate('/training/sessions');
+      navigate('/training/officer');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create training session'));
       setSaving(false);
@@ -108,7 +108,7 @@ const CreateTrainingSessionPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate('/training/sessions')}
+            onClick={() => navigate('/training/officer')}
             className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />

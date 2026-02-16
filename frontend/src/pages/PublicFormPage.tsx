@@ -90,7 +90,7 @@ const PublicFormPage = () => {
   const renderField = (field: PublicFormField) => {
     const value = formData[field.id] || '';
     const baseInputClass =
-      'w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400';
+      'w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-theme-text-primary placeholder-gray-400';
 
     switch (field.field_type) {
       case 'text':
@@ -199,7 +199,7 @@ const PublicFormPage = () => {
                   onChange={(e) => handleFieldChange(field.id, e.target.value)}
                   className="w-4 h-4 text-blue-600"
                 />
-                <span className="text-gray-700">{opt.label}</span>
+                <span className="text-theme-text-secondary">{opt.label}</span>
               </label>
             ))}
           </div>
@@ -224,7 +224,7 @@ const PublicFormPage = () => {
                     }}
                     className="w-4 h-4 text-blue-600 rounded"
                   />
-                  <span className="text-gray-700">{opt.label}</span>
+                  <span className="text-theme-text-secondary">{opt.label}</span>
                 </label>
               );
             })}
@@ -233,8 +233,8 @@ const PublicFormPage = () => {
 
       case 'section_header':
         return (
-          <div className="border-b border-gray-200 pb-2 -mb-2">
-            <h3 className="text-lg font-semibold text-gray-800">{clean(field.label)}</h3>
+          <div className="border-b border-theme-surface-border pb-2 -mb-2">
+            <h3 className="text-lg font-semibold text-theme-text-primary">{clean(field.label)}</h3>
             {field.help_text && <p className="text-sm text-theme-text-muted mt-1">{clean(field.help_text)}</p>}
           </div>
         );
@@ -255,10 +255,10 @@ const PublicFormPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-3 border-b-3 border-blue-500 mb-4"></div>
-          <p className="text-gray-600">Loading form...</p>
+          <p className="text-theme-text-secondary">Loading form...</p>
         </div>
       </div>
     );
@@ -266,15 +266,15 @@ const PublicFormPage = () => {
 
   if (error && !form) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+        <div className="bg-theme-surface rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-700 dark:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Form Not Available</h2>
-          <p className="text-gray-600">{error}</p>
+          <h2 className="text-xl font-bold text-theme-text-primary mb-2">Form Not Available</h2>
+          <p className="text-theme-text-secondary">{error}</p>
         </div>
       </div>
     );
@@ -282,15 +282,15 @@ const PublicFormPage = () => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+        <div className="bg-theme-surface rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-700 dark:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Submission Received</h2>
-          <p className="text-gray-600">{submitMessage || 'Thank you for your submission!'}</p>
+          <h2 className="text-xl font-bold text-theme-text-primary mb-2">Submission Received</h2>
+          <p className="text-theme-text-secondary">{submitMessage || 'Thank you for your submission!'}</p>
           {form?.allow_multiple_submissions && (
             <button
               onClick={() => {
@@ -312,10 +312,10 @@ const PublicFormPage = () => {
   if (!form) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-theme-surface-secondary py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
+        <div className="bg-theme-surface rounded-xl shadow-lg overflow-hidden mb-6">
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6">
             {form.organization_name && (
               <p className="text-blue-100 text-sm mb-1">{clean(form.organization_name)}</p>
@@ -328,7 +328,7 @@ const PublicFormPage = () => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-8">
+        <form onSubmit={handleSubmit} className="bg-theme-surface rounded-xl shadow-lg p-8">
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm">{error}</p>
@@ -336,24 +336,24 @@ const PublicFormPage = () => {
           )}
 
           {/* Contact Info Section */}
-          <div className="mb-8 pb-6 border-b border-gray-200">
+          <div className="mb-8 pb-6 border-b border-theme-surface-border">
             <h3 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wide mb-4">Your Information (Optional)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Name</label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-theme-text-primary placeholder-gray-400"
                   placeholder="Your name"
                   value={submitterName}
                   onChange={(e) => setSubmitterName(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Email</label>
                 <input
                   type="email"
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-theme-text-primary placeholder-gray-400"
                   placeholder="your@email.com"
                   value={submitterEmail}
                   onChange={(e) => setSubmitterEmail(e.target.value)}
@@ -375,7 +375,7 @@ const PublicFormPage = () => {
 
               return (
                 <div key={field.id} className={field.width === 'half' ? 'w-1/2 inline-block pr-2' : field.width === 'third' ? 'w-1/3 inline-block pr-2' : ''}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     {clean(field.label)}
                     {field.required && <span className="text-red-700 dark:text-red-500 ml-1">*</span>}
                   </label>
@@ -402,7 +402,7 @@ const PublicFormPage = () => {
           </div>
 
           {/* Submit */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="mt-8 pt-6 border-t border-theme-surface-border">
             <button
               type="submit"
               disabled={submitting}

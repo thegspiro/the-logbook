@@ -113,13 +113,13 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" id="main-content">
+    <main className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h1 className="mt-6 text-center text-3xl font-extrabold text-theme-text-primary">
             Create account
           </h1>
-          <p className="mt-2 text-center text-sm text-gray-700">
+          <p className="mt-2 text-center text-sm text-theme-text-secondary">
             This page is for administrator use only
           </p>
         </div>
@@ -144,7 +144,7 @@ export const RegisterPage: React.FC = () => {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="username" className="block text-sm font-medium text-theme-text-secondary">
                 Username <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
@@ -157,7 +157,7 @@ export const RegisterPage: React.FC = () => {
                 aria-describedby={formErrors.username ? 'username-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.username ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Choose a username"
                 value={formData.username}
                 onChange={handleChange}
@@ -169,7 +169,7 @@ export const RegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-theme-text-secondary">
                 Email address <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
@@ -182,7 +182,7 @@ export const RegisterPage: React.FC = () => {
                 aria-describedby={formErrors.email ? 'email-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={handleChange}
@@ -196,7 +196,7 @@ export const RegisterPage: React.FC = () => {
             <fieldset className="grid grid-cols-2 gap-4">
               <legend className="sr-only">Name</legend>
               <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="firstName" className="block text-sm font-medium text-theme-text-secondary">
                   First name <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
                 </label>
                 <input
@@ -209,7 +209,7 @@ export const RegisterPage: React.FC = () => {
                   aria-describedby={formErrors.firstName ? 'firstName-error' : undefined}
                   className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                     formErrors.firstName ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                   placeholder="John"
                   value={formData.firstName}
                   onChange={handleChange}
@@ -221,7 +221,7 @@ export const RegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="lastName" className="block text-sm font-medium text-theme-text-secondary">
                   Last name <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
                 </label>
                 <input
@@ -234,7 +234,7 @@ export const RegisterPage: React.FC = () => {
                   aria-describedby={formErrors.lastName ? 'lastName-error' : undefined}
                   className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                     formErrors.lastName ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                   placeholder="Doe"
                   value={formData.lastName}
                   onChange={handleChange}
@@ -247,7 +247,7 @@ export const RegisterPage: React.FC = () => {
             </fieldset>
 
             <div>
-              <label htmlFor="badgeNumber" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="badgeNumber" className="block text-sm font-medium text-theme-text-secondary">
                 Badge number (optional)
               </label>
               <input
@@ -263,7 +263,7 @@ export const RegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-theme-text-secondary">
                 Password <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
@@ -276,7 +276,7 @@ export const RegisterPage: React.FC = () => {
                 aria-describedby="password-requirements password-strength"
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Create a strong password"
                 value={formData.password}
                 onChange={handleChange}
@@ -288,7 +288,7 @@ export const RegisterPage: React.FC = () => {
               {formData.password && (
                 <div className="mt-2" id="password-strength">
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 bg-theme-surface-secondary rounded-full overflow-hidden">
                       <div
                         className={`h-full transition-all duration-300 ${getStrengthColor(passwordValidation.strength)}`}
                         style={{
@@ -298,7 +298,7 @@ export const RegisterPage: React.FC = () => {
                         }}
                       />
                     </div>
-                    <span className="text-xs text-gray-600">{getStrengthText(passwordValidation.strength)}</span>
+                    <span className="text-xs text-theme-text-secondary">{getStrengthText(passwordValidation.strength)}</span>
                   </div>
                 </div>
               )}
@@ -309,9 +309,9 @@ export const RegisterPage: React.FC = () => {
 
               {/* Password requirements dropdown */}
               {showPasswordRequirements && (
-                <div id="password-requirements" className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
-                  <p className="text-xs font-medium text-gray-700 mb-2">Password requirements:</p>
-                  <ul className="text-xs text-gray-600 space-y-1">
+                <div id="password-requirements" className="mt-2 p-3 bg-theme-surface-secondary rounded-md border border-theme-surface-border">
+                  <p className="text-xs font-medium text-theme-text-secondary mb-2">Password requirements:</p>
+                  <ul className="text-xs text-theme-text-secondary space-y-1">
                     {passwordRequirements.map((req, index) => (
                       <li key={index} className="flex items-center gap-1">
                         <span className="text-theme-text-muted">-</span>
@@ -324,7 +324,7 @@ export const RegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-theme-text-secondary">
                 Confirm password <span aria-hidden="true">*</span><span className="sr-only">(required)</span>
               </label>
               <input
@@ -337,7 +337,7 @@ export const RegisterPage: React.FC = () => {
                 aria-describedby={formErrors.confirmPassword ? 'confirmPassword-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
                   formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
                 onChange={handleChange}

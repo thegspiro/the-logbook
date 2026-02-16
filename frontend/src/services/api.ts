@@ -469,7 +469,7 @@ export const authService = {
    * Request password reset (sends email with reset link)
    */
   async requestPasswordReset(data: PasswordResetRequest): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/password-reset/request', data);
+    const response = await api.post<{ message: string }>('/auth/forgot-password', data);
     return response.data;
   },
 
@@ -477,7 +477,7 @@ export const authService = {
    * Confirm password reset with token
    */
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/password-reset/confirm', data);
+    const response = await api.post<{ message: string }>('/auth/reset-password', data);
     return response.data;
   },
 
@@ -1249,7 +1249,7 @@ export const electionService = {
    * Get ballot templates
    */
   async getBallotTemplates(): Promise<import('../types/election').BallotTemplate[]> {
-    const response = await api.get<import('../types/election').BallotTemplate[]>('/elections/ballot-templates');
+    const response = await api.get<import('../types/election').BallotTemplate[]>('/elections/templates/ballot-items');
     return response.data;
   },
 
@@ -1265,7 +1265,7 @@ export const electionService = {
    * Check in an attendee at an election meeting
    */
   async checkInAttendee(electionId: string, userId: string): Promise<import('../types/election').AttendeeCheckInResponse> {
-    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees/${userId}/check-in`);
+    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees`, { user_id: userId });
     return response.data;
   },
 
@@ -1280,7 +1280,7 @@ export const electionService = {
    * Get ballot by voting token (public/anonymous access)
    */
   async getBallotByToken(token: string): Promise<import('../types/election').Election> {
-    const response = await api.get<import('../types/election').Election>(`/elections/ballot/${token}`);
+    const response = await api.get<import('../types/election').Election>('/elections/ballot', { params: { token } });
     return response.data;
   },
 
@@ -1296,7 +1296,7 @@ export const electionService = {
    * Submit a ballot using a voting token
    */
   async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
-    const response = await api.post<import('../types/election').BallotSubmissionResponse>(`/elections/ballot/${token}/submit`, { votes });
+    const response = await api.post<import('../types/election').BallotSubmissionResponse>('/elections/ballot/vote/bulk', { votes }, { params: { token } });
     return response.data;
   },
 
@@ -2282,59 +2282,59 @@ export const meetingsService = {
 // Used by MinutesDetailPage for full minutes CRUD, motions, action items, and workflow
 export const minutesService = {
   async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`);
+    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`);
     return response.data;
   },
 
   async updateMinutes(minutesId: string, data: Record<string, unknown>): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.patch<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`, data);
+    const response = await api.put<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`, data);
     return response.data;
   },
 
   async deleteMinutes(minutesId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}`);
+    await api.delete(`/minutes-records/${minutesId}`);
   },
 
   async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/meetings/${minutesId}/publish`);
+    await api.post(`/minutes-records/${minutesId}/publish`);
   },
 
   async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/submit`);
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/submit`);
     return response.data;
   },
 
   async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/approve`);
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/approve`);
     return response.data;
   },
 
   async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/reject`, { reason });
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/reject`, { reason });
     return response.data;
   },
 
   async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
-    const response = await api.post<import('../types/minutes').Motion>(`/meetings/${minutesId}/motions`, data);
+    const response = await api.post<import('../types/minutes').Motion>(`/minutes-records/${minutesId}/motions`, data);
     return response.data;
   },
 
   async deleteMotion(minutesId: string, motionId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}/motions/${motionId}`);
+    await api.delete(`/minutes-records/${minutesId}/motions/${motionId}`);
   },
 
   async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.post<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items`, data);
+    const response = await api.post<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items`, data);
     return response.data;
   },
 
   async updateActionItem(minutesId: string, itemId: string, data: Record<string, unknown>): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.patch<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items/${itemId}`, data);
+    const response = await api.put<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items/${itemId}`, data);
     return response.data;
   },
 
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}/action-items/${itemId}`);
+    await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
   },
 };
 

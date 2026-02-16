@@ -71,7 +71,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
     return (
       <div className="flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${getStatusColor(health.overall)} ${health.overall === 'healthy' ? 'animate-pulse' : ''}`}></div>
-        <span className="text-sm text-gray-700">
+        <span className="text-sm text-theme-text-secondary">
           System: {getStatusText(health.overall)}
         </span>
       </div>
@@ -79,13 +79,13 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-theme-surface rounded-lg shadow-md p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">System Health</h2>
+        <h2 className="text-lg font-semibold text-theme-text-primary">System Health</h2>
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${getStatusColor(health.overall)} ${health.overall === 'healthy' ? 'animate-pulse' : ''}`}></div>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-theme-text-secondary">
             {getStatusText(health.overall)}
           </span>
         </div>
@@ -98,10 +98,10 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${getStatusColor(component.status)}`}></div>
-                <span className="text-sm font-medium text-gray-900">{component.component}</span>
+                <span className="text-sm font-medium text-theme-text-primary">{component.component}</span>
               </div>
               {component.message && (
-                <p className="text-xs text-gray-600 ml-4 mt-1">{component.message}</p>
+                <p className="text-xs text-theme-text-secondary ml-4 mt-1">{component.message}</p>
               )}
             </div>
             <div className="flex flex-col items-end text-xs text-theme-text-muted">
@@ -115,7 +115,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
       </div>
 
       {/* Last Updated */}
-      <div className="mt-4 pt-4 border-t border-gray-200">
+      <div className="mt-4 pt-4 border-t border-theme-surface-border">
         <p className="text-xs text-theme-text-muted">
           Last checked: {health.lastUpdated.toLocaleTimeString()}
         </p>

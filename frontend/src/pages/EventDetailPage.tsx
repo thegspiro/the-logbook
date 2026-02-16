@@ -312,7 +312,7 @@ export const EventDetailPage: React.FC = () => {
                 </button>
               )}
               <button
-                onClick={() => navigate(`/events/${eventId}/qr`)}
+                onClick={() => navigate(`/events/${eventId}/qr-code`)}
                 className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-blue-500/20"
               >
                 <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   Truck,
   Edit,
@@ -220,7 +221,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </button>
               {!currentApparatus.isArchived && (
                 <button
-                  onClick={() => navigate(`/apparatus/${id}/archive`)}
+                  onClick={() => toast.success('Archive functionality coming soon')}
                   className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-theme-text-secondary rounded-lg transition-colors"
                 >
                   <Archive className="w-4 h-4" />
@@ -506,7 +507,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 Maintenance Records
               </h2>
               <button
-                onClick={() => navigate(`/apparatus/${id}/maintenance/new`)}
+                onClick={() => toast.success('Maintenance record form coming soon')}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
               >
                 Add Record
@@ -569,7 +570,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 Fuel Logs
               </h2>
               <button
-                onClick={() => navigate(`/apparatus/${id}/fuel/new`)}
+                onClick={() => toast.success('Fuel log form coming soon')}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
               >
                 Add Fuel Log
@@ -621,7 +622,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 Certified Operators
               </h2>
               <button
-                onClick={() => navigate(`/apparatus/${id}/operators/new`)}
+                onClick={() => toast.success('Add operator form coming soon')}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
               >
                 Add Operator
@@ -673,7 +674,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 Equipment
               </h2>
               <button
-                onClick={() => navigate(`/apparatus/${id}/equipment/new`)}
+                onClick={() => toast.success('Add equipment form coming soon')}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
               >
                 Add Equipment
