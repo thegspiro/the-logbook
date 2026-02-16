@@ -734,11 +734,11 @@ export const ApparatusDetailPage: React.FC = () => {
                 Documents & Photos
               </h2>
               <div className="flex gap-2">
-                <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors text-sm flex items-center gap-2">
+                <button onClick={() => navigate('/documents')} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors text-sm flex items-center gap-2">
                   <Camera className="w-4 h-4" />
                   Add Photo
                 </button>
-                <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm flex items-center gap-2">
+                <button onClick={() => navigate('/documents')} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   Add Document
                 </button>
