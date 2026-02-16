@@ -357,6 +357,14 @@ export const organizationService = {
   },
 
   /**
+   * Preview the next membership ID that would be auto-assigned
+   */
+  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id: string | null }> {
+    const response = await api.get<{ enabled: boolean; next_id: string | null }>('/organization/settings/membership-id/preview');
+    return response.data;
+  },
+
+  /**
    * Assign membership number to a member (coordinator action)
    */
   async assignMembershipNumber(userId: string, membershipNumber: string): Promise<User> {

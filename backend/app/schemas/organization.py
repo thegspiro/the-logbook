@@ -230,36 +230,6 @@ class MembershipTierSettings(BaseModel):
     )
 
 
-class MembershipIdSettings(BaseModel):
-    """
-    Organization-level settings for auto-assigning membership ID numbers.
-
-    When enabled, new members receive the next sequential membership number
-    upon joining the department. The membership coordinator can also manually
-    assign a number (e.g. when reinstating a former member).
-    """
-    enabled: bool = Field(
-        default=False,
-        description="Whether to auto-assign membership numbers to new members",
-    )
-    prefix: str = Field(
-        default="",
-        max_length=10,
-        description="Optional prefix prepended to the number (e.g. 'M-', 'FD-')",
-    )
-    next_number: int = Field(
-        default=1,
-        ge=1,
-        description="The next sequential number to assign (auto-incremented after each assignment)",
-    )
-    zero_pad: int = Field(
-        default=3,
-        ge=0,
-        le=10,
-        description="Pad the numeric part with leading zeros to this width (e.g. 3 → '001')",
-    )
-
-
 class ITTeamMember(BaseModel):
     """An IT team member stored in organization settings"""
     name: str = ""

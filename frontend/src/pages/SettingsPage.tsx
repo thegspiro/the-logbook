@@ -20,7 +20,7 @@ export const SettingsPage: React.FC = () => {
     enabled: false,
     prefix: '',
     next_number: 1,
-    zero_pad: 3,
+    padding: 4,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,7 +92,7 @@ export const SettingsPage: React.FC = () => {
 
   // Preview the next membership number that will be assigned
   const previewNextNumber = () => {
-    const numStr = String(membershipIdSettings.next_number).padStart(membershipIdSettings.zero_pad, '0');
+    const numStr = String(membershipIdSettings.next_number).padStart(membershipIdSettings.padding, '0');
     return `${membershipIdSettings.prefix}${numStr}`;
   };
 
@@ -393,11 +393,11 @@ export const SettingsPage: React.FC = () => {
                     type="number"
                     min={0}
                     max={10}
-                    value={membershipIdSettings.zero_pad}
+                    value={membershipIdSettings.padding}
                     onChange={(e) =>
                       setMembershipIdSettings((prev) => ({
                         ...prev,
-                        zero_pad: Math.min(10, Math.max(0, parseInt(e.target.value) || 0)),
+                        padding: Math.min(10, Math.max(0, parseInt(e.target.value) || 0)),
                       }))
                     }
                     className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"

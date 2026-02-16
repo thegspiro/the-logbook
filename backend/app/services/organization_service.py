@@ -255,7 +255,7 @@ class OrganizationService:
             return None
 
         # Build the formatted membership number
-        number_part = str(mid_settings.next_number).zfill(mid_settings.zero_pad)
+        number_part = str(mid_settings.next_number).zfill(mid_settings.padding)
         membership_number = f"{mid_settings.prefix}{number_part}"
 
         # Assign to user
