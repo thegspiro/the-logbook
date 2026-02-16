@@ -229,7 +229,7 @@ class FormsService:
         """Get forms with filtering and pagination"""
         query = (
             select(Form)
-            .where(Form.organization_id == organization_id)
+            .where(Form.organization_id == str(organization_id))
             .options(selectinload(Form.fields))
         )
 
@@ -269,8 +269,8 @@ class FormsService:
         """Get form by ID with fields and integrations"""
         result = await self.db.execute(
             select(Form)
-            .where(Form.id == form_id)
-            .where(Form.organization_id == organization_id)
+            .where(Form.id == str(form_id))
+            .where(Form.organization_id == str(organization_id))
             .options(selectinload(Form.fields), selectinload(Form.integrations))
         )
         return result.scalar_one_or_none()
@@ -378,8 +378,8 @@ class FormsService:
 
             result = await self.db.execute(
                 select(FormField)
-                .where(FormField.id == field_id)
-                .where(FormField.form_id == form_id)
+                .where(FormField.id == str(field_id))
+                .where(FormField.form_id == str(form_id))
             )
             field = result.scalar_one_or_none()
             if not field:
@@ -406,8 +406,8 @@ class FormsService:
 
             result = await self.db.execute(
                 select(FormField)
-                .where(FormField.id == field_id)
-                .where(FormField.form_id == form_id)
+                .where(FormField.id == str(field_id))
+                .where(FormField.form_id == str(form_id))
             )
             field = result.scalar_one_or_none()
             if not field:
@@ -562,8 +562,8 @@ class FormsService:
         """Get submissions for a form"""
         query = (
             select(FormSubmission)
-            .where(FormSubmission.form_id == form_id)
-            .where(FormSubmission.organization_id == organization_id)
+            .where(FormSubmission.form_id == str(form_id))
+            .where(FormSubmission.organization_id == str(organization_id))
             .options(selectinload(FormSubmission.submitter))
         )
 
@@ -585,8 +585,8 @@ class FormsService:
         """Get a specific submission"""
         result = await self.db.execute(
             select(FormSubmission)
-            .where(FormSubmission.id == submission_id)
-            .where(FormSubmission.organization_id == organization_id)
+            .where(FormSubmission.id == str(submission_id))
+            .where(FormSubmission.organization_id == str(organization_id))
             .options(
                 selectinload(FormSubmission.submitter),
                 selectinload(FormSubmission.form),
@@ -661,9 +661,9 @@ class FormsService:
         try:
             result = await self.db.execute(
                 select(FormIntegration)
-                .where(FormIntegration.id == integration_id)
-                .where(FormIntegration.form_id == form_id)
-                .where(FormIntegration.organization_id == organization_id)
+                .where(FormIntegration.id == str(integration_id))
+                .where(FormIntegration.form_id == str(form_id))
+                .where(FormIntegration.organization_id == str(organization_id))
             )
             integration = result.scalar_one_or_none()
             if not integration:
@@ -689,9 +689,9 @@ class FormsService:
         try:
             result = await self.db.execute(
                 select(FormIntegration)
-                .where(FormIntegration.id == integration_id)
-                .where(FormIntegration.form_id == form_id)
-                .where(FormIntegration.organization_id == organization_id)
+                .where(FormIntegration.id == str(integration_id))
+                .where(FormIntegration.form_id == str(form_id))
+                .where(FormIntegration.organization_id == str(organization_id))
             )
             integration = result.scalar_one_or_none()
             if not integration:
@@ -827,7 +827,7 @@ class FormsService:
         search_term = f"%{query}%"
         result = await self.db.execute(
             select(User)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
             .where(
                 or_(
@@ -864,9 +864,10 @@ class FormsService:
     async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
         """Get forms summary statistics"""
         # Total forms (non-template)
+        org_id_str = str(organization_id)
         total_result = await self.db.execute(
             select(func.count(Form.id))
-            .where(Form.organization_id == organization_id)
+            .where(Form.organization_id == org_id_str)
             .where(Form.is_template == False)
         )
         total_forms = total_result.scalar()
@@ -874,7 +875,7 @@ class FormsService:
         # Published forms
         published_result = await self.db.execute(
             select(func.count(Form.id))
-            .where(Form.organization_id == organization_id)
+            .where(Form.organization_id == org_id_str)
             .where(Form.status == FormStatus.PUBLISHED)
             .where(Form.is_template == False)
         )
@@ -883,7 +884,7 @@ class FormsService:
         # Draft forms
         draft_result = await self.db.execute(
             select(func.count(Form.id))
-            .where(Form.organization_id == organization_id)
+            .where(Form.organization_id == org_id_str)
             .where(Form.status == FormStatus.DRAFT)
             .where(Form.is_template == False)
         )
@@ -892,7 +893,7 @@ class FormsService:
         # Public forms
         public_result = await self.db.execute(
             select(func.count(Form.id))
-            .where(Form.organization_id == organization_id)
+            .where(Form.organization_id == org_id_str)
             .where(Form.is_public == True)
             .where(Form.is_template == False)
         )
@@ -901,7 +902,7 @@ class FormsService:
         # Total submissions
         total_subs_result = await self.db.execute(
             select(func.count(FormSubmission.id))
-            .where(FormSubmission.organization_id == organization_id)
+            .where(FormSubmission.organization_id == org_id_str)
         )
         total_submissions = total_subs_result.scalar()
 
@@ -909,7 +910,7 @@ class FormsService:
         first_of_month = date.today().replace(day=1)
         month_subs_result = await self.db.execute(
             select(func.count(FormSubmission.id))
-            .where(FormSubmission.organization_id == organization_id)
+            .where(FormSubmission.organization_id == org_id_str)
             .where(FormSubmission.submitted_at >= datetime.combine(first_of_month, datetime.min.time()))
         )
         submissions_this_month = month_subs_result.scalar()
