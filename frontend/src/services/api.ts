@@ -469,7 +469,7 @@ export const authService = {
    * Request password reset (sends email with reset link)
    */
   async requestPasswordReset(data: PasswordResetRequest): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/password-reset/request', data);
+    const response = await api.post<{ message: string }>('/auth/forgot-password', data);
     return response.data;
   },
 
@@ -477,7 +477,7 @@ export const authService = {
    * Confirm password reset with token
    */
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/password-reset/confirm', data);
+    const response = await api.post<{ message: string }>('/auth/reset-password', data);
     return response.data;
   },
 
@@ -1249,8 +1249,8 @@ export const electionService = {
    * Get ballot templates
    */
   async getBallotTemplates(): Promise<import('../types/election').BallotTemplate[]> {
-    const response = await api.get<import('../types/election').BallotTemplate[]>('/elections/ballot-templates');
-    return response.data;
+    const response = await api.get<{ templates: import('../types/election').BallotTemplate[] }>('/elections/templates/ballot-items');
+    return response.data.templates;
   },
 
   /**
@@ -1265,7 +1265,7 @@ export const electionService = {
    * Check in an attendee at an election meeting
    */
   async checkInAttendee(electionId: string, userId: string): Promise<import('../types/election').AttendeeCheckInResponse> {
-    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees/${userId}/check-in`);
+    const response = await api.post<import('../types/election').AttendeeCheckInResponse>(`/elections/${electionId}/attendees`, { user_id: userId });
     return response.data;
   },
 
@@ -1280,7 +1280,7 @@ export const electionService = {
    * Get ballot by voting token (public/anonymous access)
    */
   async getBallotByToken(token: string): Promise<import('../types/election').Election> {
-    const response = await api.get<import('../types/election').Election>(`/elections/ballot/${token}`);
+    const response = await api.get<import('../types/election').Election>('/elections/ballot', { params: { token } });
     return response.data;
   },
 
@@ -1296,7 +1296,7 @@ export const electionService = {
    * Submit a ballot using a voting token
    */
   async submitBallot(token: string, votes: import('../types/election').BallotItemVote[]): Promise<import('../types/election').BallotSubmissionResponse> {
-    const response = await api.post<import('../types/election').BallotSubmissionResponse>(`/elections/ballot/${token}/submit`, { votes });
+    const response = await api.post<import('../types/election').BallotSubmissionResponse>('/elections/ballot/vote/bulk', { votes }, { params: { token } });
     return response.data;
   },
 
@@ -1320,7 +1320,7 @@ export const electionService = {
    * Soft-delete (void) a vote
    */
   async softDeleteVote(electionId: string, voteId: string, reason: string): Promise<void> {
-    await api.delete(`/elections/${electionId}/votes/${voteId}`, { data: { reason } });
+    await api.delete(`/elections/${electionId}/votes/${voteId}`, { params: { reason } });
   },
 };
 
@@ -1687,23 +1687,31 @@ export const inventoryService = {
     await api.post(`/inventory/items/${itemId}/retire`, { notes });
   },
 
-  async assignItem(itemId: string, userId: string): Promise<InventoryItem> {
-    const response = await api.post<InventoryItem>(`/inventory/items/${itemId}/assign`, { user_id: userId });
+  async assignItem(itemId: string, userId: string, options?: { assignment_type?: string; assignment_reason?: string }): Promise<{ id: string; item_id: string; user_id: string; is_active: boolean }> {
+    const response = await api.post(`/inventory/items/${itemId}/assign`, {
+      item_id: itemId,
+      user_id: userId,
+      assignment_type: options?.assignment_type ?? 'permanent',
+      assignment_reason: options?.assignment_reason,
+    });
     return response.data;
   },
 
-  async unassignItem(itemId: string): Promise<InventoryItem> {
-    const response = await api.post<InventoryItem>(`/inventory/items/${itemId}/unassign`);
+  async unassignItem(itemId: string, options?: { return_condition?: string; return_notes?: string }): Promise<{ message: string }> {
+    const response = await api.post(`/inventory/items/${itemId}/unassign`, {
+      return_condition: options?.return_condition,
+      return_notes: options?.return_notes,
+    });
     return response.data;
   },
 
-  async checkoutItem(data: { item_id: string; user_id: string; due_date?: string; notes?: string }): Promise<{ id: string }> {
+  async checkoutItem(data: { item_id: string; user_id: string; expected_return_at?: string; checkout_reason?: string }): Promise<{ id: string }> {
     const response = await api.post<{ id: string }>('/inventory/checkout', data);
     return response.data;
   },
 
-  async checkInItem(checkoutId: string): Promise<void> {
-    await api.post(`/inventory/checkout/${checkoutId}/checkin`);
+  async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
+    await api.post(`/inventory/checkout/${checkoutId}/checkin`, { return_condition: returnCondition, damage_notes: damageNotes });
   },
 
   async getActiveCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
@@ -2031,7 +2039,7 @@ export const formsService = {
    * Reorder form fields
    */
   async reorderFields(formId: string, fieldIds: string[]): Promise<void> {
-    await api.post(`/forms/${formId}/fields/reorder`, { field_ids: fieldIds });
+    await api.post(`/forms/${formId}/fields/reorder`, fieldIds);
   },
 };
 
@@ -2276,65 +2284,85 @@ export const meetingsService = {
     const response = await api.get<MeetingsSummary>('/meetings/stats/summary');
     return response.data;
   },
+
+  async getOpenActionItems(params?: { assigned_to?: string }): Promise<MeetingActionItem[]> {
+    const response = await api.get<MeetingActionItem[]>('/meetings/action-items/open', { params });
+    return response.data;
+  },
+
+  async getAttendanceDashboard(params?: { period_months?: number; meeting_type?: string }): Promise<Record<string, unknown>> {
+    const response = await api.get('/meetings/attendance/dashboard', { params });
+    return response.data;
+  },
+
+  async grantAttendanceWaiver(meetingId: string, data: { user_id: string; reason: string }): Promise<Record<string, unknown>> {
+    const response = await api.post(`/meetings/${meetingId}/attendance-waiver`, data);
+    return response.data;
+  },
+
+  async getAttendanceWaivers(meetingId: string): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/meetings/${meetingId}/attendance-waivers`);
+    return response.data;
+  },
 };
 
-// Minutes Detail Service — wraps meetings API with minutes-specific method names
+// Minutes Detail Service — uses the /minutes-records API
 // Used by MinutesDetailPage for full minutes CRUD, motions, action items, and workflow
 export const minutesService = {
   async getMinutes(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`);
+    const response = await api.get<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`);
     return response.data;
   },
 
   async updateMinutes(minutesId: string, data: Record<string, unknown>): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.patch<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}`, data);
+    const response = await api.put<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}`, data);
     return response.data;
   },
 
   async deleteMinutes(minutesId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}`);
+    await api.delete(`/minutes-records/${minutesId}`);
   },
 
   async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/meetings/${minutesId}/publish`);
+    await api.post(`/minutes-records/${minutesId}/publish`);
   },
 
   async submitForApproval(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/submit`);
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/submit`);
     return response.data;
   },
 
   async approve(minutesId: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/approve`);
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/approve`);
     return response.data;
   },
 
   async reject(minutesId: string, reason: string): Promise<import('../types/minutes').MeetingMinutes> {
-    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/meetings/${minutesId}/reject`, { reason });
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/${minutesId}/reject`, { reason });
     return response.data;
   },
 
   async addMotion(minutesId: string, data: import('../types/minutes').MotionCreate): Promise<import('../types/minutes').Motion> {
-    const response = await api.post<import('../types/minutes').Motion>(`/meetings/${minutesId}/motions`, data);
+    const response = await api.post<import('../types/minutes').Motion>(`/minutes-records/${minutesId}/motions`, data);
     return response.data;
   },
 
   async deleteMotion(minutesId: string, motionId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}/motions/${motionId}`);
+    await api.delete(`/minutes-records/${minutesId}/motions/${motionId}`);
   },
 
   async addActionItem(minutesId: string, data: import('../types/minutes').ActionItemCreate): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.post<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items`, data);
+    const response = await api.post<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items`, data);
     return response.data;
   },
 
   async updateActionItem(minutesId: string, itemId: string, data: Record<string, unknown>): Promise<import('../types/minutes').ActionItem> {
-    const response = await api.patch<import('../types/minutes').ActionItem>(`/meetings/${minutesId}/action-items/${itemId}`, data);
+    const response = await api.put<import('../types/minutes').ActionItem>(`/minutes-records/${minutesId}/action-items/${itemId}`, data);
     return response.data;
   },
 
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
-    await api.delete(`/meetings/${minutesId}/action-items/${itemId}`);
+    await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
   },
 };
 
@@ -2434,9 +2462,13 @@ export const schedulingService = {
     return response.data;
   },
 
-  async getMyAssignments(): Promise<Array<{ id: string; user_id: string; shift_id: string; position: string; status: string; shift?: ShiftRecord }>> {
+  async getMyAssignments(): Promise<Array<{ id: string; user_id: string; shift_id: string; position: string; status: string; assignment_status: string; shift?: ShiftRecord }>> {
     const response = await api.get('/scheduling/my-assignments');
-    return response.data;
+    // Backend returns assignment_status; provide status alias for convenience
+    return (response.data || []).map((a: Record<string, unknown>) => ({
+      ...a,
+      status: a.assignment_status ?? a.status,
+    }));
   },
 };
 
@@ -2756,49 +2788,82 @@ export const securityService = {
 // Training Sessions Service
 // ============================================
 
-export interface TrainingSession {
+export interface TrainingSessionResponse {
   id: string;
   organization_id: string;
   event_id: string;
   course_id?: string;
+  category_id?: string;
+  program_id?: string;
+  phase_id?: string;
+  requirement_id?: string;
   course_name: string;
   course_code?: string;
   training_type: string;
   credit_hours: number;
   instructor?: string;
-  max_participants?: number;
-  status: string;
+  issues_certification: boolean;
+  certification_number_prefix?: string;
+  issuing_agency?: string;
+  expiration_months?: number;
+  auto_create_records: boolean;
+  require_completion_confirmation: boolean;
+  approval_required: boolean;
+  approval_deadline_days: number;
+  is_finalized: boolean;
+  finalized_at?: string;
+  finalized_by?: string;
   created_at: string;
   updated_at: string;
+  created_by?: string;
 }
 
 export interface TrainingSessionCreate {
   title: string;
   description?: string;
+  location_id?: string;
+  location?: string;
+  location_details?: string;
+  start_datetime: string;
+  end_datetime: string;
+  requires_rsvp?: boolean;
+  rsvp_deadline?: string;
+  max_attendees?: number;
+  is_mandatory?: boolean;
+  eligible_roles?: string[];
+  check_in_window_type?: string;
+  check_in_minutes_before?: number;
+  check_in_minutes_after?: number;
+  require_checkout?: boolean;
+  use_existing_course?: boolean;
   course_id?: string;
-  course_name: string;
+  category_id?: string;
+  program_id?: string;
+  phase_id?: string;
+  requirement_id?: string;
+  course_name?: string;
+  course_code?: string;
   training_type: string;
   credit_hours: number;
   instructor?: string;
-  max_participants?: number;
-  start_time: string;
-  end_time: string;
-  location?: string;
+  issues_certification?: boolean;
+  certification_number_prefix?: string;
+  issuing_agency?: string;
+  expiration_months?: number;
+  auto_create_records?: boolean;
+  require_completion_confirmation?: boolean;
+  approval_required?: boolean;
+  approval_deadline_days?: number;
 }
 
 export const trainingSessionService = {
-  async getSessions(params?: { skip?: number; limit?: number; status?: string }): Promise<TrainingSession[]> {
-    const response = await api.get<TrainingSession[]>('/training/sessions', { params });
+  async getCalendar(params?: { start_after?: string; start_before?: string; training_type?: string; include_finalized?: boolean }): Promise<TrainingSessionResponse[]> {
+    const response = await api.get<TrainingSessionResponse[]>('/training/sessions/calendar', { params });
     return response.data;
   },
 
-  async getSession(sessionId: string): Promise<TrainingSession> {
-    const response = await api.get<TrainingSession>(`/training/sessions/${sessionId}`);
-    return response.data;
-  },
-
-  async createSession(data: TrainingSessionCreate): Promise<TrainingSession> {
-    const response = await api.post<TrainingSession>('/training/sessions', data);
+  async createSession(data: TrainingSessionCreate): Promise<TrainingSessionResponse> {
+    const response = await api.post<TrainingSessionResponse>('/training/sessions', data);
     return response.data;
   },
 
@@ -3099,5 +3164,130 @@ export const errorLogsService = {
   async exportErrors(params?: { event_id?: string }): Promise<string> {
     const response = await api.get('/errors/export', { params });
     return JSON.stringify(response.data, null, 2);
+  },
+};
+
+// ============================================
+// Facilities Service
+// ============================================
+
+export const facilitiesService = {
+  // Facility Types
+  async getTypes(): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/types');
+    return response.data;
+  },
+  async createType(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/types', data);
+    return response.data;
+  },
+  async updateType(typeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/types/${typeId}`, data);
+    return response.data;
+  },
+  async deleteType(typeId: string): Promise<void> {
+    await api.delete(`/facilities/types/${typeId}`);
+  },
+
+  // Facility Statuses
+  async getStatuses(): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/statuses');
+    return response.data;
+  },
+  async createStatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/statuses', data);
+    return response.data;
+  },
+  async updateStatus(statusId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/statuses/${statusId}`, data);
+    return response.data;
+  },
+  async deleteStatus(statusId: string): Promise<void> {
+    await api.delete(`/facilities/statuses/${statusId}`);
+  },
+
+  // Facilities CRUD
+  async getFacilities(params?: { facility_type_id?: string; status_id?: string; is_archived?: boolean; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities', { params });
+    return response.data;
+  },
+  async getFacility(facilityId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/${facilityId}`);
+    return response.data;
+  },
+  async createFacility(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities', data);
+    return response.data;
+  },
+  async updateFacility(facilityId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/${facilityId}`, data);
+    return response.data;
+  },
+  async archiveFacility(facilityId: string): Promise<Record<string, unknown>> {
+    const response = await api.post(`/facilities/${facilityId}/archive`);
+    return response.data;
+  },
+  async restoreFacility(facilityId: string): Promise<Record<string, unknown>> {
+    const response = await api.post(`/facilities/${facilityId}/restore`);
+    return response.data;
+  },
+
+  // Maintenance
+  async getMaintenanceRecords(params?: { facility_id?: string; status?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/maintenance', { params });
+    return response.data;
+  },
+  async getMaintenanceRecord(recordId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/maintenance/${recordId}`);
+    return response.data;
+  },
+  async createMaintenanceRecord(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/maintenance', data);
+    return response.data;
+  },
+  async updateMaintenanceRecord(recordId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/maintenance/${recordId}`, data);
+    return response.data;
+  },
+  async deleteMaintenanceRecord(recordId: string): Promise<void> {
+    await api.delete(`/facilities/maintenance/${recordId}`);
+  },
+
+  // Inspections
+  async getInspections(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/inspections', { params });
+    return response.data;
+  },
+  async getInspection(inspectionId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/inspections/${inspectionId}`);
+    return response.data;
+  },
+  async createInspection(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/inspections', data);
+    return response.data;
+  },
+  async updateInspection(inspectionId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/inspections/${inspectionId}`, data);
+    return response.data;
+  },
+  async deleteInspection(inspectionId: string): Promise<void> {
+    await api.delete(`/facilities/inspections/${inspectionId}`);
+  },
+
+  // Rooms
+  async getRooms(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/rooms', { params });
+    return response.data;
+  },
+  async createRoom(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/rooms', data);
+    return response.data;
+  },
+  async updateRoom(roomId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/rooms/${roomId}`, data);
+    return response.data;
+  },
+  async deleteRoom(roomId: string): Promise<void> {
+    await api.delete(`/facilities/rooms/${roomId}`);
   },
 };

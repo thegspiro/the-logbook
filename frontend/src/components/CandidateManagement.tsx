@@ -5,10 +5,11 @@
  * Supports adding, editing, reordering, and removing candidates.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import { electionService } from '../services/api';
+import { electionService, userService } from '../services/api';
 import type { Election, Candidate, CandidateCreate, CandidateUpdate } from '../types/election';
+import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 
 interface CandidateManagementProps {
@@ -37,27 +38,61 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   election,
 }) => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<CandidateFormState>(emptyCandidateForm);
   const [submitting, setSubmitting] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
 
   useEffect(() => {
-    fetchCandidates();
+    fetchData();
   }, [electionId]);
 
-  const fetchCandidates = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await electionService.getCandidates(electionId);
-      setCandidates(data);
+      const [candidateData, memberData] = await Promise.all([
+        electionService.getCandidates(electionId),
+        userService.getUsers(),
+      ]);
+      setCandidates(candidateData);
+      setMembers(memberData.filter((m: User) => m.status === 'active' || m.status === 'probationary'));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load candidates'));
     } finally {
       setLoading(false);
     }
+  };
+
+  // Members already added as candidates
+  const candidateUserIds = useMemo(
+    () => new Set(candidates.map((c) => c.user_id).filter(Boolean)),
+    [candidates]
+  );
+
+  // Filtered members for the search picker
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return [];
+    const q = memberSearch.toLowerCase();
+    return members
+      .filter((m) => !candidateUserIds.has(m.id))
+      .filter(
+        (m) =>
+          (m.first_name?.toLowerCase().includes(q) ?? false) ||
+          (m.last_name?.toLowerCase().includes(q) ?? false) ||
+          (m.full_name?.toLowerCase().includes(q) ?? false) ||
+          (m.badge_number?.toLowerCase().includes(q) ?? false)
+      )
+      .slice(0, 10);
+  }, [members, memberSearch, candidateUserIds]);
+
+  const selectMember = (member: User) => {
+    const name = member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim();
+    setFormData((prev) => ({ ...prev, name, user_id: member.id }));
+    setMemberSearch('');
   };
 
   const handleAdd = async () => {
@@ -83,6 +118,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       const newCandidate = await electionService.createCandidate(electionId, candidateData);
       setCandidates((prev) => [...prev, newCandidate]);
       setFormData(emptyCandidateForm);
+      setMemberSearch('');
       setShowAddForm(false);
       toast.success('Candidate added successfully');
     } catch (err: unknown) {
@@ -195,6 +231,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
             onClick={() => {
               setShowAddForm(!showAddForm);
               setFormData(emptyCandidateForm);
+              setMemberSearch('');
               setError(null);
             }}
             className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
@@ -215,14 +252,62 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
         <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/20">
           <h4 className="text-sm font-semibold text-slate-200 mb-3">Add New Candidate</h4>
           <div className="space-y-3">
+            {/* Member Search */}
             <div>
-              <label className="block text-sm font-medium text-slate-200">Name *</label>
+              <label className="block text-sm font-medium text-slate-200">Select Member</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  placeholder="Search members by name or badge number..."
+                />
+                {filteredMembers.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-600 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {filteredMembers.map((member) => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => selectMember(member)}
+                        className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between text-sm"
+                      >
+                        <span className="text-white">
+                          {member.first_name} {member.last_name}
+                        </span>
+                        {member.badge_number && (
+                          <span className="text-xs text-slate-500">#{member.badge_number}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {formData.user_id && (
+                <p className="mt-1 text-xs text-green-400">
+                  Selected: {formData.name}
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, name: '', user_id: '' }))}
+                    className="ml-2 text-slate-500 hover:text-red-400"
+                  >
+                    (clear)
+                  </button>
+                </p>
+              )}
+            </div>
+
+            {/* Manual name entry (fallback or override) */}
+            <div>
+              <label className="block text-sm font-medium text-slate-200">
+                Name {formData.user_id ? '' : '*'}
+              </label>
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value, user_id: '' }))}
                 className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="Candidate name"
+                placeholder={formData.user_id ? formData.name : 'Or type a name manually'}
               />
             </div>
 

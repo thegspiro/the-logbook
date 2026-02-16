@@ -87,7 +87,9 @@ class MembershipPipeline(Base):
     description = Column(Text)
     is_template = Column(Boolean, default=False, index=True)
     is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True, index=True)
     auto_transfer_on_approval = Column(Boolean, default=False)
+    inactivity_config = Column(JSON, default=dict)
 
     created_by = Column(String(36), ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -153,6 +155,8 @@ class MembershipPipelineStep(Base):
         nullable=True,
     )
     required = Column(Boolean, default=True)
+    config = Column(JSON, default=dict)
+    inactivity_timeout_days = Column(Integer, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -358,3 +362,101 @@ class ProspectActivityLog(Base):
 
     def __repr__(self):
         return f"<ProspectActivityLog(prospect={self.prospect_id}, action={self.action})>"
+
+
+class ProspectDocument(Base):
+    """
+    Document uploaded for a prospective member.
+
+    Tracks files attached during the pipeline process,
+    such as ID photos, background checks, certifications, etc.
+    """
+    __tablename__ = "prospect_documents"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    step_id = Column(
+        String(36),
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    document_type = Column(String(100), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, default=0)
+    mime_type = Column(String(100))
+
+    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    prospect = relationship("ProspectiveMember", backref="documents")
+    step = relationship("MembershipPipelineStep")
+    uploader = relationship("User", foreign_keys=[uploaded_by])
+
+    __table_args__ = (
+        Index("idx_prospect_doc_prospect", "prospect_id"),
+    )
+
+    def __repr__(self):
+        return f"<ProspectDocument(prospect={self.prospect_id}, type={self.document_type})>"
+
+
+class ProspectElectionPackage(Base):
+    """
+    Election package for a prospective member.
+
+    Bundles applicant information for the membership vote,
+    integrating with the Elections module.
+    """
+    __tablename__ = "prospect_election_packages"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    prospect_id = Column(
+        String(36),
+        ForeignKey("prospective_members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pipeline_id = Column(
+        String(36),
+        ForeignKey("membership_pipelines.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    step_id = Column(
+        String(36),
+        ForeignKey("membership_pipeline_steps.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    election_id = Column(
+        String(36),
+        ForeignKey("elections.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    status = Column(String(20), default="draft", nullable=False)  # draft, ready, submitted, voted
+    applicant_snapshot = Column(JSON, default=dict)
+    coordinator_notes = Column(Text)
+    package_config = Column(JSON, default=dict)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    prospect = relationship("ProspectiveMember", backref="election_packages")
+    pipeline = relationship("MembershipPipeline")
+    step = relationship("MembershipPipelineStep")
+
+    __table_args__ = (
+        Index("idx_election_pkg_prospect", "prospect_id"),
+        Index("idx_election_pkg_status", "status"),
+    )
+
+    def __repr__(self):
+        return f"<ProspectElectionPackage(prospect={self.prospect_id}, status={self.status})>"
