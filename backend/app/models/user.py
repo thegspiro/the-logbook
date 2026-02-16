@@ -166,6 +166,7 @@ class User(Base):
     middle_name = Column(String(100))
     last_name = Column(String(100))
     badge_number = Column(String(50))
+    membership_id = Column(String(50))  # Sequential membership ID (e.g., "FD-0001")
     phone = Column(String(20))
     mobile = Column(String(20))
 
@@ -237,6 +238,7 @@ class User(Base):
     __table_args__ = (
         Index('idx_user_org_username', 'organization_id', 'username', unique=True),
         Index('idx_user_org_email', 'organization_id', 'email', unique=True),
+        Index('idx_user_org_membership_id', 'organization_id', 'membership_id', unique=True),
     )
     
     @property

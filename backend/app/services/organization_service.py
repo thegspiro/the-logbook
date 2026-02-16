@@ -16,6 +16,7 @@ from app.schemas.organization import (
     EnabledModulesResponse,
     ModuleSettings,
     EmailServiceSettings,
+    MembershipIdSettings,
 )
 
 
@@ -203,3 +204,68 @@ class OrganizationService:
 
         # Return updated enabled modules
         return await self.get_enabled_modules(organization_id)
+
+    async def get_membership_id_settings(
+        self,
+        organization_id: UUID,
+    ) -> MembershipIdSettings:
+        """Get membership ID settings for an organization"""
+        org = await self.get_organization(organization_id)
+        if not org:
+            return MembershipIdSettings()
+
+        settings_dict = org.settings or {}
+        mid = settings_dict.get("membership_id", {})
+        return MembershipIdSettings(
+            enabled=mid.get("enabled", False),
+            prefix=mid.get("prefix", ""),
+            next_number=mid.get("next_number", 1),
+            padding=mid.get("padding", 4),
+        )
+
+    async def generate_next_membership_id(
+        self,
+        organization_id: UUID,
+    ) -> str | None:
+        """
+        Generate the next membership ID and increment the counter.
+
+        Returns the formatted membership ID (e.g., "FD-0001") or None
+        if membership ID assignment is not enabled.
+        """
+        org = await self.get_organization(organization_id)
+        if not org:
+            return None
+
+        settings_dict = org.settings or {}
+        mid = settings_dict.get("membership_id", {})
+        mid_settings = MembershipIdSettings(
+            enabled=mid.get("enabled", False),
+            prefix=mid.get("prefix", ""),
+            next_number=mid.get("next_number", 1),
+            padding=mid.get("padding", 4),
+        )
+
+        if not mid_settings.enabled:
+            return None
+
+        # Format the membership ID
+        number_str = str(mid_settings.next_number).zfill(mid_settings.padding)
+        membership_id = f"{mid_settings.prefix}{number_str}"
+
+        # Increment the counter in settings
+        mid["enabled"] = mid_settings.enabled
+        mid["prefix"] = mid_settings.prefix
+        mid["next_number"] = mid_settings.next_number + 1
+        mid["padding"] = mid_settings.padding
+        settings_dict["membership_id"] = mid
+        org.settings = settings_dict
+
+        # Force SQLAlchemy to detect the JSON change
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(org, "settings")
+
+        await self.db.commit()
+        await self.db.refresh(org)
+
+        return membership_id

@@ -11,6 +11,7 @@ export interface User {
   last_name?: string;
   full_name?: string;
   badge_number?: string;
+  membership_id?: string;
   phone?: string;
   mobile?: string;
   photo_url?: string;
@@ -40,4 +41,11 @@ export interface ContactInfoUpdate {
   phone?: string;
   mobile?: string;
   notification_preferences?: NotificationPreferences;
+}
+
+export interface MembershipIdSettings {
+  enabled: boolean;
+  prefix: string;
+  next_number: number;
+  padding: number;
 }

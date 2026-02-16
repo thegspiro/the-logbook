@@ -629,6 +629,7 @@ class MembershipPipelineService:
         organization_id: str,
         transferred_by: str,
         username: Optional[str] = None,
+        membership_id: Optional[str] = None,
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
@@ -642,7 +643,7 @@ class MembershipPipelineService:
             return {"success": False, "message": "Prospect has already been transferred"}
 
         return await self._do_transfer(
-            prospect, transferred_by, username, rank, station, role_ids
+            prospect, transferred_by, username, membership_id, rank, station, role_ids
         )
 
     async def _do_transfer(
@@ -650,6 +651,7 @@ class MembershipPipelineService:
         prospect: ProspectiveMember,
         transferred_by: str,
         username: Optional[str] = None,
+        membership_id: Optional[str] = None,
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
@@ -696,6 +698,12 @@ class MembershipPipelineService:
         if not username:
             username = self._generate_username(prospect.first_name, prospect.last_name)
 
+        # Auto-assign membership ID if not manually provided
+        if not membership_id:
+            from app.services.organization_service import OrganizationService
+            org_service = OrganizationService(self.db)
+            membership_id = await org_service.generate_next_membership_id(prospect.organization_id)
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
@@ -711,6 +719,7 @@ class MembershipPipelineService:
             address_city=prospect.address_city,
             address_state=prospect.address_state,
             address_zip=prospect.address_zip,
+            membership_id=membership_id,
             rank=rank,
             station=station,
         )

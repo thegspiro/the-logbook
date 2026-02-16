@@ -36,6 +36,7 @@ class UserBase(BaseModel):
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     badge_number: Optional[str] = Field(None, max_length=50)
+    membership_id: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
 
@@ -55,6 +56,7 @@ class AdminUserCreate(BaseModel):
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     badge_number: Optional[str] = Field(None, max_length=50)
+    membership_id: Optional[str] = Field(None, max_length=50, description="Membership ID; auto-assigned if not provided and membership ID is enabled")
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     date_of_birth: Optional[date] = None
@@ -87,6 +89,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     badge_number: Optional[str] = Field(None, max_length=50)
+    membership_id: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
     photo_url: Optional[str] = None
@@ -158,6 +161,7 @@ class UserListResponse(BaseModel):
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     badge_number: Optional[str] = None
+    membership_id: Optional[str] = None
     phone: Optional[str] = None  # Conditionally included
     mobile: Optional[str] = None  # Conditionally included
     photo_url: Optional[str] = None

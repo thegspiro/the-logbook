@@ -5,7 +5,7 @@
  */
 
 import axios from 'axios';
-import type { User, ContactInfoSettings, ContactInfoUpdate } from '../types/user';
+import type { User, ContactInfoSettings, ContactInfoUpdate, MembershipIdSettings } from '../types/user';
 import type {
   Role,
   RoleWithUserCount,
@@ -260,6 +260,7 @@ export const userService = {
     middle_name?: string;
     last_name: string;
     badge_number?: string;
+    membership_id?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
@@ -346,6 +347,30 @@ export const organizationService = {
   async isModuleEnabled(moduleId: string): Promise<boolean> {
     const response = await this.getEnabledModules();
     return response.enabled_modules.includes(moduleId);
+  },
+
+  /**
+   * Get membership ID settings
+   */
+  async getMembershipIdSettings(): Promise<MembershipIdSettings> {
+    const response = await api.get<MembershipIdSettings>('/organization/settings/membership-id');
+    return response.data;
+  },
+
+  /**
+   * Update membership ID settings
+   */
+  async updateMembershipIdSettings(settings: MembershipIdSettings): Promise<MembershipIdSettings> {
+    const response = await api.patch<MembershipIdSettings>('/organization/settings/membership-id', settings);
+    return response.data;
+  },
+
+  /**
+   * Preview the next membership ID without incrementing
+   */
+  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id: string | null }> {
+    const response = await api.get<{ enabled: boolean; next_id: string | null }>('/organization/settings/membership-id/preview');
+    return response.data;
   },
 };
 

@@ -311,8 +311,12 @@ export const MemberProfilePage: React.FC = () => {
                   {user.full_name || user.username}
                 </h1>
                 <p className="text-theme-text-muted mt-1">@{user.username}</p>
-                {user.badge_number && (
-                  <p className="text-sm text-theme-text-secondary mt-1">Badge #{user.badge_number}</p>
+                {(user.badge_number || user.membership_id) && (
+                  <p className="text-sm text-theme-text-secondary mt-1">
+                    {user.membership_id && <span>Member ID: {user.membership_id}</span>}
+                    {user.membership_id && user.badge_number && <span> / </span>}
+                    {user.badge_number && <span>Badge #{user.badge_number}</span>}
+                  </p>
                 )}
                 <div className="flex gap-2 mt-2">
                   {user.roles.map((role) => (

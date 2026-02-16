@@ -280,7 +280,7 @@ const Members: React.FC = () => {
                       Member
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      Badge #
+                      ID / Badge
                     </th>
                     {contactInfoEnabled.enabled && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
@@ -323,7 +323,15 @@ const Members: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-theme-text-primary font-mono">{member.badge_number || '-'}</div>
+                        {member.membership_id && (
+                          <div className="text-theme-text-primary font-mono text-sm">{member.membership_id}</div>
+                        )}
+                        {member.badge_number && (
+                          <div className="text-theme-text-muted font-mono text-xs">Badge #{member.badge_number}</div>
+                        )}
+                        {!member.membership_id && !member.badge_number && (
+                          <div className="text-theme-text-muted">-</div>
+                        )}
                       </td>
                       {contactInfoEnabled.enabled && (
                         <td className="px-6 py-4">

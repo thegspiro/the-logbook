@@ -332,7 +332,7 @@ export const MembersAdminPage: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
-                    {user.badge_number || '-'}
+                    {user.membership_id || user.badge_number || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
