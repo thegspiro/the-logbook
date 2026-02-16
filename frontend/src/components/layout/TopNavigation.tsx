@@ -40,7 +40,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const cycleTheme = () => {
-    const order = ['dark', 'light', 'system'] as const;
+    const order = ['light', 'dark', 'system'] as const;
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex]);
