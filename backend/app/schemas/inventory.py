@@ -55,8 +55,10 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Override: DB column is "extra_data"; SQLAlchemy reserves "metadata" as a class attr
+    metadata: Optional[Dict[str, Any]] = Field(None, validation_alias="extra_data")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 # ============================================

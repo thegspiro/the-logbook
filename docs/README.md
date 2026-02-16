@@ -14,7 +14,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Comprehensive troubleshooting guide for common issues
    - Step-by-step solutions for onboarding, SMTP, network, and database issues
    - Diagnostic commands and verification scripts
-   - **Updated**: 2026-02-15 with system-wide theme support, member-focused dashboard, election dark theme and timezone fixes, theme & display troubleshooting, dashboard troubleshooting
+   - **Updated**: 2026-02-16 with database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, plus theme support, dashboard redesign, election fixes
 
 2. **[ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)**
    - Complete catalog of all 94+ error messages in the application
@@ -58,7 +58,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Prevents critical enum case mismatch bugs
 
 7. **[ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md)**
-   - Comprehensive election/voting system security review (rating: 7.1/10)
+   - Comprehensive election/voting system security review (rating: 9.0/10)
    - Double-voting vulnerability analysis and database constraint fixes
    - Anonymous voting implementation review (HMAC-SHA256)
    - Election results timing enforcement
@@ -433,7 +433,7 @@ docker-compose ps
 
 | Document | Version | Last Updated | Status |
 |----------|---------|--------------|--------|
-| TROUBLESHOOTING.md | 1.8 | 2026-02-14 | Current |
+| TROUBLESHOOTING.md | 1.9 | 2026-02-16 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
@@ -443,7 +443,7 @@ docker-compose ps
 | FORMS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | PUBLIC_API_DOCUMENTATION.md | 1.1 | 2026-02-12 | Current |
 | ONBOARDING_REVIEW.md | 1.0 | 2026-02-07 | Current |
-| ELECTION_SECURITY_AUDIT.md | 1.0 | 2026-02-10 | Current |
+| ELECTION_SECURITY_AUDIT.md | 2.0 | 2026-02-12 | Current |
 | ASYNC_SQLALCHEMY_REVIEW.md | 1.0 | 2026-02-10 | Current |
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
@@ -478,6 +478,21 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-02-16 - Documentation Update: Changelog, Troubleshooting & Startup Reliability
+
+**What Changed**:
+- **CHANGELOG.md updated**: Added 20 previously undocumented commits covering database startup reliability (12 commits), hierarchical document folders (3 commits), testing & quality (2 commits), dark theme unification, role sync fixes, and form/security enhancements
+- **TROUBLESHOOTING.md v1.9**: Rewrote "Startup Sequence Issues" section to reflect fast-path init (seconds, not 25-30 minutes); added new sections for hierarchical folder troubleshooting (personal folders, apparatus/facility/event folders, folder access control); updated table of contents
+- **docs/README.md**: Updated version table and recent updates
+
+**Key Documentation Corrections**:
+- First-boot time: Corrected from "25-30 minutes" to "~7-10 minutes" (fast-path `create_all()` replaced sequential Alembic migrations)
+- Connection retries: Updated from 20 to 40 to match current codebase
+- System folders: Updated from 7 to 10 (added Member Files, Apparatus Files, Facility Files)
+- Added troubleshooting for: fast-path leftover table crashes, silent init failures, folder access denied, missing personal/apparatus/facility folders
+
+---
 
 ### 2026-02-14 - Shift Module Enhancement & Facilities Module
 

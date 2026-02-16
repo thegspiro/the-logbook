@@ -145,19 +145,19 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
             className={`flex-shrink-0 w-72 bg-slate-800/50 rounded-lg border transition-all ${
               isDropTarget
                 ? 'border-red-500 bg-red-500/5'
-                : 'border-white/10'
+                : 'border-theme-surface-border'
             }`}
           >
             {/* Column Header */}
-            <div className={`p-3 border-b border-white/10 border-t-2 ${headerColor} rounded-t-lg`}>
+            <div className={`p-3 border-b border-theme-surface-border border-t-2 ${headerColor} rounded-t-lg`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-slate-400" />
-                  <h3 className="text-sm font-medium text-white truncate">
+                  <Icon className="w-4 h-4 text-theme-text-muted" />
+                  <h3 className="text-sm font-medium text-theme-text-primary truncate">
                     {stage.name}
                   </h3>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-slate-400">
+                <div className="flex items-center gap-1 text-xs text-theme-text-muted">
                   <Users className="w-3 h-3" />
                   {stageApplicants.length}
                 </div>

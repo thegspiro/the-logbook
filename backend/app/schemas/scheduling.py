@@ -23,7 +23,7 @@ class ShiftCreate(BaseModel):
     end_time: Optional[datetime] = None
     apparatus_id: Optional[str] = None
     station_id: Optional[str] = None
-    shift_officer_id: Optional[UUID] = None
+    shift_officer_id: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
 
@@ -35,7 +35,7 @@ class ShiftUpdate(BaseModel):
     end_time: Optional[datetime] = None
     apparatus_id: Optional[str] = None
     station_id: Optional[str] = None
-    shift_officer_id: Optional[UUID] = None
+    shift_officer_id: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
 

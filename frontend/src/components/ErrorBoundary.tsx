@@ -60,7 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-8">
+          <div className="max-w-2xl w-full bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-8">
             <div className="text-center">
               {/* Error Icon */}
               <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
@@ -81,10 +81,10 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
 
               {/* Error Message */}
-              <h1 className="text-2xl font-bold text-white mb-2">
+              <h1 className="text-2xl font-bold text-theme-text-primary mb-2">
                 Oops! Something went wrong
               </h1>
-              <p className="text-slate-300 mb-6">
+              <p className="text-theme-text-secondary mb-6">
                 We're sorry, but something unexpected happened. Please try reloading the page or
                 return to the dashboard.
               </p>
@@ -92,11 +92,11 @@ export class ErrorBoundary extends Component<Props, State> {
               {/* Error Details (Development Only) */}
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <details className="mb-6 text-left">
-                  <summary className="cursor-pointer text-sm text-red-400 hover:text-red-300 mb-2">
+                  <summary className="cursor-pointer text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 mb-2">
                     Show error details (Development)
                   </summary>
-                  <div className="bg-slate-900/50 rounded-lg p-4 overflow-auto max-h-64">
-                    <pre className="text-xs text-red-300 whitespace-pre-wrap">
+                  <div className="bg-theme-input-bg rounded-lg p-4 overflow-auto max-h-64">
+                    <pre className="text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap">
                       <strong>Error:</strong> {this.state.error.toString()}
                       {'\n\n'}
                       <strong>Component Stack:</strong>
@@ -129,7 +129,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 </button>
                 <button
                   onClick={this.handleGoHome}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-white/20 text-base font-medium rounded-md text-white bg-white/10 hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 transition-colors"
+                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 transition-colors"
                 >
                   <svg
                     className="mr-2 h-5 w-5"

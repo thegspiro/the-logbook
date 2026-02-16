@@ -68,6 +68,7 @@ class RoleManagementService:
         for role in roles:
             role_dict = {
                 "id": str(role.id),
+                "organization_id": role.organization_id,
                 "name": role.name,
                 "slug": role.slug,
                 "description": role.description,

@@ -318,3 +318,37 @@ export interface RecurringEventCreate {
   require_checkout?: boolean;
   template_id?: string;
 }
+
+// Event Module Settings (organization-level)
+export interface EventModuleSettings {
+  // Which event types are enabled for this organization
+  enabled_event_types: EventType[];
+  // Custom labels for event types (overrides defaults)
+  event_type_labels: Partial<Record<EventType, string>>;
+  // Defaults applied when creating a new event
+  defaults: {
+    event_type: EventType;
+    check_in_window_type: 'flexible' | 'strict' | 'window';
+    check_in_minutes_before: number;
+    check_in_minutes_after: number;
+    require_checkout: boolean;
+    requires_rsvp: boolean;
+    allowed_rsvp_statuses: RSVPStatus[];
+    allow_guests: boolean;
+    is_mandatory: boolean;
+    send_reminders: boolean;
+    reminder_hours_before: number;
+    default_duration_minutes: number;
+  };
+  // QR code page settings
+  qr_code: {
+    show_event_description: boolean;
+    show_location_details: boolean;
+    custom_instructions: string;
+  };
+  // Cancellation policy
+  cancellation: {
+    require_reason: boolean;
+    notify_attendees: boolean;
+  };
+}

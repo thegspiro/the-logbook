@@ -176,9 +176,9 @@ const SubmissionViewer = ({
 
   if (loading) {
     return (
-      <div className="bg-white/5 rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-pink-400" />
-        <p className="text-sm text-slate-400">Loading submissions...</p>
+      <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-pink-700 dark:text-pink-400" />
+        <p className="text-sm text-theme-text-muted">Loading submissions...</p>
       </div>
     );
   }
@@ -186,10 +186,10 @@ const SubmissionViewer = ({
   if (error) {
     return (
       <div className="p-4 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
-        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-        <p className="text-sm text-red-300">{error}</p>
+        <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         {formId && (
-          <button onClick={loadData} className="ml-auto text-xs text-red-400 hover:text-red-300 underline">Retry</button>
+          <button onClick={loadData} className="ml-auto text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline">Retry</button>
         )}
       </div>
     );
@@ -197,8 +197,8 @@ const SubmissionViewer = ({
 
   if (submissions.length === 0) {
     return (
-      <div className="bg-white/5 border border-white/10 rounded-lg p-8 text-center">
-        <p className="text-sm text-slate-400">No submissions yet.</p>
+      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-8 text-center">
+        <p className="text-sm text-theme-text-muted">No submissions yet.</p>
       </div>
     );
   }
@@ -208,14 +208,14 @@ const SubmissionViewer = ({
       {/* Header */}
       {!directSubmission && (
         <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-theme-text-muted">
             {total} {total === 1 ? 'submission' : 'submissions'}
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={exportCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               Export CSV
@@ -224,7 +224,7 @@ const SubmissionViewer = ({
               <button
                 type="button"
                 onClick={loadData}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Refresh
@@ -239,12 +239,12 @@ const SubmissionViewer = ({
         {submissions.map((sub) => {
           const isExpanded = expandedId === sub.id;
           return (
-            <div key={sub.id} className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+            <div key={sub.id} className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
               {/* Summary row */}
               <button
                 type="button"
                 onClick={() => setExpandedId(isExpanded ? null : sub.id)}
-                className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors"
+                className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-theme-surface-secondary transition-colors"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0" />
@@ -254,11 +254,11 @@ const SubmissionViewer = ({
 
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {sub.is_public_submission ? (
-                    <Globe className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                    <Globe className="w-4 h-4 text-cyan-700 dark:text-cyan-400 flex-shrink-0" />
                   ) : (
-                    <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    <User className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
                   )}
-                  <span className="text-sm text-white truncate">
+                  <span className="text-sm text-theme-text-primary truncate">
                     {sub.submitter_name || sub.submitted_by || 'Anonymous'}
                   </span>
                   {sub.submitter_email && (
@@ -274,20 +274,20 @@ const SubmissionViewer = ({
 
               {/* Expanded detail */}
               {isExpanded && (
-                <div className="border-t border-white/10 px-4 py-4">
+                <div className="border-t border-theme-surface-border px-4 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {Object.entries(sub.data).map(([fieldId, value]) => (
-                      <div key={fieldId} className="bg-white/5 rounded-lg px-3 py-2">
+                      <div key={fieldId} className="bg-theme-surface-secondary rounded-lg px-3 py-2">
                         <p className="text-xs text-slate-500 font-medium mb-0.5">{getFieldLabel(fieldId)}</p>
-                        <p className="text-sm text-white break-words">{formatValue(fieldId, value)}</p>
+                        <p className="text-sm text-theme-text-primary break-words">{formatValue(fieldId, value)}</p>
                       </div>
                     ))}
                   </div>
 
                   {sub.integration_processed && sub.integration_result && (
                     <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <p className="text-xs text-green-400 font-medium mb-1">Integration Result</p>
-                      <pre className="text-xs text-green-300 overflow-x-auto">
+                      <p className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">Integration Result</p>
+                      <pre className="text-xs text-green-700 dark:text-green-300 overflow-x-auto">
                         {JSON.stringify(sub.integration_result, null, 2)}
                       </pre>
                     </div>
@@ -300,7 +300,7 @@ const SubmissionViewer = ({
                         type="button"
                         onClick={() => handleDelete(sub.id)}
                         disabled={deleting === sub.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
                       >
                         {deleting === sub.id ? (
                           <RefreshCw className="w-3 h-3 animate-spin" />
@@ -325,7 +325,7 @@ const SubmissionViewer = ({
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-white/5 rounded-lg disabled:opacity-30"
+            className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary rounded-lg disabled:opacity-30"
           >
             Previous
           </button>
@@ -336,7 +336,7 @@ const SubmissionViewer = ({
             type="button"
             onClick={() => setPage((p) => p + 1)}
             disabled={(page + 1) * limit >= total}
-            className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-white/5 rounded-lg disabled:opacity-30"
+            className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary rounded-lg disabled:opacity-30"
           >
             Next
           </button>

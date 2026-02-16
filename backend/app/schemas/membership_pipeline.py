@@ -272,6 +272,7 @@ class AdvanceProspectRequest(BaseModel):
 class TransferProspectRequest(BaseModel):
     """Schema for transferring a prospect to full membership"""
     username: Optional[str] = Field(None, description="Username for the new member account, auto-generated if not provided")
+    membership_id: Optional[str] = Field(None, description="Membership ID to assign; auto-assigned if not provided and membership ID is enabled")
     rank: Optional[str] = Field(None, description="Initial rank to assign")
     station: Optional[str] = Field(None, description="Station to assign")
     role_ids: Optional[List[UUID]] = Field(None, description="Role IDs to assign to the new member")

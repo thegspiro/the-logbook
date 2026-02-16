@@ -118,7 +118,7 @@ const EmailPlatformChoice: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
       {/* Header with Logo */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
             <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -134,8 +134,8 @@ const EmailPlatformChoice: React.FC = () => {
             </div>
           )}
           <div>
-            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
-            <p className="text-slate-400 text-sm">Setup in Progress</p>
+            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
+            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
           </div>
         </div>
       </header>
@@ -152,15 +152,15 @@ const EmailPlatformChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Mail className="w-8 h-8 text-white" />
+              <Mail className="w-8 h-8 text-theme-text-primary" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Email Platform
             </h2>
-            <p className="text-xl text-slate-300 mb-2">
+            <p className="text-xl text-theme-text-secondary mb-2">
               Which email service does your department use?
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-theme-text-muted">
               This helps us send notifications and alerts to your team
             </p>
           </div>
@@ -171,10 +171,10 @@ const EmailPlatformChoice: React.FC = () => {
               <button
                 key={platform.id}
                 onClick={() => setEmailPlatform(platform.id)}
-                className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 text-left ${
+                className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 text-left ${
                   emailPlatform === platform.id
                     ? 'border-red-500 shadow-lg shadow-red-500/50'
-                    : 'border-white/20 hover:border-red-400/50'
+                    : 'border-theme-surface-border hover:border-red-400/50'
                 }`}
                 aria-pressed={emailPlatform === platform.id}
                 aria-label={`Select ${platform.name}`}
@@ -185,27 +185,27 @@ const EmailPlatformChoice: React.FC = () => {
                     <div
                       className={`w-16 h-16 rounded-lg flex items-center justify-center transition-all ${
                         emailPlatform === platform.id
-                          ? `bg-gradient-to-br ${platform.color} text-white`
-                          : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'
+                          ? `bg-gradient-to-br ${platform.color} text-theme-text-primary`
+                          : 'bg-slate-800 text-theme-text-muted group-hover:bg-slate-700'
                       }`}
                     >
                       {platform.icon}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-2xl font-bold text-white mb-1">
+                      <h3 className="text-2xl font-bold text-theme-text-primary mb-1">
                         {platform.name}
                       </h3>
-                      <p className="text-slate-300 text-sm">
+                      <p className="text-theme-text-secondary text-sm">
                         {platform.description}
                       </p>
                     </div>
                   </div>
 
                   {/* Features */}
-                  <ul className="space-y-2 text-sm text-slate-300 mb-4">
+                  <ul className="space-y-2 text-sm text-theme-text-secondary mb-4">
                     {platform.features.map((feature, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-green-400 mr-2 flex-shrink-0">✓</span>
+                        <span className="text-green-700 dark:text-green-400 mr-2 flex-shrink-0">✓</span>
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -213,10 +213,10 @@ const EmailPlatformChoice: React.FC = () => {
 
                   {/* Setup Info */}
                   {platform.setupInfo && (
-                    <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+                    <div className="bg-theme-input-bg rounded-lg p-3 border border-theme-surface-border">
                       <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-slate-400">
+                        <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-theme-text-muted">
                           {platform.setupInfo}
                         </p>
                       </div>
@@ -228,7 +228,7 @@ const EmailPlatformChoice: React.FC = () => {
                 {emailPlatform === platform.id && (
                   <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                     <svg
-                      className="w-5 h-5 text-white"
+                      className="w-5 h-5 text-theme-text-primary"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -250,9 +250,9 @@ const EmailPlatformChoice: React.FC = () => {
           {selectedPlatformData && selectedPlatformData.id !== 'other' && (
             <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-8">
               <div className="flex items-start space-x-3">
-                <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                <Info className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-blue-300 text-sm font-medium mb-1">
+                  <p className="text-blue-700 dark:text-blue-300 text-sm font-medium mb-1">
                     Next Step
                   </p>
                   <p className="text-blue-200 text-sm">
@@ -271,8 +271,8 @@ const EmailPlatformChoice: React.FC = () => {
               disabled={!emailPlatform}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 emailPlatform
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
+                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -280,14 +280,14 @@ const EmailPlatformChoice: React.FC = () => {
             </button>
 
             {/* Help Text */}
-            <p className="text-center text-slate-400 text-sm mt-4">
+            <p className="text-center text-theme-text-muted text-sm mt-4">
               {emailPlatform === 'other'
                 ? 'You can configure email settings later in the admin panel'
                 : 'Your email credentials are encrypted and stored securely'}
             </p>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-white/10" />
+            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-surface-border" />
 
             {/* Auto-Save Notification */}
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
@@ -296,9 +296,9 @@ const EmailPlatformChoice: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
-          <p className="text-slate-300 text-sm">
+          <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
           <p className="text-slate-500 text-xs mt-1">

@@ -41,10 +41,10 @@ const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
 };
 
 const STAGE_TYPE_COLORS: Record<StageType, string> = {
-  form_submission: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  document_upload: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-  election_vote: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
-  manual_approval: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+  form_submission: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/30',
+  document_upload: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/30',
+  election_vote: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/30',
+  manual_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
 };
 
 const STAGE_TYPE_LABELS: Record<StageType, string> = {
@@ -177,8 +177,8 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
       {/* Stage List */}
       <div className="space-y-2">
         {stages.length === 0 ? (
-          <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-dashed border-white/10">
-            <p className="text-slate-400 mb-2">No stages configured yet.</p>
+          <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-dashed border-theme-surface-border">
+            <p className="text-theme-text-muted mb-2">No stages configured yet.</p>
             <p className="text-sm text-slate-500">
               Add stages to define the prospective member journey.
             </p>
@@ -203,16 +203,16 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                     ? 'opacity-50 border-red-500/50 bg-slate-800'
                     : isDragOver
                     ? 'border-red-500 bg-slate-700/50'
-                    : 'border-white/10 bg-slate-800/50 hover:border-white/20'
+                    : 'border-theme-surface-border bg-slate-800/50 hover:border-theme-surface-border'
                 }`}
               >
                 {/* Drag Handle */}
-                <div className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300">
+                <div className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-theme-text-secondary">
                   <GripVertical className="w-5 h-5" />
                 </div>
 
                 {/* Stage Number */}
-                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-300 flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-theme-text-secondary flex-shrink-0">
                   {index + 1}
                 </div>
 
@@ -225,17 +225,17 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 {/* Name & Description */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium truncate">
+                    <span className="text-theme-text-primary font-medium truncate">
                       {stage.name}
                     </span>
                     {stage.is_required && (
-                      <span className="text-xs text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
                         Required
                       </span>
                     )}
                   </div>
                   {stage.description && (
-                    <p className="text-sm text-slate-400 truncate mt-0.5">
+                    <p className="text-sm text-theme-text-muted truncate mt-0.5">
                       {stage.description}
                     </p>
                   )}
@@ -246,7 +246,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                   <button
                     onClick={() => moveStage(index, index - 1)}
                     disabled={index === 0 || isSaving}
-                    className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Move up"
                   >
                     <ArrowUp className="w-4 h-4" />
@@ -254,7 +254,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                   <button
                     onClick={() => moveStage(index, index + 1)}
                     disabled={index === stages.length - 1 || isSaving}
-                    className="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Move down"
                   >
                     <ArrowDown className="w-4 h-4" />
@@ -264,7 +264,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                       setEditingStage(stage);
                       setModalOpen(true);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
+                    className="p-1.5 text-theme-text-muted hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                     title="Edit stage"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -273,7 +273,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setDeleteConfirmId(null)}
-                        className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-white transition-colors"
+                        className="px-1.5 py-0.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -282,7 +282,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                           handleDeleteStage(stage.id);
                           setDeleteConfirmId(null);
                         }}
-                        className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+                        className="px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors"
                       >
                         Delete
                       </button>
@@ -290,7 +290,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                   ) : (
                     <button
                       onClick={() => setDeleteConfirmId(stage.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-400 transition-colors"
+                      className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
                       title="Remove stage"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -309,7 +309,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
           setEditingStage(null);
           setModalOpen(true);
         }}
-        className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-white/20 text-slate-400 hover:text-white hover:border-red-500/50 transition-all"
+        className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-red-500/50 transition-all"
       >
         <Plus className="w-4 h-4" />
         <span className="text-sm font-medium">Add Stage</span>
@@ -317,7 +317,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
 
       {/* Saving indicator */}
       {isSaving && (
-        <div className="flex items-center gap-2 mt-3 text-sm text-slate-400">
+        <div className="flex items-center gap-2 mt-3 text-sm text-theme-text-muted">
           <Loader2 className="w-4 h-4 animate-spin" />
           Saving order...
         </div>
