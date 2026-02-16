@@ -116,7 +116,7 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 600s
+      start_period: 1200s
     networks:
       - intranet-network
     # Exec form so uvicorn receives SIGTERM for graceful shutdown
