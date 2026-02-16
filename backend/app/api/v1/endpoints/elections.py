@@ -72,7 +72,7 @@ async def list_elections(
     **Requires permission: elections.view**
     """
     query = select(Election).where(
-        Election.organization_id == current_user.organization_id
+        Election.organization_id == str(current_user.organization_id)
     )
 
     if status_filter:
@@ -501,7 +501,7 @@ async def delete_election(
         # Count active votes for audit context
         votes_result = await db.execute(
             select(func.count(Vote.id))
-            .where(Vote.election_id == election_id)
+            .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
         )
         vote_count = votes_result.scalar() or 0
@@ -682,7 +682,7 @@ async def list_candidates(
 
     result = await db.execute(
         select(Candidate)
-        .where(Candidate.election_id == election_id)
+        .where(Candidate.election_id == str(election_id))
         .order_by(Candidate.position, Candidate.display_order)
     )
 
@@ -822,7 +822,7 @@ async def delete_candidate(
     # Check for active (non-deleted) votes
     votes_result = await db.execute(
         select(func.count(Vote.id))
-        .where(Vote.candidate_id == candidate_id)
+        .where(Vote.candidate_id == str(candidate_id))
         .where(Vote.deleted_at.is_(None))
     )
     vote_count = votes_result.scalar() or 0
@@ -1299,7 +1299,7 @@ async def add_voter_override(
     result = await db.execute(
         select(Election)
         .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
+        .where(Election.organization_id == str(current_user.organization_id))
     )
     election = result.scalar_one_or_none()
     if not election:
@@ -1376,7 +1376,7 @@ async def list_voter_overrides(
     result = await db.execute(
         select(Election)
         .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
+        .where(Election.organization_id == str(current_user.organization_id))
     )
     election = result.scalar_one_or_none()
     if not election:
@@ -1404,7 +1404,7 @@ async def remove_voter_override(
     result = await db.execute(
         select(Election)
         .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
+        .where(Election.organization_id == str(current_user.organization_id))
     )
     election = result.scalar_one_or_none()
     if not election:
@@ -1467,7 +1467,7 @@ async def bulk_add_voter_overrides(
     result = await db.execute(
         select(Election)
         .where(Election.id == str(election_id))
-        .where(Election.organization_id == current_user.organization_id)
+        .where(Election.organization_id == str(current_user.organization_id))
     )
     election = result.scalar_one_or_none()
     if not election:

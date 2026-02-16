@@ -145,8 +145,8 @@ class ElectionService:
         # Get the election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -154,7 +154,7 @@ class ElectionService:
 
         # Get the user being checked in
         user_result = await self.db.execute(
-            select(User).where(User.id == user_id).where(User.organization_id == organization_id)
+            select(User).where(User.id == str(user_id)).where(User.organization_id == str(organization_id))
         )
         user = user_result.scalar_one_or_none()
         if not user:
@@ -203,8 +203,8 @@ class ElectionService:
         """
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -234,8 +234,8 @@ class ElectionService:
         """Get the attendance list for an election."""
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -343,8 +343,8 @@ class ElectionService:
         # Get the election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -400,7 +400,7 @@ class ElectionService:
         # Get user with roles for position-specific eligibility checking
         user_result = await self.db.execute(
             select(User)
-            .where(User.id == user_id)
+            .where(User.id == str(user_id))
             .options(selectinload(User.roles))
         )
         user = user_result.scalar_one_or_none()
@@ -429,7 +429,7 @@ class ElectionService:
         # and meeting attendance requirements.
         # (Skipped entirely when the member has a secretary override.)
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         if org and not _has_override:
@@ -522,15 +522,15 @@ class ElectionService:
             )
             vote_result = await self.db.execute(
                 select(Vote)
-                .where(Vote.election_id == election_id)
+                .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_hash == voter_hash)
                 .where(Vote.deleted_at.is_(None))
             )
         else:
             vote_result = await self.db.execute(
                 select(Vote)
-                .where(Vote.election_id == election_id)
-                .where(Vote.voter_id == user_id)
+                .where(Vote.election_id == str(election_id))
+                .where(Vote.voter_id == str(user_id))
                 .where(Vote.deleted_at.is_(None))
             )
         existing_votes = vote_result.scalars().all()
@@ -584,8 +584,8 @@ class ElectionService:
         # Get election for further checks
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -603,8 +603,8 @@ class ElectionService:
         # Verify candidate exists and belongs to this election
         candidate_result = await self.db.execute(
             select(Candidate)
-            .where(Candidate.id == candidate_id)
-            .where(Candidate.election_id == election_id)
+            .where(Candidate.id == str(candidate_id))
+            .where(Candidate.election_id == str(election_id))
         )
         candidate = candidate_result.scalar_one_or_none()
 
@@ -689,15 +689,15 @@ class ElectionService:
             )
             result = await self.db.execute(
                 select(Vote)
-                .where(Vote.election_id == election_id)
+                .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_hash == voter_hash)
                 .where(Vote.deleted_at.is_(None))
             )
         else:
             result = await self.db.execute(
                 select(Vote)
-                .where(Vote.election_id == election_id)
-                .where(Vote.voter_id == user_id)
+                .where(Vote.election_id == str(election_id))
+                .where(Vote.voter_id == str(user_id))
                 .where(Vote.deleted_at.is_(None))
             )
         return result.scalars().all()
@@ -744,8 +744,8 @@ class ElectionService:
         """
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -753,7 +753,7 @@ class ElectionService:
 
         votes_result = await self.db.execute(
             select(Vote)
-            .where(Vote.election_id == election_id)
+            .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
@@ -806,7 +806,7 @@ class ElectionService:
     ) -> Optional[Vote]:
         """Soft-delete a vote with audit trail instead of hard-deleting."""
         result = await self.db.execute(
-            select(Vote).where(Vote.id == vote_id).where(Vote.deleted_at.is_(None))
+            select(Vote).where(Vote.id == str(vote_id)).where(Vote.deleted_at.is_(None))
         )
         vote = result.scalar_one_or_none()
         if not vote:
@@ -849,8 +849,8 @@ class ElectionService:
         # Get election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -862,7 +862,7 @@ class ElectionService:
         # 2. Soft-deleted votes
         deleted_result = await self.db.execute(
             select(Vote)
-            .where(Vote.election_id == election_id)
+            .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.isnot(None))
         )
         deleted_votes = deleted_result.scalars().all()
@@ -882,7 +882,7 @@ class ElectionService:
         # 3. Voting token access logs
         token_result = await self.db.execute(
             select(VotingToken)
-            .where(VotingToken.election_id == election_id)
+            .where(VotingToken.election_id == str(election_id))
         )
         tokens = token_result.scalars().all()
 
@@ -926,7 +926,7 @@ class ElectionService:
         # 5. Active vote statistics by IP (detect ballot stuffing patterns)
         active_result = await self.db.execute(
             select(Vote)
-            .where(Vote.election_id == election_id)
+            .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
         )
         active_votes = active_result.scalars().all()
@@ -1030,8 +1030,8 @@ class ElectionService:
         # Get the election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -1055,7 +1055,7 @@ class ElectionService:
         # Get all active (non-deleted) votes
         votes_result = await self.db.execute(
             select(Vote)
-            .where(Vote.election_id == election_id)
+            .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
@@ -1063,7 +1063,7 @@ class ElectionService:
         # Get all candidates
         candidates_result = await self.db.execute(
             select(Candidate)
-            .where(Candidate.election_id == election_id)
+            .where(Candidate.election_id == str(election_id))
         )
         candidates = candidates_result.scalars().all()
 
@@ -1074,7 +1074,7 @@ class ElectionService:
             # Count all active users in organization
             users_result = await self.db.execute(
                 select(func.count(User.id))
-                .where(User.organization_id == organization_id)
+                .where(User.organization_id == str(organization_id))
                 .where(User.is_active == True)
             )
             total_eligible = users_result.scalar() or 0
@@ -1324,8 +1324,8 @@ class ElectionService:
         # Get the election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -1335,7 +1335,7 @@ class ElectionService:
         # Get all active (non-deleted) votes
         votes_result = await self.db.execute(
             select(Vote)
-            .where(Vote.election_id == election_id)
+            .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
         )
         all_votes = votes_result.scalars().all()
@@ -1343,7 +1343,7 @@ class ElectionService:
         # Get all candidates
         candidates_result = await self.db.execute(
             select(Candidate)
-            .where(Candidate.election_id == election_id)
+            .where(Candidate.election_id == str(election_id))
         )
         total_candidates = len(candidates_result.scalars().all())
 
@@ -1353,7 +1353,7 @@ class ElectionService:
         else:
             users_result = await self.db.execute(
                 select(func.count(User.id))
-                .where(User.organization_id == organization_id)
+                .where(User.organization_id == str(organization_id))
                 .where(User.is_active == True)
             )
             total_eligible = users_result.scalar() or 0
@@ -1517,8 +1517,8 @@ class ElectionService:
         """Close an election and finalize results, creating runoff if needed"""
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -1563,8 +1563,8 @@ class ElectionService:
         """Open an election for voting"""
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -1577,7 +1577,7 @@ class ElectionService:
         # Validate election has at least one candidate
         candidates_result = await self.db.execute(
             select(func.count(Candidate.id))
-            .where(Candidate.election_id == election_id)
+            .where(Candidate.election_id == str(election_id))
             .where(Candidate.accepted == True)
         )
         candidate_count = candidates_result.scalar() or 0
@@ -1613,8 +1613,8 @@ class ElectionService:
         # Get the election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
 
@@ -1705,7 +1705,7 @@ class ElectionService:
         users_result = await self.db.execute(
             select(User)
             .join(User.roles)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.is_active == True)
             .options(selectinload(User.roles))
         )
@@ -1723,7 +1723,7 @@ class ElectionService:
         # Get the user who performed the rollback
         performer_result = await self.db.execute(
             select(User)
-            .where(User.id == performed_by)
+            .where(User.id == str(performed_by))
         )
         performer = performer_result.scalar_one_or_none()
         performer_name = performer.full_name if performer else "Unknown"
@@ -1731,7 +1731,7 @@ class ElectionService:
         # Get organization for email service
         org_result = await self.db.execute(
             select(Organization)
-            .where(Organization.id == organization_id)
+            .where(Organization.id == str(organization_id))
         )
         organization = org_result.scalar_one_or_none()
 
@@ -1876,7 +1876,7 @@ Best regards,
         users_result = await self.db.execute(
             select(User)
             .join(User.roles)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.is_active == True)
             .options(selectinload(User.roles))
         )
@@ -1891,13 +1891,13 @@ Best regards,
             return 0
 
         performer_result = await self.db.execute(
-            select(User).where(User.id == performed_by)
+            select(User).where(User.id == str(performed_by))
         )
         performer = performer_result.scalar_one_or_none()
         performer_name = performer.full_name if performer else "Unknown"
 
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         organization = org_result.scalar_one_or_none()
 
@@ -2082,8 +2082,8 @@ Best regards,
         # Load election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -2091,7 +2091,7 @@ Best regards,
 
         # Check org-level proxy voting setting
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         if not org or not self._is_proxy_voting_enabled(org):
@@ -2104,16 +2104,16 @@ Best regards,
         # Verify both users exist in the same org
         for uid, label in [(delegating_user_id, "Delegating member"), (proxy_user_id, "Proxy member")]:
             u_result = await self.db.execute(
-                select(User).where(User.id == uid).where(User.organization_id == organization_id)
+                select(User).where(User.id == str(uid)).where(User.organization_id == str(organization_id))
             )
             if not u_result.scalar_one_or_none():
                 return None, f"{label} not found"
 
-        delegating_result = await self.db.execute(select(User).where(User.id == delegating_user_id))
+        delegating_result = await self.db.execute(select(User).where(User.id == str(delegating_user_id)))
         delegating_user = delegating_result.scalar_one()
-        proxy_result = await self.db.execute(select(User).where(User.id == proxy_user_id))
+        proxy_result = await self.db.execute(select(User).where(User.id == str(proxy_user_id)))
         proxy_user = proxy_result.scalar_one()
-        auth_result = await self.db.execute(select(User).where(User.id == authorized_by))
+        auth_result = await self.db.execute(select(User).where(User.id == str(authorized_by)))
         authorizer = auth_result.scalar_one()
 
         authorizations = election.proxy_authorizations or []
@@ -2171,8 +2171,8 @@ Best regards,
         """Revoke a proxy authorization. Cannot revoke if the proxy vote has already been cast."""
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -2187,7 +2187,7 @@ Best regards,
                 # Check if a proxy vote has already been cast using this authorization
                 vote_result = await self.db.execute(
                     select(Vote)
-                    .where(Vote.election_id == election_id)
+                    .where(Vote.election_id == str(election_id))
                     .where(Vote.proxy_authorization_id == authorization_id)
                     .where(Vote.deleted_at.is_(None))
                 )
@@ -2217,15 +2217,15 @@ Best regards,
         """Return all proxy authorizations for an election plus the org-level enabled flag."""
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
             return None
 
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         enabled = self._is_proxy_voting_enabled(org) if org else False
@@ -2274,8 +2274,8 @@ Best regards,
         # Load election
         result = await self.db.execute(
             select(Election)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         election = result.scalar_one_or_none()
         if not election:
@@ -2283,7 +2283,7 @@ Best regards,
 
         # Check org-level proxy setting
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         if not org or not self._is_proxy_voting_enabled(org):
@@ -2316,8 +2316,8 @@ Best regards,
         # Verify candidate
         candidate_result = await self.db.execute(
             select(Candidate)
-            .where(Candidate.id == candidate_id)
-            .where(Candidate.election_id == election_id)
+            .where(Candidate.id == str(candidate_id))
+            .where(Candidate.election_id == str(election_id))
         )
         candidate = candidate_result.scalar_one_or_none()
         if not candidate:
@@ -2400,8 +2400,8 @@ Best regards,
         result = await self.db.execute(
             select(Election, Organization)
             .join(Organization, Election.organization_id == Organization.id)
-            .where(Election.id == election_id)
-            .where(Election.organization_id == organization_id)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
         )
         row = result.one_or_none()
 
@@ -2415,23 +2415,23 @@ Best regards,
             # Use specified recipients
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_(recipient_user_ids))
-                .where(User.organization_id == organization_id)
+                .where(User.id.in_([str(uid) for uid in recipient_user_ids]))
+                .where(User.organization_id == str(organization_id))
             )
             recipients = users_result.scalars().all()
         elif election.eligible_voters:
             # Use election's eligible voters list
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_([UUID(uid) for uid in election.eligible_voters]))
-                .where(User.organization_id == organization_id)
+                .where(User.id.in_(election.eligible_voters))
+                .where(User.organization_id == str(organization_id))
             )
             recipients = users_result.scalars().all()
         else:
             # Send to all active users in organization
             users_result = await self.db.execute(
                 select(User)
-                .where(User.organization_id == organization_id)
+                .where(User.organization_id == str(organization_id))
                 .where(User.is_active == True)
             )
             recipients = users_result.scalars().all()
@@ -2524,15 +2524,15 @@ Best regards,
             )
             result = await self.db.execute(
                 select(func.count(Vote.id))
-                .where(Vote.election_id == election_id)
+                .where(Vote.election_id == str(election_id))
                 .where(Vote.voter_hash == voter_hash)
                 .where(Vote.deleted_at.is_(None))
             )
         else:
             result = await self.db.execute(
                 select(func.count(Vote.id))
-                .where(Vote.election_id == election_id)
-                .where(Vote.voter_id == user_id)
+                .where(Vote.election_id == str(election_id))
+                .where(Vote.voter_id == str(user_id))
                 .where(Vote.deleted_at.is_(None))
             )
         vote_count = result.scalar() or 0
@@ -2615,7 +2615,7 @@ Best regards,
         # Verify candidate exists and belongs to this election
         candidate_result = await self.db.execute(
             select(Candidate)
-            .where(Candidate.id == candidate_id)
+            .where(Candidate.id == str(candidate_id))
             .where(Candidate.election_id == election.id)
         )
         candidate = candidate_result.scalar_one_or_none()
