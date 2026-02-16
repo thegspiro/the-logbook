@@ -46,7 +46,10 @@ class MembershipPipelineService:
         query = (
             select(MembershipPipeline)
             .where(MembershipPipeline.organization_id == organization_id)
-            .options(selectinload(MembershipPipeline.steps))
+            .options(
+                selectinload(MembershipPipeline.steps),
+                selectinload(MembershipPipeline.prospects),
+            )
             .order_by(MembershipPipeline.is_default.desc(), MembershipPipeline.created_at)
         )
         if not include_templates:
