@@ -30,7 +30,7 @@ class OrganizationService:
     async def get_organization(self, organization_id: UUID) -> Optional[Organization]:
         """Get an organization by ID"""
         result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         return result.scalar_one_or_none()
 

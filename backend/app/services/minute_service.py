@@ -147,7 +147,7 @@ class MinuteService:
         """Get a template by ID"""
         result = await self.db.execute(
             select(MinutesTemplate)
-            .where(MinutesTemplate.id == template_id)
+            .where(MinutesTemplate.id == str(template_id))
             .where(MinutesTemplate.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
@@ -462,7 +462,7 @@ class MinuteService:
 
         result = await self.db.execute(
             select(ActionItem)
-            .where(ActionItem.id == item_id)
+            .where(ActionItem.id == str(item_id))
             .where(ActionItem.minutes_id == minutes_id)
         )
         item = result.scalar_one_or_none()
@@ -504,7 +504,7 @@ class MinuteService:
 
         result = await self.db.execute(
             select(ActionItem)
-            .where(ActionItem.id == item_id)
+            .where(ActionItem.id == str(item_id))
             .where(ActionItem.minutes_id == minutes_id)
         )
         item = result.scalar_one_or_none()

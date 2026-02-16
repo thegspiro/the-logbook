@@ -44,8 +44,8 @@ class TrainingService:
         # Get all completed training records
         result = await self.db.execute(
             select(TrainingRecord)
-            .where(TrainingRecord.user_id == user_id)
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.user_id == str(user_id))
+            .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
         )
         records = result.scalars().all()
@@ -114,13 +114,13 @@ class TrainingService:
                 func.sum(TrainingRecord.hours_completed).label("total_hours"),
                 func.count(TrainingRecord.id).label("record_count"),
             )
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .group_by(TrainingRecord.training_type)
         )
 
         if user_id:
-            query = query.where(TrainingRecord.user_id == user_id)
+            query = query.where(TrainingRecord.user_id == str(user_id))
 
         if start_date:
             query = query.where(TrainingRecord.completion_date >= start_date)
@@ -153,14 +153,14 @@ class TrainingService:
         # Build query
         query = (
             select(TrainingRecord)
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .where(TrainingRecord.completion_date >= start_date)
             .where(TrainingRecord.completion_date <= end_date)
         )
 
         if user_id:
-            query = query.where(TrainingRecord.user_id == user_id)
+            query = query.where(TrainingRecord.user_id == str(user_id))
 
         result = await self.db.execute(query)
         records = result.scalars().all()
@@ -210,7 +210,7 @@ class TrainingService:
             # Get all active requirements
             req_result = await self.db.execute(
                 select(TrainingRequirement)
-                .where(TrainingRequirement.organization_id == organization_id)
+                .where(TrainingRequirement.organization_id == str(organization_id))
                 .where(TrainingRequirement.active == True)
             )
             requirements = req_result.scalars().all()
@@ -254,8 +254,8 @@ class TrainingService:
         # Get the requirement
         result = await self.db.execute(
             select(TrainingRequirement)
-            .where(TrainingRequirement.id == requirement_id)
-            .where(TrainingRequirement.organization_id == organization_id)
+            .where(TrainingRequirement.id == str(requirement_id))
+            .where(TrainingRequirement.organization_id == str(organization_id))
         )
         requirement = result.scalar_one_or_none()
 
@@ -275,8 +275,8 @@ class TrainingService:
         # Get completed hours in the date range
         query = (
             select(func.sum(TrainingRecord.hours_completed))
-            .where(TrainingRecord.user_id == user_id)
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.user_id == str(user_id))
+            .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .where(TrainingRecord.completion_date >= start_date)
             .where(TrainingRecord.completion_date <= end_date)
@@ -319,7 +319,7 @@ class TrainingService:
         # Get user's roles
         user_result = await self.db.execute(
             select(User)
-            .where(User.id == user_id)
+            .where(User.id == str(user_id))
             .options(selectinload(User.roles))
         )
         user = user_result.scalar_one_or_none()
@@ -331,7 +331,7 @@ class TrainingService:
         # Get all active requirements
         query = (
             select(TrainingRequirement)
-            .where(TrainingRequirement.organization_id == organization_id)
+            .where(TrainingRequirement.organization_id == str(organization_id))
             .where(TrainingRequirement.active == True)
         )
 
@@ -377,7 +377,7 @@ class TrainingService:
 
         result = await self.db.execute(
             select(TrainingRecord)
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .where(TrainingRecord.certification_number.isnot(None))
             .where(TrainingRecord.expiration_date.isnot(None))

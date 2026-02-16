@@ -45,7 +45,7 @@ async def get_metrics(
     current_user: User = Depends(require_permission("analytics.view")),
 ):
     """Get analytics metrics, optionally filtered by event"""
-    base_filter = [AnalyticsEvent.organization_id == current_user.organization_id]
+    base_filter = [AnalyticsEvent.organization_id == str(current_user.organization_id)]
     if event_id:
         base_filter.append(AnalyticsEvent.event_id == event_id)
 
@@ -134,7 +134,7 @@ async def get_metrics(
                     checkin.created_at > scan.created_at,
                 ),
             )
-            .where(scan.organization_id == current_user.organization_id)
+            .where(scan.organization_id == str(current_user.organization_id))
         )
         avg_seconds = avg_result.scalar()
         if avg_seconds is not None:
@@ -159,7 +159,7 @@ async def export_analytics(
     current_user: User = Depends(require_permission("analytics.view")),
 ):
     """Export analytics data"""
-    base_filter = [AnalyticsEvent.organization_id == current_user.organization_id]
+    base_filter = [AnalyticsEvent.organization_id == str(current_user.organization_id)]
     if event_id:
         base_filter.append(AnalyticsEvent.event_id == event_id)
 

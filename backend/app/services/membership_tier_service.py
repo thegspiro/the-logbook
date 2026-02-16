@@ -138,7 +138,7 @@ class MembershipTierService:
         highest tier they qualify for.  Returns a summary of changes.
         """
         org_result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         organization = org_result.scalar_one_or_none()
         if not organization:

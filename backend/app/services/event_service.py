@@ -102,8 +102,8 @@ class EventService:
         """
         result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
@@ -116,8 +116,8 @@ class EventService:
         if user_id:
             rsvp_result = await self.db.execute(
                 select(EventRSVP)
-                .where(EventRSVP.event_id == event_id)
-                .where(EventRSVP.user_id == user_id)
+                .where(EventRSVP.event_id == str(event_id))
+                .where(EventRSVP.user_id == str(user_id))
             )
             user_rsvp = rsvp_result.scalar_one_or_none()
 
@@ -137,7 +137,7 @@ class EventService:
         """List events with filtering"""
         query = (
             select(Event)
-            .where(Event.organization_id == organization_id)
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
         )
 
@@ -167,8 +167,8 @@ class EventService:
         """Update an event"""
         result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
         )
         event = result.scalar_one_or_none()
@@ -225,8 +225,8 @@ class EventService:
         """Cancel an event and optionally notify RSVPs"""
         result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
         )
         event = result.scalar_one_or_none()
@@ -274,8 +274,8 @@ class EventService:
         # Get the source event
         result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
         )
         source_event = result.scalar_one_or_none()
@@ -335,8 +335,8 @@ class EventService:
         """Delete an event"""
         result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = result.scalar_one_or_none()
 
@@ -357,8 +357,8 @@ class EventService:
         # Verify event exists and belongs to organization
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -383,8 +383,8 @@ class EventService:
         # Check if RSVP already exists
         existing_result = await self.db.execute(
             select(EventRSVP)
-            .where(EventRSVP.event_id == event_id)
-            .where(EventRSVP.user_id == user_id)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
         )
         existing_rsvp = existing_result.scalar_one_or_none()
 
@@ -409,7 +409,7 @@ class EventService:
             # Count current "going" RSVPs, excluding this user's RSVP if updating
             capacity_query = (
                 select(func.count(EventRSVP.id))
-                .where(EventRSVP.event_id == event_id)
+                .where(EventRSVP.event_id == str(event_id))
                 .where(EventRSVP.status == RSVPStatus.GOING)
             )
             if existing_rsvp:
@@ -432,8 +432,8 @@ class EventService:
         """Get a user's RSVP for an event"""
         result = await self.db.execute(
             select(EventRSVP)
-            .where(EventRSVP.event_id == event_id)
-            .where(EventRSVP.user_id == user_id)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
         )
         return result.scalar_one_or_none()
 
@@ -444,15 +444,15 @@ class EventService:
         # Verify event belongs to organization
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
         if not event:
             return []
 
-        query = select(EventRSVP).where(EventRSVP.event_id == event_id).options(selectinload(EventRSVP.user))
+        query = select(EventRSVP).where(EventRSVP.event_id == str(event_id)).options(selectinload(EventRSVP.user))
 
         if status_filter:
             query = query.where(EventRSVP.status == status_filter)
@@ -479,8 +479,8 @@ class EventService:
         # Verify event exists and belongs to organization
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -493,8 +493,8 @@ class EventService:
         # Verify target user belongs to organization
         user_result = await self.db.execute(
             select(User)
-            .where(User.id == user_id)
-            .where(User.organization_id == organization_id)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
         )
         user = user_result.scalar_one_or_none()
 
@@ -504,8 +504,8 @@ class EventService:
         # Check if RSVP already exists
         existing_result = await self.db.execute(
             select(EventRSVP)
-            .where(EventRSVP.event_id == event_id)
-            .where(EventRSVP.user_id == user_id)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
         )
         existing_rsvp = existing_result.scalar_one_or_none()
 
@@ -564,8 +564,8 @@ class EventService:
         # Verify event exists and belongs to organization
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -575,8 +575,8 @@ class EventService:
         # Get the RSVP
         rsvp_result = await self.db.execute(
             select(EventRSVP)
-            .where(EventRSVP.event_id == event_id)
-            .where(EventRSVP.user_id == user_id)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
         )
         rsvp = rsvp_result.scalar_one_or_none()
 
@@ -629,8 +629,8 @@ class EventService:
         # Verify event belongs to organization
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -649,8 +649,8 @@ class EventService:
         # Verify user belongs to organization
         user_result = await self.db.execute(
             select(User)
-            .where(User.id == user_id)
-            .where(User.organization_id == organization_id)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
         )
         user = user_result.scalar_one_or_none()
 
@@ -660,8 +660,8 @@ class EventService:
         # Get or create RSVP
         rsvp_result = await self.db.execute(
             select(EventRSVP)
-            .where(EventRSVP.event_id == event_id)
-            .where(EventRSVP.user_id == user_id)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
         )
         rsvp = rsvp_result.scalar_one_or_none()
 
@@ -699,8 +699,8 @@ class EventService:
         """
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -708,7 +708,7 @@ class EventService:
             return []
 
         # Base query for users in the organization
-        query = select(User).where(User.organization_id == organization_id)
+        query = select(User).where(User.organization_id == str(organization_id))
 
         # Filter by eligible roles if specified (list of role slugs)
         if event.eligible_roles:
@@ -730,8 +730,8 @@ class EventService:
         """Get statistics for an event"""
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -746,7 +746,7 @@ class EventService:
                 func.sum(EventRSVP.guest_count),
                 func.count(EventRSVP.id).filter(EventRSVP.checked_in == True)
             )
-            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
         )
         rsvp_counts = rsvps_result.all()
@@ -801,8 +801,8 @@ class EventService:
         # Get event
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
         )
         event = event_result.scalar_one_or_none()
@@ -842,8 +842,8 @@ class EventService:
         # Get event with location
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
         )
         event = event_result.scalar_one_or_none()
@@ -935,8 +935,8 @@ class EventService:
         # Get event
         event_result = await self.db.execute(
             select(Event)
-            .where(Event.id == event_id)
-            .where(Event.organization_id == organization_id)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
         )
         event = event_result.scalar_one_or_none()
 
@@ -949,8 +949,8 @@ class EventService:
         # Verify user belongs to organization
         user_result = await self.db.execute(
             select(User)
-            .where(User.id == user_id)
-            .where(User.organization_id == organization_id)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
         )
         user = user_result.scalar_one_or_none()
 
@@ -967,8 +967,8 @@ class EventService:
         # Get or create RSVP
         rsvp_result = await self.db.execute(
             select(EventRSVP)
-            .where(EventRSVP.event_id == event_id)
-            .where(EventRSVP.user_id == user_id)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
         )
         rsvp = rsvp_result.scalar_one_or_none()
 
@@ -1050,7 +1050,7 @@ class EventService:
         # Check if training record already exists
         existing_record_result = await self.db.execute(
             select(TrainingRecord)
-            .where(TrainingRecord.user_id == user_id)
+            .where(TrainingRecord.user_id == str(user_id))
             .where(TrainingRecord.course_name == training_session.course_name)
             .where(TrainingRecord.scheduled_date == event.start_datetime.date())
         )
@@ -1093,7 +1093,7 @@ class EventService:
         """
         # Get event
         result = await self.db.execute(
-            select(Event).where(Event.id == event_id)
+            select(Event).where(Event.id == str(event_id))
         )
         event = result.scalar_one_or_none()
 
@@ -1113,7 +1113,7 @@ class EventService:
         rsvp_result = await self.db.execute(
             select(EventRSVP, User)
             .join(User, EventRSVP.user_id == User.id)
-            .where(EventRSVP.event_id == event_id)
+            .where(EventRSVP.event_id == str(event_id))
             .order_by(EventRSVP.checked_in_at.desc().nullslast())
         )
         rsvps_with_users = rsvp_result.all()
@@ -1121,7 +1121,7 @@ class EventService:
         # Get total eligible members in organization
         eligible_members_result = await self.db.execute(
             select(func.count(User.id))
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.is_active == True)
         )
         total_eligible_members = eligible_members_result.scalar() or 0

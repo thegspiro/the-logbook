@@ -84,8 +84,8 @@ class InventoryService:
         """Get category by ID"""
         result = await self.db.execute(
             select(InventoryCategory)
-            .where(InventoryCategory.id == category_id)
-            .where(InventoryCategory.organization_id == organization_id)
+            .where(InventoryCategory.id == str(category_id))
+            .where(InventoryCategory.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -129,7 +129,7 @@ class InventoryService:
         """Get items with filtering and pagination"""
         query = (
             select(InventoryItem)
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.organization_id == str(organization_id))
             .options(
                 selectinload(InventoryItem.category),
                 selectinload(InventoryItem.assigned_to_user),
@@ -137,7 +137,7 @@ class InventoryService:
         )
 
         if category_id:
-            query = query.where(InventoryItem.category_id == category_id)
+            query = query.where(InventoryItem.category_id == str(category_id))
 
         if status:
             query = query.where(InventoryItem.status == status)
@@ -177,8 +177,8 @@ class InventoryService:
         """Get item by ID with all relationships"""
         result = await self.db.execute(
             select(InventoryItem)
-            .where(InventoryItem.id == item_id)
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.id == str(item_id))
+            .where(InventoryItem.organization_id == str(organization_id))
             .options(
                 selectinload(InventoryItem.category),
                 selectinload(InventoryItem.assigned_to_user),
@@ -306,7 +306,7 @@ class InventoryService:
             # Update current active assignment
             result = await self.db.execute(
                 select(ItemAssignment)
-                .where(ItemAssignment.item_id == item_id)
+                .where(ItemAssignment.item_id == str(item_id))
                 .where(ItemAssignment.is_active == True)
                 .order_by(ItemAssignment.assigned_date.desc())
                 .limit(1)
@@ -344,8 +344,8 @@ class InventoryService:
         """Get all items assigned to a user"""
         query = (
             select(ItemAssignment)
-            .where(ItemAssignment.user_id == user_id)
-            .where(ItemAssignment.organization_id == organization_id)
+            .where(ItemAssignment.user_id == str(user_id))
+            .where(ItemAssignment.organization_id == str(organization_id))
             .options(selectinload(ItemAssignment.item))
         )
 
@@ -414,8 +414,8 @@ class InventoryService:
         try:
             result = await self.db.execute(
                 select(CheckOutRecord)
-                .where(CheckOutRecord.id == checkout_id)
-                .where(CheckOutRecord.organization_id == organization_id)
+                .where(CheckOutRecord.id == str(checkout_id))
+                .where(CheckOutRecord.organization_id == str(organization_id))
                 .options(selectinload(CheckOutRecord.item))
             )
             checkout = result.scalar_one_or_none()
@@ -459,7 +459,7 @@ class InventoryService:
         """Get all active (not returned) checkouts"""
         query = (
             select(CheckOutRecord)
-            .where(CheckOutRecord.organization_id == organization_id)
+            .where(CheckOutRecord.organization_id == str(organization_id))
             .where(CheckOutRecord.is_returned == False)
             .options(
                 selectinload(CheckOutRecord.item),
@@ -468,7 +468,7 @@ class InventoryService:
         )
 
         if user_id:
-            query = query.where(CheckOutRecord.user_id == user_id)
+            query = query.where(CheckOutRecord.user_id == str(user_id))
 
         query = query.order_by(CheckOutRecord.checked_out_at.desc())
 
@@ -484,7 +484,7 @@ class InventoryService:
         # Update overdue status
         await self.db.execute(
             update(CheckOutRecord)
-            .where(CheckOutRecord.organization_id == organization_id)
+            .where(CheckOutRecord.organization_id == str(organization_id))
             .where(CheckOutRecord.is_returned == False)
             .where(CheckOutRecord.expected_return_at < now)
             .values(is_overdue=True)
@@ -494,7 +494,7 @@ class InventoryService:
         # Get overdue items
         result = await self.db.execute(
             select(CheckOutRecord)
-            .where(CheckOutRecord.organization_id == organization_id)
+            .where(CheckOutRecord.organization_id == str(organization_id))
             .where(CheckOutRecord.is_overdue == True)
             .options(
                 selectinload(CheckOutRecord.item),
@@ -548,7 +548,7 @@ class InventoryService:
 
         result = await self.db.execute(
             select(InventoryItem)
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)
             .where(InventoryItem.next_inspection_due <= cutoff_date)
             .options(selectinload(InventoryItem.category))
@@ -562,8 +562,8 @@ class InventoryService:
         """Get maintenance history for an item"""
         result = await self.db.execute(
             select(MaintenanceRecord)
-            .where(MaintenanceRecord.item_id == item_id)
-            .where(MaintenanceRecord.organization_id == organization_id)
+            .where(MaintenanceRecord.item_id == str(item_id))
+            .where(MaintenanceRecord.organization_id == str(organization_id))
             .options(selectinload(MaintenanceRecord.technician))
             .order_by(MaintenanceRecord.completed_date.desc())
         )
@@ -583,7 +583,7 @@ class InventoryService:
                 func.count(InventoryItem.id).label("current_stock"),
             )
             .join(InventoryItem, InventoryCategory.id == InventoryItem.category_id)
-            .where(InventoryCategory.organization_id == organization_id)
+            .where(InventoryCategory.organization_id == str(organization_id))
             .where(InventoryCategory.active == True)
             .where(InventoryItem.active == True)
             .where(InventoryCategory.low_stock_threshold.isnot(None))
@@ -610,7 +610,7 @@ class InventoryService:
         # Total items
         total_result = await self.db.execute(
             select(func.count(InventoryItem.id))
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)
         )
         total_items = total_result.scalar()
@@ -621,7 +621,7 @@ class InventoryService:
                 InventoryItem.status,
                 func.count(InventoryItem.id).label("count"),
             )
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)
             .group_by(InventoryItem.status)
         )
@@ -633,7 +633,7 @@ class InventoryService:
                 InventoryItem.condition,
                 func.count(InventoryItem.id).label("count"),
             )
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)
             .group_by(InventoryItem.condition)
         )
@@ -642,7 +642,7 @@ class InventoryService:
         # Total value
         value_result = await self.db.execute(
             select(func.sum(InventoryItem.current_value))
-            .where(InventoryItem.organization_id == organization_id)
+            .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active == True)
         )
         total_value = value_result.scalar() or Decimal("0.00")
@@ -650,7 +650,7 @@ class InventoryService:
         # Active checkouts
         checkout_result = await self.db.execute(
             select(func.count(CheckOutRecord.id))
-            .where(CheckOutRecord.organization_id == organization_id)
+            .where(CheckOutRecord.organization_id == str(organization_id))
             .where(CheckOutRecord.is_returned == False)
         )
         active_checkouts = checkout_result.scalar()
@@ -658,7 +658,7 @@ class InventoryService:
         # Overdue checkouts
         overdue_result = await self.db.execute(
             select(func.count(CheckOutRecord.id))
-            .where(CheckOutRecord.organization_id == organization_id)
+            .where(CheckOutRecord.organization_id == str(organization_id))
             .where(CheckOutRecord.is_overdue == True)
         )
         overdue_checkouts = overdue_result.scalar()

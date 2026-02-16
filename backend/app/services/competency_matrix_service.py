@@ -74,7 +74,7 @@ class CompetencyMatrixService:
         # Get active requirements
         req_query = (
             select(TrainingRequirement)
-            .where(TrainingRequirement.organization_id == organization_id)
+            .where(TrainingRequirement.organization_id == str(organization_id))
             .where(TrainingRequirement.active == True)
         )
         if requirement_ids:
@@ -85,7 +85,7 @@ class CompetencyMatrixService:
         # Get active members
         user_query = (
             select(User)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
             .where(User.deleted_at.is_(None))
         )
@@ -98,7 +98,7 @@ class CompetencyMatrixService:
         # Get all completed training records for this org
         records_result = await self.db.execute(
             select(TrainingRecord)
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
         )
         all_records = list(records_result.scalars().all())

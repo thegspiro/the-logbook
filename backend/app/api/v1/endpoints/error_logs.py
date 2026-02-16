@@ -49,7 +49,7 @@ async def get_errors(
     current_user: User = Depends(require_permission("audit.view")),
 ):
     """Get error logs with optional filtering"""
-    filters = [ErrorLog.organization_id == current_user.organization_id]
+    filters = [ErrorLog.organization_id == str(current_user.organization_id)]
     if error_type:
         filters.append(ErrorLog.error_type == error_type)
     if event_id:
@@ -92,7 +92,7 @@ async def get_error_stats(
     current_user: User = Depends(require_permission("audit.view")),
 ):
     """Get error statistics"""
-    filters = [ErrorLog.organization_id == current_user.organization_id]
+    filters = [ErrorLog.organization_id == str(current_user.organization_id)]
 
     total_result = await db.execute(
         select(func.count()).select_from(ErrorLog).where(*filters)
@@ -139,7 +139,7 @@ async def clear_errors(
 ):
     """Clear all error logs for the organization"""
     await db.execute(
-        delete(ErrorLog).where(ErrorLog.organization_id == current_user.organization_id)
+        delete(ErrorLog).where(ErrorLog.organization_id == str(current_user.organization_id))
     )
     await db.commit()
     return {"status": "cleared"}
@@ -152,7 +152,7 @@ async def export_errors(
     current_user: User = Depends(require_permission("audit.view")),
 ):
     """Export error logs"""
-    filters = [ErrorLog.organization_id == current_user.organization_id]
+    filters = [ErrorLog.organization_id == str(current_user.organization_id)]
     if event_id:
         filters.append(ErrorLog.event_id == event_id)
 

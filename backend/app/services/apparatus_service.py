@@ -112,7 +112,7 @@ class ApparatusService:
         """Get apparatus type by ID"""
         result = await self.db.execute(
             select(ApparatusType)
-            .where(ApparatusType.id == type_id)
+            .where(ApparatusType.id == str(type_id))
             .where(
                 or_(
                     ApparatusType.organization_id == organization_id,
@@ -139,7 +139,7 @@ class ApparatusService:
                 )
             )
         else:
-            conditions.append(ApparatusType.organization_id == organization_id)
+            conditions.append(ApparatusType.organization_id == str(organization_id))
 
         if is_active is not None:
             conditions.append(ApparatusType.is_active == is_active)
@@ -207,8 +207,8 @@ class ApparatusService:
         # Check if any apparatus in this organization uses this type
         result = await self.db.execute(
             select(func.count(Apparatus.id))
-            .where(Apparatus.apparatus_type_id == type_id)
-            .where(Apparatus.organization_id == organization_id)
+            .where(Apparatus.apparatus_type_id == str(type_id))
+            .where(Apparatus.organization_id == str(organization_id))
         )
         count = result.scalar()
         if count > 0:
@@ -261,7 +261,7 @@ class ApparatusService:
         """Get apparatus status by ID"""
         result = await self.db.execute(
             select(ApparatusStatus)
-            .where(ApparatusStatus.id == status_id)
+            .where(ApparatusStatus.id == str(status_id))
             .where(
                 or_(
                     ApparatusStatus.organization_id == organization_id,
@@ -288,7 +288,7 @@ class ApparatusService:
                 )
             )
         else:
-            conditions.append(ApparatusStatus.organization_id == organization_id)
+            conditions.append(ApparatusStatus.organization_id == str(organization_id))
 
         if is_active is not None:
             conditions.append(ApparatusStatus.is_active == is_active)
@@ -353,8 +353,8 @@ class ApparatusService:
 
         result = await self.db.execute(
             select(func.count(Apparatus.id))
-            .where(Apparatus.status_id == status_id)
-            .where(Apparatus.organization_id == organization_id)
+            .where(Apparatus.status_id == str(status_id))
+            .where(Apparatus.organization_id == str(organization_id))
         )
         count = result.scalar()
         if count > 0:
@@ -379,7 +379,7 @@ class ApparatusService:
         # Check unit number uniqueness
         result = await self.db.execute(
             select(Apparatus)
-            .where(Apparatus.organization_id == organization_id)
+            .where(Apparatus.organization_id == str(organization_id))
             .where(Apparatus.unit_number == apparatus_data.unit_number)
         )
         if result.scalar_one_or_none():
@@ -443,8 +443,8 @@ class ApparatusService:
         """Get apparatus by ID"""
         query = (
             select(Apparatus)
-            .where(Apparatus.id == apparatus_id)
-            .where(Apparatus.organization_id == organization_id)
+            .where(Apparatus.id == str(apparatus_id))
+            .where(Apparatus.organization_id == str(organization_id))
         )
 
         if include_relations:
@@ -534,7 +534,7 @@ class ApparatusService:
         if apparatus_data.unit_number and apparatus_data.unit_number != apparatus.unit_number:
             result = await self.db.execute(
                 select(Apparatus)
-                .where(Apparatus.organization_id == organization_id)
+                .where(Apparatus.organization_id == str(organization_id))
                 .where(Apparatus.unit_number == apparatus_data.unit_number)
                 .where(Apparatus.id != apparatus_id)
             )
@@ -562,7 +562,7 @@ class ApparatusService:
             # Close previous location history
             result = await self.db.execute(
                 select(ApparatusLocationHistory)
-                .where(ApparatusLocationHistory.apparatus_id == apparatus_id)
+                .where(ApparatusLocationHistory.apparatus_id == str(apparatus_id))
                 .where(ApparatusLocationHistory.unassigned_date.is_(None))
             )
             current_location = result.scalar_one_or_none()
@@ -718,7 +718,7 @@ class ApparatusService:
         # Close location history
         result = await self.db.execute(
             select(ApparatusLocationHistory)
-            .where(ApparatusLocationHistory.apparatus_id == apparatus_id)
+            .where(ApparatusLocationHistory.apparatus_id == str(apparatus_id))
             .where(ApparatusLocationHistory.unassigned_date.is_(None))
         )
         current_location = result.scalar_one_or_none()
@@ -756,7 +756,7 @@ class ApparatusService:
         """Create a custom field definition"""
         result = await self.db.execute(
             select(ApparatusCustomField)
-            .where(ApparatusCustomField.organization_id == organization_id)
+            .where(ApparatusCustomField.organization_id == str(organization_id))
             .where(ApparatusCustomField.field_key == field_data.field_key)
         )
         if result.scalar_one_or_none():
@@ -780,8 +780,8 @@ class ApparatusService:
         """Get custom field by ID"""
         result = await self.db.execute(
             select(ApparatusCustomField)
-            .where(ApparatusCustomField.id == field_id)
-            .where(ApparatusCustomField.organization_id == organization_id)
+            .where(ApparatusCustomField.id == str(field_id))
+            .where(ApparatusCustomField.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -829,7 +829,7 @@ class ApparatusService:
         if field_data.field_key and field_data.field_key != custom_field.field_key:
             result = await self.db.execute(
                 select(ApparatusCustomField)
-                .where(ApparatusCustomField.organization_id == organization_id)
+                .where(ApparatusCustomField.organization_id == str(organization_id))
                 .where(ApparatusCustomField.field_key == field_data.field_key)
                 .where(ApparatusCustomField.id != field_id)
             )
@@ -899,7 +899,7 @@ class ApparatusService:
         """Get maintenance type by ID"""
         result = await self.db.execute(
             select(ApparatusMaintenanceType)
-            .where(ApparatusMaintenanceType.id == type_id)
+            .where(ApparatusMaintenanceType.id == str(type_id))
             .where(
                 or_(
                     ApparatusMaintenanceType.organization_id == organization_id,
@@ -926,7 +926,7 @@ class ApparatusService:
                 )
             )
         else:
-            conditions.append(ApparatusMaintenanceType.organization_id == organization_id)
+            conditions.append(ApparatusMaintenanceType.organization_id == str(organization_id))
 
         if is_active is not None:
             conditions.append(ApparatusMaintenanceType.is_active == is_active)
@@ -991,8 +991,8 @@ class ApparatusService:
 
         result = await self.db.execute(
             select(func.count(ApparatusMaintenance.id))
-            .where(ApparatusMaintenance.maintenance_type_id == type_id)
-            .where(ApparatusMaintenance.organization_id == organization_id)
+            .where(ApparatusMaintenance.maintenance_type_id == str(type_id))
+            .where(ApparatusMaintenance.organization_id == str(organization_id))
         )
         count = result.scalar()
         if count > 0:
@@ -1059,8 +1059,8 @@ class ApparatusService:
         """Get maintenance record by ID"""
         result = await self.db.execute(
             select(ApparatusMaintenance)
-            .where(ApparatusMaintenance.id == record_id)
-            .where(ApparatusMaintenance.organization_id == organization_id)
+            .where(ApparatusMaintenance.id == str(record_id))
+            .where(ApparatusMaintenance.organization_id == str(organization_id))
             .options(selectinload(ApparatusMaintenance.maintenance_type))
         )
         return result.scalar_one_or_none()
@@ -1082,7 +1082,7 @@ class ApparatusService:
         conditions = [ApparatusMaintenance.organization_id == organization_id]
 
         if apparatus_id:
-            conditions.append(ApparatusMaintenance.apparatus_id == apparatus_id)
+            conditions.append(ApparatusMaintenance.apparatus_id == str(apparatus_id))
         if maintenance_type_id:
             conditions.append(ApparatusMaintenance.maintenance_type_id == maintenance_type_id)
         if is_completed is not None:
@@ -1261,7 +1261,7 @@ class ApparatusService:
         conditions = [ApparatusFuelLog.organization_id == organization_id]
 
         if apparatus_id:
-            conditions.append(ApparatusFuelLog.apparatus_id == apparatus_id)
+            conditions.append(ApparatusFuelLog.apparatus_id == str(apparatus_id))
         if start_date:
             conditions.append(ApparatusFuelLog.fuel_date >= start_date)
         if end_date:
@@ -1294,7 +1294,7 @@ class ApparatusService:
             select(ApparatusOperator)
             .where(ApparatusOperator.apparatus_id == operator_data.apparatus_id)
             .where(ApparatusOperator.user_id == operator_data.user_id)
-            .where(ApparatusOperator.organization_id == organization_id)
+            .where(ApparatusOperator.organization_id == str(organization_id))
         )
         if result.scalar_one_or_none():
             raise ValueError("Operator already assigned to this apparatus")
@@ -1324,9 +1324,9 @@ class ApparatusService:
         conditions = [ApparatusOperator.organization_id == organization_id]
 
         if apparatus_id:
-            conditions.append(ApparatusOperator.apparatus_id == apparatus_id)
+            conditions.append(ApparatusOperator.apparatus_id == str(apparatus_id))
         if user_id:
-            conditions.append(ApparatusOperator.user_id == user_id)
+            conditions.append(ApparatusOperator.user_id == str(user_id))
         if is_active is not None:
             conditions.append(ApparatusOperator.is_active == is_active)
 
@@ -1350,8 +1350,8 @@ class ApparatusService:
         """Update operator"""
         result = await self.db.execute(
             select(ApparatusOperator)
-            .where(ApparatusOperator.id == operator_id)
-            .where(ApparatusOperator.organization_id == organization_id)
+            .where(ApparatusOperator.id == str(operator_id))
+            .where(ApparatusOperator.organization_id == str(organization_id))
         )
         operator = result.scalar_one_or_none()
         if not operator:
@@ -1372,8 +1372,8 @@ class ApparatusService:
         """Delete operator"""
         result = await self.db.execute(
             select(ApparatusOperator)
-            .where(ApparatusOperator.id == operator_id)
-            .where(ApparatusOperator.organization_id == organization_id)
+            .where(ApparatusOperator.id == str(operator_id))
+            .where(ApparatusOperator.organization_id == str(organization_id))
         )
         operator = result.scalar_one_or_none()
         if not operator:
@@ -1419,7 +1419,7 @@ class ApparatusService:
         conditions = [ApparatusEquipment.organization_id == organization_id]
 
         if apparatus_id:
-            conditions.append(ApparatusEquipment.apparatus_id == apparatus_id)
+            conditions.append(ApparatusEquipment.apparatus_id == str(apparatus_id))
         if is_present is not None:
             conditions.append(ApparatusEquipment.is_present == is_present)
 
@@ -1443,8 +1443,8 @@ class ApparatusService:
         """Update equipment"""
         result = await self.db.execute(
             select(ApparatusEquipment)
-            .where(ApparatusEquipment.id == equipment_id)
-            .where(ApparatusEquipment.organization_id == organization_id)
+            .where(ApparatusEquipment.id == str(equipment_id))
+            .where(ApparatusEquipment.organization_id == str(organization_id))
         )
         equipment = result.scalar_one_or_none()
         if not equipment:
@@ -1465,8 +1465,8 @@ class ApparatusService:
         """Delete equipment"""
         result = await self.db.execute(
             select(ApparatusEquipment)
-            .where(ApparatusEquipment.id == equipment_id)
-            .where(ApparatusEquipment.organization_id == organization_id)
+            .where(ApparatusEquipment.id == str(equipment_id))
+            .where(ApparatusEquipment.organization_id == str(organization_id))
         )
         equipment = result.scalar_one_or_none()
         if not equipment:
@@ -1493,7 +1493,7 @@ class ApparatusService:
             result = await self.db.execute(
                 select(ApparatusPhoto)
                 .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
-                .where(ApparatusPhoto.organization_id == organization_id)
+                .where(ApparatusPhoto.organization_id == str(organization_id))
                 .where(ApparatusPhoto.is_primary == True)
             )
             for photo in result.scalars().all():
@@ -1517,8 +1517,8 @@ class ApparatusService:
         """List photos for apparatus"""
         query = (
             select(ApparatusPhoto)
-            .where(ApparatusPhoto.apparatus_id == apparatus_id)
-            .where(ApparatusPhoto.organization_id == organization_id)
+            .where(ApparatusPhoto.apparatus_id == str(apparatus_id))
+            .where(ApparatusPhoto.organization_id == str(organization_id))
             .order_by(desc(ApparatusPhoto.is_primary), desc(ApparatusPhoto.uploaded_at))
         )
 
@@ -1531,8 +1531,8 @@ class ApparatusService:
         """Delete photo"""
         result = await self.db.execute(
             select(ApparatusPhoto)
-            .where(ApparatusPhoto.id == photo_id)
-            .where(ApparatusPhoto.organization_id == organization_id)
+            .where(ApparatusPhoto.id == str(photo_id))
+            .where(ApparatusPhoto.organization_id == str(organization_id))
         )
         photo = result.scalar_one_or_none()
         if not photo:
@@ -1568,8 +1568,8 @@ class ApparatusService:
         """List documents for apparatus"""
         query = (
             select(ApparatusDocument)
-            .where(ApparatusDocument.apparatus_id == apparatus_id)
-            .where(ApparatusDocument.organization_id == organization_id)
+            .where(ApparatusDocument.apparatus_id == str(apparatus_id))
+            .where(ApparatusDocument.organization_id == str(organization_id))
             .order_by(ApparatusDocument.document_type, desc(ApparatusDocument.uploaded_at))
         )
 
@@ -1582,8 +1582,8 @@ class ApparatusService:
         """Delete document"""
         result = await self.db.execute(
             select(ApparatusDocument)
-            .where(ApparatusDocument.id == document_id)
-            .where(ApparatusDocument.organization_id == organization_id)
+            .where(ApparatusDocument.id == str(document_id))
+            .where(ApparatusDocument.organization_id == str(organization_id))
         )
         document = result.scalar_one_or_none()
         if not document:
@@ -1610,7 +1610,7 @@ class ApparatusService:
                 func.count(Apparatus.id).label("count")
             )
             .join(Apparatus, Apparatus.status_id == ApparatusStatus.id)
-            .where(Apparatus.organization_id == organization_id)
+            .where(Apparatus.organization_id == str(organization_id))
             .group_by(ApparatusStatus.id)
         )
         status_result = await self.db.execute(status_counts_query)
@@ -1623,7 +1623,7 @@ class ApparatusService:
                 func.count(Apparatus.id).label("count")
             )
             .join(Apparatus, Apparatus.apparatus_type_id == ApparatusType.id)
-            .where(Apparatus.organization_id == organization_id)
+            .where(Apparatus.organization_id == str(organization_id))
             .where(Apparatus.is_archived == False)
             .group_by(ApparatusType.id)
         )
@@ -1709,7 +1709,7 @@ class ApparatusService:
             ApparatusNFPACompliance.organization_id == organization_id
         )
         if apparatus_id:
-            query = query.where(ApparatusNFPACompliance.apparatus_id == apparatus_id)
+            query = query.where(ApparatusNFPACompliance.apparatus_id == str(apparatus_id))
         if compliance_status:
             query = query.where(ApparatusNFPACompliance.compliance_status == compliance_status)
 
@@ -1724,7 +1724,7 @@ class ApparatusService:
         result = await self.db.execute(
             select(ApparatusNFPACompliance)
             .where(ApparatusNFPACompliance.id == compliance_id)
-            .where(ApparatusNFPACompliance.organization_id == organization_id)
+            .where(ApparatusNFPACompliance.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -1810,8 +1810,8 @@ class ApparatusService:
         """Get a specific report config"""
         result = await self.db.execute(
             select(ApparatusReportConfig)
-            .where(ApparatusReportConfig.id == config_id)
-            .where(ApparatusReportConfig.organization_id == organization_id)
+            .where(ApparatusReportConfig.id == str(config_id))
+            .where(ApparatusReportConfig.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -1888,8 +1888,8 @@ class ApparatusService:
         """Get a specific service provider"""
         result = await self.db.execute(
             select(ApparatusServiceProvider)
-            .where(ApparatusServiceProvider.id == provider_id)
-            .where(ApparatusServiceProvider.organization_id == organization_id)
+            .where(ApparatusServiceProvider.id == str(provider_id))
+            .where(ApparatusServiceProvider.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -1971,7 +1971,7 @@ class ApparatusService:
             ApparatusComponent.organization_id == organization_id
         )
         if apparatus_id:
-            query = query.where(ApparatusComponent.apparatus_id == apparatus_id)
+            query = query.where(ApparatusComponent.apparatus_id == str(apparatus_id))
         if component_type:
             query = query.where(ApparatusComponent.component_type == component_type)
         if is_active is not None:
@@ -1989,8 +1989,8 @@ class ApparatusService:
         """Get a specific component"""
         result = await self.db.execute(
             select(ApparatusComponent)
-            .where(ApparatusComponent.id == component_id)
-            .where(ApparatusComponent.organization_id == organization_id)
+            .where(ApparatusComponent.id == str(component_id))
+            .where(ApparatusComponent.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -2062,9 +2062,9 @@ class ApparatusService:
             ApparatusComponentNote.organization_id == organization_id
         )
         if apparatus_id:
-            query = query.where(ApparatusComponentNote.apparatus_id == apparatus_id)
+            query = query.where(ApparatusComponentNote.apparatus_id == str(apparatus_id))
         if component_id:
-            query = query.where(ApparatusComponentNote.component_id == component_id)
+            query = query.where(ApparatusComponentNote.component_id == str(component_id))
         if note_status:
             query = query.where(ApparatusComponentNote.status == note_status)
         if severity:
@@ -2086,8 +2086,8 @@ class ApparatusService:
         """Get a specific component note"""
         result = await self.db.execute(
             select(ApparatusComponentNote)
-            .where(ApparatusComponentNote.id == note_id)
-            .where(ApparatusComponentNote.organization_id == organization_id)
+            .where(ApparatusComponentNote.id == str(note_id))
+            .where(ApparatusComponentNote.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 

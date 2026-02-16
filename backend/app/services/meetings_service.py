@@ -98,7 +98,7 @@ class MeetingsService:
         """Get meetings with filtering and pagination"""
         query = (
             select(Meeting)
-            .where(Meeting.organization_id == organization_id)
+            .where(Meeting.organization_id == str(organization_id))
         )
 
         if meeting_type:
@@ -143,8 +143,8 @@ class MeetingsService:
         """Get a meeting by ID with attendees and action items"""
         result = await self.db.execute(
             select(Meeting)
-            .where(Meeting.id == meeting_id)
-            .where(Meeting.organization_id == organization_id)
+            .where(Meeting.id == str(meeting_id))
+            .where(Meeting.organization_id == str(organization_id))
             .options(
                 selectinload(Meeting.attendees),
                 selectinload(Meeting.action_items),
@@ -240,9 +240,9 @@ class MeetingsService:
         try:
             result = await self.db.execute(
                 select(MeetingAttendee)
-                .where(MeetingAttendee.id == attendee_id)
-                .where(MeetingAttendee.meeting_id == meeting_id)
-                .where(MeetingAttendee.organization_id == organization_id)
+                .where(MeetingAttendee.id == str(attendee_id))
+                .where(MeetingAttendee.meeting_id == str(meeting_id))
+                .where(MeetingAttendee.organization_id == str(organization_id))
             )
             attendee = result.scalar_one_or_none()
             if not attendee:
@@ -288,8 +288,8 @@ class MeetingsService:
         try:
             result = await self.db.execute(
                 select(MeetingActionItem)
-                .where(MeetingActionItem.id == item_id)
-                .where(MeetingActionItem.organization_id == organization_id)
+                .where(MeetingActionItem.id == str(item_id))
+                .where(MeetingActionItem.organization_id == str(organization_id))
             )
             item = result.scalar_one_or_none()
             if not item:
@@ -318,8 +318,8 @@ class MeetingsService:
         try:
             result = await self.db.execute(
                 select(MeetingActionItem)
-                .where(MeetingActionItem.id == item_id)
-                .where(MeetingActionItem.organization_id == organization_id)
+                .where(MeetingActionItem.id == str(item_id))
+                .where(MeetingActionItem.organization_id == str(organization_id))
             )
             item = result.scalar_one_or_none()
             if not item:
@@ -338,7 +338,7 @@ class MeetingsService:
         """Get all open action items for the organization"""
         query = (
             select(MeetingActionItem)
-            .where(MeetingActionItem.organization_id == organization_id)
+            .where(MeetingActionItem.organization_id == str(organization_id))
             .where(MeetingActionItem.status.in_([ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]))
         )
 
@@ -358,7 +358,7 @@ class MeetingsService:
         # Total meetings
         total_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == organization_id)
+            .where(Meeting.organization_id == str(organization_id))
         )
         total_meetings = total_result.scalar() or 0
 
@@ -366,7 +366,7 @@ class MeetingsService:
         first_of_month = date.today().replace(day=1)
         month_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == organization_id)
+            .where(Meeting.organization_id == str(organization_id))
             .where(Meeting.meeting_date >= first_of_month)
         )
         meetings_this_month = month_result.scalar() or 0
@@ -374,7 +374,7 @@ class MeetingsService:
         # Open action items
         open_result = await self.db.execute(
             select(func.count(MeetingActionItem.id))
-            .where(MeetingActionItem.organization_id == organization_id)
+            .where(MeetingActionItem.organization_id == str(organization_id))
             .where(MeetingActionItem.status.in_([ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]))
         )
         open_action_items = open_result.scalar() or 0
@@ -382,7 +382,7 @@ class MeetingsService:
         # Pending approval
         pending_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == organization_id)
+            .where(Meeting.organization_id == str(organization_id))
             .where(Meeting.status == MeetingStatus.PENDING_APPROVAL)
         )
         pending_approval = pending_result.scalar() or 0

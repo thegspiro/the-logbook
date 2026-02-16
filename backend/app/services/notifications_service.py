@@ -59,7 +59,7 @@ class NotificationsService:
         """Get notification rules with optional filtering"""
         query = (
             select(NotificationRule)
-            .where(NotificationRule.organization_id == organization_id)
+            .where(NotificationRule.organization_id == str(organization_id))
         )
 
         if category:
@@ -91,8 +91,8 @@ class NotificationsService:
         """Get a notification rule by ID"""
         result = await self.db.execute(
             select(NotificationRule)
-            .where(NotificationRule.id == rule_id)
-            .where(NotificationRule.organization_id == organization_id)
+            .where(NotificationRule.id == str(rule_id))
+            .where(NotificationRule.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -168,7 +168,7 @@ class NotificationsService:
         """Get notification logs with pagination"""
         query = (
             select(NotificationLog)
-            .where(NotificationLog.organization_id == organization_id)
+            .where(NotificationLog.organization_id == str(organization_id))
         )
 
         if channel:
@@ -197,8 +197,8 @@ class NotificationsService:
         try:
             result = await self.db.execute(
                 select(NotificationLog)
-                .where(NotificationLog.id == log_id)
-                .where(NotificationLog.organization_id == organization_id)
+                .where(NotificationLog.id == str(log_id))
+                .where(NotificationLog.organization_id == str(organization_id))
             )
             log = result.scalar_one_or_none()
             if not log:
@@ -223,14 +223,14 @@ class NotificationsService:
         # Total rules
         total_result = await self.db.execute(
             select(func.count(NotificationRule.id))
-            .where(NotificationRule.organization_id == organization_id)
+            .where(NotificationRule.organization_id == str(organization_id))
         )
         total_rules = total_result.scalar() or 0
 
         # Active rules
         active_result = await self.db.execute(
             select(func.count(NotificationRule.id))
-            .where(NotificationRule.organization_id == organization_id)
+            .where(NotificationRule.organization_id == str(organization_id))
             .where(NotificationRule.enabled == True)
         )
         active_rules = active_result.scalar() or 0
@@ -239,7 +239,7 @@ class NotificationsService:
         first_of_month = date.today().replace(day=1)
         email_result = await self.db.execute(
             select(func.count(NotificationLog.id))
-            .where(NotificationLog.organization_id == organization_id)
+            .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.channel == NotificationChannel.EMAIL)
             .where(NotificationLog.sent_at >= datetime.combine(first_of_month, datetime.min.time()))
         )
@@ -248,7 +248,7 @@ class NotificationsService:
         # Total notifications this month
         total_notif_result = await self.db.execute(
             select(func.count(NotificationLog.id))
-            .where(NotificationLog.organization_id == organization_id)
+            .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.sent_at >= datetime.combine(first_of_month, datetime.min.time()))
         )
         notifications_this_month = total_notif_result.scalar() or 0

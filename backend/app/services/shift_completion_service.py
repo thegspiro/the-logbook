@@ -117,7 +117,7 @@ class ShiftCompletionService:
 
         # If specific enrollment provided, narrow down
         if enrollment_id:
-            enrollment_query = enrollment_query.where(ProgramEnrollment.id == enrollment_id)
+            enrollment_query = enrollment_query.where(ProgramEnrollment.id == str(enrollment_id))
 
         result = await self.db.execute(enrollment_query)
         enrollments = result.scalars().all()
