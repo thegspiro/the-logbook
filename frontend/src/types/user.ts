@@ -49,3 +49,10 @@ export interface ContactInfoUpdate {
   mobile?: string;
   notification_preferences?: NotificationPreferences;
 }
+
+export interface MembershipIdSettings {
+  enabled: boolean;
+  prefix: string;
+  next_number: number;
+  padding: number;
+}

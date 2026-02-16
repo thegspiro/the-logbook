@@ -260,6 +260,7 @@ export const userService = {
     middle_name?: string;
     last_name: string;
     badge_number?: string;
+    membership_id?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;

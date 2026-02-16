@@ -57,7 +57,7 @@ export const SettingsPage: React.FC = () => {
 
       await organizationService.updateContactInfoSettings(settings);
 
-      setSuccessMessage('Settings saved successfully!');
+      setSuccessMessage('Contact info settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       setError('Unable to save settings. Please check your connection and try again.');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   UserPlus,
@@ -12,12 +12,14 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
-import { userService } from '../services/api';
+import { userService, organizationService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
+  const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
+  const [membershipIdOverride, setMembershipIdOverride] = useState('');
   const [formData, setFormData] = useState<MemberFormData>({
     firstName: '',
     lastName: '',
@@ -49,6 +51,16 @@ const AddMember: React.FC = () => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    organizationService.previewNextMembershipId().then((data) => {
+      if (data.enabled && data.next_id) {
+        setMembershipIdPreview(data.next_id);
+      }
+    }).catch(() => {
+      // Silently ignore - membership ID may not be configured
+    });
+  }, []);
 
   const handleInputChange = (
     field: keyof MemberFormData,
@@ -148,6 +160,7 @@ const AddMember: React.FC = () => {
         middle_name: formData.middleName || undefined,
         last_name: formData.lastName,
         badge_number: formData.departmentId || undefined,
+        membership_id: membershipIdOverride || undefined,
         phone: formData.primaryPhone || undefined,
         mobile: formData.secondaryPhone || undefined,
         date_of_birth: formData.dateOfBirth || undefined,
@@ -298,6 +311,33 @@ const AddMember: React.FC = () => {
                 />
               </div>
             </div>
+
+            {/* Membership ID - shown when membership IDs are enabled */}
+            {membershipIdPreview && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-slate-200 mb-2">
+                  Membership ID
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={membershipIdOverride}
+                    onChange={(e) => setMembershipIdOverride(e.target.value)}
+                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={membershipIdPreview}
+                  />
+                  <span className="text-sm text-theme-text-muted">
+                    {membershipIdOverride
+                      ? 'Manual override'
+                      : `Auto-assigned: ${membershipIdPreview}`
+                    }
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-theme-text-muted">
+                  Leave blank to auto-assign the next ID. Enter a value to manually assign (e.g., for returning former members).
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Home Address */}

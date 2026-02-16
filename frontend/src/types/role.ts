@@ -37,6 +37,7 @@ export interface UserWithRoles {
   last_name?: string;
   full_name?: string;
   badge_number?: string;
+  membership_id?: string;
   phone?: string;
   mobile?: string;
   photo_url?: string;

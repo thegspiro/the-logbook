@@ -151,6 +151,12 @@ async def create_member(
     # Generate temporary password
     temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
 
+    # Auto-assign membership ID if enabled and not manually provided
+    membership_id = user_data.membership_id
+    if not membership_id:
+        org_service = OrganizationService(db)
+        membership_id = await org_service.generate_next_membership_id(current_user.organization_id)
+
     # Create new user
     new_user = User(
         id=str(uuid4()),
@@ -162,6 +168,7 @@ async def create_member(
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
         badge_number=user_data.badge_number,
+        membership_id=membership_id,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
