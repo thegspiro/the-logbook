@@ -26,6 +26,7 @@ import type {
   TrainingCategory,
   DueDateType,
   RequirementFrequency,
+  RequirementType,
   TrainingType,
 } from '../types/training';
 import toast from 'react-hot-toast';
@@ -86,6 +87,7 @@ const TrainingRequirementsPage: React.FC = () => {
       const newReq: TrainingRequirementCreate = {
         name: `${requirement.name} (Copy)`,
         description: requirement.description,
+        requirement_type: requirement.requirement_type || 'hours',
         training_type: requirement.training_type,
         required_hours: requirement.required_hours,
         required_courses: requirement.required_courses,
@@ -333,6 +335,19 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
   onDuplicate,
   onToggleActive,
 }) => {
+  const getRequirementTypeLabel = (type: string) => {
+    switch (type) {
+      case 'hours': return 'Hours';
+      case 'courses': return 'Courses';
+      case 'certification': return 'Certification';
+      case 'shifts': return 'Shifts';
+      case 'calls': return 'Calls';
+      case 'skills_evaluation': return 'Skills Evaluation';
+      case 'checklist': return 'Checklist';
+      default: return type;
+    }
+  };
+
   const getDueDateTypeLabel = (type: DueDateType) => {
     switch (type) {
       case 'calendar_period': return 'Calendar Period';
@@ -359,6 +374,11 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-2">
               <h3 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h3>
+              {requirement.requirement_type && (
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-green-700 text-theme-text-primary">
+                  {getRequirementTypeLabel(requirement.requirement_type)}
+                </span>
+              )}
               <span className={`text-xs font-semibold px-2 py-1 rounded ${
                 requirement.due_date_type === 'rolling' ? 'bg-purple-600' :
                 requirement.due_date_type === 'calendar_period' ? 'bg-blue-600' :
@@ -541,6 +561,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
   const [formData, setFormData] = useState({
     name: requirement?.name || '',
     description: requirement?.description || '',
+    requirement_type: (requirement?.requirement_type || 'hours') as RequirementType,
     training_type: requirement?.training_type || '',
     required_hours: requirement?.required_hours || undefined,
     frequency: requirement?.frequency || 'annual' as RequirementFrequency,
@@ -569,6 +590,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
       const data = {
         name: formData.name,
         description: formData.description || undefined,
+        requirement_type: formData.requirement_type as RequirementType,
         training_type: formData.training_type as TrainingType || undefined,
         required_hours: formData.required_hours || undefined,
         frequency: formData.frequency,
@@ -651,6 +673,28 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 placeholder="Describe the requirement..."
                 rows={3}
               />
+            </div>
+
+            <div>
+              <label htmlFor="req-requirement-type" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                Requirement Type <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+              </label>
+              <select
+                id="req-requirement-type"
+                value={formData.requirement_type}
+                onChange={(e) => setFormData({ ...formData, requirement_type: e.target.value as RequirementType })}
+                className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
+                aria-required="true"
+              >
+                <option value="hours">Hours</option>
+                <option value="courses">Courses</option>
+                <option value="certification">Certification</option>
+                <option value="shifts">Shifts</option>
+                <option value="calls">Calls</option>
+                <option value="skills_evaluation">Skills Evaluation</option>
+                <option value="checklist">Checklist</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -922,6 +966,7 @@ const TemplateModal: React.FC<{
     {
       name: 'NFPA 1001 Annual Training',
       description: 'NFPA 1001 requires annual training for firefighters',
+      requirement_type: 'hours',
       required_hours: 36,
       frequency: 'annual',
       applies_to_all: false,
@@ -932,6 +977,7 @@ const TemplateModal: React.FC<{
     {
       name: 'NREMT EMT Recertification',
       description: 'National Registry EMT continuing education requirements',
+      requirement_type: 'hours',
       required_hours: 24,
       frequency: 'biannual',
       applies_to_all: false,
@@ -941,6 +987,7 @@ const TemplateModal: React.FC<{
     {
       name: 'Annual CPR Certification',
       description: 'Annual CPR certification renewal requirement',
+      requirement_type: 'certification',
       required_hours: 4,
       frequency: 'annual',
       applies_to_all: true,
@@ -950,6 +997,7 @@ const TemplateModal: React.FC<{
     {
       name: 'Hazmat Operations Refresher',
       description: 'OSHA-required hazmat operations refresher training',
+      requirement_type: 'hours',
       required_hours: 8,
       frequency: 'annual',
       applies_to_all: false,

@@ -8,6 +8,8 @@ import axios from 'axios';
 import type { User, ContactInfoSettings, ContactInfoUpdate } from '../types/user';
 import type {
   Role,
+  RoleWithUserCount,
+  RoleUsersResponse,
   Permission,
   PermissionCategory,
   UserWithRoles,
@@ -365,10 +367,20 @@ export const roleService = {
   },
 
   /**
-   * Get all roles
+   * Get all roles (with user counts)
    */
-  async getRoles(): Promise<Role[]> {
-    const response = await api.get<Role[]>('/roles');
+  async getRoles(): Promise<RoleWithUserCount[]> {
+    const response = await api.get<RoleWithUserCount[]>('/roles', {
+      params: { include_user_count: true },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get users assigned to a specific role
+   */
+  async getRoleUsers(roleId: string): Promise<RoleUsersResponse> {
+    const response = await api.get<RoleUsersResponse>(`/roles/${roleId}/users`);
     return response.data;
   },
 

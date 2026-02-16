@@ -69,6 +69,9 @@ export const ElectionDetailPage: React.FC = () => {
   useEffect(() => {
     if (electionId) {
       fetchElection();
+    } else {
+      setLoading(false);
+      setError('Election not found');
     }
   }, [electionId]);
 
