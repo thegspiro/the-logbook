@@ -867,7 +867,10 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
                         ) : (
-                          <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded">
+                          <button
+                            onClick={() => toast('Manual category mapping coming soon. Run a sync to auto-map categories.')}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded"
+                          >
                             Map Category
                           </button>
                         )}
@@ -911,7 +914,10 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                             {mapping.auto_mapped && <span className="text-xs">(auto)</span>}
                           </span>
                         ) : (
-                          <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded">
+                          <button
+                            onClick={() => toast('Manual user mapping coming soon. Run a sync to auto-map users.')}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded"
+                          >
                             Map User
                           </button>
                         )}

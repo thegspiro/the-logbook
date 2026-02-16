@@ -159,7 +159,10 @@ export default function TrainingDashboardPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-theme-text-primary">Active Training Courses</h2>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                <button
+                  onClick={() => navigate('/training/courses')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
                   Add New Course
                 </button>
               </div>
@@ -211,8 +214,8 @@ export default function TrainingDashboardPage() {
                           {course.instructor || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
-                          <button className="text-theme-text-secondary hover:text-theme-text-primary">View</button>
+                          <button onClick={() => navigate('/training/courses')} className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                          <button onClick={() => navigate('/training/courses')} className="text-theme-text-secondary hover:text-theme-text-primary">View</button>
                         </td>
                       </tr>
                     ))}
@@ -234,7 +237,10 @@ export default function TrainingDashboardPage() {
                 <h2 className="text-lg font-semibold text-theme-text-primary">
                   Training Requirements for {currentYear}
                 </h2>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                <button
+                  onClick={() => navigate('/training/requirements')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
                   Add New Requirement
                 </button>
               </div>
@@ -278,10 +284,10 @@ export default function TrainingDashboardPage() {
                         </div>
                       </div>
                       <div className="ml-4">
-                        <button className="text-sm text-blue-600 hover:text-blue-900 mr-3">
+                        <button onClick={() => navigate('/training/requirements')} className="text-sm text-blue-600 hover:text-blue-900 mr-3">
                           Edit
                         </button>
-                        <button className="text-sm text-theme-text-secondary hover:text-theme-text-primary">
+                        <button onClick={() => navigate('/training/requirements')} className="text-sm text-theme-text-secondary hover:text-theme-text-primary">
                           View Progress
                         </button>
                       </div>
@@ -364,7 +370,7 @@ export default function TrainingDashboardPage() {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900">
+                            <button onClick={() => navigate('/training/sessions/new')} className="text-blue-600 hover:text-blue-900">
                               Schedule Renewal
                             </button>
                           </td>

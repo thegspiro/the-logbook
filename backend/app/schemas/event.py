@@ -90,6 +90,13 @@ class EventResponse(EventBase):
     created_at: datetime
     updated_at: datetime
 
+    # Recurrence fields
+    is_recurring: bool = False
+    recurrence_pattern: Optional[str] = None
+    recurrence_end_date: Optional[datetime] = None
+    recurrence_custom_days: Optional[List[int]] = None
+    recurrence_parent_id: Optional[UUID] = None
+
     # Additional computed fields
     rsvp_count: Optional[int] = None
     going_count: Optional[int] = None
