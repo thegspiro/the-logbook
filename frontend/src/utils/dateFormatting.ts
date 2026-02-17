@@ -85,21 +85,18 @@ export const formatTime = (dateString?: string | Date | null, timezone?: string)
  */
 export const formatForDateTimeInput = (dateString?: string | Date | null, timezone?: string): string => {
   if (!dateString) return '';
-  if (!timezone) {
-    return new Date(dateString).toISOString().slice(0, 16);
-  }
-  // Format in the target timezone for input fields
   const date = new Date(dateString);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
+  const formatOpts: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).formatToParts(date);
-
+  };
+  if (timezone) formatOpts.timeZone = timezone;
+  // Use Intl to format in the target timezone (or browser local when omitted)
+  const parts = new Intl.DateTimeFormat('en-CA', formatOpts).formatToParts(date);
   const get = (type: string) => parts.find(p => p.type === type)?.value || '';
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
 };

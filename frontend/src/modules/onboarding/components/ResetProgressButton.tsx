@@ -78,7 +78,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
       {/* Reset Button */}
       <button
         onClick={() => setShowModal(true)}
-        className={`inline-flex items-center px-4 py-2 text-red-400 hover:text-red-300 bg-transparent border border-red-600/50 hover:border-red-500 rounded-lg font-medium transition-all duration-300 ${className}`}
+        className={`inline-flex items-center px-4 py-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-transparent border border-red-600/50 hover:border-red-500 rounded-lg font-medium transition-all duration-300 ${className}`}
         aria-label="Reset onboarding progress"
       >
         <RotateCcw className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -102,12 +102,12 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
           />
 
           {/* Modal Content */}
-          <div className="relative bg-slate-800 border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="relative bg-theme-surface border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
             {/* Close Button */}
             {!isResetting && (
               <button
                 onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+                className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 aria-label="Close dialog"
               >
                 <X className="w-5 h-5" aria-hidden="true" />
@@ -117,19 +117,19 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
             {/* Warning Icon */}
             <div className="flex justify-center mb-4">
               <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-8 h-8 text-red-500" aria-hidden="true" />
+                <AlertTriangle className="w-8 h-8 text-red-700 dark:text-red-500" aria-hidden="true" />
               </div>
             </div>
 
             {/* Title */}
-            <h3 id="reset-progress-title" className="text-xl font-bold text-white text-center mb-2">
+            <h3 id="reset-progress-title" className="text-xl font-bold text-theme-text-primary text-center mb-2">
               Reset Onboarding Progress?
             </h3>
 
             {/* Warning Message */}
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
               <p className="text-red-200 text-sm text-center">
-                <strong className="text-red-400">Warning:</strong> This action will:
+                <strong className="text-red-700 dark:text-red-400">Warning:</strong> This action will:
               </p>
               <ul className="mt-2 space-y-1 text-sm text-red-200">
                 <li className="flex items-start">
@@ -145,7 +145,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
                   Remove any users and organizations created
                 </li>
               </ul>
-              <p className="mt-3 text-red-300 text-sm text-center font-semibold">
+              <p className="mt-3 text-red-700 dark:text-red-300 text-sm text-center font-semibold">
                 This action cannot be undone.
               </p>
             </div>
@@ -162,7 +162,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
               <button
                 onClick={() => setShowModal(false)}
                 disabled={isResetting}
-                className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -174,7 +174,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
                 {isResetting ? (
                   <>
                     <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-theme-text-primary"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"

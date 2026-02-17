@@ -91,7 +91,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
       // Navigate to the event page to view QR code
       // navigate(`/events/${response.event_id}`);
-      navigate('/training/sessions');
+      navigate('/training/officer');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create training session'));
       setSaving(false);
@@ -111,23 +111,23 @@ const CreateTrainingSessionPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate('/training/sessions')}
-            className="flex items-center text-slate-400 hover:text-white transition-colors mb-4"
+            onClick={() => navigate('/training/officer')}
+            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Training Sessions
           </button>
-          <h1 className="text-3xl font-bold text-white flex items-center space-x-3">
-            <Calendar className="w-8 h-8 text-red-500" />
+          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
+            <Calendar className="w-8 h-8 text-red-700" />
             <span>Create Training Session</span>
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-theme-text-muted mt-1">
             Schedule a training event with automatic attendance tracking via QR code
           </p>
         </div>
 
         {/* Progress Steps */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 mb-8">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => {
               const Icon = step.icon;
@@ -143,25 +143,25 @@ const CreateTrainingSessionPage: React.FC = () => {
                           ? 'bg-green-600 border-green-600'
                           : isActive
                           ? 'bg-red-600 border-red-600'
-                          : 'bg-slate-800 border-slate-600'
+                          : 'bg-theme-input-bg border-theme-input-border'
                       }`}
                     >
                       {isComplete ? (
-                        <CheckCircle className="w-6 h-6 text-white" />
+                        <CheckCircle className="w-6 h-6 text-theme-text-primary" />
                       ) : (
-                        <Icon className={`w-6 h-6 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                        <Icon className={`w-6 h-6 ${isActive ? 'text-theme-text-primary' : 'text-theme-text-muted'}`} />
                       )}
                     </div>
                     <p
                       className={`mt-2 text-sm font-medium ${
-                        isActive ? 'text-white' : 'text-slate-400'
+                        isActive ? 'text-theme-text-primary' : 'text-theme-text-muted'
                       }`}
                     >
                       {step.title}
                     </p>
                   </div>
                   {index < steps.length - 1 && (
-                    <div className="flex-1 h-0.5 bg-slate-700 mx-4" />
+                    <div className="flex-1 h-0.5 bg-theme-surface-hover mx-4" />
                   )}
                 </React.Fragment>
               );
@@ -170,29 +170,29 @@ const CreateTrainingSessionPage: React.FC = () => {
         </div>
 
         {/* Form Content */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-8 border border-white/20 space-y-8">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border space-y-8">
           {/* Step 1: Event Details */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white mb-4">Event Details</h2>
+              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Event Details</h2>
 
               {/* Title */}
               <div>
-                <label className="block text-sm font-semibold text-slate-200 mb-2">
-                  Training Title <span className="text-red-400">*</span>
+                <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                  Training Title <span className="text-red-700">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => updateField('title', e.target.value)}
                   placeholder="e.g., CPR/AED Renewal Training"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-semibold text-slate-200 mb-2">
+                <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                   Description
                 </label>
                 <textarea
@@ -200,32 +200,32 @@ const CreateTrainingSessionPage: React.FC = () => {
                   onChange={(e) => updateField('description', e.target.value)}
                   placeholder="Training objectives, topics covered, etc."
                   rows={4}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
               {/* Date and Time */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-200 mb-2">
-                    Start Date & Time <span className="text-red-400">*</span>
+                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                    Start Date & Time <span className="text-red-700">*</span>
                   </label>
                   <input
                     type="datetime-local"
                     value={formatForDateTimeInput(formData.start_datetime, tz)}
                     onChange={(e) => updateField('start_datetime', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-200 mb-2">
-                    End Date & Time <span className="text-red-400">*</span>
+                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                    End Date & Time <span className="text-red-700">*</span>
                   </label>
                   <input
                     type="datetime-local"
                     value={formatForDateTimeInput(formData.end_datetime, tz)}
                     onChange={(e) => updateField('end_datetime', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
@@ -233,7 +233,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               {/* Location */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-200 mb-2">
+                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                     Location
                   </label>
                   <input
@@ -241,11 +241,11 @@ const CreateTrainingSessionPage: React.FC = () => {
                     value={formData.location}
                     onChange={(e) => updateField('location', e.target.value)}
                     placeholder="e.g., Station 1 Training Room"
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-200 mb-2">
+                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                     Location Details
                   </label>
                   <input
@@ -253,7 +253,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     value={formData.location_details}
                     onChange={(e) => updateField('location_details', e.target.value)}
                     placeholder="Additional location info"
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
@@ -266,9 +266,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="requires_rsvp"
                     checked={formData.requires_rsvp}
                     onChange={(e) => updateField('requires_rsvp', e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   />
-                  <label htmlFor="requires_rsvp" className="text-slate-300 text-sm">
+                  <label htmlFor="requires_rsvp" className="text-theme-text-secondary text-sm">
                     Require RSVP
                   </label>
                 </div>
@@ -278,9 +278,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="is_mandatory"
                     checked={formData.is_mandatory}
                     onChange={(e) => updateField('is_mandatory', e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   />
-                  <label htmlFor="is_mandatory" className="text-slate-300 text-sm">
+                  <label htmlFor="is_mandatory" className="text-theme-text-secondary text-sm">
                     Mandatory Training
                   </label>
                 </div>
@@ -289,18 +289,18 @@ const CreateTrainingSessionPage: React.FC = () => {
               {formData.requires_rsvp && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-slate-200 mb-2">
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                       RSVP Deadline
                     </label>
                     <input
                       type="datetime-local"
                       value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
                       onChange={(e) => updateField('rsvp_deadline', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-200 mb-2">
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                       Max Participants
                     </label>
                     <input
@@ -308,7 +308,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       value={formData.max_attendees || ''}
                       onChange={(e) => updateField('max_attendees', parseInt(e.target.value) || undefined)}
                       placeholder="Unlimited"
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                 </div>
@@ -319,14 +319,14 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Step 2: Training Info */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white mb-4">Training Information</h2>
+              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Training Information</h2>
 
               {/* Use Existing Course or Create New */}
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+                  <AlertCircle className="w-5 h-5 text-blue-700 mt-0.5 mr-3 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="text-blue-400 font-semibold mb-2">Course Selection</p>
+                    <p className="text-blue-700 font-semibold mb-2">Course Selection</p>
                     <div className="space-y-3">
                       <label className="flex items-center space-x-3 cursor-pointer">
                         <input
@@ -335,7 +335,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                           onChange={() => updateField('use_existing_course', false)}
                           className="w-4 h-4 text-red-600 focus:ring-red-500"
                         />
-                        <span className="text-slate-300 text-sm">Create new course for this training</span>
+                        <span className="text-theme-text-secondary text-sm">Create new course for this training</span>
                       </label>
                       <label className="flex items-center space-x-3 cursor-pointer">
                         <input
@@ -344,7 +344,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                           onChange={() => updateField('use_existing_course', true)}
                           className="w-4 h-4 text-red-600 focus:ring-red-500"
                         />
-                        <span className="text-slate-300 text-sm">Use existing course template</span>
+                        <span className="text-theme-text-secondary text-sm">Use existing course template</span>
                       </label>
                     </div>
                   </div>
@@ -354,13 +354,13 @@ const CreateTrainingSessionPage: React.FC = () => {
               {formData.use_existing_course ? (
                 /* Existing Course Selection */
                 <div>
-                  <label className="block text-sm font-semibold text-slate-200 mb-2">
-                    Select Course <span className="text-red-400">*</span>
+                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                    Select Course <span className="text-red-700">*</span>
                   </label>
                   <select
                     value={formData.course_id}
                     onChange={(e) => updateField('course_id', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     <option value="">Select a course...</option>
                     {availableCourses.map((course) => (
@@ -375,19 +375,19 @@ const CreateTrainingSessionPage: React.FC = () => {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-200 mb-2">
-                        Course Name <span className="text-red-400">*</span>
+                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        Course Name <span className="text-red-700">*</span>
                       </label>
                       <input
                         type="text"
                         value={formData.course_name}
                         onChange={(e) => updateField('course_name', e.target.value)}
                         placeholder="e.g., CPR/AED for Healthcare Providers"
-                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-200 mb-2">
+                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                         Course Code
                       </label>
                       <input
@@ -395,20 +395,20 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.course_code}
                         onChange={(e) => updateField('course_code', e.target.value)}
                         placeholder="e.g., CPR-HCP"
-                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-200 mb-2">
-                        Training Type <span className="text-red-400">*</span>
+                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        Training Type <span className="text-red-700">*</span>
                       </label>
                       <select
                         value={formData.training_type}
                         onChange={(e) => updateField('training_type', e.target.value as TrainingType)}
-                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                       >
                         <option value="certification">Certification</option>
                         <option value="continuing_education">Continuing Education</option>
@@ -419,8 +419,8 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-200 mb-2">
-                        Hours <span className="text-red-400">*</span>
+                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        Credit Hours <span className="text-red-700">*</span>
                       </label>
                       <input
                         type="number"
@@ -428,13 +428,13 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.credit_hours}
                         onChange={(e) => updateField('credit_hours', parseFloat(e.target.value) || 0)}
                         placeholder="0"
-                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-slate-200 mb-2">
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                       Instructor
                     </label>
                     <input
@@ -442,23 +442,23 @@ const CreateTrainingSessionPage: React.FC = () => {
                       value={formData.instructor}
                       onChange={(e) => updateField('instructor', e.target.value)}
                       placeholder="Instructor name"
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                 </>
               )}
 
               {/* Certification Settings */}
-              <div className="border-t border-white/10 pt-6">
+              <div className="border-t border-theme-surface-border pt-6">
                 <div className="flex items-center space-x-3 mb-4">
                   <input
                     type="checkbox"
                     id="issues_certification"
                     checked={formData.issues_certification}
                     onChange={(e) => updateField('issues_certification', e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   />
-                  <label htmlFor="issues_certification" className="text-slate-200 font-semibold">
+                  <label htmlFor="issues_certification" className="text-theme-text-primary font-semibold">
                     This training issues a certification
                   </label>
                 </div>
@@ -467,7 +467,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <div className="space-y-4 pl-7">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-200 mb-2">
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                           Issuing Agency
                         </label>
                         <input
@@ -475,11 +475,11 @@ const CreateTrainingSessionPage: React.FC = () => {
                           value={formData.issuing_agency}
                           onChange={(e) => updateField('issuing_agency', e.target.value)}
                           placeholder="e.g., American Heart Association"
-                          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-200 mb-2">
+                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                           Cert Number Prefix
                         </label>
                         <input
@@ -487,12 +487,12 @@ const CreateTrainingSessionPage: React.FC = () => {
                           value={formData.certification_number_prefix}
                           onChange={(e) => updateField('certification_number_prefix', e.target.value)}
                           placeholder="e.g., AHA-CPR-"
-                          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-200 mb-2">
+                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                         Expiration (months)
                       </label>
                       <input
@@ -500,7 +500,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         value={formData.expiration_months || ''}
                         onChange={(e) => updateField('expiration_months', parseInt(e.target.value) || undefined)}
                         placeholder="e.g., 24 (for 2 years)"
-                        className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                   </div>
@@ -512,14 +512,14 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Step 3: Settings */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white mb-4">Attendance & Completion Settings</h2>
+              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Attendance & Completion Settings</h2>
 
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
-                  <QrCode className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
+                  <QrCode className="w-5 h-5 text-green-700 mt-0.5 mr-3 flex-shrink-0" />
                   <div>
-                    <p className="text-green-400 font-semibold mb-1">QR Code Check-In</p>
-                    <p className="text-slate-300 text-sm">
+                    <p className="text-green-700 font-semibold mb-1">QR Code Check-In</p>
+                    <p className="text-theme-text-secondary text-sm">
                       A QR code will be automatically generated for this training. Members can scan it to check in
                       and verify their attendance.
                     </p>
@@ -534,13 +534,13 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="auto_create_records"
                     checked={formData.auto_create_records}
                     onChange={(e) => updateField('auto_create_records', e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500 mt-1"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500 mt-1"
                   />
                   <div>
-                    <label htmlFor="auto_create_records" className="text-slate-200 font-semibold block">
+                    <label htmlFor="auto_create_records" className="text-theme-text-primary font-semibold block">
                       Auto-create training records on check-in
                     </label>
-                    <p className="text-slate-400 text-sm mt-1">
+                    <p className="text-theme-text-muted text-sm mt-1">
                       Automatically create a training record for each member who checks in via QR code
                     </p>
                   </div>
@@ -552,13 +552,13 @@ const CreateTrainingSessionPage: React.FC = () => {
                     id="require_completion_confirmation"
                     checked={formData.require_completion_confirmation}
                     onChange={(e) => updateField('require_completion_confirmation', e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500 mt-1"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500 mt-1"
                   />
                   <div>
-                    <label htmlFor="require_completion_confirmation" className="text-slate-200 font-semibold block">
+                    <label htmlFor="require_completion_confirmation" className="text-theme-text-primary font-semibold block">
                       Require instructor confirmation
                     </label>
-                    <p className="text-slate-400 text-sm mt-1">
+                    <p className="text-theme-text-muted text-sm mt-1">
                       Training records will be marked as "pending" until instructor confirms completion
                     </p>
                   </div>
@@ -570,9 +570,9 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Step 4: Review */}
           {currentStep === 4 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white mb-4">Review Training Session</h2>
+              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Review Training Session</h2>
 
-              <div className="bg-slate-800/50 rounded-lg p-6 space-y-4">
+              <div className="bg-theme-input-bg/50 rounded-lg p-6 space-y-4">
                 <ReviewSection title="Event Details">
                   <ReviewItem label="Title" value={formData.title} />
                   <ReviewItem label="Start" value={formatDateTime(formData.start_datetime, tz)} />
@@ -614,11 +614,11 @@ const CreateTrainingSessionPage: React.FC = () => {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6 border-t border-white/10">
+          <div className="flex justify-between pt-6 border-t border-theme-surface-border">
             <button
               onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
               disabled={currentStep === 1}
-              className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
@@ -658,15 +658,15 @@ const CreateTrainingSessionPage: React.FC = () => {
 
 const ReviewSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
-    <h3 className="text-white font-semibold mb-3">{title}</h3>
+    <h3 className="text-theme-text-primary font-semibold mb-3">{title}</h3>
     <div className="space-y-2">{children}</div>
   </div>
 );
 
 const ReviewItem: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="flex justify-between text-sm">
-    <span className="text-slate-400">{label}:</span>
-    <span className="text-white font-medium capitalize">{value}</span>
+    <span className="text-theme-text-muted">{label}:</span>
+    <span className="text-theme-text-primary font-medium capitalize">{value}</span>
   </div>
 );
 

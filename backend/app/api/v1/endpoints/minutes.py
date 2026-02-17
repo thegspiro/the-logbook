@@ -847,7 +847,7 @@ async def set_meeting_quorum_config(
 
     result = await db.execute(
         sa_select(MeetingMinutes)
-        .where(MeetingMinutes.id == minutes_id)
+        .where(MeetingMinutes.id == str(minutes_id))
         .where(MeetingMinutes.organization_id == current_user.organization_id)
     )
     minutes = result.scalar_one_or_none()

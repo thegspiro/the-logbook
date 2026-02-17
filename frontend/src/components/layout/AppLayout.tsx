@@ -20,7 +20,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const _user = useAuthStore((s) => s.user);
   const [departmentName, setDepartmentName] = useState('Fire Department');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>('top');
+  const [navigationLayout, setNavigationLayout] = useState<'top' | 'left'>(
+    () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
+  );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Session inactivity timeout
@@ -47,10 +49,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, [logout, navigate]);
 
   useEffect(() => {
-    // Load department info and navigation preference from sessionStorage first
-    const savedDepartmentName = sessionStorage.getItem('departmentName');
-    const savedLogo = sessionStorage.getItem('logoData');
-    const savedLayout = sessionStorage.getItem('navigationLayout') as 'top' | 'left' | null;
+    // Load branding from localStorage first (persists across sessions/logout)
+    const savedDepartmentName = localStorage.getItem('departmentName');
+    const savedLogo = localStorage.getItem('logoData');
 
     if (savedDepartmentName) {
       setDepartmentName(savedDepartmentName);
@@ -58,21 +59,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     if (savedLogo) {
       setLogoPreview(savedLogo);
     }
-    if (savedLayout) {
-      setNavigationLayout(savedLayout);
-    }
 
-    // If sessionStorage is empty (new tab, returning user), fetch branding from backend
+    // If localStorage is empty (first visit), fetch branding from backend
     if (!savedDepartmentName) {
       axios.get('/api/v1/auth/branding').then((response) => {
         const { name, logo } = response.data;
         if (name) {
           setDepartmentName(name);
-          sessionStorage.setItem('departmentName', name);
+          localStorage.setItem('departmentName', name);
         }
         if (logo) {
           setLogoPreview(logo);
-          sessionStorage.setItem('logoData', logo);
+          localStorage.setItem('logoData', logo);
         }
       }).catch(() => {
         // Branding is non-critical — keep defaults
@@ -96,9 +94,22 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const content = children ?? <Outlet />;
 
+  const footer = (
+    <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <p className="text-center text-theme-text-secondary text-sm">
+          &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
+        </p>
+        <p className="text-center text-theme-text-muted text-xs mt-1">
+          Powered by The Logbook
+        </p>
+      </div>
+    </footer>
+  );
+
   if (navigationLayout === 'left') {
     return (
-      <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+      <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
@@ -111,8 +122,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           logoPreview={logoPreview}
           onLogout={handleLogoutClick}
         />
-        <div className="lg:ml-64 min-h-screen pt-16 lg:pt-0" id="main-content" role="main">
-          {content}
+        <div className="md:ml-64 min-h-screen flex flex-col pt-16 md:pt-0">
+          <div className="flex-1" id="main-content" role="main">
+            {content}
+          </div>
+          <div className="md:ml-0">{footer}</div>
         </div>
         <LogoutConfirmModal
           isOpen={showLogoutModal}
@@ -124,7 +138,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"
@@ -137,9 +151,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         logoPreview={logoPreview}
         onLogout={handleLogoutClick}
       />
-      <div id="main-content" role="main">
+      <div className="flex-1" id="main-content" role="main">
         {content}
       </div>
+      {footer}
       <LogoutConfirmModal
         isOpen={showLogoutModal}
         onConfirm={handleLogoutConfirm}

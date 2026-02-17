@@ -44,11 +44,11 @@ interface TrainingStatusBadgeProps {
 }
 
 const trainingStatusConfig: Record<TrainingStatus, { label: string; classes: string }> = {
-  scheduled: { label: 'Scheduled', classes: 'bg-blue-100 text-blue-800' },
-  in_progress: { label: 'In Progress', classes: 'bg-yellow-100 text-yellow-800' },
-  completed: { label: 'Completed', classes: 'bg-green-100 text-green-800' },
-  cancelled: { label: 'Cancelled', classes: 'bg-gray-100 text-gray-800' },
-  failed: { label: 'Failed', classes: 'bg-red-100 text-red-800' },
+  scheduled: { label: 'Scheduled', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
+  in_progress: { label: 'In Progress', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' },
+  completed: { label: 'Completed', classes: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
+  cancelled: { label: 'Cancelled', classes: 'bg-theme-surface-secondary text-theme-text-primary' },
+  failed: { label: 'Failed', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
 };
 
 export const TrainingStatusBadge: React.FC<TrainingStatusBadgeProps> = ({
@@ -100,11 +100,18 @@ export const RequirementProgressBar: React.FC<RequirementProgressBarProps> = ({
     <div className="w-full">
       {(label || showPercentage) && (
         <div className="mb-1 flex items-center justify-between text-sm">
-          {label && <span className="font-medium text-gray-700">{label}</span>}
-          {showPercentage && <span className="text-gray-500">{Math.round(clamped)}%</span>}
+          {label && <span className="font-medium text-theme-text-primary">{label}</span>}
+          {showPercentage && <span className="text-theme-text-muted">{Math.round(clamped)}%</span>}
         </div>
       )}
-      <div className={`w-full overflow-hidden rounded-full bg-gray-200 ${progressBarHeight[size]}`}>
+      <div
+        className={`w-full overflow-hidden rounded-full bg-theme-surface-secondary ${progressBarHeight[size]}`}
+        role="progressbar"
+        aria-valuenow={Math.round(clamped)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label ? `${label}: ${Math.round(clamped)}%` : `${Math.round(clamped)}% complete`}
+      >
         <div
           className={`${progressBarHeight[size]} rounded-full transition-all duration-300 ${getProgressColor(clamped)}`}
           style={{ width: `${clamped}%` }}
@@ -206,7 +213,7 @@ export const TrainingCategoryBadge: React.FC<TrainingCategoryBadgeProps> = ({
       }
     : {};
 
-  const fallbackClasses = rgb ? '' : 'bg-gray-100 text-gray-800';
+  const fallbackClasses = rgb ? '' : 'bg-theme-surface-secondary text-theme-text-primary';
 
   return (
     <span
@@ -259,7 +266,7 @@ const enrollmentStatusConfig: Record<EnrollmentStatus, { label: string; classes:
   active: { label: 'Active', classes: 'bg-blue-100 text-blue-800' },
   completed: { label: 'Completed', classes: 'bg-green-100 text-green-800' },
   on_hold: { label: 'On Hold', classes: 'bg-yellow-100 text-yellow-800' },
-  withdrawn: { label: 'Withdrawn', classes: 'bg-gray-100 text-gray-800' },
+  withdrawn: { label: 'Withdrawn', classes: 'bg-theme-surface-secondary text-theme-text-primary' },
   failed: { label: 'Failed', classes: 'bg-red-100 text-red-800' },
 };
 
@@ -303,7 +310,7 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
             {/* Connector line */}
             {idx > 0 && (
               <div
-                className={`h-0.5 w-8 flex-shrink-0 ${isCompleted || isCurrent ? 'bg-blue-400' : 'bg-gray-300'}`}
+                className={`h-0.5 w-8 flex-shrink-0 ${isCompleted || isCurrent ? 'bg-blue-400' : 'bg-theme-surface-secondary'}`}
               />
             )}
 
@@ -311,14 +318,14 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
             <div className="flex flex-col items-center gap-1">
               <div className="relative flex items-center justify-center">
                 {isCompleted ? (
-                  <CheckCircle className="h-6 w-6 text-green-500" />
+                  <CheckCircle className="h-6 w-6 text-green-700 dark:text-green-500" />
                 ) : isCurrent ? (
                   <div className="relative">
-                    <Circle className="h-6 w-6 text-blue-500 fill-blue-500" />
+                    <Circle className="h-6 w-6 text-blue-700 dark:text-blue-500 fill-blue-500" />
                     <span className="absolute inset-0 animate-ping rounded-full bg-blue-400 opacity-30" />
                   </div>
                 ) : (
-                  <Circle className="h-6 w-6 text-gray-300" />
+                  <Circle className="h-6 w-6 text-theme-text-secondary" />
                 )}
               </div>
               <span
@@ -327,7 +334,7 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
                     ? 'font-medium text-green-700'
                     : isCurrent
                       ? 'font-semibold text-blue-700'
-                      : 'text-gray-500'
+                      : 'text-theme-text-muted'
                 }`}
                 title={phase.name}
               >
@@ -360,11 +367,11 @@ export const TrainingHoursDisplay: React.FC<TrainingHoursDisplayProps> = ({
 
   return (
     <div className="w-full">
-      {label && <span className="mb-0.5 block text-xs font-medium text-gray-500">{label}</span>}
-      <span className="text-sm font-semibold text-gray-900">
-        {completed} <span className="font-normal text-gray-500">/ {required} hrs</span>
+      {label && <span className="mb-0.5 block text-xs font-medium text-theme-text-muted">{label}</span>}
+      <span className="text-sm font-semibold text-theme-text-primary">
+        {completed} <span className="font-normal text-theme-text-muted">/ {required} hrs</span>
       </span>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-secondary">
         <div
           className={`h-1.5 rounded-full transition-all duration-300 ${getProgressColor(pct)}`}
           style={{ width: `${pct}%` }}
@@ -390,23 +397,23 @@ const emptyStateConfig: Record<
   { icon: React.ReactNode; defaultMessage: string }
 > = {
   courses: {
-    icon: <BookOpen className="h-12 w-12 text-gray-400" />,
+    icon: <BookOpen className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training courses found.',
   },
   records: {
-    icon: <ClipboardList className="h-12 w-12 text-gray-400" />,
+    icon: <ClipboardList className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training records yet.',
   },
   requirements: {
-    icon: <ShieldCheck className="h-12 w-12 text-gray-400" />,
+    icon: <ShieldCheck className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training requirements configured.',
   },
   programs: {
-    icon: <GraduationCap className="h-12 w-12 text-gray-400" />,
+    icon: <GraduationCap className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No training programs available.',
   },
   certifications: {
-    icon: <Award className="h-12 w-12 text-gray-400" />,
+    icon: <Award className="h-12 w-12 text-theme-text-muted" />,
     defaultMessage: 'No certifications on file.',
   },
 };
@@ -422,7 +429,7 @@ export const EmptyTrainingState: React.FC<EmptyTrainingStateProps> = ({
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       {config.icon}
-      <p className="mt-4 text-sm text-gray-500">{message ?? config.defaultMessage}</p>
+      <p className="mt-4 text-sm text-theme-text-muted">{message ?? config.defaultMessage}</p>
       {actionLabel && onAction && (
         <button
           type="button"
