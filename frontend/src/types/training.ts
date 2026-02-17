@@ -293,6 +293,7 @@ export interface TrainingRequirement {
   organization_id: string;
   name: string;
   description?: string;
+  requirement_type: RequirementType;
   training_type?: TrainingType;
   required_hours?: number;
   required_courses?: string[];
@@ -317,6 +318,7 @@ export interface TrainingRequirement {
 export interface TrainingRequirementCreate {
   name: string;
   description?: string;
+  requirement_type: RequirementType;
   training_type?: TrainingType;
   required_hours?: number;
   required_courses?: string[];
@@ -337,6 +339,7 @@ export interface TrainingRequirementCreate {
 export interface TrainingRequirementUpdate {
   name?: string;
   description?: string;
+  requirement_type?: RequirementType;
   training_type?: TrainingType;
   required_hours?: number;
   required_courses?: string[];
@@ -1153,6 +1156,7 @@ export interface MyTrainingSummary {
     requirements?: Array<{
       id: string;
       requirement_id: string;
+      requirement_name?: string;
       status: string;
       progress_value: number;
       progress_percentage: number;

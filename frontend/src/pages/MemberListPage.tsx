@@ -53,7 +53,7 @@ export const MemberListPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500">Loading members...</div>
+          <div className="text-theme-text-muted">Loading members...</div>
         </div>
       </div>
     );
@@ -66,7 +66,7 @@ export const MemberListPage: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
-                className="h-5 w-5 text-red-400"
+                className="h-5 w-5 text-red-700"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 20"
                 fill="currentColor"
@@ -93,8 +93,8 @@ export const MemberListPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Department Members</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-2xl font-bold text-theme-text-primary">Department Members</h2>
+        <p className="mt-1 text-sm text-theme-text-muted">
           A list of all members in your department.
           {showContactInfo && ' Contact information is displayed below.'}
         </p>
@@ -104,7 +104,7 @@ export const MemberListPage: React.FC = () => {
 
       <MemberList members={members} contactSettings={contactSettings} />
 
-      <div className="mt-6 text-sm text-gray-500">
+      <div className="mt-6 text-sm text-theme-text-muted">
         Showing {members.length} {members.length === 1 ? 'member' : 'members'}
       </div>
     </div>

@@ -101,23 +101,23 @@ export const ApparatusListPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg">
       {/* Header */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-red-600 rounded-lg p-2">
-                <Truck className="w-6 h-6 text-white" />
+                <Truck className="w-6 h-6 text-theme-text-primary" />
               </div>
               <div>
-                <h1 className="text-white text-xl font-bold">Apparatus Management</h1>
-                <p className="text-slate-400 text-sm">Manage your fleet vehicles and equipment</p>
+                <h1 className="text-theme-text-primary text-xl font-bold">Apparatus Management</h1>
+                <p className="text-theme-text-muted text-sm">Manage your fleet vehicles and equipment</p>
               </div>
             </div>
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-slate-300 hover:text-white transition-colors text-sm"
+              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm"
             >
               ← Back to Dashboard
             </button>
@@ -130,10 +130,10 @@ export const ApparatusListPage: React.FC = () => {
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
-              <span className="text-red-300">{error}</span>
+              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
+              <span className="text-red-700 dark:text-red-300">{error}</span>
             </div>
-            <button onClick={clearError} className="text-red-400 hover:text-red-300">
+            <button onClick={clearError} className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
               Dismiss
             </button>
           </div>
@@ -141,56 +141,56 @@ export const ApparatusListPage: React.FC = () => {
 
         {/* Fleet Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <p className="text-slate-400 text-xs font-medium uppercase">Total Fleet</p>
-            <p className="text-white text-2xl font-bold mt-1">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
+            <p className="text-theme-text-primary text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.totalApparatus ?? 0}
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <p className="text-slate-400 text-xs font-medium uppercase">In Service</p>
-            <p className="text-green-400 text-2xl font-bold mt-1">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">In Service</p>
+            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.inServiceCount ?? 0}
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <p className="text-slate-400 text-xs font-medium uppercase">Out of Service</p>
-            <p className="text-red-400 text-2xl font-bold mt-1">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Out of Service</p>
+            <p className="text-red-700 dark:text-red-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.outOfServiceCount ?? 0}
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <p className="text-slate-400 text-xs font-medium uppercase">In Maintenance</p>
-            <p className="text-yellow-400 text-2xl font-bold mt-1">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">In Maintenance</p>
+            <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.inMaintenanceCount ?? 0}
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <p className="text-slate-400 text-xs font-medium uppercase">Reserve</p>
-            <p className="text-blue-400 text-2xl font-bold mt-1">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Reserve</p>
+            <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : fleetSummary?.reserveCount ?? 0}
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <p className="text-slate-400 text-xs font-medium uppercase">Maint. Due</p>
-            <p className="text-orange-400 text-2xl font-bold mt-1">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Maint. Due</p>
+            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">
               {isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
             </p>
           </div>
         </div>
 
         {/* Actions Bar */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Search */}
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
                 type="text"
                 placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
 
@@ -200,7 +200,7 @@ export const ApparatusListPage: React.FC = () => {
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
                 showFilters
                   ? 'bg-red-600 text-white'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
               <Filter className="w-4 h-4" />
@@ -219,15 +219,15 @@ export const ApparatusListPage: React.FC = () => {
 
           {/* Expanded Filters */}
           {showFilters && (
-            <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="mt-4 pt-4 border-t border-theme-surface-border grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Type Filter */}
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Type</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Type</label>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                   disabled={isLoadingTypes}
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">All Types</option>
                   {types.map((type) => (
@@ -240,12 +240,12 @@ export const ApparatusListPage: React.FC = () => {
 
               {/* Status Filter */}
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Status</label>
+                <label className="block text-sm text-theme-text-muted mb-1">Status</label>
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                   disabled={isLoadingStatuses}
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">All Statuses</option>
                   {statuses.map((status) => (
@@ -263,9 +263,9 @@ export const ApparatusListPage: React.FC = () => {
                     type="checkbox"
                     checked={showArchived}
                     onChange={(e) => setShowArchived(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-red-600 focus:ring-red-500"
+                    className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   />
-                  <span className="text-slate-300">Show Archived</span>
+                  <span className="text-theme-text-secondary">Show Archived</span>
                 </label>
               </div>
 
@@ -278,7 +278,7 @@ export const ApparatusListPage: React.FC = () => {
                     setShowArchived(false);
                     setSearchQuery('');
                   }}
-                  className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
                   Clear Filters
                 </button>
@@ -289,15 +289,15 @@ export const ApparatusListPage: React.FC = () => {
 
         {/* Apparatus Table */}
         {isLoading ? (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-slate-300">Loading apparatus...</p>
+            <p className="text-theme-text-secondary">Loading apparatus...</p>
           </div>
         ) : apparatusList.length === 0 ? (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-            <Truck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-white text-xl font-bold mb-2">No Apparatus Found</h3>
-            <p className="text-slate-300 mb-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+            <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+            <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Apparatus Found</h3>
+            <p className="text-theme-text-secondary mb-6">
               {searchQuery || filterType || filterStatus
                 ? 'Try adjusting your search or filters'
                 : 'Get started by adding your first piece of apparatus'}
@@ -314,32 +314,32 @@ export const ApparatusListPage: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-900/50 border-b border-white/10">
+                  <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Unit
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Vehicle
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         <Gauge className="w-4 h-4 inline mr-1" />
                         Mileage
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         <Clock className="w-4 h-4 inline mr-1" />
                         Hours
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -352,7 +352,7 @@ export const ApparatusListPage: React.FC = () => {
                       return (
                         <tr
                           key={apparatus.id}
-                          className={`hover:bg-white/5 transition-colors ${
+                          className={`hover:bg-theme-surface-secondary transition-colors ${
                             apparatus.isArchived ? 'opacity-60' : ''
                           }`}
                         >
@@ -362,11 +362,11 @@ export const ApparatusListPage: React.FC = () => {
                                 {apparatus.unitNumber.substring(0, 2)}
                               </div>
                               <div className="ml-3">
-                                <div className="text-white font-medium">
+                                <div className="text-theme-text-primary font-medium">
                                   {apparatus.unitNumber}
                                 </div>
                                 {apparatus.name && (
-                                  <div className="text-slate-400 text-sm">{apparatus.name}</div>
+                                  <div className="text-theme-text-muted text-sm">{apparatus.name}</div>
                                 )}
                               </div>
                             </div>
@@ -375,7 +375,7 @@ export const ApparatusListPage: React.FC = () => {
                             {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-white text-sm">
+                            <div className="text-theme-text-primary text-sm">
                               {apparatus.year && apparatus.make && apparatus.model
                                 ? `${apparatus.year} ${apparatus.make} ${apparatus.model}`
                                 : apparatus.make && apparatus.model
@@ -387,14 +387,14 @@ export const ApparatusListPage: React.FC = () => {
                             {status && <StatusBadge status={status} />}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-slate-300 text-sm">
+                            <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentMileage
                                 ? apparatus.currentMileage.toLocaleString()
                                 : '-'}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-slate-300 text-sm">
+                            <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentHours
                                 ? apparatus.currentHours.toLocaleString()
                                 : '-'}
@@ -404,29 +404,29 @@ export const ApparatusListPage: React.FC = () => {
                             <div className="flex items-center justify-end space-x-2">
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
+                                className="p-2 text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}/edit`)}
-                                className="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                                className="p-2 text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
                                 title="Edit"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => navigate(`/apparatus/${apparatus.id}/maintenance`)}
-                                className="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
-                                title="Maintenance"
+                                onClick={() => navigate(`/apparatus/${apparatus.id}`)}
+                                className="p-2 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
+                                title="View Details"
                               >
                                 <Wrench className="w-4 h-4" />
                               </button>
                               {!apparatus.isArchived && (
                                 <button
-                                  onClick={() => navigate(`/apparatus/${apparatus.id}/archive`)}
-                                  className="p-2 text-slate-400 hover:text-slate-300 hover:bg-slate-500/10 rounded transition-colors"
+                                  onClick={() => navigate(`/apparatus/${apparatus.id}`)}
+                                  className="p-2 text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded transition-colors"
                                   title="Archive"
                                 >
                                   <Archive className="w-4 h-4" />
@@ -445,14 +445,14 @@ export const ApparatusListPage: React.FC = () => {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="mt-6 flex items-center justify-between">
-                <p className="text-slate-400 text-sm">
+                <p className="text-theme-text-muted text-sm">
                   Showing page {currentPage} of {totalPages} ({totalApparatus} total)
                 </p>
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="p-2 rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
@@ -474,7 +474,7 @@ export const ApparatusListPage: React.FC = () => {
                         className={`w-10 h-10 rounded-lg transition-colors ${
                           currentPage === pageNum
                             ? 'bg-red-600 text-white'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                         }`}
                       >
                         {pageNum}
@@ -484,7 +484,7 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="p-2 rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>

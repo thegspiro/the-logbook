@@ -207,6 +207,8 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
       setNavigationLayout: (layout) => {
         set({ navigationLayout: layout });
+        // Also write directly so AppLayout can read it via localStorage.getItem('navigationLayout')
+        localStorage.setItem('navigationLayout', layout);
         get().triggerAutoSave();
       },
 
@@ -437,7 +439,7 @@ export const syncWithSessionStorage = () => {
   if (!store.departmentName) {
     const sessionDepartment = sessionStorage.getItem('departmentName');
     const sessionLogo = sessionStorage.getItem('logoData');
-    const sessionNav = sessionStorage.getItem('navigationLayout');
+    const sessionNav = localStorage.getItem('navigationLayout') || sessionStorage.getItem('navigationLayout');
     const sessionEmail = sessionStorage.getItem('emailPlatform');
     const sessionStoragePlatform = sessionStorage.getItem('fileStoragePlatform');
     const sessionAuth = sessionStorage.getItem('authPlatform');

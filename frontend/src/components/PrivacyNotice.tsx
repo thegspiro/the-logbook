@@ -12,7 +12,7 @@ export const PrivacyNotice: React.FC = () => {
       <div className="flex items-start">
         <div className="flex-shrink-0">
           <svg
-            className="h-5 w-5 text-blue-400"
+            className="h-5 w-5 text-blue-700 dark:text-blue-400"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
             fill="currentColor"

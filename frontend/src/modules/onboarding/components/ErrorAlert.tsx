@@ -50,11 +50,11 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
     >
       <div className="flex items-start gap-3">
         {/* Error Icon */}
-        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+        <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0 mt-0.5" />
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <h4 className="text-red-300 font-semibold mb-1">Error</h4>
+          <h4 className="text-red-700 dark:text-red-300 font-semibold mb-1">Error</h4>
           <p className="text-red-200 text-sm">{message}</p>
 
           {/* Actions */}
@@ -74,7 +74,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="inline-flex items-center px-3 py-1.5 text-red-300 hover:text-red-100 text-sm font-medium transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 text-red-700 dark:text-red-300 hover:text-red-100 text-sm font-medium transition-colors"
                   aria-label="Dismiss error"
                 >
                   Dismiss
@@ -84,7 +84,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
           )}
 
           {canRetry && (
-            <p className="mt-2 text-xs text-red-300/70">
+            <p className="mt-2 text-xs text-red-700 dark:text-red-300/70">
               You can edit the form and retry, or go back to the previous step.
             </p>
           )}
@@ -94,7 +94,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="text-red-400 hover:text-red-300 transition-colors"
+            className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
             aria-label="Close error message"
           >
             <X className="w-4 h-4" />
