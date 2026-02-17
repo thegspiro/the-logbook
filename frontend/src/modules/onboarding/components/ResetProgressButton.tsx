@@ -107,7 +107,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
             {!isResetting && (
               <button
                 onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+                className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 aria-label="Close dialog"
               >
                 <X className="w-5 h-5" aria-hidden="true" />
@@ -122,7 +122,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
             </div>
 
             {/* Title */}
-            <h3 id="reset-progress-title" className="text-xl font-bold text-white text-center mb-2">
+            <h3 id="reset-progress-title" className="text-xl font-bold text-theme-text-primary text-center mb-2">
               Reset Onboarding Progress?
             </h3>
 

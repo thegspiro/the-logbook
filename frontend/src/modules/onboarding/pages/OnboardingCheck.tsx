@@ -457,13 +457,13 @@ const OnboardingCheck: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white/10 backdrop-blur-sm rounded-lg p-8 text-center border border-white/20">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
           <div className="text-red-400 text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
-          <h2 className="text-2xl font-bold text-white mb-4">
+          <h2 className="text-2xl font-bold text-theme-text-primary mb-4">
             {schemaError ? 'Database Reset Required' : 'Connection Error'}
           </h2>
-          <p className="text-slate-300 mb-6">{error}</p>
+          <p className="text-theme-text-secondary mb-6">{error}</p>
 
           {/* Schema error specific instructions */}
           {schemaError && (
@@ -490,11 +490,11 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Show service status even on error */}
           <div className="mb-6 text-left bg-black/20 rounded-lg p-4">
-            <p className="text-sm text-slate-400 mb-3">Service Status:</p>
+            <p className="text-sm text-theme-text-muted mb-3">Service Status:</p>
             {services.map((service) => (
-              <div key={service.name} className="flex items-center justify-between py-2 border-b border-white/10 last:border-0">
+              <div key={service.name} className="flex items-center justify-between py-2 border-b border-theme-nav-border last:border-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-300">{service.name}</span>
+                  <span className="text-theme-text-secondary">{service.name}</span>
                   {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
                 </div>
                 <div className="flex items-center gap-2">
@@ -529,30 +529,30 @@ const OnboardingCheck: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-4"></div>
-          <p className="text-white text-xl mb-2">Initializing The Logbook</p>
-          <p className="text-slate-400 text-sm">{statusMessage}</p>
+          <p className="text-theme-text-primary text-xl mb-2">Initializing The Logbook</p>
+          <p className="text-theme-text-muted text-sm">{statusMessage}</p>
           <p className="text-slate-500 text-xs mt-2">Time elapsed: {formatTime(elapsedTime)}</p>
         </div>
 
         {/* Service Status Cards */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Service Status</h3>
-            <span className="text-sm text-slate-400">{connectedCount}/{services.length} ready</span>
+            <h3 className="text-theme-text-primary font-semibold">Service Status</h3>
+            <span className="text-sm text-theme-text-muted">{connectedCount}/{services.length} ready</span>
           </div>
 
           {services.map((service) => (
             <div
               key={service.name}
-              className="flex items-center justify-between py-3 border-b border-white/10 last:border-0"
+              className="flex items-center justify-between py-3 border-b border-theme-nav-border last:border-0"
             >
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="text-white">{service.name}</span>
+                  <span className="text-theme-text-primary">{service.name}</span>
                   {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
                 </div>
                 {service.message && (
@@ -575,7 +575,7 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Startup Progress Details */}
           {!startupInfo && isWaiting && (
-            <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-0.5">
                   <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/30">
@@ -588,10 +588,10 @@ const OnboardingCheck: React.FC = () => {
                   <h3 className="text-blue-400 font-semibold text-base mb-1">
                     Waiting for Backend
                   </h3>
-                  <p className="text-slate-300 text-sm mb-1">
+                  <p className="text-theme-text-secondary text-sm mb-1">
                     The backend server is starting up. This process includes initializing services, connecting to the database, and running migrations.
                   </p>
-                  <p className="text-slate-400 text-xs">
+                  <p className="text-theme-text-muted text-xs">
                     First startup can take 25-30 minutes while MySQL initializes and 38 database migrations create comprehensive tables for your fire department intranet.
                   </p>
                 </div>
@@ -599,7 +599,7 @@ const OnboardingCheck: React.FC = () => {
             </div>
           )}
           {startupInfo && !startupInfo.ready && (
-            <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               {(() => {
                 const phaseDetails = getPhaseDetails(startupInfo.phase);
                 return (
@@ -617,11 +617,11 @@ const OnboardingCheck: React.FC = () => {
                         <h3 className="text-orange-400 font-semibold text-base mb-1">
                           {phaseDetails.title}
                         </h3>
-                        <p className="text-slate-300 text-sm mb-1">
+                        <p className="text-theme-text-secondary text-sm mb-1">
                           {startupInfo.detailed_message || phaseDetails.description}
                         </p>
                         {startupInfo.message && (
-                          <p className="text-slate-400 text-xs">
+                          <p className="text-theme-text-muted text-xs">
                             {startupInfo.message}
                           </p>
                         )}
@@ -631,14 +631,14 @@ const OnboardingCheck: React.FC = () => {
                     {/* Migration progress bar */}
                     {startupInfo.migrations && startupInfo.migrations.total > 0 && (
                       <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                        <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                        <div className="flex items-center justify-between text-xs text-theme-text-muted mb-2">
                           <span className="font-medium">Database Migrations</span>
                           <span className="text-orange-400 font-semibold">
                             {startupInfo.migrations.completed}/{startupInfo.migrations.total}
                           </span>
                         </div>
                         {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
-                          <div className="text-xs text-slate-400 mb-2 space-y-1">
+                          <div className="text-xs text-theme-text-muted mb-2 space-y-1">
                             <p className="font-medium text-orange-400">
                               Creating {startupInfo.migrations.total} database tables...
                             </p>
@@ -661,7 +661,7 @@ const OnboardingCheck: React.FC = () => {
                             {getMigrationFeatureMessage(startupInfo.migrations.current)}
                           </p>
                           {getEstimatedTimeRemaining() && (
-                            <p className="text-slate-400 text-xs">
+                            <p className="text-theme-text-muted text-xs">
                               <span className="text-slate-500">Est. remaining:</span> {getEstimatedTimeRemaining()}
                             </p>
                           )}
@@ -676,7 +676,7 @@ const OnboardingCheck: React.FC = () => {
 
           {/* Educational Tips - shown while waiting */}
           {(isWaiting || (startupInfo && !startupInfo.ready)) && (
-            <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
                 <div className="flex items-start gap-3">
                   <div className="text-3xl flex-shrink-0">{educationalTips[currentTipIndex].icon}</div>
@@ -704,7 +704,7 @@ const OnboardingCheck: React.FC = () => {
           )}
 
           {isWaiting && (
-            <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="mt-4 pt-4 border-t border-theme-nav-border">
               {/* Retry progress bar */}
               <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
                 <div
@@ -713,7 +713,7 @@ const OnboardingCheck: React.FC = () => {
                 ></div>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">
+                <span className="text-theme-text-muted">
                   Attempt {retryCount}/{MAX_RETRIES}
                 </span>
                 <span className="text-slate-500">
@@ -733,8 +733,8 @@ const OnboardingCheck: React.FC = () => {
             onClick={() => setShowWhatsHappening(!showWhatsHappening)}
             className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 rounded-lg transition-all duration-300"
           >
-            <span className="text-slate-300 text-sm font-medium">What's happening?</span>
-            <span className={`text-slate-400 transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
+            <span className="text-theme-text-secondary text-sm font-medium">What's happening?</span>
+            <span className={`text-theme-text-muted transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
               ▼
             </span>
           </button>
@@ -742,40 +742,40 @@ const OnboardingCheck: React.FC = () => {
           {showWhatsHappening && (
             <div className="mt-2 bg-slate-800/30 border border-slate-700 rounded-lg p-4 space-y-3 text-sm">
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">🔍 Preflight Checks</h4>
-                <p className="text-slate-400 text-xs">
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🔍 Preflight Checks</h4>
+                <p className="text-theme-text-muted text-xs">
                   Verifying that all required environment variables are set and the system has enough resources.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">🗄️ Database Connection</h4>
-                <p className="text-slate-400 text-xs">
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🗄️ Database Connection</h4>
+                <p className="text-theme-text-muted text-xs">
                   Connecting to MySQL. On first startup, MySQL needs to initialize its system tables, which can take 1-2 minutes.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">🔧 Database Migrations</h4>
-                <p className="text-slate-400 text-xs">
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🔧 Database Migrations</h4>
+                <p className="text-theme-text-muted text-xs">
                   Creating 37 database tables for users, training, events, elections, inventory, and more. This only happens once during initial setup.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">⚡ Service Initialization</h4>
-                <p className="text-slate-400 text-xs">
+                <h4 className="text-theme-text-secondary font-semibold mb-1">⚡ Service Initialization</h4>
+                <p className="text-theme-text-muted text-xs">
                   Starting Redis cache, GeoIP service, and running database validations in parallel to speed up startup.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">⏱️ Expected Timeline</h4>
-                <p className="text-slate-400 text-xs">
+                <h4 className="text-theme-text-secondary font-semibold mb-1">⏱️ Expected Timeline</h4>
+                <p className="text-theme-text-muted text-xs">
                   • Fresh install: 25-30 minutes (~6 min MySQL init + ~23 min migrations)<br />
                   • Subsequent restarts: 10-30 seconds<br />
                   • The wait time is longest on the very first startup
                 </p>
               </div>
               <div className="pt-2 border-t border-slate-700">
-                <h4 className="text-slate-200 font-semibold mb-1">🔧 Troubleshooting</h4>
-                <p className="text-slate-400 text-xs mb-2">
+                <h4 className="text-theme-text-secondary font-semibold mb-1">🔧 Troubleshooting</h4>
+                <p className="text-theme-text-muted text-xs mb-2">
                   If startup is taking too long, check the logs:
                 </p>
                 <code className="block bg-slate-900/50 text-green-400 text-xs p-2 rounded font-mono">

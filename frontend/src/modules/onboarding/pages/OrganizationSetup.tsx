@@ -695,7 +695,7 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
         <div className="mb-4">
@@ -708,7 +708,7 @@ const OrganizationSetup: React.FC = () => {
             <Building2 className="w-8 h-8 text-white" />
           </div>
           <div className="flex items-center justify-center space-x-3 mb-3">
-            <h1 className="text-3xl md:text-4xl font-bold text-white">
+            <h1 className="text-3xl md:text-4xl font-bold text-theme-text-primary">
               Organization Setup
             </h1>
             <HelpLink
@@ -718,15 +718,15 @@ const OrganizationSetup: React.FC = () => {
               tooltipPosition="bottom"
             />
           </div>
-          <p className="text-lg text-slate-300">
+          <p className="text-lg text-theme-text-secondary">
             Let's set up your fire department or emergency services organization
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 space-y-4">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border space-y-4">
           {/* Basic Information */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Basic Information"
               icon={<Building2 className="w-5 h-5" />}
@@ -736,7 +736,7 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <InputField
                   label="Organization Name"
                   id="org-name"
@@ -784,7 +784,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Contact Information"
               icon={<Phone className="w-5 h-5" />}
@@ -792,7 +792,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('contact')}
             />
             {expandedSections.contact && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="Phone Number"
@@ -845,7 +845,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Mailing Address */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Mailing Address"
               icon={<Mail className="w-5 h-5" />}
@@ -855,7 +855,7 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-slate-900/30 space-y-4">
+              <div className="p-4 bg-theme-surface-secondary space-y-4">
                 {/* Info banner explaining why mailing address is required */}
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                   <div className="flex items-start space-x-2">
@@ -879,7 +879,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Physical Address */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Physical Address"
               icon={<MapPin className="w-5 h-5" />}
@@ -887,7 +887,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('physical')}
             />
             {expandedSections.physical && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -912,7 +912,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Department Identifiers */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Department Identifiers"
               icon={<FileText className="w-5 h-5" />}
@@ -920,7 +920,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('identifiers')}
             />
             {expandedSections.identifiers && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <p className="text-sm text-slate-400 mb-4">
                   Select the primary identifier your department uses for official reporting.
                 </p>
@@ -1019,7 +1019,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Additional Information */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Additional Information"
               icon={<Clock className="w-5 h-5" />}
@@ -1027,7 +1027,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('additional')}
             />
             {expandedSections.additional && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-surface-secondary">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="County/Jurisdiction"
@@ -1052,7 +1052,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Logo Upload */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Organization Logo"
               icon={<ImageIcon className="w-5 h-5" />}
@@ -1060,7 +1060,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('logo')}
             />
             {expandedSections.logo && (
-              <div className="p-4 bg-slate-900/30">
+              <div className="p-4 bg-theme-surface-secondary">
                 <div className="relative">
                   <LoadingOverlay isVisible={isProcessingFile} message="Processing image..." />
 
@@ -1218,13 +1218,13 @@ const OrganizationSetup: React.FC = () => {
           <ProgressIndicator
             currentStep={1}
             totalSteps={10}
-            className="pt-4 border-t border-white/10"
+            className="pt-4 border-t border-theme-nav-border"
           />
         </div>
 
         {/* Help Text */}
         <div className="mt-6 text-center">
-          <p className="text-slate-400 text-sm">
+          <p className="text-theme-text-muted text-sm">
             Need help?{' '}
             <a
               href="/docs"

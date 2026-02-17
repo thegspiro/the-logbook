@@ -245,9 +245,9 @@ const AdminUserCreation: React.FC = () => {
     passwordStrength.passedChecks === 5;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
             <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -263,8 +263,8 @@ const AdminUserCreation: React.FC = () => {
             </div>
           )}
           <div>
-            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
-            <p className="text-slate-400 text-sm">Setup in Progress</p>
+            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
+            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
           </div>
         </div>
       </header>
@@ -283,13 +283,13 @@ const AdminUserCreation: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
               <Shield className="w-8 h-8 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Create IT Administrator Account
             </h2>
-            <p className="text-xl text-slate-300 mb-2">
+            <p className="text-xl text-theme-text-secondary mb-2">
               Set up the primary IT administrator account
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-theme-text-muted">
               This account will have full access to all system settings and configurations
             </p>
           </div>
@@ -334,8 +334,8 @@ const AdminUserCreation: React.FC = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-              <h3 className="text-xl font-bold text-white mb-4">
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <h3 className="text-xl font-bold text-theme-text-primary mb-4">
                 IT Administrator Information
               </h3>
               <div className="grid md:grid-cols-2 gap-4">
@@ -343,7 +343,7 @@ const AdminUserCreation: React.FC = () => {
                 <div>
                   <label
                     htmlFor="firstName"
-                    className="block text-sm font-medium text-slate-300 mb-2"
+                    className="block text-sm font-medium text-theme-text-secondary mb-2"
                   >
                     First Name <span className="text-red-400">*</span>
                   </label>
@@ -354,10 +354,10 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.firstName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
                       errors.firstName && touched.firstName
                         ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-slate-700 focus:ring-red-600'
+                        : 'border-theme-input-border focus:ring-red-600'
                     }`}
                     placeholder="John"
                     aria-invalid={errors.firstName && touched.firstName ? 'true' : 'false'}
@@ -375,7 +375,7 @@ const AdminUserCreation: React.FC = () => {
                 <div>
                   <label
                     htmlFor="lastName"
-                    className="block text-sm font-medium text-slate-300 mb-2"
+                    className="block text-sm font-medium text-theme-text-secondary mb-2"
                   >
                     Last Name <span className="text-red-400">*</span>
                   </label>
@@ -386,10 +386,10 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.lastName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
                       errors.lastName && touched.lastName
                         ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-slate-700 focus:ring-red-600'
+                        : 'border-theme-input-border focus:ring-red-600'
                     }`}
                     placeholder="Doe"
                     aria-invalid={errors.lastName && touched.lastName ? 'true' : 'false'}
@@ -408,7 +408,7 @@ const AdminUserCreation: React.FC = () => {
               <div className="mt-4">
                 <label
                   htmlFor="badgeNumber"
-                  className="block text-sm font-medium text-slate-300 mb-2"
+                  className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
                   Badge Number <span className="text-slate-500">(Optional)</span>
                 </label>
@@ -418,15 +418,15 @@ const AdminUserCreation: React.FC = () => {
                   name="badgeNumber"
                   value={formData.badgeNumber}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
                   placeholder="e.g., FF-1234"
                 />
               </div>
             </div>
 
             {/* Account Credentials */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-              <h3 className="text-xl font-bold text-white mb-4">
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+              <h3 className="text-xl font-bold text-theme-text-primary mb-4">
                 Account Credentials
               </h3>
 
@@ -434,7 +434,7 @@ const AdminUserCreation: React.FC = () => {
               <div className="mb-4">
                 <label
                   htmlFor="username"
-                  className="block text-sm font-medium text-slate-300 mb-2"
+                  className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
                   Username <span className="text-red-400">*</span>
                 </label>
@@ -445,10 +445,10 @@ const AdminUserCreation: React.FC = () => {
                   value={formData.username}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`w-full px-4 py-3 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
                     errors.username && touched.username
                       ? 'border-red-500 focus:ring-red-500/50'
-                      : 'border-slate-700 focus:ring-red-600'
+                      : 'border-theme-input-border focus:ring-red-600'
                   }`}
                   placeholder="johndoe"
                   autoComplete="username"
@@ -467,7 +467,7 @@ const AdminUserCreation: React.FC = () => {
               <div className="mb-4">
                 <label
                   htmlFor="email"
-                  className="block text-sm font-medium text-slate-300 mb-2"
+                  className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
                   Email Address <span className="text-red-400">*</span>
                 </label>
@@ -478,10 +478,10 @@ const AdminUserCreation: React.FC = () => {
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`w-full px-4 py-3 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
                     errors.email && touched.email
                       ? 'border-red-500 focus:ring-red-500/50'
-                      : 'border-slate-700 focus:ring-red-600'
+                      : 'border-theme-input-border focus:ring-red-600'
                   }`}
                   placeholder="admin@example.com"
                   autoComplete="email"
@@ -500,7 +500,7 @@ const AdminUserCreation: React.FC = () => {
               <div className="mb-4">
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-slate-300 mb-2"
+                  className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
                   Password <span className="text-red-400">*</span>
                 </label>
@@ -512,10 +512,10 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 pr-12 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
                       errors.password && touched.password
                         ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-slate-700 focus:ring-red-600'
+                        : 'border-theme-input-border focus:ring-red-600'
                     }`}
                     placeholder="Enter a strong password"
                     autoComplete="new-password"
@@ -631,7 +631,7 @@ const AdminUserCreation: React.FC = () => {
               <div>
                 <label
                   htmlFor="confirmPassword"
-                  className="block text-sm font-medium text-slate-300 mb-2"
+                  className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
                   Confirm Password <span className="text-red-400">*</span>
                 </label>
@@ -643,10 +643,10 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 pr-12 bg-slate-900/50 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
                       errors.confirmPassword && touched.confirmPassword
                         ? 'border-red-500 focus:ring-red-500/50'
-                        : 'border-slate-700 focus:ring-red-600'
+                        : 'border-theme-input-border focus:ring-red-600'
                     }`}
                     placeholder="Re-enter your password"
                     autoComplete="new-password"
@@ -705,13 +705,13 @@ const AdminUserCreation: React.FC = () => {
               </button>
 
               {/* Help Text */}
-              <p className="text-center text-slate-400 text-sm mt-4">
+              <p className="text-center text-theme-text-muted text-sm mt-4">
                 You'll be logged in automatically and redirected to your dashboard
               </p>
 
               {/* Progress Indicator */}
-              <div className="mt-6 pt-6 border-t border-white/10">
-                <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
+              <div className="mt-6 pt-6 border-t border-theme-nav-border">
+                <div className="flex items-center justify-between text-sm text-theme-text-muted mb-2">
                   <span>Setup Progress</span>
                   <span>Step 10 of 10</span>
                 </div>
@@ -734,9 +734,9 @@ const AdminUserCreation: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
-          <p className="text-slate-300 text-sm">
+          <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
           <p className="text-slate-500 text-xs mt-1">

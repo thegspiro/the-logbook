@@ -154,12 +154,12 @@ const ModuleSelection: React.FC = () => {
     return (
       <div
         key={module.id}
-        className={`bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 ${
+        className={`bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 ${
           isSelected
             ? 'border-white/40 shadow-lg'
             : module.canDisable
-            ? 'border-white/10 hover:border-white/20'
-            : 'border-white/20'
+            ? 'border-theme-surface-border hover:border-white/20'
+            : 'border-theme-surface-border'
         }`}
       >
         <div
@@ -186,23 +186,23 @@ const ModuleSelection: React.FC = () => {
             {/* Content */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-bold text-white">{module.name}</h3>
+                <h3 className="text-lg font-bold text-theme-text-primary">{module.name}</h3>
                 {getCategoryBadge()}
               </div>
-              <p className="text-slate-300 text-sm mb-3">{module.description}</p>
+              <p className="text-theme-text-secondary text-sm mb-3">{module.description}</p>
 
               {/* Key Features - Always Visible */}
               <div className="mb-3">
-                <h4 className="text-white text-xs font-semibold mb-1.5 uppercase tracking-wide">Key Features:</h4>
+                <h4 className="text-theme-text-primary text-xs font-semibold mb-1.5 uppercase tracking-wide">Key Features:</h4>
                 <ul className="space-y-1">
                   {module.features.slice(0, 3).map((feature, index) => (
-                    <li key={index} className="text-slate-300 text-sm flex items-start space-x-2">
+                    <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
                       <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
                   {module.features.length > 3 && !isExpanded && (
-                    <li className="text-slate-400 text-sm italic">
+                    <li className="text-theme-text-muted text-sm italic">
                       + {module.features.length - 3} more feature{module.features.length - 3 !== 1 ? 's' : ''}
                     </li>
                   )}
@@ -246,16 +246,16 @@ const ModuleSelection: React.FC = () => {
 
         {/* Expanded Details - Full Description and All Features */}
         {isExpanded && (
-          <div className="border-t border-white/10 p-4 bg-slate-900/30">
-            <h4 className="text-white font-semibold mb-2">About this module</h4>
-            <p className="text-slate-300 text-sm mb-4">{module.longDescription}</p>
+          <div className="border-t border-theme-nav-border p-4 bg-theme-surface-secondary">
+            <h4 className="text-theme-text-primary font-semibold mb-2">About this module</h4>
+            <p className="text-theme-text-secondary text-sm mb-4">{module.longDescription}</p>
 
             {module.features.length > 3 && (
               <>
-                <h4 className="text-white font-semibold mb-2">All features ({module.features.length})</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-2">All features ({module.features.length})</h4>
                 <ul className="space-y-1">
                   {module.features.map((feature, index) => (
-                    <li key={index} className="text-slate-300 text-sm flex items-start space-x-2">
+                    <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
                       <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
@@ -274,7 +274,7 @@ const ModuleSelection: React.FC = () => {
   const optionalModules = AVAILABLE_MODULES.filter((m) => m.category === 'optional');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -284,11 +284,11 @@ const ModuleSelection: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
               <Settings className="w-8 h-8 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">Select Modules</h2>
-            <p className="text-xl text-slate-300 mb-2">
+            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">Select Modules</h2>
+            <p className="text-xl text-theme-text-secondary mb-2">
               Choose which features to enable for your department
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-theme-text-muted">
               Don't worry – modules can be enabled, disabled, or added later in System Settings
             </p>
           </div>
@@ -317,40 +317,40 @@ const ModuleSelection: React.FC = () => {
 
           {/* Core Modules */}
           <div className="mb-8">
-            <h3 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
+            <h3 className="text-2xl font-bold text-theme-text-primary mb-4 flex items-center space-x-2">
               <span>Core Modules</span>
-              <span className="text-sm font-normal text-slate-400">(Always Enabled)</span>
+              <span className="text-sm font-normal text-theme-text-muted">(Always Enabled)</span>
             </h3>
             <div className="space-y-4">{coreModules.map(renderModuleCard)}</div>
           </div>
 
           {/* Recommended Modules */}
           <div className="mb-8">
-            <h3 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
+            <h3 className="text-2xl font-bold text-theme-text-primary mb-4 flex items-center space-x-2">
               <span>Recommended Modules</span>
-              <span className="text-sm font-normal text-slate-400">(Click to toggle)</span>
+              <span className="text-sm font-normal text-theme-text-muted">(Click to toggle)</span>
             </h3>
             <div className="space-y-4">{recommendedModules.map(renderModuleCard)}</div>
           </div>
 
           {/* Optional Modules */}
           <div className="mb-8">
-            <h3 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
+            <h3 className="text-2xl font-bold text-theme-text-primary mb-4 flex items-center space-x-2">
               <span>Optional Modules</span>
-              <span className="text-sm font-normal text-slate-400">(Click to enable)</span>
+              <span className="text-sm font-normal text-theme-text-muted">(Click to enable)</span>
             </h3>
             <div className="space-y-4">{optionalModules.map(renderModuleCard)}</div>
           </div>
 
           {/* Summary */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 mb-8">
-            <h3 className="text-xl font-bold text-white mb-2">Selection Summary</h3>
-            <p className="text-slate-300 text-sm mb-4">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
+            <h3 className="text-xl font-bold text-theme-text-primary mb-2">Selection Summary</h3>
+            <p className="text-theme-text-secondary text-sm mb-4">
               You have selected <strong>{selectedModules.length}</strong> modules (
               {coreModules.length} core, {selectedModules.filter((id) => recommendedModules.some((m) => m.id === id)).length} recommended,{' '}
               {selectedModules.filter((id) => optionalModules.some((m) => m.id === id)).length} optional)
             </p>
-            <p className="text-slate-400 text-xs">
+            <p className="text-theme-text-muted text-xs">
               💡 You can enable or disable modules at any time from System Settings
             </p>
           </div>
@@ -373,7 +373,7 @@ const ModuleSelection: React.FC = () => {
             <ProgressIndicator
               currentStep={8}
               totalSteps={10}
-              className="mt-6 pt-6 border-t border-white/10"
+              className="mt-6 pt-6 border-t border-theme-nav-border"
             />
           </div>
         </div>

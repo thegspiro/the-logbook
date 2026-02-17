@@ -73,9 +73,9 @@ const NavigationChoice: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
             <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -91,8 +91,8 @@ const NavigationChoice: React.FC = () => {
             </div>
           )}
           <div>
-            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
-            <p className="text-slate-400 text-sm">Setup in Progress</p>
+            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
+            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
           </div>
         </div>
       </header>
@@ -108,10 +108,10 @@ const NavigationChoice: React.FC = () => {
 
           {/* Page Header */}
           <div className="text-center mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Choose Your Navigation Style
             </h2>
-            <p className="text-xl text-slate-300">
+            <p className="text-xl text-theme-text-secondary">
               How would you like to navigate your intranet?
             </p>
           </div>
@@ -121,10 +121,10 @@ const NavigationChoice: React.FC = () => {
             {/* Top Navigation Option */}
             <button
               onClick={() => setNavigationLayout('top')}
-              className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
+              className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'top'
                   ? 'border-red-500 shadow-lg shadow-red-500/50'
-                  : 'border-white/20 hover:border-red-400/50'
+                  : 'border-theme-surface-border hover:border-red-400/50'
               }`}
               aria-pressed={navigationLayout === 'top'}
               aria-label="Top navigation layout"
@@ -146,15 +146,15 @@ const NavigationChoice: React.FC = () => {
                 </div>
 
                 {/* Title */}
-                <h3 className="text-2xl font-bold text-white mb-2">
+                <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
                   Top Navigation
                 </h3>
-                <p className="text-slate-300 mb-6">
+                <p className="text-theme-text-secondary mb-6">
                   Links displayed horizontally across the top of the page
                 </p>
 
                 {/* Preview */}
-                <div className="bg-slate-900/80 rounded-lg p-4 border border-slate-700">
+                <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border">
                   <div className="space-y-2">
                     {/* Header bar */}
                     <div className="bg-slate-800 rounded h-8 flex items-center px-2 space-x-1">
@@ -167,13 +167,13 @@ const NavigationChoice: React.FC = () => {
                     {/* Content area */}
                     <div className="bg-slate-700 rounded h-32"></div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-3 text-center">
+                  <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Horizontal menu bar
                   </p>
                 </div>
 
                 {/* Benefits */}
-                <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                <ul className="mt-4 space-y-2 text-sm text-theme-text-secondary">
                   <li className="flex items-start">
                     <span className="text-green-400 mr-2">✓</span>
                     <span>More horizontal screen space</span>
@@ -212,10 +212,10 @@ const NavigationChoice: React.FC = () => {
             {/* Left Sidebar Option */}
             <button
               onClick={() => setNavigationLayout('left')}
-              className={`group relative bg-white/10 backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
+              className={`group relative bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 overflow-hidden ${
                 navigationLayout === 'left'
                   ? 'border-red-500 shadow-lg shadow-red-500/50'
-                  : 'border-white/20 hover:border-red-400/50'
+                  : 'border-theme-surface-border hover:border-red-400/50'
               }`}
               aria-pressed={navigationLayout === 'left'}
               aria-label="Left sidebar navigation layout"
@@ -237,15 +237,15 @@ const NavigationChoice: React.FC = () => {
                 </div>
 
                 {/* Title */}
-                <h3 className="text-2xl font-bold text-white mb-2">
+                <h3 className="text-2xl font-bold text-theme-text-primary mb-2">
                   Left Sidebar
                 </h3>
-                <p className="text-slate-300 mb-6">
+                <p className="text-theme-text-secondary mb-6">
                   Links displayed vertically down the left side of the page
                 </p>
 
                 {/* Preview */}
-                <div className="bg-slate-900/80 rounded-lg p-4 border border-slate-700">
+                <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border">
                   <div className="flex space-x-2">
                     {/* Sidebar */}
                     <div className="bg-slate-800 rounded w-16 flex flex-col space-y-1 p-1">
@@ -258,13 +258,13 @@ const NavigationChoice: React.FC = () => {
                     {/* Content area */}
                     <div className="bg-slate-700 rounded flex-1 h-32"></div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-3 text-center">
+                  <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Vertical sidebar menu
                   </p>
                 </div>
 
                 {/* Benefits */}
-                <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                <ul className="mt-4 space-y-2 text-sm text-theme-text-secondary">
                   <li className="flex items-start">
                     <span className="text-green-400 mr-2">✓</span>
                     <span>More vertical navigation space</span>
@@ -329,12 +329,12 @@ const NavigationChoice: React.FC = () => {
             </button>
 
             {/* Help Text */}
-            <p className="text-center text-slate-400 text-sm mt-4">
+            <p className="text-center text-theme-text-muted text-sm mt-4">
               Don't worry, you can change this later in settings
             </p>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={2} totalSteps={10} className="pt-6 border-t border-white/10" />
+          <ProgressIndicator currentStep={2} totalSteps={10} className="pt-6 border-t border-theme-nav-border" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
@@ -343,9 +343,9 @@ const NavigationChoice: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
-          <p className="text-slate-300 text-sm">
+          <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
           <p className="text-slate-500 text-xs mt-1">

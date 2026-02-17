@@ -173,9 +173,9 @@ const AuthenticationChoice: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
             <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -191,8 +191,8 @@ const AuthenticationChoice: React.FC = () => {
             </div>
           )}
           <div>
-            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
-            <p className="text-slate-400 text-sm">Setup in Progress</p>
+            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
+            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
           </div>
         </div>
       </header>
@@ -210,13 +210,13 @@ const AuthenticationChoice: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
               <Key className="w-8 h-8 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               User Authentication
             </h2>
-            <p className="text-xl text-slate-300 mb-2">
+            <p className="text-xl text-theme-text-secondary mb-2">
               How should users sign in to the system?
             </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-theme-text-muted">
               Choose your authentication provider
             </p>
           </div>
@@ -262,10 +262,10 @@ const AuthenticationChoice: React.FC = () => {
               <button
                 key={platform.id}
                 onClick={() => setAuthPlatform(platform.id)}
-                className={`relative bg-white/10 backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
+                className={`relative bg-theme-surface backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   authPlatform === platform.id
                     ? 'border-red-500 shadow-lg shadow-red-500/50'
-                    : 'border-white/20 hover:border-white/40'
+                    : 'border-theme-surface-border hover:border-white/40'
                 }`}
                 aria-pressed={authPlatform === platform.id}
               >
@@ -294,17 +294,17 @@ const AuthenticationChoice: React.FC = () => {
 
                   {/* Content */}
                   <div className="mb-4">
-                    <h3 className="text-xl font-bold text-white mb-1">
+                    <h3 className="text-xl font-bold text-theme-text-primary mb-1">
                       {platform.name}
                     </h3>
-                    <p className="text-slate-400 text-sm mb-3">
+                    <p className="text-theme-text-muted text-sm mb-3">
                       {platform.description}
                     </p>
 
                     {/* Features */}
                     <ul className="space-y-1.5 mb-4">
                       {platform.features.map((feature, index) => (
-                        <li key={index} className="flex items-start text-xs text-slate-300">
+                        <li key={index} className="flex items-start text-xs text-theme-text-secondary">
                           <CheckCircle className="w-3.5 h-3.5 text-green-400 mr-2 flex-shrink-0 mt-0.5" />
                           <span>{feature}</span>
                         </li>
@@ -352,7 +352,7 @@ const AuthenticationChoice: React.FC = () => {
             </button>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={6} totalSteps={10} className="mt-6 pt-6 border-t border-white/10" />
+            <ProgressIndicator currentStep={6} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
 
             {/* Auto-Save Notification */}
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
@@ -361,9 +361,9 @@ const AuthenticationChoice: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
-          <p className="text-slate-300 text-sm">
+          <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
           <p className="text-slate-500 text-xs mt-1">

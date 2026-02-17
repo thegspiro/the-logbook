@@ -586,8 +586,8 @@ const RoleSetup: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+      <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
             <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -599,8 +599,8 @@ const RoleSetup: React.FC = () => {
             </div>
           )}
           <div>
-            <h1 className="text-white text-lg font-semibold">{departmentName}</h1>
-            <p className="text-slate-400 text-sm">Setup in Progress</p>
+            <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
+            <p className="text-theme-text-muted text-sm">Setup in Progress</p>
           </div>
         </div>
       </header>
@@ -614,13 +614,13 @@ const RoleSetup: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
               <Users className="w-8 h-8 text-white" aria-hidden="true" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Set Up Roles & Permissions
             </h1>
-            <p className="text-xl text-slate-300 mb-2">
+            <p className="text-xl text-theme-text-secondary mb-2">
               Choose which roles your organization needs
             </p>
-            <p className="text-sm text-slate-400 max-w-2xl mx-auto">
+            <p className="text-sm text-theme-text-muted max-w-2xl mx-auto">
               Select from common fire department roles or create your own. Each role determines what members can view and manage.
             </p>
           </div>
@@ -656,11 +656,11 @@ const RoleSetup: React.FC = () => {
           </div>
 
           {/* Stats Bar */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6 flex items-center justify-between flex-wrap gap-4">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6 flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center space-x-4">
-              <div className="text-white">
+              <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{selectedCount}</span>
-                <span className="text-slate-400 ml-2">roles selected</span>
+                <span className="text-theme-text-muted ml-2">roles selected</span>
               </div>
             </div>
             <div className="flex gap-3">
@@ -688,17 +688,17 @@ const RoleSetup: React.FC = () => {
           <div className="grid lg:grid-cols-2 gap-6">
             {/* Left: Role Templates */}
             <div className="space-y-4">
-              <h2 className="text-white font-bold text-lg mb-4">Available Role Templates</h2>
+              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Available Role Templates</h2>
 
               {Object.entries(roleTemplates).map(([categoryId, category]) => (
-                <div key={categoryId} className="bg-white/5 rounded-lg border border-white/10 overflow-hidden">
+                <div key={categoryId} className="bg-white/5 rounded-lg border border-theme-surface-border overflow-hidden">
                   <button
                     onClick={() => toggleCategory(categoryId)}
                     className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
                   >
                     <div>
-                      <h3 className="text-white font-semibold">{category.name}</h3>
-                      <p className="text-slate-400 text-sm">{category.description}</p>
+                      <h3 className="text-theme-text-primary font-semibold">{category.name}</h3>
+                      <p className="text-theme-text-muted text-sm">{category.description}</p>
                     </div>
                     {expandedCategories.includes(categoryId) ? (
                       <ChevronDown className="w-5 h-5 text-slate-400" aria-hidden="true" />
@@ -736,10 +736,10 @@ const RoleSetup: React.FC = () => {
                                   <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                                 </div>
                                 <div>
-                                  <p className={`font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}>
+                                  <p className={`font-semibold ${isSelected ? 'text-green-400' : 'text-theme-text-primary'}`}>
                                     {role.name}
                                   </p>
-                                  <p className="text-slate-400 text-xs">{role.description}</p>
+                                  <p className="text-theme-text-muted text-xs">{role.description}</p>
                                 </div>
                               </div>
                               {isSelected && (
@@ -757,7 +757,7 @@ const RoleSetup: React.FC = () => {
 
             {/* Right: Selected Roles & Permissions */}
             <div>
-              <h2 className="text-white font-bold text-lg mb-4">Selected Roles & Permissions</h2>
+              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Selected Roles & Permissions</h2>
 
               <div className="space-y-3">
                 {Object.values(selectedRoles)
@@ -770,8 +770,8 @@ const RoleSetup: React.FC = () => {
                     return (
                       <div
                         key={role.id}
-                        className={`bg-white/10 rounded-lg border transition-all ${
-                          isEditing ? 'border-orange-500' : 'border-white/20'
+                        className={`bg-theme-surface rounded-lg border transition-all ${
+                          isEditing ? 'border-orange-500' : 'border-theme-surface-border'
                         }`}
                       >
                         <div
@@ -791,7 +791,7 @@ const RoleSetup: React.FC = () => {
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="text-white font-semibold">{role.name}</p>
+                                <p className="text-theme-text-primary font-semibold">{role.name}</p>
                                 {isAdmin && (
                                   <span className="text-xs bg-purple-500/30 text-purple-300 px-2 py-0.5 rounded">
                                     System
@@ -803,7 +803,7 @@ const RoleSetup: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-slate-400 text-xs">{role.description}</p>
+                              <p className="text-theme-text-muted text-xs">{role.description}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -829,8 +829,8 @@ const RoleSetup: React.FC = () => {
 
                         {/* Expanded permissions editor */}
                         {isEditing && (
-                          <div className="px-4 pb-4 border-t border-white/10 pt-4">
-                            <p className="text-slate-400 text-sm mb-3">
+                          <div className="px-4 pb-4 border-t border-theme-nav-border pt-4">
+                            <p className="text-theme-text-muted text-sm mb-3">
                               {isAdmin
                                 ? 'Administrator has full access to all features.'
                                 : 'Click to toggle permissions for each module:'}
@@ -844,7 +844,7 @@ const RoleSetup: React.FC = () => {
                                     key={catId}
                                     className="flex items-center justify-between py-2 px-3 bg-slate-800/50 rounded"
                                   >
-                                    <span className="text-slate-300 text-sm">{cat.name}</span>
+                                    <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
                                       <button
                                         onClick={() => updateRolePermission(role.id, catId, 'view', !perms.view)}
@@ -887,7 +887,7 @@ const RoleSetup: React.FC = () => {
           </div>
 
           {/* Progress */}
-          <div className="mt-8 bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="mt-8 bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <ProgressIndicator currentStep={8} totalSteps={10} />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
@@ -903,12 +903,12 @@ const RoleSetup: React.FC = () => {
           aria-labelledby="custom-role-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
         >
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-white/20">
-            <h3 id="custom-role-modal-title" className="text-white font-bold text-xl mb-4">Create Custom Role</h3>
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
+            <h3 id="custom-role-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Role</h3>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="custom-role-name" className="block text-sm font-semibold text-slate-200 mb-2">
+                <label htmlFor="custom-role-name" className="block text-sm font-semibold text-theme-text-secondary mb-2">
                   Role Name <span aria-hidden="true">*</span>
                 </label>
                 <input
@@ -919,12 +919,12 @@ const RoleSetup: React.FC = () => {
                   placeholder="e.g., Social Media Manager"
                   required
                   aria-required="true"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="custom-role-description" className="block text-sm font-semibold text-slate-200 mb-2">
+                <label htmlFor="custom-role-description" className="block text-sm font-semibold text-theme-text-secondary mb-2">
                   Description
                 </label>
                 <input
@@ -933,7 +933,7 @@ const RoleSetup: React.FC = () => {
                   value={customRoleDescription}
                   onChange={(e) => setCustomRoleDescription(e.target.value)}
                   placeholder="Brief description of this role"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -956,9 +956,9 @@ const RoleSetup: React.FC = () => {
         </div>
       )}
 
-      <footer className="bg-slate-900/50 backdrop-blur-sm border-t border-white/10 px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
-          <p className="text-slate-300 text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
+          <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
           <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
