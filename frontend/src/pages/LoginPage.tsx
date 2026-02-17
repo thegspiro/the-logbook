@@ -123,7 +123,7 @@ export const LoginPage: React.FC = () => {
   const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
+    <main className="relative min-h-screen flex items-center justify-center bg-theme-surface-secondary py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
           {branding.logo ? (
@@ -200,8 +200,8 @@ export const LoginPage: React.FC = () => {
                 aria-invalid={formErrors.username ? 'true' : 'false'}
                 aria-describedby={formErrors.username ? 'username-error' : undefined}
                 className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                  formErrors.username ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-theme-text-primary rounded-t-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
+                  formErrors.username ? 'border-red-300' : 'border-theme-input-border'
+                } placeholder-theme-text-muted text-theme-text-primary rounded-t-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                 placeholder="Username or Email"
                 value={formData.username}
                 onChange={handleChange}
@@ -224,8 +224,8 @@ export const LoginPage: React.FC = () => {
                 aria-invalid={formErrors.password ? 'true' : 'false'}
                 aria-describedby={formErrors.password ? 'password-error' : undefined}
                 className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                  formErrors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-theme-text-primary rounded-b-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
+                  formErrors.password ? 'border-red-300' : 'border-theme-input-border'
+                } placeholder-theme-text-muted text-theme-text-primary rounded-b-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm`}
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
@@ -270,7 +270,7 @@ export const LoginPage: React.FC = () => {
             <>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
+                  <div className="w-full border-t border-theme-input-border" />
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="px-2 bg-theme-surface-secondary text-theme-text-muted">Or continue with</span>

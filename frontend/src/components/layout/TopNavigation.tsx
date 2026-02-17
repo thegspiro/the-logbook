@@ -212,7 +212,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       aria-expanded={openDropdown === item.label}
                       aria-haspopup="true"
                       className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center gap-1 ${
-                        active ? 'text-white' : 'text-slate-300'
+                        active ? 'text-white' : 'text-theme-text-secondary'
                       }`}
                     >
                       {item.label}
@@ -232,7 +232,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                             className={`block px-4 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-500 ${
                               subActive
                                 ? 'bg-red-600 text-white'
-                                : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                : 'text-theme-text-secondary hover:bg-white/10 hover:text-white'
                             }`}
                           >
                             {subItem.label}
@@ -252,7 +252,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   onClick={(e) => handleNavigation(item.path, e)}
                   aria-current={active ? 'page' : undefined}
                   className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    active ? 'text-white' : 'text-slate-300'
+                    active ? 'text-white' : 'text-theme-text-secondary'
                   }`}
                 >
                   {item.label}
@@ -314,7 +314,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                         onClick={() => toggleMobileMenu(item.label)}
                         aria-expanded={isExpanded}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                          isParentActive(item) ? 'text-white' : 'text-slate-300'
+                          isParentActive(item) ? 'text-white' : 'text-theme-text-secondary'
                         }`}
                       >
                         {item.label}
@@ -333,7 +333,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                               className={`block px-3 py-2 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                                 subActive
                                   ? 'bg-red-600 text-white'
-                                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                  : 'text-theme-text-secondary hover:bg-white/10 hover:text-white'
                               }`}
                             >
                               {subItem.label}
@@ -353,7 +353,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     onClick={(e) => handleNavigation(item.path, e)}
                     aria-current={isActive(item.path) ? 'page' : undefined}
                     className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                      isActive(item.path) ? 'text-white' : 'text-slate-300'
+                      isActive(item.path) ? 'text-white' : 'text-theme-text-secondary'
                     }`}
                   >
                     {item.label}

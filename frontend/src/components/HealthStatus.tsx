@@ -35,7 +35,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
   if (loading || !health) {
     return (
       <div className="flex items-center gap-2 text-theme-text-muted">
-        <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+        <div className="animate-spin h-4 w-4 border-2 border-theme-input-border border-t-blue-600 rounded-full"></div>
         <span className="text-sm">Checking system health...</span>
       </div>
     );
@@ -50,7 +50,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
       case 'down':
         return 'bg-red-500';
       default:
-        return 'bg-gray-500';
+        return 'bg-theme-surface-hover';
     }
   };
 
@@ -70,7 +70,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
   if (compact) {
     return (
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${getStatusColor(health.overall)} ${health.overall === 'healthy' ? 'animate-pulse' : ''}`}></div>
+        <div className={`w-2 h-2 rounded-full ${getStatusColor(health.overall)} ${health.overall === 'healthy' ? 'animate-pulse' : ''}`} aria-hidden="true"></div>
         <span className="text-sm text-theme-text-secondary">
           System: {getStatusText(health.overall)}
         </span>

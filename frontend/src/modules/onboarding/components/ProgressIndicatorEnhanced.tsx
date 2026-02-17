@@ -40,7 +40,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-slate-800 rounded-full h-2 mb-4">
+      <div className="w-full bg-theme-surface rounded-full h-2 mb-4">
         <div
           className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
           style={{ width: `${percentage}%` }}
@@ -53,7 +53,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       </div>
 
       {/* Breadcrumb-Style Step Indicators (Mobile: Scrollable, Desktop: All visible) */}
-      <div className="overflow-x-auto pb-2 -mx-2 px-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+      <div className="overflow-x-auto pb-2 -mx-2 px-2 scrollbar-thin scrollbar-thumb-theme-surface-hover scrollbar-track-theme-surface">
         <div className="flex items-center space-x-1 min-w-max">
           {ONBOARDING_STEPS.map((step, index) => {
             const isCompleted = step.id < currentStep;
@@ -68,7 +68,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                       ? 'bg-red-600 text-white shadow-lg'
                       : isCompleted
                       ? 'bg-green-600/20 text-green-700 dark:text-green-400'
-                      : 'bg-slate-800/50 text-slate-500'
+                      : 'bg-theme-input-bg text-theme-text-muted'
                   }`}
                 >
                   {/* Step Number/Check */}
@@ -78,7 +78,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                         ? 'bg-white text-red-600'
                         : isCompleted
                         ? 'bg-green-500 text-white'
-                        : 'bg-slate-700 text-theme-text-muted'
+                        : 'bg-theme-surface-hover text-theme-text-muted'
                     }`}
                   >
                     {isCompleted ? (
@@ -103,7 +103,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                 {index < ONBOARDING_STEPS.length - 1 && (
                   <ChevronRight
                     className={`w-4 h-4 flex-shrink-0 ${
-                      isCompleted ? 'text-green-700 dark:text-green-400' : 'text-slate-600'
+                      isCompleted ? 'text-green-700 dark:text-green-400' : 'text-theme-text-muted'
                     }`}
                     aria-hidden="true"
                   />

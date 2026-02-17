@@ -192,7 +192,7 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({
                         {member.first_name} {member.last_name}
                       </span>
                       {member.badge_number && (
-                        <span className="ml-2 text-xs text-slate-500">
+                        <span className="ml-2 text-xs text-theme-text-muted">
                           #{member.badge_number}
                         </span>
                       )}

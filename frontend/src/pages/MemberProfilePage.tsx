@@ -16,11 +16,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { userService, organizationService, trainingService, inventoryService } from '../services/api';
+import toast from 'react-hot-toast';
+import { userService, organizationService, trainingService, inventoryService, memberStatusService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import type { UserWithRoles } from '../types/role';
-import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
+import type { ContactInfoUpdate, NotificationPreferences, UserStatus, MembershipTier } from '../types/user';
 import type { TrainingRecord } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 
@@ -73,6 +74,20 @@ export const MemberProfilePage: React.FC = () => {
   const [trainingsLoading, setTrainingsLoading] = useState(false);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
+
+  // Status / tier change states
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showTierModal, setShowTierModal] = useState(false);
+  const [statusForm, setStatusForm] = useState<{ new_status: UserStatus; reason: string; send_property_return_email: boolean; return_deadline_days: number }>({
+    new_status: 'active',
+    reason: '',
+    send_property_return_email: true,
+    return_deadline_days: 14,
+  });
+  const [tierForm, setTierForm] = useState<{ membership_type: string; reason: string }>({ membership_type: '', reason: '' });
+  const [tiers, setTiers] = useState<MembershipTier[]>([]);
+  const [statusChanging, setStatusChanging] = useState(false);
+  const [tierChanging, setTierChanging] = useState(false);
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
@@ -161,17 +176,17 @@ export const MemberProfilePage: React.FC = () => {
   const getTrainingStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
       case 'scheduled':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'failed':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-theme-surface-secondary text-theme-text-primary';
     }
   };
 
@@ -246,6 +261,82 @@ export const MemberProfilePage: React.FC = () => {
     }));
   };
 
+  const canManageMembers = currentUser?.permissions?.includes('members.manage') ?? false;
+
+  const handleOpenStatusModal = () => {
+    if (user) {
+      setStatusForm({ new_status: user.status as UserStatus, reason: '', send_property_return_email: true, return_deadline_days: 14 });
+      setShowStatusModal(true);
+    }
+  };
+
+  const handleOpenTierModal = async () => {
+    try {
+      const config = await memberStatusService.getTierConfig();
+      setTiers(config.tiers);
+    } catch {
+      setTiers([]);
+    }
+    setTierForm({ membership_type: '', reason: '' });
+    setShowTierModal(true);
+  };
+
+  const handleStatusChange = async () => {
+    if (!userId || !user) return;
+    setStatusChanging(true);
+    try {
+      const result = await memberStatusService.changeStatus(userId, {
+        new_status: statusForm.new_status,
+        reason: statusForm.reason || undefined,
+        send_property_return_email: statusForm.send_property_return_email,
+        return_deadline_days: statusForm.return_deadline_days,
+      });
+      toast.success(`Status changed from ${result.previous_status} to ${result.new_status}`);
+      if (result.email_sent) toast.success('Property return email sent');
+      setShowStatusModal(false);
+      // Reload profile
+      const updatedUser = await userService.getUserWithRoles(userId);
+      setUser(updatedUser);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change status'));
+    } finally {
+      setStatusChanging(false);
+    }
+  };
+
+  const handleTierChange = async () => {
+    if (!userId || !tierForm.membership_type) return;
+    setTierChanging(true);
+    try {
+      const result = await memberStatusService.changeMembershipType(userId, {
+        membership_type: tierForm.membership_type,
+        reason: tierForm.reason || undefined,
+      });
+      toast.success(`Tier changed from ${result.previous_membership_type} to ${result.new_membership_type}`);
+      setShowTierModal(false);
+      const updatedUser = await userService.getUserWithRoles(userId);
+      setUser(updatedUser);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change membership tier'));
+    } finally {
+      setTierChanging(false);
+    }
+  };
+
+  const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+    active: { label: 'Active', color: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
+    inactive: { label: 'Inactive', color: 'bg-theme-surface-secondary text-theme-text-primary' },
+    suspended: { label: 'Suspended', color: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
+    probationary: { label: 'Probationary', color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
+    retired: { label: 'Retired', color: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400' },
+    dropped_voluntary: { label: 'Dropped (Voluntary)', color: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400' },
+    dropped_involuntary: { label: 'Dropped (Involuntary)', color: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
+    archived: { label: 'Archived', color: 'bg-theme-surface-secondary text-theme-text-muted' },
+  };
+
+  const getStatusInfo = (status: string) => STATUS_LABELS[status] || { label: status, color: 'bg-theme-surface-secondary text-theme-text-primary' };
+  const isDroppedStatus = (s: string) => s === 'dropped_voluntary' || s === 'dropped_involuntary';
+
   // Check if current user can edit this profile
   const canEdit = currentUser?.id === userId;
 
@@ -293,7 +384,7 @@ export const MemberProfilePage: React.FC = () => {
       <div className="mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm text-theme-text-muted hover:text-slate-200 mb-4 flex items-center gap-1"
+          className="text-sm text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1"
         >
           &larr; Back
         </button>
@@ -323,7 +414,7 @@ export const MemberProfilePage: React.FC = () => {
                     <span
                       key={role.id}
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        role.is_system ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                        role.is_system ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-theme-surface-secondary text-theme-text-primary'
                       }`}
                     >
                       {role.name}
@@ -333,13 +424,9 @@ export const MemberProfilePage: React.FC = () => {
               </div>
             </div>
             <span
-              className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                user.status === 'active'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
+              className={`px-3 py-1 text-sm font-semibold rounded-full ${getStatusInfo(user.status).color}`}
             >
-              {user.status}
+              {getStatusInfo(user.status).label}
             </span>
           </div>
         </div>
@@ -370,7 +457,7 @@ export const MemberProfilePage: React.FC = () => {
               ) : trainings.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-sm text-theme-text-muted">No training records found.</p>
-                  <p className="text-xs text-slate-500 mt-1">Training records will appear here as they are completed.</p>
+                  <p className="text-xs text-theme-text-muted mt-1">Training records will appear here as they are completed.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -378,7 +465,7 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.slice(0, 5).map((training) => (
                     <div
                       key={training.id}
-                      className="border border-theme-surface-border rounded-lg p-4 hover:border-slate-500 transition-colors"
+                      className="border border-theme-surface-border rounded-lg p-4 hover:border-theme-input-border transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -411,12 +498,12 @@ export const MemberProfilePage: React.FC = () => {
                             {training.status.replace('_', ' ')}
                           </span>
                           {isExpired(training) && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
                           {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               expiring soon
                             </span>
                           )}
@@ -477,10 +564,10 @@ export const MemberProfilePage: React.FC = () => {
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                               item.condition === 'Excellent'
-                                ? 'bg-green-100 text-green-800'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
                                 : item.condition === 'Good'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                             }`}
                           >
                             {item.condition}
@@ -584,7 +671,7 @@ export const MemberProfilePage: React.FC = () => {
                         onChange={() => handleNotificationToggle('email')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">Email notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-primary">Email notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -593,7 +680,7 @@ export const MemberProfilePage: React.FC = () => {
                         onChange={() => handleNotificationToggle('sms')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">SMS notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-primary">SMS notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -602,7 +689,7 @@ export const MemberProfilePage: React.FC = () => {
                         onChange={() => handleNotificationToggle('push')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">Push notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-primary">Push notifications</span>
                     </label>
                   </div>
                 </div>
@@ -618,7 +705,7 @@ export const MemberProfilePage: React.FC = () => {
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving}
-                    className="flex-1 px-4 py-2 bg-slate-800 text-theme-text-secondary text-sm font-medium border border-white/30 rounded-md hover:bg-theme-surface-secondary disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-secondary disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -635,11 +722,23 @@ export const MemberProfilePage: React.FC = () => {
 
           {/* Employment Info */}
           <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Employment</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Membership</h2>
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-theme-text-muted uppercase font-medium">Status</p>
-                <p className="text-sm text-theme-text-primary mt-1 capitalize">{user.status}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusInfo(user.status).color}`}>
+                    {getStatusInfo(user.status).label}
+                  </span>
+                  {canManageMembers && (
+                    <button
+                      onClick={handleOpenStatusModal}
+                      className="text-xs text-blue-700 dark:text-blue-400 hover:underline"
+                    >
+                      Change
+                    </button>
+                  )}
+                </div>
               </div>
               {user.hire_date && (
                 <div>
@@ -647,6 +746,22 @@ export const MemberProfilePage: React.FC = () => {
                   <p className="text-sm text-theme-text-primary mt-1">{formatDate(user.hire_date)}</p>
                 </div>
               )}
+              <div>
+                <p className="text-xs text-theme-text-muted uppercase font-medium">Membership Tier</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-theme-text-primary capitalize">
+                    {(user as unknown as Record<string, string>).membership_type || 'active'}
+                  </p>
+                  {canManageMembers && (
+                    <button
+                      onClick={handleOpenTierModal}
+                      className="text-xs text-blue-700 dark:text-blue-400 hover:underline"
+                    >
+                      Change
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -689,6 +804,161 @@ export const MemberProfilePage: React.FC = () => {
         </div>
       </div>
       </div>
+
+      {/* Status Change Modal */}
+      {showStatusModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowStatusModal(false); }}
+        >
+          <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-theme-surface-border">
+              <h2 className="text-xl font-bold text-theme-text-primary">Change Member Status</h2>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Change status for {user.full_name || user.username}
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">New Status</label>
+                <select
+                  value={statusForm.new_status}
+                  onChange={(e) => setStatusForm(prev => ({ ...prev, new_status: e.target.value as UserStatus }))}
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="probationary">Probationary</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="retired">Retired</option>
+                  <option value="dropped_voluntary">Dropped (Voluntary)</option>
+                  <option value="dropped_involuntary">Dropped (Involuntary)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Reason</label>
+                <textarea
+                  value={statusForm.reason}
+                  onChange={(e) => setStatusForm(prev => ({ ...prev, reason: e.target.value }))}
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  rows={3}
+                  placeholder="Reason for status change (optional)"
+                />
+              </div>
+
+              {isDroppedStatus(statusForm.new_status) && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 space-y-3">
+                  <p className="text-sm font-medium text-orange-700 dark:text-orange-400">
+                    Dropping a member triggers property return processing.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={statusForm.send_property_return_email}
+                      onChange={(e) => setStatusForm(prev => ({ ...prev, send_property_return_email: e.target.checked }))}
+                      className="rounded border-theme-input-border"
+                    />
+                    Send property return email to member
+                  </label>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Return deadline (days)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={statusForm.return_deadline_days}
+                      onChange={(e) => setStatusForm(prev => ({ ...prev, return_deadline_days: parseInt(e.target.value) || 14 }))}
+                      className="w-24 px-3 py-1 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStatusChange}
+                  disabled={statusChanging || statusForm.new_status === user.status}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                >
+                  {statusChanging ? 'Changing...' : 'Change Status'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tier Change Modal */}
+      {showTierModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowTierModal(false); }}
+        >
+          <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full">
+            <div className="p-6 border-b border-theme-surface-border">
+              <h2 className="text-xl font-bold text-theme-text-primary">Change Membership Tier</h2>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Change tier for {user.full_name || user.username}
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">New Tier</label>
+                <select
+                  value={tierForm.membership_type}
+                  onChange={(e) => setTierForm(prev => ({ ...prev, membership_type: e.target.value }))}
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                >
+                  <option value="">Select tier...</option>
+                  {tiers.map(tier => (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.name} ({tier.years_required}+ years)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Reason</label>
+                <textarea
+                  value={tierForm.reason}
+                  onChange={(e) => setTierForm(prev => ({ ...prev, reason: e.target.value }))}
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                  rows={2}
+                  placeholder="Reason for tier change (optional)"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
+                <button
+                  onClick={() => setShowTierModal(false)}
+                  className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleTierChange}
+                  disabled={tierChanging || !tierForm.membership_type}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                >
+                  {tierChanging ? 'Changing...' : 'Change Tier'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

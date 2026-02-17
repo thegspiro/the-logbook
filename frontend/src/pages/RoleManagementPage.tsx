@@ -300,7 +300,7 @@ export const RoleManagementPage: React.FC = () => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-lg font-semibold text-theme-text-primary">{role.name}</h3>
                           {role.is_system && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                               System
                             </span>
                           )}
@@ -406,7 +406,7 @@ export const RoleManagementPage: React.FC = () => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-lg font-semibold text-theme-text-primary">{role.name}</h3>
                           {role.is_system && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                               System
                             </span>
                           )}
@@ -454,7 +454,7 @@ export const RoleManagementPage: React.FC = () => {
                                     {user.email}
                                   </p>
                                   {!user.is_active && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 mt-1">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 mt-1">
                                       Inactive
                                     </span>
                                   )}
@@ -479,13 +479,13 @@ export const RoleManagementPage: React.FC = () => {
         {/* ===== Create/Edit Role Modal ===== */}
         {showCreateModal && (
           <div
-            className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
             onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
           >
-            <div className="bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
               <div className="px-6 py-4 border-b border-theme-surface-border">
                 <h3 id="role-modal-title" className="text-lg font-medium text-theme-text-primary">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
@@ -503,7 +503,7 @@ export const RoleManagementPage: React.FC = () => {
                 )}
 
                 <div>
-                  <label htmlFor="role-name" className="block text-sm font-medium text-slate-200">Role Name</label>
+                  <label htmlFor="role-name" className="block text-sm font-medium text-theme-text-primary">Role Name</label>
                   <input
                     id="role-name"
                     type="text"
@@ -512,13 +512,13 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system}
                     required
                     aria-required="true"
-                    className="mt-1 block w-full rounded-md border-theme-input-border bg-theme-input-bg text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-slate-700"
+                    className="mt-1 block w-full rounded-md border-theme-input-border bg-theme-input-bg text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-theme-surface-hover"
                   />
                 </div>
 
                 {!editingRole && (
                   <div>
-                    <label htmlFor="role-slug" className="block text-sm font-medium text-slate-200">Slug</label>
+                    <label htmlFor="role-slug" className="block text-sm font-medium text-theme-text-primary">Slug</label>
                     <input
                       id="role-slug"
                       type="text"
@@ -531,7 +531,7 @@ export const RoleManagementPage: React.FC = () => {
                 )}
 
                 <div>
-                  <label htmlFor="role-description" className="block text-sm font-medium text-slate-200">Description</label>
+                  <label htmlFor="role-description" className="block text-sm font-medium text-theme-text-primary">Description</label>
                   <textarea
                     id="role-description"
                     value={formData.description}
@@ -543,7 +543,7 @@ export const RoleManagementPage: React.FC = () => {
 
                 {!editingRole?.is_system && (
                   <div>
-                    <label htmlFor="role-priority" className="block text-sm font-medium text-slate-200">Priority (0-100)</label>
+                    <label htmlFor="role-priority" className="block text-sm font-medium text-theme-text-primary">Priority (0-100)</label>
                     <input
                       id="role-priority"
                       type="number"
@@ -558,7 +558,7 @@ export const RoleManagementPage: React.FC = () => {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-3">Permissions</label>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-3">Permissions</label>
                   <div className="space-y-4">
                     {permissionCategories.map((category) => {
                       const categoryPermissions = category.permissions.map((p) => p.name);
@@ -607,7 +607,7 @@ export const RoleManagementPage: React.FC = () => {
               <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-slate-800 border border-white/30 rounded-md hover:bg-theme-surface-secondary"
+                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-secondary"
                 >
                   Cancel
                 </button>

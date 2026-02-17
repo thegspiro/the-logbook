@@ -41,7 +41,7 @@ export interface Event {
   check_in_minutes_after?: number;
   require_checkout?: boolean;
   custom_fields?: Record<string, string | number | boolean | null>;
-  attachments?: Array<{ [key: string]: string }>;
+  attachments?: EventAttachment[];
   is_recurring?: boolean;
   recurrence_pattern?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
   recurrence_end_date?: string;
@@ -99,7 +99,7 @@ export interface EventCreate {
   check_in_minutes_after?: number;
   require_checkout?: boolean;
   custom_fields?: Record<string, string | number | boolean | null>;
-  attachments?: Array<{ [key: string]: string }>;
+  attachments?: EventAttachment[];
 }
 
 export interface EventUpdate {
@@ -125,7 +125,7 @@ export interface EventUpdate {
   check_in_minutes_after?: number;
   require_checkout?: boolean;
   custom_fields?: Record<string, string | number | boolean | null>;
-  attachments?: Array<{ [key: string]: string }>;
+  attachments?: EventAttachment[];
 }
 
 export interface EventCancel {
@@ -317,6 +317,38 @@ export interface RecurringEventCreate {
   check_in_minutes_after?: number;
   require_checkout?: boolean;
   template_id?: string;
+}
+
+// Event Attachments & Document Folder
+
+export interface EventAttachment {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  file_type: string;
+  description?: string;
+  uploaded_by: string;
+  uploaded_at: string;
+}
+
+export interface EventAttachmentUploadResponse {
+  message: string;
+  attachment: EventAttachment;
+  total_attachments: number;
+}
+
+export interface EventDocumentFolder {
+  id: string;
+  organization_id: string;
+  name: string;
+  parent_folder_id?: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  status: string;
+  document_count: number;
 }
 
 // Event Module Settings (organization-level)

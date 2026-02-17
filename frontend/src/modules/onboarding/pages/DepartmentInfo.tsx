@@ -138,7 +138,7 @@ const DepartmentInfo: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
         {/* Header */}
         <div className="text-center mb-8">
@@ -159,7 +159,7 @@ const DepartmentInfo: React.FC = () => {
           <div>
             <label
               htmlFor="departmentName"
-              className="block text-sm font-semibold text-slate-200 mb-2"
+              className="block text-sm font-semibold text-theme-text-primary mb-2"
             >
               Department Name <span className="text-red-700 dark:text-red-400">*</span>
             </label>
@@ -172,7 +172,7 @@ const DepartmentInfo: React.FC = () => {
                 clearError();
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
-              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
               maxLength={100}
               autoFocus
               aria-required="true"
@@ -186,7 +186,7 @@ const DepartmentInfo: React.FC = () => {
 
           {/* Logo Upload */}
           <div className="relative">
-            <label className="block text-sm font-semibold text-slate-200 mb-2">
+            <label className="block text-sm font-semibold text-theme-text-primary mb-2">
               Department Logo <span className="text-theme-text-muted font-normal">(Optional)</span>
             </label>
 
@@ -223,7 +223,7 @@ const DepartmentInfo: React.FC = () => {
                   aria-label="File input for logo"
                 />
                 <div className="flex flex-col items-center space-y-3">
-                  <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center">
+                  <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
                     <Upload className="w-8 h-8 text-theme-text-muted" />
                   </div>
                   <div>
@@ -307,8 +307,8 @@ const DepartmentInfo: React.FC = () => {
               disabled={!departmentName.trim() || isSaving}
               className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
                 departmentName.trim() && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -318,7 +318,7 @@ const DepartmentInfo: React.FC = () => {
             {departmentName.trim() && !logo && (
               <button
                 onClick={handleSkipLogo}
-                className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all duration-300"
+                className="sm:w-auto px-6 py-3 bg-transparent border border-theme-input-border hover:border-theme-input-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all duration-300"
                 aria-label="Skip logo upload"
               >
                 Skip Logo for Now

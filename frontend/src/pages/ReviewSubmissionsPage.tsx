@@ -35,7 +35,7 @@ import type {
 // ==================== Helpers ====================
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; icon: React.ElementType }> = {
-  draft: { label: 'Draft', color: 'bg-gray-500/20 text-theme-text-muted', icon: FileText },
+  draft: { label: 'Draft', color: 'bg-theme-surface-secondary text-theme-text-muted', icon: FileText },
   pending_review: { label: 'Pending Review', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400', icon: Clock },
   approved: { label: 'Approved', color: 'bg-green-500/20 text-green-700 dark:text-green-400', icon: CheckCircle2 },
   rejected: { label: 'Rejected', color: 'bg-red-500/20 text-red-700 dark:text-red-400', icon: XCircle },
@@ -225,7 +225,7 @@ const SubmissionCard: React.FC<{
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full text-left p-4 hover:bg-gray-750 transition-colors"
+        className="w-full text-left p-4 hover:bg-theme-surface-hover transition-colors"
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -529,7 +529,7 @@ const ConfigEditor: React.FC<{
                   type="text"
                   value={fc.label}
                   onChange={(e) => updateField(name, 'label', e.target.value)}
-                  className="bg-transparent border-none text-theme-text-secondary text-sm focus:outline-none flex-1 min-w-0"
+                  className="bg-transparent border-none text-theme-text-secondary text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded flex-1 min-w-0"
                 />
               </div>
               <label className="flex items-center space-x-2 ml-4 flex-shrink-0">
@@ -737,7 +737,7 @@ const ReviewSubmissionsPage: React.FC = () => {
               </>
             ) : (
               <>
-                <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <FileText className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
                 <p className="text-theme-text-muted">No submissions found</p>
                 {statusFilter && (
                   <button

@@ -246,7 +246,7 @@ const ModuleSelection: React.FC = () => {
 
         {/* Expanded Details - Full Description and All Features */}
         {isExpanded && (
-          <div className="border-t border-theme-surface-border p-4 bg-slate-900/30">
+          <div className="border-t border-theme-surface-border p-4 bg-theme-input-bg">
             <h4 className="text-theme-text-primary font-semibold mb-2">About this module</h4>
             <p className="text-theme-text-secondary text-sm mb-4">{module.longDescription}</p>
 
@@ -274,7 +274,7 @@ const ModuleSelection: React.FC = () => {
   const optionalModules = AVAILABLE_MODULES.filter((m) => m.category === 'optional');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
       <main className="flex-1 flex items-center justify-center p-4 py-8">
@@ -362,8 +362,8 @@ const ModuleSelection: React.FC = () => {
               disabled={isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 isSaving
-                  ? 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
-                  : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
+                  ? 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
             >
               {isSaving ? 'Saving Module Configuration...' : 'Continue to Admin Setup'}

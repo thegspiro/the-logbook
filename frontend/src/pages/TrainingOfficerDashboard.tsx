@@ -233,7 +233,7 @@ const TrainingOfficerDashboard: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-              <GraduationCap className="w-8 h-8 text-red-700 dark:text-red-500" />
+              <GraduationCap className="w-8 h-8 text-red-700" />
               <span>Training Officer Dashboard</span>
             </h1>
             <p className="text-theme-text-muted mt-1">
@@ -245,7 +245,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             {/* Refresh Button */}
             <button
               onClick={fetchDashboardData}
-              className="p-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+              className="p-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               title="Refresh Data"
             >
               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -262,7 +262,7 @@ const TrainingOfficerDashboard: React.FC = () => {
 
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+              className="p-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               title="Dashboard Settings"
             >
               <Settings className="w-5 h-5" />
@@ -273,7 +273,7 @@ const TrainingOfficerDashboard: React.FC = () => {
         {/* Error Banner */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
-            <p className="text-red-700 dark:text-red-400">{error}</p>
+            <p className="text-red-700">{error}</p>
           </div>
         )}
 
@@ -293,7 +293,7 @@ const TrainingOfficerDashboard: React.FC = () => {
                 return (
                   <label
                     key={widget.id}
-                    className="flex items-center space-x-3 p-3 bg-slate-800/50 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors"
+                    className="flex items-center space-x-3 p-3 bg-theme-input-bg/50 rounded-lg cursor-pointer hover:bg-theme-surface transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -566,7 +566,7 @@ const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ e
           <div
             key={item.id}
             onClick={() => onViewMember(item.memberId)}
-            className="flex items-center justify-between p-3 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 transition-colors"
+            className="flex items-center justify-between p-3 bg-theme-input-bg/50 rounded cursor-pointer hover:bg-theme-surface transition-colors"
           >
             <div>
               <p className="text-theme-text-primary text-sm font-medium">{item.memberName}</p>
@@ -599,13 +599,13 @@ const RecentCompletionsWidget: React.FC<RecentCompletionsWidgetProps> = ({ compl
     ) : (
       <div className="space-y-3">
         {completions.map((item) => (
-          <div key={item.id} className="flex items-center space-x-3 p-3 bg-slate-800/50 rounded">
-            <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-400 flex-shrink-0" />
+          <div key={item.id} className="flex items-center space-x-3 p-3 bg-theme-input-bg/50 rounded">
+            <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-theme-text-primary text-sm font-medium truncate">{item.memberName}</p>
               <p className="text-theme-text-muted text-xs">{item.courseName}</p>
             </div>
-            <span className="text-slate-500 text-xs whitespace-nowrap">{formatDate(item.completionDate)}</span>
+            <span className="text-theme-text-muted text-xs whitespace-nowrap">{formatDate(item.completionDate)}</span>
           </div>
         ))}
       </div>
@@ -630,16 +630,16 @@ const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({
             <span className="text-theme-text-muted">Department Total</span>
             <span className="text-theme-text-primary font-semibold">{stats.totalHoursThisYear.toLocaleString()} hrs</span>
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-2">
+          <div className="w-full bg-theme-surface rounded-full h-2">
             <div className="bg-green-600 h-2 rounded-full" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <div className="bg-slate-800/50 rounded p-3">
+          <div className="bg-theme-input-bg/50 rounded p-3">
             <p className="text-theme-text-muted text-xs">Average per Member</p>
             <p className="text-theme-text-primary font-bold text-xl">{stats.avgHoursPerMember} hrs</p>
           </div>
-          <div className="bg-slate-800/50 rounded p-3">
+          <div className="bg-theme-input-bg/50 rounded p-3">
             <p className="text-theme-text-muted text-xs">Goal Progress</p>
             <p className="text-theme-text-primary font-bold text-xl">{progressPercent}%</p>
           </div>
@@ -698,13 +698,13 @@ const ComplianceBar: React.FC<ComplianceBarProps> = ({ label, percentage, detail
       <span className="text-theme-text-muted">{label}</span>
       <span className="text-theme-text-primary font-semibold">{percentage}%</span>
     </div>
-    <div className="w-full bg-slate-800 rounded-full h-2">
+    <div className="w-full bg-theme-surface rounded-full h-2">
       <div
         className={`h-2 rounded-full ${percentage >= 80 ? 'bg-green-600' : percentage >= 60 ? 'bg-yellow-600' : 'bg-red-600'}`}
         style={{ width: `${percentage}%` }}
       ></div>
     </div>
-    {detail && <p className="text-slate-500 text-xs mt-1">{detail}</p>}
+    {detail && <p className="text-theme-text-muted text-xs mt-1">{detail}</p>}
   </div>
 );
 
@@ -721,7 +721,7 @@ const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, sta
   };
 
   return (
-    <div className="p-3 bg-slate-800/50 rounded">
+    <div className="p-3 bg-theme-input-bg/50 rounded">
       <div className="flex items-center justify-between">
         <span className="text-theme-text-primary text-sm font-medium truncate flex-1 mr-2">{name}</span>
         <span className={`text-xs font-semibold px-2 py-1 rounded ${statusConfig[status].color} text-theme-text-primary whitespace-nowrap`}>

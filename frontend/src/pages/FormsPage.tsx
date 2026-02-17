@@ -564,7 +564,7 @@ const FormsPage: React.FC = () => {
                 placeholder="Search forms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-pink-500"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -596,7 +596,7 @@ const FormsPage: React.FC = () => {
               </div>
             ) : forms.length === 0 ? (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <FormInput className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
+                <FormInput className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Custom Forms</h3>
                 <p className="text-theme-text-secondary mb-6">
                   Create a custom form from scratch or start from a starter template.
@@ -817,7 +817,7 @@ const FormsPage: React.FC = () => {
               </div>
             ) : (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
+                <FileCheck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">View Submissions</h3>
                 <p className="text-theme-text-secondary mb-6">
                   Select a form from the &quot;My Forms&quot; tab to view its submissions.
@@ -836,7 +836,7 @@ const FormsPage: React.FC = () => {
         {/* Form Detail / Editor View */}
         {editingForm && (
           <div
-            className="fixed inset-0 z-50 bg-slate-900/95 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/95 overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="form-editor-title"
@@ -944,7 +944,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="create-form-title" className="text-lg font-medium text-theme-text-primary">Create New Form</h3>
@@ -1007,7 +1007,7 @@ const FormsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                   >
                     Cancel
                   </button>
@@ -1035,7 +1035,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="share-form-title" className="text-lg font-medium text-theme-text-primary flex items-center space-x-2">
@@ -1062,7 +1062,7 @@ const FormsPage: React.FC = () => {
                             onClick={() => handleTogglePublic(form)}
                             aria-label={form.is_public ? 'Disable public access' : 'Enable public access'}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              form.is_public ? 'bg-cyan-600' : 'bg-slate-600'
+                              form.is_public ? 'bg-cyan-600' : 'bg-theme-surface-hover'
                             }`}
                           >
                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1190,7 +1190,7 @@ const FormsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end rounded-b-lg">
                   <button
                     onClick={() => setShowShareModal(false)}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+                    className="px-4 py-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
                   >
                     Done
                   </button>
@@ -1211,7 +1211,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="integration-modal-title" className="text-lg font-medium text-theme-text-primary flex items-center space-x-2">
@@ -1310,7 +1310,7 @@ const FormsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end rounded-b-lg">
                   <button
                     onClick={() => setShowIntegrationModal(false)}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+                    className="px-4 py-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
                   >
                     Done
                   </button>

@@ -31,7 +31,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
         aria-label="Loading"
       />
       {message && (
-        <p className={`mt-4 text-lg ${fullScreen ? 'text-slate-300' : 'text-theme-text-secondary'}`} aria-live="polite">
+        <p className={`mt-4 text-lg ${fullScreen ? 'text-theme-text-secondary' : 'text-theme-text-secondary'}`} aria-live="polite">
           {message}
         </p>
       )}
@@ -40,7 +40,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   if (fullScreen) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
         {spinner}
       </div>
     );

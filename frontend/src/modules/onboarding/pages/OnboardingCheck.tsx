@@ -457,7 +457,7 @@ const OnboardingCheck: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-theme-surface backdrop-blur-sm rounded-lg p-8 text-center border border-theme-surface-border">
           <div className="text-red-700 dark:text-red-400 text-6xl mb-4">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-2xl font-bold text-theme-text-primary mb-4">
@@ -495,7 +495,7 @@ const OnboardingCheck: React.FC = () => {
               <div key={service.name} className="flex items-center justify-between py-2 border-b border-theme-surface-border last:border-0">
                 <div className="flex items-center gap-2">
                   <span className="text-theme-text-secondary">{service.name}</span>
-                  {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
+                  {service.optional && <span className="text-xs text-theme-text-muted">(optional)</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   {service.message && (
@@ -510,14 +510,14 @@ const OnboardingCheck: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={handleRetry}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
             >
               Try Again
             </button>
             {requiredConnected === requiredServices.length && (
               <button
                 onClick={handleSkip}
-                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
+                className="flex-1 px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
               >
                 Continue Anyway
               </button>
@@ -529,13 +529,13 @@ const OnboardingCheck: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-4"></div>
           <p className="text-theme-text-primary text-xl mb-2">Initializing The Logbook</p>
           <p className="text-theme-text-muted text-sm">{statusMessage}</p>
-          <p className="text-slate-500 text-xs mt-2">Time elapsed: {formatTime(elapsedTime)}</p>
+          <p className="text-theme-text-muted text-xs mt-2">Time elapsed: {formatTime(elapsedTime)}</p>
         </div>
 
         {/* Service Status Cards */}
@@ -553,7 +553,7 @@ const OnboardingCheck: React.FC = () => {
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="text-theme-text-primary">{service.name}</span>
-                  {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
+                  {service.optional && <span className="text-xs text-theme-text-muted">(optional)</span>}
                 </div>
                 {service.message && (
                   <span className={`text-xs ${getStatusColor(service.status)}`}>
@@ -630,7 +630,7 @@ const OnboardingCheck: React.FC = () => {
 
                     {/* Migration progress bar */}
                     {startupInfo.migrations && startupInfo.migrations.total > 0 && (
-                      <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-theme-surface-border">
+                      <div className="mt-3 p-3 bg-theme-input-bg rounded-lg border border-theme-surface-border">
                         <div className="flex items-center justify-between text-xs text-theme-text-muted mb-2">
                           <span className="font-medium">Database Migrations</span>
                           <span className="text-orange-700 dark:text-orange-400 font-semibold">
@@ -642,13 +642,13 @@ const OnboardingCheck: React.FC = () => {
                             <p className="font-medium text-orange-700 dark:text-orange-400">
                               Creating {startupInfo.migrations.total} database tables...
                             </p>
-                            <p className="text-slate-500">
+                            <p className="text-theme-text-muted">
                               Setting up tables for users, organizations, training records, events, elections, inventory, and audit logs.
                               This process runs in the background and may take 1-2 minutes.
                             </p>
                           </div>
                         )}
-                        <div className="w-full bg-slate-700 rounded-full h-2.5 mb-2">
+                        <div className="w-full bg-theme-surface-hover rounded-full h-2.5 mb-2">
                           <div
                             className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
                             style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
@@ -662,7 +662,7 @@ const OnboardingCheck: React.FC = () => {
                           </p>
                           {getEstimatedTimeRemaining() && (
                             <p className="text-theme-text-muted text-xs">
-                              <span className="text-slate-500">Est. remaining:</span> {getEstimatedTimeRemaining()}
+                              <span className="text-theme-text-muted">Est. remaining:</span> {getEstimatedTimeRemaining()}
                             </p>
                           )}
                         </div>
@@ -694,7 +694,7 @@ const OnboardingCheck: React.FC = () => {
                     <div
                       key={index}
                       className={`h-1 rounded-full transition-all duration-300 ${
-                        index === currentTipIndex ? 'w-6 bg-blue-400' : 'w-1 bg-slate-600'
+                        index === currentTipIndex ? 'w-6 bg-blue-400' : 'w-1 bg-theme-surface-hover'
                       }`}
                     />
                   ))}
@@ -706,7 +706,7 @@ const OnboardingCheck: React.FC = () => {
           {isWaiting && (
             <div className="mt-4 pt-4 border-t border-theme-surface-border">
               {/* Retry progress bar */}
-              <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+              <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-3">
                 <div
                   className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${progressPercent}%` }}
@@ -716,11 +716,11 @@ const OnboardingCheck: React.FC = () => {
                 <span className="text-theme-text-muted">
                   Attempt {retryCount}/{MAX_RETRIES}
                 </span>
-                <span className="text-slate-500">
+                <span className="text-theme-text-muted">
                   Auto-retrying...
                 </span>
               </div>
-              <p className="text-slate-500 text-xs mt-2">
+              <p className="text-theme-text-muted text-xs mt-2">
                 Services are starting up. Checking every 60 seconds. First deployment can take 25-30 minutes.
               </p>
             </div>
@@ -731,7 +731,7 @@ const OnboardingCheck: React.FC = () => {
         <div className="mt-4">
           <button
             onClick={() => setShowWhatsHappening(!showWhatsHappening)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 border border-theme-surface-border rounded-lg transition-all duration-300"
+            className="w-full flex items-center justify-between px-4 py-3 bg-theme-input-bg hover:bg-theme-surface-hover border border-theme-surface-border rounded-lg transition-all duration-300"
           >
             <span className="text-theme-text-secondary text-sm font-medium">What's happening?</span>
             <span className={`text-theme-text-muted transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
@@ -740,33 +740,33 @@ const OnboardingCheck: React.FC = () => {
           </button>
 
           {showWhatsHappening && (
-            <div className="mt-2 bg-slate-800/30 border border-theme-surface-border rounded-lg p-4 space-y-3 text-sm">
+            <div className="mt-2 bg-theme-input-bg border border-theme-surface-border rounded-lg p-4 space-y-3 text-sm">
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">🔍 Preflight Checks</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-1">🔍 Preflight Checks</h4>
                 <p className="text-theme-text-muted text-xs">
                   Verifying that all required environment variables are set and the system has enough resources.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">🗄️ Database Connection</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-1">🗄️ Database Connection</h4>
                 <p className="text-theme-text-muted text-xs">
                   Connecting to MySQL. On first startup, MySQL needs to initialize its system tables, which can take 1-2 minutes.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">🔧 Database Migrations</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-1">🔧 Database Migrations</h4>
                 <p className="text-theme-text-muted text-xs">
                   Creating 37 database tables for users, training, events, elections, inventory, and more. This only happens once during initial setup.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">⚡ Service Initialization</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-1">⚡ Service Initialization</h4>
                 <p className="text-theme-text-muted text-xs">
                   Starting Redis cache, GeoIP service, and running database validations in parallel to speed up startup.
                 </p>
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold mb-1">⏱️ Expected Timeline</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-1">⏱️ Expected Timeline</h4>
                 <p className="text-theme-text-muted text-xs">
                   • Fresh install: 25-30 minutes (~6 min MySQL init + ~23 min migrations)<br />
                   • Subsequent restarts: 10-30 seconds<br />
@@ -774,7 +774,7 @@ const OnboardingCheck: React.FC = () => {
                 </p>
               </div>
               <div className="pt-2 border-t border-theme-surface-border">
-                <h4 className="text-slate-200 font-semibold mb-1">🔧 Troubleshooting</h4>
+                <h4 className="text-theme-text-primary font-semibold mb-1">🔧 Troubleshooting</h4>
                 <p className="text-theme-text-muted text-xs mb-2">
                   If startup is taking too long, check the logs:
                 </p>
@@ -803,7 +803,7 @@ const OnboardingCheck: React.FC = () => {
 
         {/* Help text */}
         <div className="mt-4 text-center">
-          <p className="text-slate-500 text-xs">
+          <p className="text-theme-text-muted text-xs">
             If services don't connect, check your Docker logs with: <code className="text-theme-text-muted">docker compose logs</code>
           </p>
         </div>

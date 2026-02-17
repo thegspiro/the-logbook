@@ -77,7 +77,7 @@ const ModuleConfigTemplate: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 p-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to p-4 py-8">
       <div className="max-w-4xl w-full mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -187,7 +187,7 @@ const ModuleConfigTemplate: React.FC = () => {
                   className={`p-4 rounded-lg border-2 text-left transition-all ${
                     isSelected
                       ? 'border-orange-500 bg-orange-500/10'
-                      : 'border-theme-input-border bg-slate-800/50 hover:border-slate-500'
+                      : 'border-theme-input-border bg-theme-input-bg hover:border-theme-input-border'
                   } ${isAdmin ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -207,7 +207,7 @@ const ModuleConfigTemplate: React.FC = () => {
             })}
           </div>
 
-          <div className="mt-4 p-3 bg-slate-800/50 rounded-lg">
+          <div className="mt-4 p-3 bg-theme-input-bg rounded-lg">
             <p className="text-theme-text-muted text-sm">
               <strong className="text-theme-text-primary">Selected roles:</strong>{' '}
               {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).filter(Boolean).join(', ')}
@@ -216,7 +216,7 @@ const ModuleConfigTemplate: React.FC = () => {
         </div>
 
         {/* Quick Tips */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-theme-surface-border mb-6">
+        <div className="bg-theme-input-bg rounded-lg p-4 border border-theme-surface-border mb-6">
           <h3 className="text-theme-text-primary font-semibold mb-2">Quick Tips</h3>
           <ul className="text-theme-text-secondary text-sm space-y-2">
             <li className="flex items-start">
@@ -239,13 +239,13 @@ const ModuleConfigTemplate: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : 'Save Permissions'}
           </button>
           <button
             onClick={handleSkip}
-            className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
+            className="sm:w-auto px-6 py-3 bg-transparent border border-theme-input-border hover:border-theme-input-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
           >
             Use Defaults
           </button>

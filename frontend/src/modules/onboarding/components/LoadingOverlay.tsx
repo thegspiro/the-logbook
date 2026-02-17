@@ -34,7 +34,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
 
   return (
     <div
-      className={`absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg ${className}`}
+      className={`absolute inset-0 bg-theme-input-bg backdrop-blur-sm flex items-center justify-center z-50 rounded-lg ${className}`}
       role="status"
       aria-live="polite"
       aria-busy="true"

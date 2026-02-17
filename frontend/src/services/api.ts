@@ -375,6 +375,77 @@ export const organizationService = {
   },
 };
 
+// ==================== Member Status & Lifecycle ====================
+
+export const memberStatusService = {
+  async changeStatus(
+    userId: string,
+    request: import('../types/user').MemberStatusChangeRequest
+  ): Promise<import('../types/user').MemberStatusChangeResponse> {
+    const response = await api.patch(`/users/${userId}/status`, request);
+    return response.data;
+  },
+
+  async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
+    const response = await api.get(`/users/${userId}/property-return-report`);
+    return response.data;
+  },
+
+  async processPropertyReturnReminders(): Promise<{ processed: number; reminders_sent: number }> {
+    const response = await api.post('/users/property-return-reminders/process');
+    return response.data;
+  },
+
+  async getOverduePropertyReturns(): Promise<import('../types/user').OverduePropertyReturnsResponse> {
+    const response = await api.get('/users/property-return-reminders/overdue');
+    return response.data;
+  },
+
+  async archiveMember(
+    userId: string,
+    request: import('../types/user').ArchiveMemberRequest
+  ): Promise<{ user_id: string; member_name: string; previous_status: string; new_status: string; archived_at: string }> {
+    const response = await api.post(`/users/${userId}/archive`, request);
+    return response.data;
+  },
+
+  async reactivateMember(
+    userId: string,
+    request: import('../types/user').ReactivateMemberRequest
+  ): Promise<{ user_id: string; member_name: string; previous_status: string; new_status: string }> {
+    const response = await api.post(`/users/${userId}/reactivate`, request);
+    return response.data;
+  },
+
+  async getArchivedMembers(): Promise<import('../types/user').ArchivedMembersResponse> {
+    const response = await api.get('/users/archived');
+    return response.data;
+  },
+
+  async changeMembershipType(
+    userId: string,
+    request: import('../types/user').MembershipTypeChangeRequest
+  ): Promise<import('../types/user').MembershipTypeChangeResponse> {
+    const response = await api.patch(`/users/${userId}/membership-type`, request);
+    return response.data;
+  },
+
+  async advanceMembershipTiers(): Promise<import('../types/user').AdvanceTiersResponse> {
+    const response = await api.post('/users/advance-membership-tiers');
+    return response.data;
+  },
+
+  async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
+    const response = await api.get('/users/membership-tiers/config');
+    return response.data;
+  },
+
+  async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<{ message: string; tiers: import('../types/user').MembershipTier[] }> {
+    const response = await api.put('/users/membership-tiers/config', config);
+    return response.data;
+  },
+};
+
 export const roleService = {
   /**
    * Get all available permissions
@@ -1546,6 +1617,42 @@ export const eventService = {
   // Recurring Events
   async createRecurringEvent(data: import('../types/event').RecurringEventCreate): Promise<import('../types/event').Event[]> {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
+    return response.data;
+  },
+
+  // Attachments
+  async uploadAttachment(eventId: string, file: File, description?: string): Promise<import('../types/event').EventAttachmentUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (description) {
+      formData.append('description', description);
+    }
+    const response = await api.post<import('../types/event').EventAttachmentUploadResponse>(
+      `/events/${eventId}/attachments`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async getAttachments(eventId: string): Promise<import('../types/event').EventAttachment[]> {
+    const response = await api.get<import('../types/event').EventAttachment[]>(`/events/${eventId}/attachments`);
+    return response.data;
+  },
+
+  async downloadAttachment(eventId: string, attachmentId: string): Promise<Blob> {
+    const response = await api.get(`/events/${eventId}/attachments/${attachmentId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async deleteAttachment(eventId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/attachments/${attachmentId}`);
+  },
+
+  async getEventFolder(eventId: string): Promise<import('../types/event').EventDocumentFolder> {
+    const response = await api.get<import('../types/event').EventDocumentFolder>(`/events/${eventId}/folder`);
     return response.data;
   },
 

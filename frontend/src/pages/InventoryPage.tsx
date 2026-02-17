@@ -38,7 +38,7 @@ const STATUS_OPTIONS = [
   { value: 'checked_out', label: 'Checked Out', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
   { value: 'in_maintenance', label: 'In Maintenance', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30' },
   { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
-  { value: 'retired', label: 'Retired', color: 'bg-slate-500/10 text-theme-text-muted border-slate-500/30' },
+  { value: 'retired', label: 'Retired', color: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border' },
 ];
 
 const CONDITION_OPTIONS = [
@@ -52,7 +52,7 @@ const CONDITION_OPTIONS = [
 
 const getStatusStyle = (status: string) => {
   const found = STATUS_OPTIONS.find(s => s.value === status);
-  return found?.color || 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+  return found?.color || 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
 };
 
 const getConditionColor = (condition: string) => {
@@ -238,7 +238,7 @@ const InventoryPage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setShowAddCategory(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-theme-text-primary rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg transition-colors"
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 <span>Add Category</span>
@@ -335,7 +335,7 @@ const InventoryPage: React.FC = () => {
                     placeholder="Search by name, serial number, asset tag..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="flex items-center space-x-2">
@@ -371,7 +371,7 @@ const InventoryPage: React.FC = () => {
             {/* Items Table */}
             {items.length === 0 ? (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
+                <Package className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Items Found</h3>
                 <p className="text-theme-text-secondary mb-6">
                   {searchQuery || statusFilter || categoryFilter
@@ -444,7 +444,7 @@ const InventoryPage: React.FC = () => {
           <>
             {categories.length === 0 ? (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <Tag className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
+                <Tag className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Categories</h3>
                 <p className="text-theme-text-secondary mb-6">
                   Create categories to organize your inventory items.
@@ -505,7 +505,7 @@ const InventoryPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddItem(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
                 <form onSubmit={handleCreateItem}>
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
@@ -652,7 +652,7 @@ const InventoryPage: React.FC = () => {
                   <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                     <button
                       type="button" onClick={() => setShowAddItem(false)}
-                      className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                      className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                     >
                       Cancel
                     </button>
@@ -680,7 +680,7 @@ const InventoryPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <form onSubmit={handleCreateCategory}>
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
@@ -771,7 +771,7 @@ const InventoryPage: React.FC = () => {
                   <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                     <button
                       type="button" onClick={() => setShowAddCategory(false)}
-                      className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                      className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                     >
                       Cancel
                     </button>

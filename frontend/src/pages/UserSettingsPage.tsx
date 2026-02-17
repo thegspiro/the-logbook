@@ -156,12 +156,12 @@ export const UserSettingsPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">User Settings</h1>
-        <p className="text-slate-500 dark:text-slate-300">Manage your account settings and preferences</p>
+        <h1 className="text-3xl font-bold text-theme-text-primary mb-2">User Settings</h1>
+        <p className="text-theme-text-secondary">Manage your account settings and preferences</p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200 dark:border-white/10 mb-6">
+      <div className="border-b border-theme-surface-border mb-6">
         <nav className="flex space-x-6" aria-label="Settings tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -171,8 +171,8 @@ export const UserSettingsPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center space-x-2 pb-4 px-1 border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                   activeTab === tab.id
-                    ? 'border-red-500 text-slate-900 dark:text-white'
-                    : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    ? 'border-red-500 text-theme-text-primary'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
                 }`}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
               >
@@ -185,13 +185,13 @@ export const UserSettingsPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white dark:bg-white/10 backdrop-blur-sm border border-slate-200 dark:border-white/20 rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-6">
         {/* Account Tab */}
         {activeTab === 'account' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Account Information</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Account Information</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Update your account details and personal information
               </p>
             </div>
@@ -218,8 +218,8 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'password' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Change Password</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Change Password</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Update your password to keep your account secure
               </p>
             </div>
@@ -227,7 +227,7 @@ export const UserSettingsPage: React.FC = () => {
             <form onSubmit={handlePasswordChange} className="space-y-4">
               {/* Current Password */}
               <div>
-                <label htmlFor="currentPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-theme-text-primary mb-2">
                   Current Password
                 </label>
                 <div className="relative">
@@ -240,7 +240,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showCurrentPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Enter current password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -249,7 +249,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 dark:hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                     aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
                   >
                     {showCurrentPassword ? (
@@ -263,7 +263,7 @@ export const UserSettingsPage: React.FC = () => {
 
               {/* New Password */}
               <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                <label htmlFor="newPassword" className="block text-sm font-medium text-theme-text-primary mb-2">
                   New Password
                 </label>
                 <div className="relative">
@@ -276,7 +276,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showNewPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Enter new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -285,7 +285,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 dark:hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
                   >
                     {showNewPassword ? (
@@ -299,7 +299,7 @@ export const UserSettingsPage: React.FC = () => {
                 {/* Password strength indicator */}
                 {newPassword && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs text-slate-500 dark:text-slate-300 font-medium">Password must contain:</p>
+                    <p className="text-xs text-theme-text-secondary font-medium">Password must contain:</p>
                     <ul className="space-y-1 text-xs">
                       {[
                         { label: 'At least 8 characters', valid: passwordValidation.checks.length },
@@ -312,9 +312,9 @@ export const UserSettingsPage: React.FC = () => {
                           {check.valid ? (
                             <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
                           ) : (
-                            <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-slate-500 flex-shrink-0" aria-hidden="true" />
+                            <div className="w-4 h-4 rounded-full border-2 border-theme-input-border flex-shrink-0" aria-hidden="true" />
                           )}
-                          <span className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-slate-400'}>
+                          <span className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-theme-text-muted'}>
                             {check.label}
                           </span>
                         </li>
@@ -326,7 +326,7 @@ export const UserSettingsPage: React.FC = () => {
 
               {/* Confirm Password */}
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-theme-text-primary mb-2">
                   Confirm New Password
                 </label>
                 <div className="relative">
@@ -339,7 +339,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Confirm new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -348,7 +348,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 dark:hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? (
@@ -380,14 +380,14 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'appearance' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Appearance</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Appearance</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Choose how The Logbook looks to you
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">
+              <label className="block text-sm font-medium text-theme-text-primary mb-3">
                 Theme
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -401,23 +401,23 @@ export const UserSettingsPage: React.FC = () => {
                       className={`relative flex flex-col items-center p-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                         isSelected
                           ? 'border-red-500 bg-red-50 dark:bg-red-500/10'
-                          : 'border-slate-200 dark:border-white/20 bg-slate-50 dark:bg-white/5 hover:border-slate-300 dark:hover:border-white/30'
+                          : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-input-border'
                       }`}
                       aria-pressed={isSelected}
                     >
                       <Icon className={`w-8 h-8 mb-2 ${
                         isSelected
                           ? 'text-red-600 dark:text-red-400'
-                          : 'text-slate-500 dark:text-slate-400'
+                          : 'text-theme-text-muted'
                       }`} aria-hidden="true" />
                       <span className={`text-sm font-medium ${
                         isSelected
                           ? 'text-red-700 dark:text-red-300'
-                          : 'text-slate-700 dark:text-slate-200'
+                          : 'text-theme-text-primary'
                       }`}>
                         {option.label}
                       </span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-center">
+                      <span className="text-xs text-theme-text-muted mt-1 text-center">
                         {option.description}
                       </span>
                       {isSelected && (
@@ -437,20 +437,20 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'notifications' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Notification Preferences</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Notification Preferences</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Manage how and when you receive notifications
               </p>
             </div>
 
             <div className="space-y-4">
               {/* Email Notifications Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="emailNotifications" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <span id="emailNotifications-label" className="text-sm font-medium text-theme-text-primary">
                     Email Notifications
-                  </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  </span>
+                  <p id="emailNotifications-desc" className="text-sm text-theme-text-secondary">
                     Receive email notifications for important updates
                   </p>
                 </div>
@@ -458,10 +458,12 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setEmailNotifications(!emailNotifications)}
                   className={`${
-                    emailNotifications ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    emailNotifications ? 'bg-red-600' : 'bg-theme-surface-hover'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={emailNotifications}
+                  aria-labelledby="emailNotifications-label"
+                  aria-describedby="emailNotifications-desc"
                 >
                   <span
                     className={`${
@@ -472,12 +474,12 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               {/* Event Reminders Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="eventReminders" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <span id="eventReminders-label" className="text-sm font-medium text-theme-text-primary">
                     Event Reminders
-                  </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  </span>
+                  <p id="eventReminders-desc" className="text-sm text-theme-text-secondary">
                     Get reminders before scheduled events
                   </p>
                 </div>
@@ -485,10 +487,12 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setEventReminders(!eventReminders)}
                   className={`${
-                    eventReminders ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    eventReminders ? 'bg-red-600' : 'bg-theme-surface-hover'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={eventReminders}
+                  aria-labelledby="eventReminders-label"
+                  aria-describedby="eventReminders-desc"
                 >
                   <span
                     className={`${
@@ -499,12 +503,12 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               {/* Training Reminders Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="trainingReminders" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <span id="trainingReminders-label" className="text-sm font-medium text-theme-text-primary">
                     Training Reminders
-                  </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  </span>
+                  <p id="trainingReminders-desc" className="text-sm text-theme-text-secondary">
                     Notifications for training deadlines and requirements
                   </p>
                 </div>
@@ -512,10 +516,12 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setTrainingReminders(!trainingReminders)}
                   className={`${
-                    trainingReminders ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    trainingReminders ? 'bg-red-600' : 'bg-theme-surface-hover'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={trainingReminders}
+                  aria-labelledby="trainingReminders-label"
+                  aria-describedby="trainingReminders-desc"
                 >
                   <span
                     className={`${
@@ -528,10 +534,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Announcement Notifications Toggle */}
               <div className="flex items-center justify-between py-4">
                 <div>
-                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <span id="announcementNotifications-label" className="text-sm font-medium text-theme-text-primary">
                     Announcement Notifications
-                  </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  </span>
+                  <p id="announcementNotifications-desc" className="text-sm text-theme-text-secondary">
                     Stay updated with department announcements
                   </p>
                 </div>
@@ -539,10 +545,12 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setAnnouncementNotifications(!announcementNotifications)}
                   className={`${
-                    announcementNotifications ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    announcementNotifications ? 'bg-red-600' : 'bg-theme-surface-hover'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={announcementNotifications}
+                  aria-labelledby="announcementNotifications-label"
+                  aria-describedby="announcementNotifications-desc"
                 >
                   <span
                     className={`${

@@ -140,7 +140,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
@@ -151,9 +151,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (!currentApparatus) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg flex items-center justify-center">
         <div className="text-center">
-          <Truck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+          <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
           <h2 className="text-theme-text-primary text-xl font-bold mb-2">Apparatus Not Found</h2>
           <p className="text-theme-text-muted mb-6">The apparatus you're looking for doesn't exist.</p>
           <button
@@ -180,7 +180,7 @@ export const ApparatusDetailPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg">
       {/* Header */}
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto">
@@ -200,7 +200,7 @@ export const ApparatusDetailPage: React.FC = () => {
                   <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                   {status && <StatusBadge status={status} />}
                   {currentApparatus.isArchived && (
-                    <span className="px-2 py-1 bg-slate-500/20 text-theme-text-muted text-xs rounded border border-slate-500/30">
+                    <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-muted text-xs rounded border border-theme-surface-border">
                       ARCHIVED
                     </span>
                   )}
@@ -214,7 +214,7 @@ export const ApparatusDetailPage: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => navigate(`/apparatus/${id}/edit`)}
-                className="flex items-center space-x-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 <Edit className="w-4 h-4" />
                 <span>Edit</span>
@@ -222,7 +222,7 @@ export const ApparatusDetailPage: React.FC = () => {
               {!currentApparatus.isArchived && (
                 <button
                   onClick={() => toast.success('Archive functionality coming soon')}
-                  className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-theme-text-secondary rounded-lg transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors"
                 >
                   <Archive className="w-4 h-4" />
                   <span>Archive</span>
@@ -734,7 +734,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 Documents & Photos
               </h2>
               <div className="flex gap-2">
-                <button onClick={() => navigate('/documents')} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors text-sm flex items-center gap-2">
+                <button onClick={() => navigate('/documents')} className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors text-sm flex items-center gap-2">
                   <Camera className="w-4 h-4" />
                   Add Photo
                 </button>

@@ -43,10 +43,10 @@ const StarRating: React.FC<{
           key={star}
           type="button"
           onClick={() => onChange(star)}
-          className="focus:outline-none"
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 rounded"
         >
           <Star
-            className={`${sizeClass} ${star <= value ? 'text-yellow-700 dark:text-yellow-400 fill-yellow-400' : 'text-gray-600'}`}
+            className={`${sizeClass} ${star <= value ? 'text-yellow-700 dark:text-yellow-400 fill-yellow-400' : 'text-theme-text-secondary'}`}
           />
         </button>
       ))}
@@ -66,7 +66,7 @@ const ReportCard: React.FC<{
     <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full text-left p-4 hover:bg-gray-750 transition-colors"
+        className="w-full text-left p-4 hover:bg-theme-surface-hover transition-colors"
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -127,7 +127,7 @@ const ReportCard: React.FC<{
               <span className="text-theme-text-muted text-xs">Skills Observed</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {report.skills_observed.map((s, i) => (
-                  <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-gray-600 text-theme-text-muted'}`}>
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-hover text-theme-text-muted'}`}>
                     {s.skill_name}
                   </span>
                 ))}
@@ -674,7 +674,7 @@ const ShiftReportPage: React.FC = () => {
               </div>
             ) : filedReports.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                <ClipboardList className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <ClipboardList className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
                 <p className="text-theme-text-muted">No reports filed yet.</p>
               </div>
             ) : (
@@ -694,7 +694,7 @@ const ShiftReportPage: React.FC = () => {
               </div>
             ) : receivedReports.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                <TrendingUp className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <TrendingUp className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
                 <p className="text-theme-text-muted">No shift reports about you yet.</p>
               </div>
             ) : (

@@ -94,7 +94,7 @@ const Toggle: React.FC<{
       type="button"
       id={id}
       onClick={onChange}
-      className={`${checked ? 'bg-blue-600' : 'bg-slate-600'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+      className={`${checked ? 'bg-blue-600' : 'bg-theme-surface-hover'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
       role="switch"
       aria-checked={checked}
     >
@@ -122,7 +122,7 @@ const SectionCard: React.FC<{
         <button
           onClick={onSave}
           disabled={saving}
-          className={`${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'} inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
+          className={`${saving ? 'bg-theme-text-muted cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'} inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
         >
           {saving ? 'Saving...' : saveLabel || 'Save'}
         </button>

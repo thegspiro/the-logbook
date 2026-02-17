@@ -69,7 +69,7 @@ export default function TrainingDashboardPage() {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
-                className="h-5 w-5 text-yellow-700 dark:text-yellow-400"
+                className="h-5 w-5 text-yellow-700"
                 viewBox="0 0 20 20"
                 fill="currentColor"
               >
@@ -81,7 +81,7 @@ export default function TrainingDashboardPage() {
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              <p className="text-sm text-yellow-700">
                 <span className="font-medium">{expiringCerts.length} certifications</span> expiring within 90 days
               </p>
             </div>
@@ -125,7 +125,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'courses'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-theme-text-muted hover:text-slate-200 hover:border-white/30'
+                  : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Training Courses
@@ -135,7 +135,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'requirements'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-theme-text-muted hover:text-slate-200 hover:border-white/30'
+                  : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Requirements
@@ -145,7 +145,7 @@ export default function TrainingDashboardPage() {
               className={`${
                 activeTab === 'certifications'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-theme-text-muted hover:text-slate-200 hover:border-white/30'
+                  : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-white/30'
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Expiring Certifications
@@ -203,7 +203,7 @@ export default function TrainingDashboardPage() {
                           {course.code || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                             {course.training_type.replace('_', ' ')}
                           </span>
                         </td>
@@ -275,8 +275,8 @@ export default function TrainingDashboardPage() {
                           <span
                             className={`px-2 py-1 text-xs font-semibold rounded-full ${
                               req.applies_to_all
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                             }`}
                           >
                             {req.applies_to_all ? 'Applies to All' : 'Specific Roles'}

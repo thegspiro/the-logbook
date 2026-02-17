@@ -33,32 +33,32 @@ import type {
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   event_reminder: {
     icon: <Calendar className="w-5 h-5" />,
-    color: 'text-blue-700 dark:text-blue-400',
+    color: 'text-blue-700',
     label: 'Event Reminder',
   },
   training_expiry: {
     icon: <GraduationCap className="w-5 h-5" />,
-    color: 'text-purple-700 dark:text-purple-400',
+    color: 'text-purple-700',
     label: 'Training Expiry',
   },
   schedule_change: {
     icon: <Clock className="w-5 h-5" />,
-    color: 'text-violet-700 dark:text-violet-400',
+    color: 'text-violet-700',
     label: 'Schedule Change',
   },
   new_member: {
     icon: <Users className="w-5 h-5" />,
-    color: 'text-green-700 dark:text-green-400',
+    color: 'text-green-700',
     label: 'Member Added',
   },
   maintenance_due: {
     icon: <AlertTriangle className="w-5 h-5" />,
-    color: 'text-orange-700 dark:text-orange-400',
+    color: 'text-orange-700',
     label: 'Maintenance Due',
   },
   form_submitted: {
     icon: <FileText className="w-5 h-5" />,
-    color: 'text-cyan-700 dark:text-cyan-400',
+    color: 'text-cyan-700',
     label: 'Form Submitted',
   },
 };
@@ -214,7 +214,7 @@ const NotificationsPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="w-10 h-10 text-orange-700 dark:text-orange-400 animate-spin" />
+          <Loader2 className="w-10 h-10 text-orange-700 animate-spin" />
           <p className="text-theme-text-secondary text-sm">Loading notifications...</p>
         </div>
       </div>
@@ -251,11 +251,11 @@ const NotificationsPage: React.FC = () => {
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-red-700 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
+              <p className="text-red-300 text-sm">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
+            <button onClick={() => setError(null)} className="text-red-700 hover:text-red-600">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -269,11 +269,11 @@ const NotificationsPage: React.FC = () => {
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Active Rules</p>
-            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
+            <p className="text-green-700 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Emails Sent (This Month)</p>
-            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
+            <p className="text-orange-700 text-2xl font-bold mt-1">{summary?.emails_sent_this_month ?? 0}</p>
           </div>
         </div>
 
@@ -324,7 +324,7 @@ const NotificationsPage: React.FC = () => {
                   placeholder="Search notification rules..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>
@@ -333,7 +333,7 @@ const NotificationsPage: React.FC = () => {
             <div className="space-y-3">
               {filteredRules.length === 0 && (
                 <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                  <Bell className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                  <Bell className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                   <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notification Rules</h3>
                   <p className="text-theme-text-secondary mb-6">
                     {searchQuery
@@ -369,19 +369,19 @@ const NotificationsPage: React.FC = () => {
                           </div>
                           <p className="text-theme-text-secondary text-sm mt-0.5">{rule.description || 'No description'}</p>
                           <div className="flex items-center space-x-1 mt-1">
-                            <Zap className="w-3 h-3 text-slate-500" />
-                            <span className="text-slate-500 text-xs">{display.label}</span>
+                            <Zap className="w-3 h-3 text-theme-text-muted" />
+                            <span className="text-theme-text-muted text-xs">{display.label}</span>
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
                         {rule.enabled ? (
-                          <span className="flex items-center space-x-1 text-green-700 dark:text-green-400 text-sm">
+                          <span className="flex items-center space-x-1 text-green-700 text-sm">
                             <CheckCircle className="w-4 h-4" />
                             <span>Active</span>
                           </span>
                         ) : (
-                          <span className="text-slate-500 text-sm">Disabled</span>
+                          <span className="text-theme-text-muted text-sm">Disabled</span>
                         )}
                         {canManage && (
                           <button
@@ -392,9 +392,9 @@ const NotificationsPage: React.FC = () => {
                             {togglingRuleId === rule.id ? (
                               <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
                             ) : rule.enabled ? (
-                              <ToggleRight className="w-8 h-8 text-green-700 dark:text-green-400" />
+                              <ToggleRight className="w-8 h-8 text-green-700" />
                             ) : (
-                              <ToggleLeft className="w-8 h-8 text-slate-500" />
+                              <ToggleLeft className="w-8 h-8 text-theme-text-muted" />
                             )}
                           </button>
                         )}
@@ -409,13 +409,13 @@ const NotificationsPage: React.FC = () => {
 
         {activeTab === 'templates' && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center" role="tabpanel">
-            <Mail className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
+            <Mail className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">Email Templates</h3>
             <p className="text-theme-text-secondary mb-6">
               Customize email templates for different notification types. Templates support dynamic placeholders for personalization.
             </p>
             <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 max-w-md mx-auto">
-              <p className="text-orange-700 dark:text-orange-300 text-sm">
+              <p className="text-orange-700 text-sm">
                 Email template editor will be available once the notification service is fully configured.
               </p>
             </div>
@@ -426,7 +426,7 @@ const NotificationsPage: React.FC = () => {
           <>
             {logs.length === 0 ? (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <Clock className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <Clock className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notifications Sent</h3>
                 <p className="text-theme-text-secondary mb-6">
                   The notification send log will show all sent emails with delivery status and timestamps.
@@ -452,7 +452,7 @@ const NotificationsPage: React.FC = () => {
                       <div className="col-span-4">
                         <p className="text-theme-text-primary text-sm truncate">{log.subject || '(No subject)'}</p>
                         {log.rule_name && (
-                          <p className="text-slate-500 text-xs mt-0.5 truncate">Rule: {log.rule_name}</p>
+                          <p className="text-theme-text-muted text-xs mt-0.5 truncate">Rule: {log.rule_name}</p>
                         )}
                       </div>
                       <div className="col-span-3">
@@ -460,7 +460,7 @@ const NotificationsPage: React.FC = () => {
                           {log.recipient_name || log.recipient_email || 'Unknown'}
                         </p>
                         {log.recipient_name && log.recipient_email && (
-                          <p className="text-slate-500 text-xs mt-0.5 truncate">{log.recipient_email}</p>
+                          <p className="text-theme-text-muted text-xs mt-0.5 truncate">{log.recipient_email}</p>
                         )}
                       </div>
                       <div className="col-span-2">
@@ -472,17 +472,17 @@ const NotificationsPage: React.FC = () => {
                         <p className="text-theme-text-secondary text-sm">
                           {new Date(log.sent_at).toLocaleDateString()}
                         </p>
-                        <p className="text-slate-500 text-xs mt-0.5">
+                        <p className="text-theme-text-muted text-xs mt-0.5">
                           {new Date(log.sent_at).toLocaleTimeString()}
                         </p>
                       </div>
                       <div className="col-span-1">
                         {log.delivered ? (
-                          <span className="flex items-center space-x-1 text-green-700 dark:text-green-400" title="Delivered">
+                          <span className="flex items-center space-x-1 text-green-700" title="Delivered">
                             <CheckCircle className="w-4 h-4" />
                           </span>
                         ) : (
-                          <span className="flex items-center space-x-1 text-red-700 dark:text-red-400" title={log.error || 'Not delivered'}>
+                          <span className="flex items-center space-x-1 text-red-700" title={log.error || 'Not delivered'}>
                             <AlertCircle className="w-4 h-4" />
                           </span>
                         )}
@@ -506,7 +506,7 @@ const NotificationsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-medium text-theme-text-primary">Create Notification Rule</h3>
@@ -516,8 +516,8 @@ const NotificationsPage: React.FC = () => {
                   </div>
                   {createError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start space-x-2">
-                      <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-red-700 dark:text-red-300 text-sm">{createError}</p>
+                      <AlertCircle className="w-4 h-4 text-red-700 mt-0.5 flex-shrink-0" />
+                      <p className="text-red-300 text-sm">{createError}</p>
                     </div>
                   )}
                   <div className="space-y-4">
@@ -556,7 +556,7 @@ const NotificationsPage: React.FC = () => {
                         className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                     </div>
-                    <div className="bg-slate-700/30 border border-theme-input-border/50 rounded-lg p-3">
+                    <div className="bg-theme-input-bg/30 border border-theme-input-border/50 rounded-lg p-3">
                       <div className="flex items-start space-x-2">
                         <AlertCircle className="w-4 h-4 text-theme-text-muted mt-0.5 flex-shrink-0" />
                         <p className="text-theme-text-muted text-sm">
@@ -569,7 +569,7 @@ const NotificationsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => { setShowCreateModal(false); setCreateError(null); }}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                   >
                     Cancel
                   </button>

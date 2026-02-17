@@ -102,7 +102,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (isValidating) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
           <p className="text-theme-text-primary text-lg">Validating reset link...</p>
@@ -113,7 +113,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (!tokenValid) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/20 mb-4">
@@ -145,7 +145,7 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (success) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
@@ -172,7 +172,7 @@ export const ResetPasswordPage: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-theme-text-primary mb-2">
@@ -203,7 +203,7 @@ export const ResetPasswordPage: React.FC = () => {
             )}
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-theme-text-primary mb-2">
                 New Password
               </label>
               <div className="relative">
@@ -216,7 +216,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                   placeholder="Enter new password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -225,7 +225,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -252,7 +252,7 @@ export const ResetPasswordPage: React.FC = () => {
                         {check.valid ? (
                           <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
                         ) : (
-                          <div className="w-4 h-4 rounded-full border-2 border-slate-500 flex-shrink-0" aria-hidden="true" />
+                          <div className="w-4 h-4 rounded-full border-2 border-theme-input-border flex-shrink-0" aria-hidden="true" />
                         )}
                         <span className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
                           {check.label}
@@ -265,7 +265,7 @@ export const ResetPasswordPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-theme-text-primary mb-2">
                 Confirm New Password
               </label>
               <div className="relative">
@@ -278,7 +278,7 @@ export const ResetPasswordPage: React.FC = () => {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-10 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                   placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -287,7 +287,7 @@ export const ResetPasswordPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                   aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                 >
                   {showConfirmPassword ? (

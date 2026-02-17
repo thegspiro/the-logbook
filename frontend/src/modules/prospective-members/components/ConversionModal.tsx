@@ -97,7 +97,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       aria-labelledby="conversion-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isConverting) onClose(); }}
     >
-      <div className="bg-slate-800 border border-theme-surface-border rounded-xl max-w-lg w-full">
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-lg w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <div className="flex items-center gap-3">
@@ -131,14 +131,14 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 Conversion Complete
               </h3>
               <p className="text-theme-text-muted mb-4">{conversionResult.message}</p>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-theme-text-muted">
                 Member ID: {conversionResult.user_id}
               </p>
             </div>
             <div className="flex justify-end">
               <button
                 onClick={onClose}
-                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+                className="px-6 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 Close
               </button>
@@ -149,25 +149,25 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
             {/* Body */}
             <div className="p-6 space-y-5">
               {/* Applicant Summary */}
-              <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
+              <div className="bg-theme-surface-hover rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Mail className="w-4 h-4 text-slate-500" aria-hidden="true" />
+                  <Mail className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
                   <span className="text-theme-text-secondary">{applicant.email}</span>
                 </div>
                 {applicant.phone && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Phone className="w-4 h-4 text-slate-500" aria-hidden="true" />
+                    <Phone className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
                     <span className="text-theme-text-secondary">{applicant.phone}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-slate-500" aria-hidden="true" />
+                  <Calendar className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
                   <span className="text-theme-text-secondary">
                     Applied {formatDate(applicant.created_at)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
+                  <Shield className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
                   <span className="text-theme-text-secondary">
                     Completed {applicant.stage_history.filter(s => s.completed_at).length} stages
                   </span>
@@ -185,7 +185,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === 'probationary'
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-theme-surface-border bg-slate-700/50 hover:border-theme-surface-border'
+                        : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}
                   >
                     <p className="text-sm font-medium text-theme-text-primary">
@@ -200,7 +200,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === 'administrative'
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-theme-surface-border bg-slate-700/50 hover:border-theme-surface-border'
+                        : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}
                   >
                     <p className="text-sm font-medium text-theme-text-primary">
@@ -215,8 +215,8 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
 
               {/* Target Role */}
               {applicant.target_role_name && (
-                <div className="flex items-center gap-2 text-sm bg-slate-700/30 rounded-lg p-3">
-                  <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
+                <div className="flex items-center gap-2 text-sm bg-theme-surface-hover rounded-lg p-3">
+                  <Shield className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
                   <span className="text-theme-text-muted">Assigned role:</span>
                   <span className="text-theme-text-primary font-medium">
                     {applicant.target_role_name}
@@ -230,7 +230,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   type="checkbox"
                   checked={sendWelcomeEmail}
                   onChange={(e) => setSendWelcomeEmail(e.target.checked)}
-                  className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                  className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                 />
                 Send welcome email with login credentials
               </label>
@@ -246,7 +246,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Any notes about this conversion..."
                   rows={2}
-                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 />
               </div>
 

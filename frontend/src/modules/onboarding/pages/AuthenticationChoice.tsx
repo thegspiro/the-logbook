@@ -173,7 +173,7 @@ const AuthenticationChoice: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
@@ -343,8 +343,8 @@ const AuthenticationChoice: React.FC = () => {
               disabled={!authPlatform || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 authPlatform && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -366,7 +366,7 @@ const AuthenticationChoice: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>

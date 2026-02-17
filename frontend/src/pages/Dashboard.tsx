@@ -182,7 +182,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Total Hours</p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover/50 animate-pulse rounded"></div>
                 ) : (
                   <p className="text-theme-text-primary text-2xl font-bold mt-1">{totalHours}</p>
                 )}
@@ -197,7 +197,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Training</p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover/50 animate-pulse rounded"></div>
                 ) : (
                   <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{hours.training}</p>
                 )}
@@ -212,7 +212,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Standby</p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover/50 animate-pulse rounded"></div>
                 ) : (
                   <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{hours.standby}</p>
                 )}
@@ -227,7 +227,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-theme-text-secondary text-xs font-medium uppercase">Administrative</p>
                 {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover/50 animate-pulse rounded"></div>
                 ) : (
                   <p className="text-purple-700 dark:text-purple-400 text-2xl font-bold mt-1">{hours.administrative}</p>
                 )}
@@ -261,7 +261,7 @@ const Dashboard: React.FC = () => {
             {loadingNotifications ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
+                  <div key={i} className="h-14 bg-theme-surface-hover/30 animate-pulse rounded-lg"></div>
                 ))}
               </div>
             ) : notifications.length === 0 ? (
@@ -276,7 +276,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => !notification.read && markNotificationRead(notification.id)}
                     className={`w-full text-left p-3 rounded-lg transition-colors ${
                       notification.read
-                        ? 'bg-slate-800/30 text-theme-text-muted'
+                        ? 'bg-theme-surface/30 text-theme-text-muted'
                         : 'bg-blue-500/10 border border-blue-500/20 text-theme-text-primary'
                     }`}
                   >
@@ -285,7 +285,7 @@ const Dashboard: React.FC = () => {
                         <p className="text-sm font-medium truncate">{notification.subject || 'Notification'}</p>
                         <p className="text-xs text-theme-text-muted mt-0.5 truncate">{notification.message || ''}</p>
                       </div>
-                      <span className="text-xs text-slate-500 ml-2 whitespace-nowrap">
+                      <span className="text-xs text-theme-text-muted ml-2 whitespace-nowrap">
                         {new Date(notification.sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
@@ -314,7 +314,7 @@ const Dashboard: React.FC = () => {
             {loadingShifts ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-slate-700/30 animate-pulse rounded-lg"></div>
+                  <div key={i} className="h-14 bg-theme-surface-hover/30 animate-pulse rounded-lg"></div>
                 ))}
               </div>
             ) : upcomingShifts.length === 0 ? (
@@ -326,7 +326,7 @@ const Dashboard: React.FC = () => {
                 {upcomingShifts.map((shift) => (
                   <div
                     key={shift.id}
-                    className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-theme-surface/30 rounded-lg"
                   >
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
@@ -384,7 +384,7 @@ const Dashboard: React.FC = () => {
                   <button
                     key={enrollment.id}
                     onClick={() => navigate('/training/my-training')}
-                    className="w-full bg-slate-800/50 rounded-lg p-4 hover:bg-slate-800/70 cursor-pointer transition-colors text-left"
+                    className="w-full bg-theme-surface/50 rounded-lg p-4 hover:bg-theme-surface/70 cursor-pointer transition-colors text-left"
                     aria-label={`${enrollment.program?.name || 'Program'}: ${Math.round(enrollment.progress_percentage)}% complete`}
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -407,7 +407,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+                    <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-3">
                       <div
                         className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}

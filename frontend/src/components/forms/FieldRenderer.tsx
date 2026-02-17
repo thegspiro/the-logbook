@@ -121,7 +121,7 @@ function SignaturePad({ value, onChange, isDark, inputClass, disabled }: Signatu
         />
       </div>
       <div className="flex items-center justify-between mt-2">
-        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-theme-text-muted'}`}>
+        <p className={`text-xs ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>
           Draw your signature above
         </p>
         {value && (
@@ -176,16 +176,16 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
   const isDark = theme === 'dark';
 
   const inputClass = isDark
-    ? `w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-slate-500 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
+    ? `w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
         error ? 'border-red-500/50' : 'border-theme-surface-border'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
-    : `w-full px-4 py-3 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-        error ? 'border-red-300' : 'border-gray-300'
+    : `w-full px-4 py-3 bg-white border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+        error ? 'border-red-300' : 'border-theme-input-border'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
-  const labelClass = isDark ? 'text-theme-text-secondary' : 'text-gray-700';
-  const radioTextClass = isDark ? 'text-theme-text-secondary' : 'text-gray-700';
-  const sectionHeaderClass = isDark ? 'text-theme-text-primary' : 'text-gray-800';
+  const labelClass = isDark ? 'text-theme-text-secondary' : 'text-theme-text-primary';
+  const radioTextClass = isDark ? 'text-theme-text-secondary' : 'text-theme-text-primary';
+  const sectionHeaderClass = isDark ? 'text-theme-text-primary' : 'text-theme-text-primary';
   const sectionSubClass = isDark ? 'text-theme-text-muted' : 'text-theme-text-muted';
 
   const handleMemberSearch = async (query: string) => {
@@ -214,7 +214,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
   // Section headers are purely visual dividers
   if (field.field_type === 'section_header') {
     return (
-      <div className={`pt-2 ${isDark ? 'border-b border-theme-surface-border' : 'border-b border-gray-200'} pb-2`}>
+      <div className={`pt-2 ${isDark ? 'border-b border-theme-surface-border' : 'border-b border-theme-surface-border'} pb-2`}>
         <h3 className={`text-lg font-semibold ${sectionHeaderClass}`}>{field.label}</h3>
         {field.help_text && <p className={`text-sm mt-1 ${sectionSubClass}`}>{field.help_text}</p>}
       </div>
@@ -327,7 +327,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
       case 'multiselect': {
         const selected = value ? value.split(',').filter(Boolean) : [];
         return (
-          <div className={`${isDark ? 'bg-theme-surface-secondary border-theme-surface-border' : 'bg-white border-gray-300'} border rounded-lg p-3 space-y-2`}>
+          <div className={`${isDark ? 'bg-theme-surface-secondary border-theme-surface-border' : 'bg-white border-theme-input-border'} border rounded-lg p-3 space-y-2`}>
             {field.options?.map((opt) => {
               const checked = selected.includes(opt.value);
               return (
@@ -404,7 +404,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
         return (
           <div className="relative">
             <div className="relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-slate-500' : 'text-theme-text-muted'}`} />
+              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`} />
               <input
                 type="text"
                 className={`${inputClass} pl-10`}
@@ -418,13 +418,13 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
               )}
             </div>
             {memberResults.length > 0 && (
-              <div className={`absolute z-10 mt-1 w-full rounded-lg shadow-lg max-h-48 overflow-y-auto ${isDark ? 'bg-slate-800 border border-theme-surface-border' : 'bg-white border border-gray-200'}`}>
+              <div className={`absolute z-10 mt-1 w-full rounded-lg shadow-lg max-h-48 overflow-y-auto ${isDark ? 'bg-theme-surface border border-theme-surface-border' : 'bg-white border border-theme-surface-border'}`}>
                 {memberResults.map((member) => (
                   <button
                     key={member.id}
                     type="button"
                     onClick={() => selectMember(member)}
-                    className={`w-full text-left px-4 py-2 flex items-center gap-3 ${isDark ? 'hover:bg-theme-surface-hover text-theme-text-primary' : 'hover:bg-gray-50 text-gray-900'}`}
+                    className={`w-full text-left px-4 py-2 flex items-center gap-3 ${isDark ? 'hover:bg-theme-surface-hover text-theme-text-primary' : 'hover:bg-theme-surface-secondary text-theme-text-primary'}`}
                   >
                     <User className="w-4 h-4 flex-shrink-0" />
                     <div>
@@ -476,7 +476,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
               <div className="flex items-center gap-2 min-w-0">
                 <FileText className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-pink-700 dark:text-pink-400' : 'text-blue-700 dark:text-blue-500'}`} />
                 <span className="text-sm truncate">{fileInfo.name}</span>
-                <span className={`text-xs flex-shrink-0 ${isDark ? 'text-slate-500' : 'text-theme-text-muted'}`}>
+                <span className={`text-xs flex-shrink-0 ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>
                   ({formatFileSize(fileInfo.size)})
                 </span>
               </div>
@@ -505,7 +505,7 @@ const FieldRenderer = ({ field, value, onChange, theme = 'dark', disabled = fals
             <p className={`text-sm ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>
               Click to upload or drag and drop
             </p>
-            <p className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-theme-text-muted'}`}>
+            <p className={`text-xs mt-1 ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>
               Max file size: {formatFileSize(MAX_FILE_SIZE)}
             </p>
             <input

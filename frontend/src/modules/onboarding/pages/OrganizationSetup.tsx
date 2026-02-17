@@ -176,7 +176,7 @@ const SectionHeader: React.FC<{
   <button
     type="button"
     onClick={onToggle}
-    className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800/70 rounded-lg transition-colors"
+    className="w-full flex items-center justify-between p-4 bg-theme-input-bg hover:bg-theme-input-bg rounded-lg transition-colors"
   >
     <div className="flex items-center gap-3">
       <span className="text-red-700 dark:text-red-400">{icon}</span>
@@ -219,7 +219,7 @@ const InputField: React.FC<{
   onBlur,
 }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-primary mb-1">
       {label} {required && <span className="text-red-700 dark:text-red-400">*</span>}
     </label>
     <input
@@ -230,7 +230,7 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+      className={`w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
         error ? 'border-red-500' : 'border-theme-input-border'
       }`}
       aria-required={required}
@@ -253,7 +253,7 @@ const SelectField: React.FC<{
   error?: string;
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-primary mb-1">
       {label} {required && <span className="text-red-700 dark:text-red-400">*</span>}
     </label>
     <select
@@ -695,7 +695,7 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
         <div className="mb-4">
@@ -736,7 +736,7 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <InputField
                   label="Organization Name"
                   id="org-name"
@@ -792,7 +792,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('contact')}
             />
             {expandedSections.contact && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="Phone Number"
@@ -855,7 +855,7 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-slate-900/30 space-y-4">
+              <div className="p-4 bg-theme-input-bg space-y-4">
                 {/* Info banner explaining why mailing address is required */}
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                   <div className="flex items-start space-x-2">
@@ -887,7 +887,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('physical')}
             />
             {expandedSections.physical && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -895,7 +895,7 @@ const OrganizationSetup: React.FC = () => {
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
                     className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500 focus:ring-offset-0"
                   />
-                  <span className="text-slate-200">Same as mailing address</span>
+                  <span className="text-theme-text-primary">Same as mailing address</span>
                 </label>
 
                 {!formData.physicalAddressSame && (
@@ -920,7 +920,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('identifiers')}
             />
             {expandedSections.identifiers && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <p className="text-sm text-theme-text-muted mb-4">
                   Select the primary identifier your department uses for official reporting.
                 </p>
@@ -950,7 +950,7 @@ const OrganizationSetup: React.FC = () => {
                         className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-all ${
                           formData.identifierType === option.value
                             ? 'border-red-500 bg-red-500/10'
-                            : 'border-theme-input-border hover:border-slate-500'
+                            : 'border-theme-input-border hover:border-theme-input-border'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -1027,7 +1027,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('additional')}
             />
             {expandedSections.additional && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="County/Jurisdiction"
@@ -1060,7 +1060,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('logo')}
             />
             {expandedSections.logo && (
-              <div className="p-4 bg-slate-900/30">
+              <div className="p-4 bg-theme-input-bg">
                 <div className="relative">
                   <LoadingOverlay isVisible={isProcessingFile} message="Processing image..." />
 
@@ -1094,7 +1094,7 @@ const OrganizationSetup: React.FC = () => {
                         aria-label="File input for logo"
                       />
                       <div className="flex flex-col items-center space-y-3">
-                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center">
+                        <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
                           <Upload className="w-8 h-8 text-theme-text-muted" />
                         </div>
                         <div>
@@ -1189,14 +1189,14 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-from via-theme-bg-from to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={handleContinue}
               disabled={isSaving}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
-                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
+                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >

@@ -114,7 +114,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                       {field.field_name}
                     </code>
                     {field.is_sensitive && (
-                      <span className="px-2 py-0.5 text-xs font-semibold rounded bg-yellow-100 text-yellow-800">
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                         PII
                       </span>
                     )}

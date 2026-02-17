@@ -266,7 +266,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
             return (
               <div key={position} className="mb-6">
                 {position !== '_default' && (
-                  <h4 className="text-md font-semibold text-slate-200 mb-3">{position}</h4>
+                  <h4 className="text-md font-semibold text-theme-text-primary mb-3">{position}</h4>
                 )}
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                   <div className="flex items-center text-green-700 dark:text-green-300">
@@ -287,7 +287,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
           return (
             <div key={position} className="mb-6">
               {position !== '_default' && (
-                <h4 className="text-md font-semibold text-slate-200 mb-3">{position}</h4>
+                <h4 className="text-md font-semibold text-theme-text-primary mb-3">{position}</h4>
               )}
 
               {positionCandidates.length === 0 ? (
@@ -371,7 +371,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             <div className="flex items-center">
                               <div
                                 className={`w-5 h-5 rounded border-2 mr-3 flex items-center justify-center ${
-                                  isApproved ? 'bg-green-500 border-green-500' : 'border-slate-500'
+                                  isApproved ? 'bg-green-500 border-green-500' : 'border-theme-input-border'
                                 }`}
                               >
                                 {isApproved && (
@@ -416,7 +416,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             <div className="flex items-center">
                               <div
                                 className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${
-                                  isSelected ? 'border-blue-500' : 'border-slate-500'
+                                  isSelected ? 'border-blue-500' : 'border-theme-input-border'
                                 }`}
                               >
                                 {isSelected && <div className="w-3 h-3 rounded-full bg-blue-500" />}

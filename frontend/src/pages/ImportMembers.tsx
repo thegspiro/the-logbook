@@ -383,7 +383,7 @@ const ImportMembers: React.FC = () => {
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-500 hover:border-blue-500 rounded-lg p-12 text-center cursor-pointer transition-colors"
+            className="border-2 border-dashed border-theme-input-border hover:border-blue-500 rounded-lg p-12 text-center cursor-pointer transition-colors"
           >
             <Upload className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             {file ? (
@@ -469,7 +469,7 @@ const ImportMembers: React.FC = () => {
               <button
                 onClick={handleImport}
                 disabled={importing}
-                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-theme-text-primary rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? (
                   <>

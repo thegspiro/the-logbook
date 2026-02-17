@@ -492,7 +492,7 @@ const SchedulingPage: React.FC = () => {
         {/* Empty State */}
         {!loading && !hasShifts && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <CalendarDays className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+            <CalendarDays className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Schedules Created</h3>
             <p className="text-theme-text-secondary mb-6">
               Start building shift schedules and duty rosters for your department.
@@ -520,7 +520,7 @@ const SchedulingPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="create-schedule-title" className="text-lg font-medium text-theme-text-primary">Create Schedule</h3>
@@ -598,7 +598,7 @@ const SchedulingPage: React.FC = () => {
                       setShowCreateShift(false);
                       setCreateError(null);
                     }}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                   >
                     Cancel
                   </button>

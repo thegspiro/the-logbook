@@ -92,7 +92,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         {/* Tooltip */}
         {showTooltip && tooltip && (
           <div className={`absolute z-50 ${getTooltipPositionClasses()}`}>
-            <div className="bg-slate-800 text-theme-text-primary text-sm rounded-lg p-3 shadow-xl border border-theme-surface-border max-w-xs">
+            <div className="bg-theme-surface text-theme-text-primary text-sm rounded-lg p-3 shadow-xl border border-theme-surface-border max-w-xs">
               <div className="flex items-start justify-between space-x-2 mb-2">
                 <p>{tooltip}</p>
                 <button
@@ -126,7 +126,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
         href={getDocUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-theme-text-primary text-sm rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="inline-flex items-center space-x-2 px-3 py-1.5 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary text-sm rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
       >
         <HelpCircle className="w-4 h-4" aria-hidden="true" />
         <span>{label}</span>

@@ -188,7 +188,7 @@ const ITTeamBackupAccess: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
@@ -286,7 +286,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="text"
                         value={member.name}
                         onChange={(e) => updateITMember(member.id, 'name', e.target.value)}
-                        className={`w-full px-4 py-3 bg-slate-800/50 border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryName' : `member${index}Name`]
                             ? 'border-red-500 focus:ring-red-500/50'
                             : 'border-theme-surface-border focus:ring-cyan-600'
@@ -309,7 +309,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="text"
                         value={member.role}
                         onChange={(e) => updateITMember(member.id, 'role', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-800/50 border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-600 transition-all"
+                        className="w-full px-4 py-3 bg-theme-input-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-600 transition-all"
                         placeholder="IT Manager"
                       />
                     </div>
@@ -323,7 +323,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="email"
                         value={member.email}
                         onChange={(e) => updateITMember(member.id, 'email', e.target.value)}
-                        className={`w-full px-4 py-3 bg-slate-800/50 border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryEmail' : `member${index}Email`]
                             ? 'border-red-500 focus:ring-red-500/50'
                             : 'border-theme-surface-border focus:ring-cyan-600'
@@ -346,7 +346,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         type="tel"
                         value={member.phone}
                         onChange={(e) => updateITMember(member.id, 'phone', e.target.value)}
-                        className={`w-full px-4 py-3 bg-slate-800/50 border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                           errors[index === 0 ? 'primaryPhone' : `member${index}Phone`]
                             ? 'border-red-500 focus:ring-red-500/50'
                             : 'border-theme-surface-border focus:ring-cyan-600'
@@ -398,7 +398,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="email"
                       value={backupEmail}
                       onChange={(e) => setBackupEmail(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-3 bg-slate-800/50 border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                         errors.backupEmail
                           ? 'border-red-500 focus:ring-red-500/50'
                           : 'border-theme-surface-border focus:ring-cyan-600'
@@ -425,7 +425,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="tel"
                       value={backupPhone}
                       onChange={(e) => setBackupPhone(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-3 bg-slate-800/50 border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                         errors.backupPhone
                           ? 'border-red-500 focus:ring-red-500/50'
                           : 'border-theme-surface-border focus:ring-cyan-600'
@@ -444,7 +444,7 @@ const ITTeamBackupAccess: React.FC = () => {
                 {/* Secondary Admin Email (Optional) */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                    Secondary Admin Email <span className="text-slate-500">(Optional)</span>
+                    Secondary Admin Email <span className="text-theme-text-muted">(Optional)</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
@@ -452,7 +452,7 @@ const ITTeamBackupAccess: React.FC = () => {
                       type="email"
                       value={secondaryAdminEmail}
                       onChange={(e) => setSecondaryAdminEmail(e.target.value)}
-                      className={`w-full pl-12 pr-4 py-3 bg-slate-800/50 border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full pl-12 pr-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                         errors.secondaryAdminEmail
                           ? 'border-red-500 focus:ring-red-500/50'
                           : 'border-theme-surface-border focus:ring-cyan-600'
@@ -483,8 +483,8 @@ const ITTeamBackupAccess: React.FC = () => {
                 disabled={isSaving}
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                   isSaving
-                    ? 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
-                    : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
+                    ? 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                    : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                 }`}
               >
                 {isSaving ? 'Saving Securely...' : 'Continue to Module Selection'}
@@ -501,7 +501,7 @@ const ITTeamBackupAccess: React.FC = () => {
       <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

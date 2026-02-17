@@ -27,7 +27,7 @@ import type {
 // ==================== Helpers ====================
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; icon: React.ElementType }> = {
-  draft: { label: 'Draft', color: 'bg-gray-500/20 text-theme-text-muted', icon: FileText },
+  draft: { label: 'Draft', color: 'bg-theme-surface-secondary text-theme-text-muted', icon: FileText },
   pending_review: { label: 'Pending Review', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400', icon: Clock },
   approved: { label: 'Approved', color: 'bg-green-500/20 text-green-700 dark:text-green-400', icon: CheckCircle2 },
   rejected: { label: 'Rejected', color: 'bg-red-500/20 text-red-700 dark:text-red-400', icon: XCircle },

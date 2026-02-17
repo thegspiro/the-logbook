@@ -28,15 +28,15 @@ export const getEventTypeLabel = (type: string): string => {
  */
 export const getEventTypeBadgeColor = (type: string): string => {
   const colors: Record<string, string> = {
-    business_meeting: 'bg-blue-100 text-blue-800',
-    public_education: 'bg-green-100 text-green-800',
-    training: 'bg-purple-100 text-purple-800',
-    social: 'bg-pink-100 text-pink-800',
-    fundraiser: 'bg-yellow-100 text-yellow-800',
-    ceremony: 'bg-indigo-100 text-indigo-800',
-    other: 'bg-gray-100 text-gray-800',
+    business_meeting: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+    public_education: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+    training: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+    social: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-400',
+    fundraiser: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+    ceremony: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+    other: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
   };
-  return colors[type] || 'bg-gray-100 text-gray-800';
+  return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
 };
 
 /**
@@ -56,9 +56,9 @@ export const getRSVPStatusLabel = (status: RSVPStatus): string => {
  */
 export const getRSVPStatusColor = (status: RSVPStatus): string => {
   const colors: Record<RSVPStatus, string> = {
-    going: 'bg-green-100 text-green-800',
-    not_going: 'bg-red-100 text-red-800',
-    maybe: 'bg-yellow-100 text-yellow-800',
+    going: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+    not_going: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+    maybe: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   };
   return colors[status];
 };

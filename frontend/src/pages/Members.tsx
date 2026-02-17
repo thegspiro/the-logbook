@@ -106,14 +106,14 @@ const Members: React.FC = () => {
       case 'active':
         return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
       case 'inactive':
-        return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+        return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
       case 'leave':
       case 'on_leave':
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
       case 'retired':
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
       default:
-        return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+        return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
     }
   };
 
@@ -188,7 +188,7 @@ const Members: React.FC = () => {
                 placeholder="Search by name, badge number, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -246,7 +246,7 @@ const Members: React.FC = () => {
           </div>
         ) : filteredMembers.length === 0 ? (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <Users className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+            <Users className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Members Found</h3>
             <p className="text-theme-text-secondary mb-6">
               {searchQuery || filterStatus !== 'all'
@@ -355,7 +355,7 @@ const Members: React.FC = () => {
                               </div>
                             )}
                             {!member.phone && !member.mobile && !member.email && (
-                              <span className="text-slate-500">-</span>
+                              <span className="text-theme-text-muted">-</span>
                             )}
                           </div>
                         </td>

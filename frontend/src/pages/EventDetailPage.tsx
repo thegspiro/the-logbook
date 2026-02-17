@@ -9,7 +9,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
-import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
+import type { Event, RSVP, RSVPStatus, EventStats, EventAttachment } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -41,6 +41,12 @@ export const EventDetailPage: React.FC = () => {
   const [memberSearch, setMemberSearch] = useState('');
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
+  const [attachments, setAttachments] = useState<EventAttachment[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -48,6 +54,7 @@ export const EventDetailPage: React.FC = () => {
   useEffect(() => {
     if (eventId) {
       fetchEvent();
+      fetchAttachments();
       if (canManage) {
         fetchRSVPs();
         fetchStats();
@@ -101,6 +108,81 @@ export const EventDetailPage: React.FC = () => {
     } catch (err) {
       // Error silently handled - eligible members list will show empty
     }
+  };
+
+  const fetchAttachments = async () => {
+    if (!eventId) return;
+    try {
+      const data = await eventService.getAttachments(eventId);
+      setAttachments(data);
+    } catch {
+      // Attachments section will show empty
+    }
+  };
+
+  const handleUploadAttachment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId || !uploadFile) return;
+
+    try {
+      setUploading(true);
+      await eventService.uploadAttachment(eventId, uploadFile, uploadDescription || undefined);
+      toast.success('Attachment uploaded successfully');
+      setShowUploadModal(false);
+      setUploadFile(null);
+      setUploadDescription('');
+      await fetchAttachments();
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to upload attachment');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownloadAttachment = async (attachment: EventAttachment) => {
+    if (!eventId) return;
+    try {
+      const blob = await eventService.downloadAttachment(eventId, attachment.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to download attachment');
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!eventId) return;
+    try {
+      setDeletingAttachmentId(attachmentId);
+      await eventService.deleteAttachment(eventId, attachmentId);
+      toast.success('Attachment deleted');
+      await fetchAttachments();
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete attachment');
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (fileType: string): string => {
+    if (fileType.startsWith('image/')) return '🖼';
+    if (fileType === 'application/pdf') return '📄';
+    if (fileType.includes('spreadsheet') || fileType.includes('excel') || fileType.includes('.sheet')) return '📊';
+    if (fileType.includes('presentation') || fileType.includes('powerpoint')) return '📽';
+    if (fileType.includes('word') || fileType.includes('document')) return '📝';
+    return '📎';
   };
 
   const openCheckInModal = () => {
@@ -275,7 +357,7 @@ export const EventDetailPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to="/events"
-          className="inline-flex items-center text-sm text-theme-text-muted hover:text-slate-200 mb-4"
+          className="inline-flex items-center text-sm text-theme-text-muted hover:text-theme-text-primary mb-4"
         >
           <svg className="mr-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -294,7 +376,7 @@ export const EventDetailPage: React.FC = () => {
                 </span>
               )}
               {event.is_mandatory && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                   Mandatory
                 </span>
               )}
@@ -324,7 +406,7 @@ export const EventDetailPage: React.FC = () => {
                 <>
                   <button
                     onClick={() => navigate(`/events/${eventId}/edit`)}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -334,7 +416,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     onClick={handleDuplicateEvent}
                     disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary disabled:opacity-50"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary disabled:opacity-50"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -343,7 +425,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={openCheckInModal}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -352,7 +434,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={openRecordTimesModal}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -408,18 +490,18 @@ export const EventDetailPage: React.FC = () => {
 
             {event.description && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-slate-200 mb-1">Description</h3>
+                <h3 className="text-sm font-medium text-theme-text-primary mb-1">Description</h3>
                 <p className="text-theme-text-secondary whitespace-pre-wrap">{event.description}</p>
               </div>
             )}
 
             <div className="space-y-3">
               <div className="flex items-start">
-                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-medium text-slate-200">Date & Time</p>
+                  <p className="text-sm font-medium text-theme-text-primary">Date & Time</p>
                   <p className="text-sm text-theme-text-secondary">
                     {formatDateTime(event.start_datetime)}
                   </p>
@@ -431,12 +513,12 @@ export const EventDetailPage: React.FC = () => {
 
               {(event.location_name || event.location) && (
                 <div className="flex items-start">
-                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Location</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Location</p>
                     <p className="text-sm text-theme-text-secondary">{event.location_name || event.location}</p>
                     {event.location_details && (
                       <p className="text-sm text-theme-text-muted mt-1">{event.location_details}</p>
@@ -446,6 +528,76 @@ export const EventDetailPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Attachments */}
+          {(attachments.length > 0 || canManage) && (
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-theme-text-primary">
+                  Attachments {attachments.length > 0 && <span className="text-sm text-theme-text-muted font-normal">({attachments.length})</span>}
+                </h2>
+                {canManage && (
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                  >
+                    <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Upload
+                  </button>
+                )}
+              </div>
+
+              {attachments.length === 0 ? (
+                <p className="text-sm text-theme-text-muted">No attachments yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between p-3 bg-theme-input-bg rounded-lg"
+                    >
+                      <div className="flex items-center min-w-0 flex-1">
+                        <span className="text-lg mr-3 flex-shrink-0" aria-hidden="true">{getFileIcon(attachment.file_type)}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-theme-text-primary truncate">{attachment.file_name}</p>
+                          <p className="text-xs text-theme-text-muted">
+                            {formatFileSize(attachment.file_size)}
+                            {attachment.description && <> &middot; {attachment.description}</>}
+                            {' '}&middot; {new Date(attachment.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-3 flex-shrink-0">
+                        <button
+                          onClick={() => handleDownloadAttachment(attachment)}
+                          className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded"
+                          title="Download"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => handleDeleteAttachment(attachment.id)}
+                            disabled={deletingAttachmentId === attachment.id}
+                            className="p-1.5 text-theme-text-muted hover:text-red-400 rounded disabled:opacity-50"
+                            title="Delete"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Training Session Details */}
           {event.event_type === 'training' && event.custom_fields && (
@@ -460,28 +612,28 @@ export const EventDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 {event.custom_fields.course_name && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Course Name</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Course Name</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
                   </div>
                 )}
 
                 {event.custom_fields.course_code && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Course Code</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Course Code</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
                   </div>
                 )}
 
                 {event.custom_fields.credit_hours && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Credit Hours</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Credit Hours</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
                   </div>
                 )}
 
                 {event.custom_fields.training_type && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Training Type</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Training Type</p>
                     <p className="text-sm text-theme-text-primary capitalize">
                       {typeof event.custom_fields.training_type === 'string'
                         ? event.custom_fields.training_type.replace('_', ' ')
@@ -492,21 +644,21 @@ export const EventDetailPage: React.FC = () => {
 
                 {event.custom_fields.instructor && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Instructor</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Instructor</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
                   </div>
                 )}
 
                 {event.custom_fields.issuing_agency && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Issuing Agency</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Issuing Agency</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
                   </div>
                 )}
 
                 {event.custom_fields.expiration_months && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Certification Valid For</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Certification Valid For</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
                   </div>
                 )}
@@ -584,7 +736,7 @@ export const EventDetailPage: React.FC = () => {
                         </button>
                       )}
                       {rsvp.checked_in && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                           Checked In
                         </span>
                       )}
@@ -694,12 +846,12 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRSVP}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
 
                   {submitError && (
@@ -710,7 +862,7 @@ export const EventDetailPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <fieldset>
-                      <legend className="block text-sm font-medium text-slate-200 mb-2">
+                      <legend className="block text-sm font-medium text-theme-text-primary mb-2">
                         Your Response
                       </legend>
                       <div className="space-y-2">
@@ -724,7 +876,7 @@ export const EventDetailPage: React.FC = () => {
                               onChange={(e) => setRsvpStatus(e.target.value as RSVPStatus)}
                               className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border"
                             />
-                            <span className="ml-2 text-sm text-slate-200">
+                            <span className="ml-2 text-sm text-theme-text-primary">
                               {getRSVPStatusLabel(status as RSVPStatus)}
                             </span>
                           </label>
@@ -734,7 +886,7 @@ export const EventDetailPage: React.FC = () => {
 
                     {event.allow_guests && rsvpStatus === 'going' && (
                       <div>
-                        <label htmlFor="guest_count" className="block text-sm font-medium text-slate-200">
+                        <label htmlFor="guest_count" className="block text-sm font-medium text-theme-text-primary">
                           Number of Guests
                         </label>
                         <input
@@ -750,7 +902,7 @@ export const EventDetailPage: React.FC = () => {
                     )}
 
                     <div>
-                      <label htmlFor="notes" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="notes" className="block text-sm font-medium text-theme-text-primary">
                         Notes (optional)
                       </label>
                       <textarea
@@ -779,7 +931,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRSVPModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -801,12 +953,12 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleCancelEvent}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
                   <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -822,7 +974,7 @@ export const EventDetailPage: React.FC = () => {
                   )}
 
                   <div>
-                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-slate-200">
+                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-theme-text-primary">
                       Reason for Cancellation <span aria-hidden="true">*</span>
                     </label>
                     <textarea
@@ -850,7 +1002,7 @@ export const EventDetailPage: React.FC = () => {
                         onChange={(e) => setSendCancelNotifications(e.target.checked)}
                         className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">
+                      <span className="ml-2 text-sm text-theme-text-primary">
                         Send cancellation notifications to all RSVPs
                       </span>
                     </label>
@@ -873,7 +1025,7 @@ export const EventDetailPage: React.FC = () => {
                       setCancelReason('');
                       setSendCancelNotifications(false);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Go Back
                   </button>
@@ -895,17 +1047,17 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
-              <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary">Check In Members</h3>
                   <button
                     type="button"
                     onClick={() => setShowCheckInModal(false)}
-                    className="text-slate-500 hover:text-theme-text-muted"
+                    className="text-theme-text-muted hover:text-theme-text-muted"
                     aria-label="Close dialog"
                   >
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -920,7 +1072,7 @@ export const EventDetailPage: React.FC = () => {
 
                 {/* Search */}
                 <div className="mb-4">
-                  <label htmlFor="member-search" className="block text-sm font-medium text-slate-200 mb-2">
+                  <label htmlFor="member-search" className="block text-sm font-medium text-theme-text-primary mb-2">
                     Search Members
                   </label>
                   <input
@@ -982,7 +1134,7 @@ export const EventDetailPage: React.FC = () => {
                           </div>
                           <div>
                             {isCheckedIn ? (
-                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                 Checked In
                               </span>
                             ) : (
@@ -1019,7 +1171,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCheckInModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Done
                 </button>
@@ -1040,12 +1192,12 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRecordTimes}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
 
                   <p className="text-sm text-theme-text-secondary mb-4">
@@ -1060,7 +1212,7 @@ export const EventDetailPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-theme-text-primary">
                         Actual Start Time
                       </label>
                       <input
@@ -1084,7 +1236,7 @@ export const EventDetailPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-theme-text-primary">
                         Actual End Time
                       </label>
                       <input
@@ -1132,7 +1284,94 @@ export const EventDetailPage: React.FC = () => {
                       setShowRecordTimesModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Attachment Modal */}
+      {showUploadModal && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowUploadModal(false); setUploadFile(null); setUploadDescription(''); } }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-black opacity-75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <form onSubmit={handleUploadAttachment}>
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="upload-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Upload Attachment</h3>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="attachment-file" className="block text-sm font-medium text-theme-text-primary mb-1">
+                        File <span aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        type="file"
+                        id="attachment-file"
+                        required
+                        aria-required="true"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.gif"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                        className="block w-full text-sm text-theme-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-red-600 file:text-white hover:file:bg-red-700"
+                      />
+                      <p className="mt-1 text-xs text-theme-text-muted">
+                        PDF, DOC, XLS, PPT, TXT, CSV, JPG, PNG, GIF. Max 25 MB.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label htmlFor="attachment-description" className="block text-sm font-medium text-theme-text-primary mb-1">
+                        Description (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="attachment-description"
+                        value={uploadDescription}
+                        onChange={(e) => setUploadDescription(e.target.value)}
+                        placeholder="Brief description of this file"
+                        className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      />
+                    </div>
+
+                    {uploadFile && (
+                      <div className="bg-theme-surface-secondary rounded-lg p-3">
+                        <p className="text-sm text-theme-text-primary">{uploadFile.name}</p>
+                        <p className="text-xs text-theme-text-muted">{formatFileSize(uploadFile.size)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-theme-input-bg px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="submit"
+                    disabled={uploading || !uploadFile}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  >
+                    {uploading ? 'Uploading...' : 'Upload'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      setUploadFile(null);
+                      setUploadDescription('');
+                    }}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -1154,11 +1393,11 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                     <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1190,7 +1429,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Go Back
                 </button>
