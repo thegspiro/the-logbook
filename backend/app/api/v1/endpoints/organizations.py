@@ -13,6 +13,7 @@ from app.schemas.organization import (
     OrganizationSettingsResponse,
     OrganizationSettingsUpdate,
     ContactInfoSettings,
+    MembershipIdSettings,
     EnabledModulesResponse,
     ModuleSettingsUpdate,
 )
@@ -145,6 +146,54 @@ async def update_contact_info_settings(
         )
 
         return contact_settings
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.patch("/settings/membership-id", response_model=MembershipIdSettings)
+async def update_membership_id_settings(
+    membership_id_settings: MembershipIdSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("settings.edit", "organization.update_settings")),
+):
+    """
+    Update membership ID number settings
+
+    Configure whether membership IDs are enabled, auto-generated, and their format.
+
+    **Authentication and permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {
+        "membership_id": {
+            "enabled": membership_id_settings.enabled,
+            "auto_generate": membership_id_settings.auto_generate,
+            "prefix": membership_id_settings.prefix,
+            "next_number": membership_id_settings.next_number,
+        }
+    }
+
+    try:
+        await org_service.update_organization_settings(current_user.organization_id, settings_dict)
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["membership_id"],
+                "membership_id_enabled": membership_id_settings.enabled,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return membership_id_settings
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

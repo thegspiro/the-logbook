@@ -14,6 +14,7 @@ from app.models.user import Organization
 from app.schemas.organization import (
     OrganizationSettings,
     ContactInfoSettings,
+    MembershipIdSettings,
     EnabledModulesResponse,
     ModuleSettings,
     EmailServiceSettings,
@@ -87,10 +88,20 @@ class OrganizationService:
             integrations=modules.get("integrations", False),
         )
 
+        # Parse membership ID settings
+        membership_id = settings_dict.get("membership_id", {})
+        membership_id_settings = MembershipIdSettings(
+            enabled=membership_id.get("enabled", False),
+            auto_generate=membership_id.get("auto_generate", False),
+            prefix=membership_id.get("prefix", ""),
+            next_number=membership_id.get("next_number", 1),
+        )
+
         return OrganizationSettings(
             contact_info_visibility=contact_settings,
             email_service=email_settings,
             modules=module_settings,
+            membership_id=membership_id_settings,
         )
 
     async def update_organization_settings(

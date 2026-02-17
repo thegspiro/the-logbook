@@ -317,7 +317,7 @@ export const organizationService = {
   /**
    * Get organization settings
    */
-  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings }> {
+  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_id?: import('../types/user').MembershipIdSettings }> {
     const response = await api.get('/organization/settings');
     return response.data;
   },
@@ -327,6 +327,14 @@ export const organizationService = {
    */
   async updateContactInfoSettings(settings: ContactInfoSettings): Promise<ContactInfoSettings> {
     const response = await api.patch('/organization/settings/contact-info', settings);
+    return response.data;
+  },
+
+  /**
+   * Update membership ID settings
+   */
+  async updateMembershipIdSettings(settings: import('../types/user').MembershipIdSettings): Promise<import('../types/user').MembershipIdSettings> {
+    const response = await api.patch('/organization/settings/membership-id', settings);
     return response.data;
   },
 

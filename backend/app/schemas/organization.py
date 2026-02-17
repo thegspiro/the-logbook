@@ -230,6 +230,28 @@ class MembershipTierSettings(BaseModel):
     )
 
 
+class MembershipIdSettings(BaseModel):
+    """Settings for membership ID number display and generation"""
+    enabled: bool = Field(
+        default=False,
+        description="Whether membership ID numbers are enabled for the organization",
+    )
+    auto_generate: bool = Field(
+        default=False,
+        description="Automatically assign the next sequential ID to new members",
+    )
+    prefix: str = Field(
+        default="",
+        max_length=10,
+        description="Optional prefix for generated IDs (e.g. 'FD-')",
+    )
+    next_number: int = Field(
+        default=1,
+        ge=1,
+        description="Next number to use when auto-generating IDs",
+    )
+
+
 class ITTeamMember(BaseModel):
     """An IT team member stored in organization settings"""
     name: str = ""
@@ -355,6 +377,10 @@ class OrganizationSettings(BaseModel):
         default_factory=MembershipTierSettings,
         description="Membership tier definitions, years-of-service thresholds, and tier benefits",
     )
+    membership_id: MembershipIdSettings = Field(
+        default_factory=MembershipIdSettings,
+        description="Membership ID number configuration",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -390,6 +416,7 @@ class OrganizationSettingsUpdate(BaseModel):
     it_team: Optional[ITTeamSettings] = None
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
+    membership_id: Optional[MembershipIdSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -413,6 +440,7 @@ class OrganizationSettingsResponse(BaseModel):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
+    membership_id: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')
 

@@ -25,6 +25,13 @@ export interface ContactInfoSettings {
   show_mobile: boolean;
 }
 
+export interface MembershipIdSettings {
+  enabled: boolean;
+  auto_generate: boolean;
+  prefix: string;
+  next_number: number;
+}
+
 export interface NotificationPreferences {
   email: boolean;
   sms: boolean;
