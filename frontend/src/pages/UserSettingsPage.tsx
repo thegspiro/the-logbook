@@ -13,6 +13,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
+import type { UserProfileUpdate } from '../types/user';
+import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 
 type TabType = 'account' | 'password' | 'appearance' | 'notifications';
@@ -21,6 +23,12 @@ export const UserSettingsPage: React.FC = () => {
   const { user } = useAuthStore();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('account');
+
+  // Profile state
+  const [profile, setProfile] = useState<UserWithRoles | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState<UserProfileUpdate>({});
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -38,6 +46,38 @@ export const UserSettingsPage: React.FC = () => {
   const [announcementNotifications, setAnnouncementNotifications] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [loadingPreferences, setLoadingPreferences] = useState(false);
+
+  // Load user profile
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadProfile = async () => {
+      setLoadingProfile(true);
+      try {
+        const data = await userService.getUserWithRoles(user.id);
+        setProfile(data);
+        setProfileForm({
+          first_name: data.first_name || '',
+          middle_name: data.middle_name || '',
+          last_name: data.last_name || '',
+          phone: data.phone || '',
+          mobile: data.mobile || '',
+          badge_number: data.badge_number || '',
+          rank: data.rank || '',
+          station: data.station || '',
+          address_street: data.address_street || '',
+          address_city: data.address_city || '',
+          address_state: data.address_state || '',
+          address_zip: data.address_zip || '',
+          address_country: data.address_country || 'USA',
+        });
+      } catch {
+        // Profile load failure is non-critical for other tabs
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+    loadProfile();
+  }, [user?.id]);
 
   // Load notification preferences from backend
   useEffect(() => {
@@ -58,6 +98,24 @@ export const UserSettingsPage: React.FC = () => {
     };
     loadPreferences();
   }, [user?.id]);
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+    setSavingProfile(true);
+    try {
+      const updated = await userService.updateUserProfile(user.id, profileForm);
+      setProfile(updated);
+      toast.success('Profile updated successfully!');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update profile. Please try again.'));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleProfileChange = (field: keyof UserProfileUpdate, value: string) => {
+    setProfileForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const passwordValidation = validatePasswordStrength(newPassword);
 
@@ -192,25 +250,190 @@ export const UserSettingsPage: React.FC = () => {
             <div>
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Account Information</h2>
               <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
-                Update your account details and personal information
+                Update your personal details and contact information
               </p>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <svg className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
+            {loadingProfile ? (
+              <div className="flex justify-center items-center h-32">
+                <div className="text-slate-400">Loading profile...</div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Personal Information */}
                 <div>
-                  <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
-                    Account Settings Coming Soon
-                  </h4>
-                  <p className="text-sm text-blue-600 dark:text-blue-200">
-                    Profile editing, email changes, and other account management features will be available in a future update. For now, contact your administrator to update your account information.
-                  </p>
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Personal Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">First Name</label>
+                      <input
+                        id="firstName"
+                        type="text"
+                        value={profileForm.first_name || ''}
+                        onChange={(e) => handleProfileChange('first_name', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="middleName" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Middle Name</label>
+                      <input
+                        id="middleName"
+                        type="text"
+                        value={profileForm.middle_name || ''}
+                        onChange={(e) => handleProfileChange('middle_name', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Last Name</label>
+                      <input
+                        id="lastName"
+                        type="text"
+                        value={profileForm.last_name || ''}
+                        onChange={(e) => handleProfileChange('last_name', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                <div>
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Contact Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="phone" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Phone</label>
+                      <input
+                        id="phone"
+                        type="tel"
+                        value={profileForm.phone || ''}
+                        onChange={(e) => handleProfileChange('phone', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="mobile" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Mobile</label>
+                      <input
+                        id="mobile"
+                        type="tel"
+                        value={profileForm.mobile || ''}
+                        onChange={(e) => handleProfileChange('mobile', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Department Information */}
+                <div>
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Department Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label htmlFor="badgeNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Badge Number</label>
+                      <input
+                        id="badgeNumber"
+                        type="text"
+                        value={profileForm.badge_number || ''}
+                        onChange={(e) => handleProfileChange('badge_number', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="rank" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Rank</label>
+                      <input
+                        id="rank"
+                        type="text"
+                        value={profileForm.rank || ''}
+                        onChange={(e) => handleProfileChange('rank', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="station" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Station</label>
+                      <input
+                        id="station"
+                        type="text"
+                        value={profileForm.station || ''}
+                        onChange={(e) => handleProfileChange('station', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div>
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Address</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="addressStreet" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Street Address</label>
+                      <input
+                        id="addressStreet"
+                        type="text"
+                        value={profileForm.address_street || ''}
+                        onChange={(e) => handleProfileChange('address_street', e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="col-span-2 sm:col-span-1">
+                        <label htmlFor="addressCity" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">City</label>
+                        <input
+                          id="addressCity"
+                          type="text"
+                          value={profileForm.address_city || ''}
+                          onChange={(e) => handleProfileChange('address_city', e.target.value)}
+                          className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          disabled={savingProfile}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="addressState" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">State</label>
+                        <input
+                          id="addressState"
+                          type="text"
+                          value={profileForm.address_state || ''}
+                          onChange={(e) => handleProfileChange('address_state', e.target.value)}
+                          className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          disabled={savingProfile}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="addressZip" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">ZIP Code</label>
+                        <input
+                          id="addressZip"
+                          type="text"
+                          value={profileForm.address_zip || ''}
+                          onChange={(e) => handleProfileChange('address_zip', e.target.value)}
+                          className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          disabled={savingProfile}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={savingProfile}
+                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {savingProfile ? 'Saving...' : 'Save Profile'}
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

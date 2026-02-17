@@ -1,22 +1,35 @@
 /**
  * Members Admin Page
  *
- * Administrative page for managing user roles and permissions.
+ * Administrative page for managing user roles, permissions, and contact information.
  * Accessible to: IT Administrator, Chief, Assistant Chief, President,
  * Vice President, Secretary, Assistant Secretary
  *
  * Features:
  * - View by Member: See each member and their assigned roles
  * - View by Role: See each role and the members assigned to it
+ * - Edit member contact information (admin)
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { userService, roleService } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
+import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 
 type ViewMode = 'by-member' | 'by-role';
+
+interface EditProfileForm {
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  phone: string;
+  mobile: string;
+  badge_number: string;
+  rank: string;
+  station: string;
+}
 
 export const MembersAdminPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -32,6 +45,21 @@ export const MembersAdminPage: React.FC = () => {
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Edit contact info state
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileUser, setProfileUser] = useState<UserWithRoles | null>(null);
+  const [profileForm, setProfileForm] = useState<EditProfileForm>({
+    first_name: '',
+    middle_name: '',
+    last_name: '',
+    phone: '',
+    mobile: '',
+    badge_number: '',
+    rank: '',
+    station: '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const canCreateMembers = checkPermission('users.create');
 
@@ -72,6 +100,65 @@ export const MembersAdminPage: React.FC = () => {
     );
     setSelectedUserIds(usersWithRole.map((u) => u.id));
     setEditingMembers(true);
+  };
+
+  const handleEditProfile = async (user: UserWithRoles) => {
+    // Fetch full profile for the user to get all fields
+    try {
+      const fullProfile = await userService.getUserWithRoles(user.id);
+      setProfileUser(fullProfile);
+      setProfileForm({
+        first_name: fullProfile.first_name || '',
+        middle_name: fullProfile.middle_name || '',
+        last_name: fullProfile.last_name || '',
+        phone: fullProfile.phone || '',
+        mobile: fullProfile.mobile || '',
+        badge_number: fullProfile.badge_number || '',
+        rank: fullProfile.rank || '',
+        station: fullProfile.station || '',
+      });
+      setEditingProfile(true);
+    } catch (err) {
+      setError('Unable to load member profile. Please try again.');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profileUser) return;
+
+    try {
+      setSavingProfile(true);
+      setError(null);
+
+      const updateData: UserProfileUpdate = {};
+      // Only send changed fields
+      if (profileForm.first_name !== (profileUser.first_name || '')) updateData.first_name = profileForm.first_name;
+      if (profileForm.middle_name !== (profileUser.middle_name || '')) updateData.middle_name = profileForm.middle_name;
+      if (profileForm.last_name !== (profileUser.last_name || '')) updateData.last_name = profileForm.last_name;
+      if (profileForm.phone !== (profileUser.phone || '')) updateData.phone = profileForm.phone;
+      if (profileForm.mobile !== (profileUser.mobile || '')) updateData.mobile = profileForm.mobile;
+      if (profileForm.badge_number !== (profileUser.badge_number || '')) updateData.badge_number = profileForm.badge_number;
+      if (profileForm.rank !== (profileUser.rank || '')) updateData.rank = profileForm.rank;
+      if (profileForm.station !== (profileUser.station || '')) updateData.station = profileForm.station;
+
+      await userService.updateUserProfile(profileUser.id, updateData);
+
+      // Refresh the user list
+      await fetchData();
+
+      setEditingProfile(false);
+      setProfileUser(null);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setError('You do not have permission to update member information. Contact an administrator.');
+      } else {
+        setError(detail || 'Unable to update member information. Please try again.');
+      }
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleSaveRoles = async () => {
@@ -219,7 +306,7 @@ export const MembersAdminPage: React.FC = () => {
     );
   }
 
-  if (error && !editingRoles && !editingMembers) {
+  if (error && !editingRoles && !editingMembers && !editingProfile) {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -242,7 +329,7 @@ export const MembersAdminPage: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-white">Members Administration</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Manage member roles and permissions
+            Manage member roles, permissions, and contact information
           </p>
         </div>
         {canCreateMembers && (
@@ -385,12 +472,20 @@ export const MembersAdminPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEditRoles(user)}
-                      className="text-blue-400 hover:text-blue-300"
-                    >
-                      Manage Roles
-                    </button>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => handleEditProfile(user)}
+                        className="text-green-400 hover:text-green-300"
+                      >
+                        Edit Info
+                      </button>
+                      <button
+                        onClick={() => handleEditRoles(user)}
+                        className="text-blue-400 hover:text-blue-300"
+                      >
+                        Manage Roles
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -475,6 +570,144 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {editingProfile && profileUser && (
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-profile-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingProfile(false); setProfileUser(null); setError(null); } }}
+        >
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="edit-profile-title" className="text-lg font-medium text-white">
+                Edit Information for {profileUser.full_name || profileUser.username}
+              </h3>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {/* Name Fields */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.first_name}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Middle Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.middle_name}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Last Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.last_name}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+              </div>
+
+              {/* Contact Fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={profileForm.phone}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Mobile</label>
+                  <input
+                    type="tel"
+                    value={profileForm.mobile}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+              </div>
+
+              {/* Department Fields */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Badge #</label>
+                  <input
+                    type="text"
+                    value={profileForm.badge_number}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, badge_number: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Rank</label>
+                  <input
+                    type="text"
+                    value={profileForm.rank}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Station</label>
+                  <input
+                    type="text"
+                    value={profileForm.station}
+                    onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={savingProfile}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="text-sm text-red-400">{error}</div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setEditingProfile(false);
+                  setProfileUser(null);
+                  setError(null);
+                }}
+                disabled={savingProfile}
+                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {savingProfile ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

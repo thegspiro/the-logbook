@@ -20,6 +20,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     UserProfileResponse,
     AdminUserCreate,
+    UserUpdate,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
@@ -691,6 +692,83 @@ async def update_contact_info(
         event_data={
             "updated_user_id": str(user_id),
             "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return user
+
+
+@router.patch("/{user_id}/profile", response_model=UserProfileResponse)
+async def update_user_profile(
+    user_id: UUID,
+    profile_update: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update user profile information (name, address, emergency contacts, etc.)
+
+    Users can update their own profile. Admins with users.update or members.manage
+    permission can update any user's profile.
+
+    **Authentication required**
+    """
+    # Check if user is updating their own profile or has admin permissions
+    is_self = str(current_user.id) == str(user_id)
+    if not is_self:
+        user_permissions = []
+        for role in current_user.roles:
+            user_permissions.extend(role.permissions or [])
+        has_wildcard = "*" in user_permissions
+        if not has_wildcard and "users.update" not in user_permissions and "members.manage" not in user_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to update this user's profile"
+            )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+        .options(selectinload(User.roles))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Update only provided fields
+    update_data = profile_update.model_dump(exclude_unset=True)
+
+    # Handle emergency_contacts separately (needs serialization)
+    if "emergency_contacts" in update_data:
+        ec_list = update_data.pop("emergency_contacts")
+        if ec_list is not None:
+            user.emergency_contacts = [ec.model_dump() if hasattr(ec, 'model_dump') else ec for ec in profile_update.emergency_contacts]
+
+    for field, value in update_data.items():
+        if hasattr(user, field):
+            setattr(user, field, value)
+
+    await db.commit()
+    await db.refresh(user)
+
+    await log_audit_event(
+        db=db,
+        event_type="user_profile_updated",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "updated_user_id": str(user_id),
+            "updated_by": str(current_user.id),
+            "is_self_update": is_self,
+            "fields_updated": list(profile_update.model_dump(exclude_unset=True).keys()),
         },
         user_id=str(current_user.id),
         username=current_user.username,

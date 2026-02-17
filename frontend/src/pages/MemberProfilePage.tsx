@@ -43,7 +43,7 @@ function isModuleEnabled(moduleId: string): boolean {
 export const MemberProfilePage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, checkPermission } = useAuthStore();
 
   const [user, setUser] = useState<UserWithRoles | null>(null);
   const [loading, setLoading] = useState(true);
@@ -246,8 +246,9 @@ export const MemberProfilePage: React.FC = () => {
     }));
   };
 
-  // Check if current user can edit this profile
-  const canEdit = currentUser?.id === userId;
+  // Check if current user can edit this profile (self or admin)
+  const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
+  const canEdit = currentUser?.id === userId || isAdmin;
 
   if (loading) {
     return (
