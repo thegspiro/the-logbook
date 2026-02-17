@@ -10,10 +10,10 @@ interface OnboardingHeaderProps {
 const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
   departmentName,
   logoPreview,
-  icon = <Shield className="w-6 h-6 text-theme-text-primary" />,
+  icon = <Shield className="w-6 h-6 text-white" />,
 }) => {
   return (
-    <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
+    <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
       <div className="max-w-7xl mx-auto flex items-center">
         {logoPreview ? (
           <div className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden mr-4">

@@ -158,7 +158,7 @@ const ModuleSelection: React.FC = () => {
           isSelected
             ? 'border-white/40 shadow-lg'
             : module.canDisable
-            ? 'border-theme-surface-border hover:border-theme-surface-border'
+            ? 'border-theme-surface-border hover:border-white/20'
             : 'border-theme-surface-border'
         }`}
       >
@@ -170,17 +170,17 @@ const ModuleSelection: React.FC = () => {
             {/* Selection Indicator */}
             <div className="flex-shrink-0 mt-1">
               {isSelected ? (
-                <CheckCircle className="w-6 h-6 text-green-700 dark:text-green-400" />
+                <CheckCircle className="w-6 h-6 text-green-400" />
               ) : module.canDisable ? (
-                <Circle className="w-6 h-6 text-theme-text-muted" />
+                <Circle className="w-6 h-6 text-slate-400" />
               ) : (
-                <CheckCircle className="w-6 h-6 text-blue-700 dark:text-blue-400" />
+                <CheckCircle className="w-6 h-6 text-blue-400" />
               )}
             </div>
 
             {/* Icon */}
             <div className={`flex-shrink-0 bg-gradient-to-br ${getCategoryColor()} rounded-lg p-3`}>
-              <div className="text-theme-text-primary">{icon}</div>
+              <div className="text-white">{icon}</div>
             </div>
 
             {/* Content */}
@@ -197,7 +197,7 @@ const ModuleSelection: React.FC = () => {
                 <ul className="space-y-1">
                   {module.features.slice(0, 3).map((feature, index) => (
                     <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
-                      <CheckCircle className="w-3.5 h-3.5 text-green-700 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -216,7 +216,7 @@ const ModuleSelection: React.FC = () => {
                     e.stopPropagation();
                     toggleExpanded(module.id);
                   }}
-                  className="text-cyan-700 dark:text-cyan-400 text-sm font-medium hover:text-cyan-700 dark:hover:text-cyan-300 flex items-center space-x-1 mb-2"
+                  className="text-cyan-400 text-sm font-medium hover:text-cyan-300 flex items-center space-x-1 mb-2"
                 >
                   <span>{isExpanded ? 'Hide' : 'View'} full details</span>
                   {isExpanded ? (
@@ -228,14 +228,14 @@ const ModuleSelection: React.FC = () => {
               )}
 
               {!module.canDisable && (
-                <p className="text-blue-700 dark:text-blue-400 text-xs mt-2 flex items-center space-x-1">
+                <p className="text-blue-400 text-xs mt-2 flex items-center space-x-1">
                   <Info className="w-3 h-3" />
                   <span>Always enabled</span>
                 </p>
               )}
 
               {module.requiresSetup && (
-                <p className="text-yellow-700 dark:text-yellow-400 text-xs mt-2 flex items-center space-x-1">
+                <p className="text-yellow-400 text-xs mt-2 flex items-center space-x-1">
                   <Info className="w-3 h-3" />
                   <span>{module.setupDescription}</span>
                 </p>
@@ -246,7 +246,7 @@ const ModuleSelection: React.FC = () => {
 
         {/* Expanded Details - Full Description and All Features */}
         {isExpanded && (
-          <div className="border-t border-theme-surface-border p-4 bg-theme-input-bg">
+          <div className="border-t border-theme-nav-border p-4 bg-theme-surface-secondary">
             <h4 className="text-theme-text-primary font-semibold mb-2">About this module</h4>
             <p className="text-theme-text-secondary text-sm mb-4">{module.longDescription}</p>
 
@@ -256,7 +256,7 @@ const ModuleSelection: React.FC = () => {
                 <ul className="space-y-1">
                   {module.features.map((feature, index) => (
                     <li key={index} className="text-theme-text-secondary text-sm flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -282,7 +282,7 @@ const ModuleSelection: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
-              <Settings className="w-8 h-8 text-theme-text-primary" />
+              <Settings className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">Select Modules</h2>
             <p className="text-xl text-theme-text-secondary mb-2">
@@ -296,9 +296,9 @@ const ModuleSelection: React.FC = () => {
           {/* Info Banner */}
           <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-6">
             <div className="flex items-start space-x-3">
-              <Info className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-blue-700 dark:text-blue-300 text-sm font-medium mb-1">Module Categories</p>
+                <p className="text-blue-300 text-sm font-medium mb-1">Module Categories</p>
                 <div className="text-blue-200 text-sm space-y-1">
                   <p>
                     <strong>Core Modules:</strong> Always enabled – essential for all departments
@@ -362,7 +362,7 @@ const ModuleSelection: React.FC = () => {
               disabled={isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 isSaving
-                  ? 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                   : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
             >
@@ -373,7 +373,7 @@ const ModuleSelection: React.FC = () => {
             <ProgressIndicator
               currentStep={8}
               totalSteps={10}
-              className="mt-6 pt-6 border-t border-theme-surface-border"
+              className="mt-6 pt-6 border-t border-theme-nav-border"
             />
           </div>
         </div>
