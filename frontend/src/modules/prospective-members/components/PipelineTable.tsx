@@ -22,6 +22,8 @@ import toast from 'react-hot-toast';
 import type { ApplicantListItem, ApplicantStatus } from '../types';
 import { getInitials } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
 
 interface PipelineTableProps {
   applicants: ApplicantListItem[];
@@ -49,6 +51,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   onPageChange,
   onApplicantClick,
 }) => {
+  const tz = useTimezone();
   const { advanceApplicant, holdApplicant, rejectApplicant, withdrawApplicant, isRejecting, isWithdrawing } =
     useProspectiveMembersStore();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -108,14 +111,6 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       `${action.charAt(0).toUpperCase() + action.slice(1)}d ${successCount} of ${ids.length} applicants`
     );
     setSelected(new Set());
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
   };
 
   // Generate page numbers to show
@@ -320,7 +315,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         className="p-3 text-sm text-slate-400"
                         onClick={() => onApplicantClick(applicant)}
                       >
-                        {formatDate(applicant.created_at)}
+                        {formatDate(applicant.created_at, tz)}
                       </td>
                       <td className="p-3 relative" onClick={(e) => e.stopPropagation()}>
                         <button

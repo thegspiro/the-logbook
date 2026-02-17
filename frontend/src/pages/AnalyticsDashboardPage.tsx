@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatTime } from '../utils/dateFormatting';
 
 /**
  * Analytics Dashboard
@@ -11,6 +13,7 @@ import { analyticsService, type QRCodeMetrics } from '../services/analytics';
  */
 const AnalyticsDashboardPage: React.FC = () => {
   const { id: eventId } = useParams<{ id?: string }>();
+  const tz = useTimezone();
   const [metrics, setMetrics] = useState<QRCodeMetrics | null>(null);
 
   useEffect(() => {
@@ -192,10 +195,10 @@ const AnalyticsDashboardPage: React.FC = () => {
                     <div
                       className="w-8 bg-green-600 hover:bg-green-700 rounded-t cursor-pointer transition-all"
                       style={{ height: `${heightPercent}px` }}
-                      title={`${time.toLocaleTimeString()} - ${count} check-ins`}
+                      title={`${formatTime(time, tz)} - ${count} check-ins`}
                     ></div>
                     <div className="text-xs text-slate-400 mt-1 whitespace-nowrap">
-                      {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTime(time, tz)}
                     </div>
                   </div>
                 );

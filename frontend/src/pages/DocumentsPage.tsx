@@ -21,12 +21,15 @@ import {
   type DocumentsSummary,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 type ViewMode = 'grid' | 'list';
 
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
+  const tz = useTimezone();
 
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
@@ -418,7 +421,7 @@ const DocumentsPage: React.FC = () => {
                           </div>
                           <p className="text-slate-500 text-xs mt-1">
                             {doc.uploader_name ? `Uploaded by ${doc.uploader_name}` : ''}{' '}
-                            {new Date(doc.created_at).toLocaleDateString()}
+                            {formatDate(doc.created_at, tz)}
                           </p>
                         </div>
                         {canManage && (
@@ -468,7 +471,7 @@ const DocumentsPage: React.FC = () => {
                           <td className="px-4 py-3 text-slate-300 text-sm">{formatFileSize(doc.file_size)}</td>
                           <td className="px-4 py-3 text-slate-300 text-sm uppercase">{doc.file_type || '-'}</td>
                           <td className="px-4 py-3 text-slate-400 text-sm">
-                            {new Date(doc.created_at).toLocaleDateString()}
+                            {formatDate(doc.created_at, tz)}
                           </td>
                           {canManage && (
                             <td className="px-4 py-3 text-right">

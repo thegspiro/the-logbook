@@ -19,6 +19,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { shiftCompletionService, userService, trainingProgramService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import type {
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
@@ -60,6 +62,7 @@ const ReportCard: React.FC<{
   report: ShiftCompletionReport;
   memberMap: Record<string, string>;
 }> = ({ report, memberMap }) => {
+  const tz = useTimezone();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -156,7 +159,7 @@ const ReportCard: React.FC<{
             </div>
           )}
           <div className="text-xs text-gray-500">
-            Filed by: {memberMap[report.officer_id] || 'Unknown Officer'} on {new Date(report.created_at).toLocaleDateString()}
+            Filed by: {memberMap[report.officer_id] || 'Unknown Officer'} on {formatDate(report.created_at, tz)}
           </div>
         </div>
       )}
@@ -176,6 +179,7 @@ interface SimpleUser {
 
 const ShiftReportPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<'new' | 'filed' | 'received'>('new');
   const [members, setMembers] = useState<SimpleUser[]>([]);
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
@@ -187,7 +191,7 @@ const ShiftReportPage: React.FC = () => {
 
   // Form state
   const [traineeId, setTraineeId] = useState('');
-  const [shiftDate, setShiftDate] = useState(new Date().toISOString().split('T')[0]);
+  const [shiftDate, setShiftDate] = useState(() => getTodayLocalDate(tz));
   const [hoursOnShift, setHoursOnShift] = useState<number>(0);
   const [callsResponded, setCallsResponded] = useState<number>(0);
   const [callTypes, setCallTypes] = useState<string[]>([]);
@@ -445,7 +449,7 @@ const ShiftReportPage: React.FC = () => {
                   onChange={(e) => setShiftDate(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                   required
-                  max={new Date().toISOString().split('T')[0]}
+                  max={getTodayLocalDate(tz)}
                 />
               </div>
             </div>

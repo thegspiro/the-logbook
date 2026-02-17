@@ -40,6 +40,8 @@ import type {
 } from '../types';
 import { isSafeUrl, getInitials } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 
 interface ApplicantDetailDrawerProps {
   applicant: Applicant | null;
@@ -63,6 +65,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   onConvert,
   isLastStage,
 }) => {
+  const tz = useTimezone();
+
   const {
     advanceApplicant,
     rejectApplicant,
@@ -236,24 +240,6 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
-
   const maskValue = (value: string) => showPii ? value : '••••••••';
 
   return (
@@ -318,13 +304,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <p className="text-xs text-slate-400">
                   This application was marked inactive due to no activity
                   {applicant.deactivated_at && (
-                    <> since {formatDate(applicant.deactivated_at)}</>
+                    <> since {formatDate(applicant.deactivated_at, tz)}</>
                   )}.
                   A coordinator can reactivate it, or the individual may resubmit an interest form.
                 </p>
                 {applicant.reactivated_at && (
                   <p className="text-xs text-slate-500 mt-1">
-                    Previously reactivated on {formatDate(applicant.reactivated_at)}
+                    Previously reactivated on {formatDate(applicant.reactivated_at, tz)}
                   </p>
                 )}
               </div>
@@ -340,7 +326,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <p className="text-xs text-slate-400">
                   This applicant voluntarily withdrew from the pipeline
                   {applicant.withdrawn_at && (
-                    <> on {formatDate(applicant.withdrawn_at)}</>
+                    <> on {formatDate(applicant.withdrawn_at, tz)}</>
                   )}.
                 </p>
                 {applicant.withdrawal_reason && (
@@ -373,7 +359,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="w-4 h-4 text-slate-500" />
                       <span className="text-slate-300">
-                        DOB: {showPii ? formatDate(applicant.date_of_birth) : '••/••/••••'}
+                        DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
                       </span>
                     </div>
                   )}
@@ -411,7 +397,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   </div>
                   <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
                     <Clock className="w-3 h-3" />
-                    Entered {formatDateTime(applicant.stage_entered_at)}
+                    Entered {formatDateTime(applicant.stage_entered_at, tz)}
                   </div>
                 </div>
 
@@ -544,7 +530,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           <p className="text-xs text-emerald-300">
                             This package is ready for the secretary to add to a ballot.
                             {currentElectionPackage.submitted_at && (
-                              <> Submitted {formatDateTime(currentElectionPackage.submitted_at)}.</>
+                              <> Submitted {formatDateTime(currentElectionPackage.submitted_at, tz)}.</>
                             )}
                           </p>
                           {currentElectionPackage.coordinator_notes && (
@@ -627,9 +613,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                 {entry.stage_name}
                               </p>
                               <p className="text-xs text-slate-500 mt-0.5">
-                                Entered {formatDateTime(entry.entered_at)}
+                                Entered {formatDateTime(entry.entered_at, tz)}
                                 {entry.completed_at && (
-                                  <> &middot; Completed {formatDateTime(entry.completed_at)}</>
+                                  <> &middot; Completed {formatDateTime(entry.completed_at, tz)}</>
                                 )}
                               </p>
                               {entry.completed_by_name && (
@@ -691,17 +677,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   Details
                 </h3>
                 <div className="text-xs text-slate-500 space-y-1">
-                  <p>Applied: {formatDate(applicant.created_at)}</p>
-                  <p>Last updated: {formatDate(applicant.updated_at)}</p>
-                  <p>Last activity: {formatDate(applicant.last_activity_at)}</p>
+                  <p>Applied: {formatDate(applicant.created_at, tz)}</p>
+                  <p>Last updated: {formatDate(applicant.updated_at, tz)}</p>
+                  <p>Last activity: {formatDate(applicant.last_activity_at, tz)}</p>
                   {applicant.pipeline_name && (
                     <p>Pipeline: {applicant.pipeline_name}</p>
                   )}
                   {applicant.deactivated_at && (
-                    <p>Deactivated: {formatDate(applicant.deactivated_at)}</p>
+                    <p>Deactivated: {formatDate(applicant.deactivated_at, tz)}</p>
                   )}
                   {applicant.reactivated_at && (
-                    <p>Last reactivated: {formatDate(applicant.reactivated_at)}</p>
+                    <p>Last reactivated: {formatDate(applicant.reactivated_at, tz)}</p>
                   )}
                 </div>
               </div>

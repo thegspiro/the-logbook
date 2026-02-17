@@ -20,6 +20,8 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatTime } from '../utils/dateFormatting';
 import {
   notificationsService,
 } from '../services/api';
@@ -98,6 +100,7 @@ function formatCategory(category: string): string {
 const NotificationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('notifications.manage');
+  const tz = useTimezone();
 
   // Data states
   const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
@@ -470,10 +473,10 @@ const NotificationsPage: React.FC = () => {
                       </div>
                       <div className="col-span-2">
                         <p className="text-slate-300 text-sm">
-                          {new Date(log.sent_at).toLocaleDateString()}
+                          {formatDate(log.sent_at, tz)}
                         </p>
                         <p className="text-slate-500 text-xs mt-0.5">
-                          {new Date(log.sent_at).toLocaleTimeString()}
+                          {formatTime(log.sent_at, tz)}
                         </p>
                       </div>
                       <div className="col-span-1">

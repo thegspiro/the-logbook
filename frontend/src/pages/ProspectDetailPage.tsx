@@ -18,6 +18,8 @@ import type {
 } from '../services/membershipPipelineApi';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatDateTime } from '../utils/dateFormatting';
 import {
   ArrowLeft,
   User,
@@ -60,6 +62,7 @@ export const ProspectDetailPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('members.manage');
+  const tz = useTimezone();
 
   const fetchProspect = useCallback(async () => {
     if (!prospectId) return;
@@ -321,7 +324,7 @@ export const ProspectDetailPage: React.FC = () => {
                     </div>
                     {progress.completed_at && (
                       <span className="text-xs text-slate-400">
-                        {new Date(progress.completed_at).toLocaleDateString()}
+                        {formatDate(progress.completed_at, tz)}
                       </span>
                     )}
                   </div>
@@ -407,7 +410,7 @@ export const ProspectDetailPage: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <Calendar className="h-4 w-4 text-slate-400" />
                   <dt className="text-sm text-slate-400 w-20">DOB</dt>
-                  <dd className="text-sm text-white">{new Date(prospect.date_of_birth).toLocaleDateString()}</dd>
+                  <dd className="text-sm text-white">{formatDate(prospect.date_of_birth, tz)}</dd>
                 </div>
               )}
             </dl>
@@ -454,16 +457,16 @@ export const ProspectDetailPage: React.FC = () => {
             <dl className="space-y-3">
               <div className="flex justify-between">
                 <dt className="text-sm text-slate-400">Added</dt>
-                <dd className="text-sm text-white">{new Date(prospect.created_at).toLocaleString()}</dd>
+                <dd className="text-sm text-white">{formatDateTime(prospect.created_at, tz)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-sm text-slate-400">Last Updated</dt>
-                <dd className="text-sm text-white">{new Date(prospect.updated_at).toLocaleString()}</dd>
+                <dd className="text-sm text-white">{formatDateTime(prospect.updated_at, tz)}</dd>
               </div>
               {prospect.transferred_at && (
                 <div className="flex justify-between">
                   <dt className="text-sm text-slate-400">Transferred</dt>
-                  <dd className="text-sm text-white">{new Date(prospect.transferred_at).toLocaleString()}</dd>
+                  <dd className="text-sm text-white">{formatDateTime(prospect.transferred_at, tz)}</dd>
                 </div>
               )}
             </dl>
@@ -487,7 +490,7 @@ export const ProspectDetailPage: React.FC = () => {
                         {entry.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
                       <span className="text-xs text-slate-400">
-                        {new Date(entry.created_at).toLocaleString()}
+                        {formatDateTime(entry.created_at, tz)}
                       </span>
                     </div>
                     {entry.performer_name && (

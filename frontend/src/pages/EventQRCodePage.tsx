@@ -4,6 +4,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { eventService } from '../services/api';
 import type { QRCheckInData } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatShortDateTime } from '../utils/dateFormatting';
 
 /**
  * Event QR Code Page
@@ -16,6 +18,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 const EventQRCodePage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const tz = useTimezone();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,18 +51,6 @@ const EventQRCodePage: React.FC = () => {
     if (!eventId) return '';
     const baseUrl = window.location.origin;
     return `${baseUrl}/events/${eventId}/check-in`;
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
   };
 
   if (loading) {
@@ -134,12 +125,12 @@ const EventQRCodePage: React.FC = () => {
 
           <p>
             <span className="font-medium">Scheduled:</span>{' '}
-            {formatDateTime(qrData.start_datetime)} - {formatDateTime(qrData.end_datetime)}
+            {formatShortDateTime(qrData.start_datetime, tz)} - {formatShortDateTime(qrData.end_datetime, tz)}
           </p>
 
           <p>
             <span className="font-medium">Check-in Available:</span>{' '}
-            {formatDateTime(qrData.check_in_start)} - {formatDateTime(qrData.check_in_end)}
+            {formatShortDateTime(qrData.check_in_start, tz)} - {formatShortDateTime(qrData.check_in_end, tz)}
           </p>
         </div>
       </div>
@@ -208,7 +199,7 @@ const EventQRCodePage: React.FC = () => {
                 Check-in is only available during the following time window:
               </p>
               <p className="font-semibold text-yellow-300">
-                {formatDateTime(qrData.check_in_start)} - {formatDateTime(qrData.check_in_end)}
+                {formatShortDateTime(qrData.check_in_start, tz)} - {formatShortDateTime(qrData.check_in_end, tz)}
               </p>
               {qrData.actual_end_time && (
                 <p className="text-sm text-yellow-300 mt-2">

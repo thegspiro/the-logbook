@@ -27,14 +27,11 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { trainingModuleConfigService } from '../services/api';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
 
 // ==================== Helpers ====================
-
-const formatDate = (d: string | null | undefined) => {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -179,6 +176,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
 
 const MyTrainingPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [data, setData] = useState<MyTrainingSummary | null>(null);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -363,7 +361,7 @@ const MyTrainingPage: React.FC = () => {
                           <span>Valid</span>
                         </span>
                       )}
-                      <p className="text-xs text-slate-500">{formatDate(c.expiration_date)}</p>
+                      <p className="text-xs text-slate-500">{formatDate(c.expiration_date, tz)}</p>
                     </div>
                   </div>
                 ))}
@@ -394,8 +392,8 @@ const MyTrainingPage: React.FC = () => {
                       />
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Enrolled: {formatDate(e.enrolled_at)}</span>
-                      {e.target_completion_date && <span>Target: {formatDate(e.target_completion_date)}</span>}
+                      <span>Enrolled: {formatDate(e.enrolled_at, tz)}</span>
+                      {e.target_completion_date && <span>Target: {formatDate(e.target_completion_date, tz)}</span>}
                     </div>
                     {v?.show_requirement_details && e.requirements && e.requirements.length > 0 && (
                       <div className="mt-3 space-y-1">
@@ -441,7 +439,7 @@ const MyTrainingPage: React.FC = () => {
                       <tr key={r.id} className="text-slate-200">
                         <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{r.hours_completed}</td>
                         <td className="px-4 py-2">
                           <span className={`text-xs px-2 py-1 rounded ${getStatusColor(r.status)}`}>
@@ -463,7 +461,7 @@ const MyTrainingPage: React.FC = () => {
                 {data.shift_reports.map((sr) => (
                   <div key={sr.id} className="bg-slate-800/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium text-white">{formatDate(sr.shift_date)}</p>
+                      <p className="text-sm font-medium text-white">{formatDate(sr.shift_date, tz)}</p>
                       <div className="flex items-center space-x-3 text-xs text-slate-400">
                         <span>{sr.hours_on_shift}h</span>
                         <span>{sr.calls_responded} calls</span>
@@ -517,14 +515,14 @@ const MyTrainingPage: React.FC = () => {
                     {data.submissions.map((s) => (
                       <tr key={s.id} className="text-slate-200">
                         <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date, tz)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
                         <td className="px-4 py-2">
                           <span className={`text-xs px-2 py-1 rounded ${getStatusColor(s.status)}`}>
                             {s.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-500">{formatDate(s.submitted_at)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-500">{formatDate(s.submitted_at, tz)}</td>
                       </tr>
                     ))}
                   </tbody>

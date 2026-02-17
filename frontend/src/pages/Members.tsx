@@ -16,6 +16,8 @@ import {
 import { userService } from '../services/api';
 import { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 
 interface MemberStats {
   total: number;
@@ -27,6 +29,7 @@ interface MemberStats {
 
 const Members: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [members, setMembers] = useState<User[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
@@ -364,7 +367,7 @@ const Members: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-slate-300">
                           {member.hire_date
-                            ? new Date(member.hire_date).toLocaleDateString()
+                            ? formatDate(member.hire_date, tz)
                             : '-'}
                         </div>
                       </td>

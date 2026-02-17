@@ -12,6 +12,8 @@ import {
   Circle,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 import type {
   ProgramEnrollment,
   MemberProgramProgress,
@@ -167,6 +169,7 @@ interface DetailedProgressViewProps {
 }
 
 const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, onBack }) => {
+  const tz = useTimezone();
   const { enrollment, program, requirement_progress, next_milestones } = progress;
 
   const requirementsByPhase = requirement_progress.reduce((acc, rp) => {
@@ -228,14 +231,14 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
           <div>
             <p className="text-xs text-gray-400 mb-1">Enrolled</p>
             <p className="text-sm font-medium text-white">
-              {new Date(enrollment.enrolled_at).toLocaleDateString()}
+              {formatDate(enrollment.enrolled_at, tz)}
             </p>
           </div>
           {enrollment.target_completion_date && (
             <div>
               <p className="text-xs text-gray-400 mb-1">Target Completion</p>
               <p className="text-sm font-medium text-white">
-                {new Date(enrollment.target_completion_date).toLocaleDateString()}
+                {formatDate(enrollment.target_completion_date, tz)}
               </p>
             </div>
           )}
@@ -243,7 +246,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
             <div>
               <p className="text-xs text-gray-400 mb-1">Completed</p>
               <p className="text-sm font-medium text-green-400">
-                {new Date(enrollment.completed_at).toLocaleDateString()}
+                {formatDate(enrollment.completed_at, tz)}
               </p>
             </div>
           )}
@@ -334,7 +337,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
 
                       {rp.completed_at && (
                         <p className="text-xs text-green-400 mt-2">
-                          Completed on {new Date(rp.completed_at).toLocaleDateString()}
+                          Completed on {formatDate(rp.completed_at, tz)}
                         </p>
                       )}
                     </div>

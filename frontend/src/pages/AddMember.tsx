@@ -14,9 +14,12 @@ import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { getTodayLocalDate } from '../utils/dateFormatting';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<MemberFormData>({
     firstName: '',
@@ -32,7 +35,7 @@ const AddMember: React.FC = () => {
     secondaryPhone: '',
     email: '',
     preferredContact: 'phone',
-    joinDate: new Date().toISOString().split('T')[0],
+    joinDate: getTodayLocalDate(tz),
     status: 'active',
     membershipType: 'probationary',
     rank: '',

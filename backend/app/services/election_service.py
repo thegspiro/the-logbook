@@ -5,7 +5,8 @@ Business logic for election management including elections, candidates, voting, 
 """
 
 from typing import List, Optional, Dict, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -1791,7 +1792,7 @@ class ElectionService:
                     <li><strong>Title:</strong> {safe_title}</li>
                     <li><strong>Status Changed:</strong> {from_status.upper()} → {to_status.upper()}</li>
                     <li><strong>Performed By:</strong> {safe_performer}</li>
-                    <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
+                    <li><strong>Date/Time:</strong> {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}</li>
                 </ul>
             </div>
 
@@ -1824,7 +1825,7 @@ ELECTION DETAILS:
 - Title: {election.title}
 - Status Changed: {from_status.upper()} → {to_status.upper()}
 - Performed By: {performer_name}
-- Date/Time: {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}
+- Date/Time: {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}
 
 REASON FOR ROLLBACK:
 {reason}
@@ -1956,7 +1957,7 @@ Best regards,
                     <li><strong>Status at Deletion:</strong> {election_status}</li>
                     <li><strong>Active Votes at Deletion:</strong> {vote_count}</li>
                     <li><strong>Deleted By:</strong> {safe_performer}</li>
-                    <li><strong>Date/Time:</strong> {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</li>
+                    <li><strong>Date/Time:</strong> {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}</li>
                 </ul>
             </div>
 
@@ -1989,7 +1990,7 @@ ELECTION DETAILS:
 - Status at Deletion: {election_status}
 - Active Votes at Deletion: {vote_count}
 - Deleted By: {performer_name}
-- Date/Time: {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}
+- Date/Time: {datetime.now(timezone.utc).astimezone(ZoneInfo(getattr(organization, 'timezone', 'America/New_York'))).strftime('%B %d, %Y at %I:%M %p')}
 
 REASON GIVEN:
 {reason}

@@ -8,7 +8,8 @@ and publishing meeting minutes as formatted documents.
 import logging
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from html import escape
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -16,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.document import Document, DocumentFolder, DocumentType, SYSTEM_FOLDERS
 from app.models.minute import MeetingMinutes, MinutesStatus
+from app.models.user import Organization
 from app.schemas.document import FolderCreate, FolderUpdate, DocumentCreate, DocumentUpdate
 
 logger = logging.getLogger(__name__)
@@ -287,8 +289,15 @@ class DocumentService:
             if not folder:
                 raise RuntimeError("Failed to create meeting-minutes folder")
 
+        # Look up organization timezone for local date formatting
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        tz_name = org.timezone if org else None
+
         # Generate HTML
-        html = self._generate_minutes_html(minutes)
+        html = self._generate_minutes_html(minutes, tz_name)
 
         # Check if already published (update instead of creating duplicate)
         if minutes.published_document_id:
@@ -326,13 +335,19 @@ class DocumentService:
         await self.db.refresh(doc)
         return doc
 
-    def _generate_minutes_html(self, minutes: MeetingMinutes) -> str:
+    def _to_local(self, dt: datetime, tz_name: Optional[str]) -> datetime:
+        """Convert a UTC datetime to the organization's local timezone."""
+        if not tz_name or not dt:
+            return dt
+        return dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
+
+    def _generate_minutes_html(self, minutes: MeetingMinutes, tz_name: Optional[str] = None) -> str:
         """Generate formatted HTML for published meeting minutes"""
         header = minutes.get_effective_header() or {}
         footer = minutes.get_effective_footer() or {}
 
         mt_display = minutes.meeting_type if isinstance(minutes.meeting_type, str) else minutes.meeting_type.value
-        meeting_date = minutes.meeting_date.strftime("%B %d, %Y at %I:%M %p") if minutes.meeting_date else ""
+        meeting_date = self._to_local(minutes.meeting_date, tz_name).strftime("%B %d, %Y at %I:%M %p") if minutes.meeting_date else ""
 
         parts = []
 
@@ -362,9 +377,9 @@ class DocumentService:
 
         # Called to order / adjourned
         if minutes.called_to_order_at:
-            parts.append(f'<p style="font-size:13px; color:#666;">Called to order: {minutes.called_to_order_at.strftime("%I:%M %p")}</p>')
+            parts.append(f'<p style="font-size:13px; color:#666;">Called to order: {self._to_local(minutes.called_to_order_at, tz_name).strftime("%I:%M %p")}</p>')
         if minutes.adjourned_at:
-            parts.append(f'<p style="font-size:13px; color:#666;">Adjourned: {minutes.adjourned_at.strftime("%I:%M %p")}</p>')
+            parts.append(f'<p style="font-size:13px; color:#666;">Adjourned: {self._to_local(minutes.adjourned_at, tz_name).strftime("%I:%M %p")}</p>')
         parts.append('</div>')
 
         # Attendees
@@ -430,7 +445,7 @@ class DocumentService:
             parts.append('<table style="width:100%; border-collapse:collapse; font-size:13px;">')
             parts.append('<tr style="background:#f3f4f6;"><th style="padding:6px; text-align:left; border:1px solid #ddd;">Description</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Assignee</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Due</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Priority</th></tr>')
             for item in minutes.action_items:
-                due = item.due_date.strftime("%Y-%m-%d") if item.due_date else "—"
+                due = self._to_local(item.due_date, tz_name).strftime("%Y-%m-%d") if item.due_date else "—"
                 priority = item.priority if isinstance(item.priority, str) else item.priority.value
                 parts.append(f'<tr><td style="padding:6px; border:1px solid #ddd;">{escape(item.description)}</td><td style="padding:6px; border:1px solid #ddd;">{escape(item.assignee_name or "—")}</td><td style="padding:6px; border:1px solid #ddd;">{escape(due)}</td><td style="padding:6px; border:1px solid #ddd;">{escape(priority)}</td></tr>')
             parts.append('</table>')
@@ -449,7 +464,7 @@ class DocumentService:
             parts.append('<p style="text-align:center;">' + ' &nbsp;|&nbsp; '.join(footer_parts) + '</p>')
 
         if minutes.approved_at:
-            parts.append(f'<p style="text-align:center;">Approved: {minutes.approved_at.strftime("%B %d, %Y")}</p>')
+            parts.append(f'<p style="text-align:center;">Approved: {self._to_local(minutes.approved_at, tz_name).strftime("%B %d, %Y")}</p>')
         parts.append('</div>')
 
         parts.append('</div>')

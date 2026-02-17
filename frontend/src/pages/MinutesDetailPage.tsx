@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatDateTime } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
   MeetingMinutes,
@@ -62,6 +64,7 @@ export const MinutesDetailPage: React.FC = () => {
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
+  const tz = useTimezone();
   const canManage = checkPermission('meetings.manage');
 
   const [minutes, setMinutes] = useState<MeetingMinutes | null>(null);
@@ -389,12 +392,6 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -429,7 +426,7 @@ export const MinutesDetailPage: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-white">{minutes.title}</h1>
             <p className="text-slate-400 mt-1">
-              {formatDate(minutes.meeting_date)}
+              {formatDateTime(minutes.meeting_date, tz)}
               {minutes.location && ` \u00b7 ${minutes.location}`}
               {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
             </p>
@@ -482,7 +479,7 @@ export const MinutesDetailPage: React.FC = () => {
                 {linkedEvent.title}
               </Link>
               <span className="text-xs text-slate-400">
-                {new Date(linkedEvent.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                {formatDate(linkedEvent.start_datetime, tz)}
               </span>
               {linkedEvent.location && (
                 <span className="text-xs text-slate-400">{linkedEvent.location}</span>
@@ -563,13 +560,13 @@ export const MinutesDetailPage: React.FC = () => {
           {minutes.called_to_order_at && (
             <div>
               <span className="text-slate-400">Called to Order:</span>
-              <div className="font-medium text-white">{formatDate(minutes.called_to_order_at)}</div>
+              <div className="font-medium text-white">{formatDateTime(minutes.called_to_order_at, tz)}</div>
             </div>
           )}
           {minutes.adjourned_at && (
             <div>
               <span className="text-slate-400">Adjourned:</span>
-              <div className="font-medium text-white">{formatDate(minutes.adjourned_at)}</div>
+              <div className="font-medium text-white">{formatDateTime(minutes.adjourned_at, tz)}</div>
             </div>
           )}
           {minutes.quorum_met !== null && minutes.quorum_met !== undefined && (
@@ -1016,7 +1013,7 @@ export const MinutesDetailPage: React.FC = () => {
                       {item.assignee_name && <span>Assigned to: {item.assignee_name}</span>}
                       {item.due_date && (
                         <span>
-                          Due: {new Date(item.due_date).toLocaleDateString()}
+                          Due: {formatDate(item.due_date, tz)}
                         </span>
                       )}
                     </div>
@@ -1084,7 +1081,7 @@ export const MinutesDetailPage: React.FC = () => {
                     >
                       <div className="text-sm font-medium text-white">{ev.title}</div>
                       <div className="text-xs text-slate-400 mt-1">
-                        {new Date(ev.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {formatDateTime(ev.start_datetime, tz)}
                         {ev.location && ` \u00b7 ${ev.location}`}
                       </div>
                     </button>

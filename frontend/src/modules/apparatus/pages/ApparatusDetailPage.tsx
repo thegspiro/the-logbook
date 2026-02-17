@@ -41,6 +41,8 @@ import {
   apparatusOperatorService,
   apparatusEquipmentService,
 } from '../services/api';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
 
 type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' | 'documents';
 
@@ -53,6 +55,8 @@ export const ApparatusDetailPage: React.FC = () => {
   const [operators, setOperators] = useState<ApparatusOperator[]>([]);
   const [equipment, setEquipment] = useState<ApparatusEquipment[]>([]);
   const [loadingTab, setLoadingTab] = useState(false);
+
+  const tz = useTimezone();
 
   const {
     currentApparatus,
@@ -123,11 +127,6 @@ export const ApparatusDetailPage: React.FC = () => {
 
   const getTypeById = (typeId: string) => types.find((t) => t.id === typeId);
   const getStatusById = (statusId: string) => statuses.find((s) => s.id === statusId);
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString();
-  };
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null) return '-';
@@ -378,7 +377,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <p className="text-slate-400 text-xs uppercase">Purchase Date</p>
-                    <p className="text-white">{formatDate(currentApparatus.purchaseDate)}</p>
+                    <p className="text-white">{formatDate(currentApparatus.purchaseDate, tz)}</p>
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs uppercase">Purchase Price</p>
@@ -390,7 +389,7 @@ export const ApparatusDetailPage: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs uppercase">In Service Date</p>
-                    <p className="text-white">{formatDate(currentApparatus.inServiceDate)}</p>
+                    <p className="text-white">{formatDate(currentApparatus.inServiceDate, tz)}</p>
                   </div>
                   {currentApparatus.isFinanced && (
                     <>
@@ -404,7 +403,7 @@ export const ApparatusDetailPage: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-slate-400 text-xs uppercase">Financing Ends</p>
-                        <p className="text-white">{formatDate(currentApparatus.financingEndDate)}</p>
+                        <p className="text-white">{formatDate(currentApparatus.financingEndDate, tz)}</p>
                       </div>
                     </>
                   )}
@@ -449,25 +448,25 @@ export const ApparatusDetailPage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-sm">Registration</span>
                     <span className="text-white text-sm">
-                      {formatDate(currentApparatus.registrationExpiration)}
+                      {formatDate(currentApparatus.registrationExpiration, tz)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-sm">Inspection</span>
                     <span className="text-white text-sm">
-                      {formatDate(currentApparatus.inspectionExpiration)}
+                      {formatDate(currentApparatus.inspectionExpiration, tz)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-sm">Insurance</span>
                     <span className="text-white text-sm">
-                      {formatDate(currentApparatus.insuranceExpiration)}
+                      {formatDate(currentApparatus.insuranceExpiration, tz)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-sm">Warranty</span>
                     <span className="text-white text-sm">
-                      {formatDate(currentApparatus.warrantyExpiration)}
+                      {formatDate(currentApparatus.warrantyExpiration, tz)}
                     </span>
                   </div>
                 </div>
@@ -532,8 +531,8 @@ export const ApparatusDetailPage: React.FC = () => {
                         </p>
                         <p className="text-slate-400 text-sm">
                           {record.isCompleted
-                            ? `Completed ${formatDate(record.completedDate)}`
-                            : `Due ${formatDate(record.dueDate)}`}
+                            ? `Completed ${formatDate(record.completedDate, tz)}`
+                            : `Due ${formatDate(record.dueDate, tz)}`}
                         </p>
                       </div>
                       <div className="text-right">
@@ -596,7 +595,7 @@ export const ApparatusDetailPage: React.FC = () => {
                   <tbody className="divide-y divide-white/10">
                     {fuelLogs.map((log) => (
                       <tr key={log.id}>
-                        <td className="px-4 py-3 text-white">{formatDate(log.fuelDate)}</td>
+                        <td className="px-4 py-3 text-white">{formatDate(log.fuelDate, tz)}</td>
                         <td className="px-4 py-3 text-slate-300 capitalize">{log.fuelType}</td>
                         <td className="px-4 py-3 text-right text-white">{log.gallons.toFixed(2)}</td>
                         <td className="px-4 py-3 text-right text-white">{formatCurrency(log.totalCost)}</td>
@@ -644,7 +643,7 @@ export const ApparatusDetailPage: React.FC = () => {
                       <p className="text-white font-medium">Operator ID: {op.userId}</p>
                       <p className="text-slate-400 text-sm">
                         {op.isCertified ? 'Certified' : 'Not Certified'}
-                        {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration)}`}
+                        {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, tz)}`}
                       </p>
                       {op.hasRestrictions && (
                         <p className="text-yellow-400 text-sm mt-1">Has Restrictions</p>

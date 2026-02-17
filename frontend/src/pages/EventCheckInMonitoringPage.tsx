@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 
 /**
  * Event Check-In Monitoring Dashboard
@@ -12,6 +14,7 @@ import { getErrorMessage } from '../utils/errorHandling';
  */
 const EventCheckInMonitoringPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
+  const tz = useTimezone();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,17 +47,6 @@ const EventCheckInMonitoringPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
   };
 
   const formatTimeAgo = (dateStr: string) => {
@@ -131,7 +123,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
           </div>
           <div className="text-right">
             <div className="text-sm text-slate-400">
-              Last updated: {lastUpdated.toLocaleTimeString()}
+              Last updated: {formatTime(lastUpdated, tz)}
             </div>
             <div className="mt-1">
               {stats.is_check_in_active ? (
@@ -203,15 +195,15 @@ const EventCheckInMonitoringPage: React.FC = () => {
             <span className="text-slate-300 font-medium">Event Time:</span>
             <br />
             <span className="text-white">
-              {formatDateTime(stats.start_datetime)} - {formatDateTime(stats.end_datetime)}
+              {formatShortDateTime(stats.start_datetime, tz)} - {formatShortDateTime(stats.end_datetime, tz)}
             </span>
           </div>
           <div>
             <span className="text-slate-300 font-medium">Check-In Window:</span>
             <br />
             <span className="text-white">
-              {formatDateTime(stats.check_in_window_start)} -{' '}
-              {formatDateTime(stats.check_in_window_end)}
+              {formatShortDateTime(stats.check_in_window_start, tz)} -{' '}
+              {formatShortDateTime(stats.check_in_window_end, tz)}
             </span>
           </div>
         </div>

@@ -15,7 +15,8 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
 import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
-import { formatDateTime, formatTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -43,6 +44,7 @@ export const EventDetailPage: React.FC = () => {
   const [actualEndTime, setActualEndTime] = useState('');
 
   const { checkPermission } = useAuthStore();
+  const tz = useTimezone();
   const canManage = checkPermission('events.manage');
 
   useEffect(() => {
@@ -212,8 +214,8 @@ export const EventDetailPage: React.FC = () => {
   const openRecordTimesModal = () => {
     if (event) {
       // Pre-fill with existing actual times if they exist
-      setActualStartTime(event.actual_start_time ? formatForDateTimeInput(event.actual_start_time) : '');
-      setActualEndTime(event.actual_end_time ? formatForDateTimeInput(event.actual_end_time) : '');
+      setActualStartTime(event.actual_start_time ? formatForDateTimeInput(event.actual_start_time, tz) : '');
+      setActualEndTime(event.actual_end_time ? formatForDateTimeInput(event.actual_end_time, tz) : '');
     }
     setShowRecordTimesModal(true);
     setSubmitError(null);
@@ -421,10 +423,10 @@ export const EventDetailPage: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-200">Date & Time</p>
                   <p className="text-sm text-slate-300">
-                    {formatDateTime(event.start_datetime)}
+                    {formatDateTime(event.start_datetime, tz)}
                   </p>
                   <p className="text-sm text-slate-300">
-                    to {formatTime(event.end_datetime)}
+                    to {formatTime(event.end_datetime, tz)}
                   </p>
                 </div>
               </div>
@@ -655,12 +657,7 @@ export const EventDetailPage: React.FC = () => {
                     <div>
                       <p className="text-sm text-slate-300">RSVP Deadline</p>
                       <p className="text-sm font-medium text-white">
-                        {new Date(event.rsvp_deadline).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
+                        {formatShortDateTime(event.rsvp_deadline, tz)}
                       </p>
                     </div>
                   )}
@@ -971,10 +968,7 @@ export const EventDetailPage: React.FC = () => {
                                   <span className="text-xs text-green-600">
                                     ✓ Checked in at{' '}
                                     {rsvp.checked_in_at &&
-                                      new Date(rsvp.checked_in_at).toLocaleTimeString('en-US', {
-                                        hour: 'numeric',
-                                        minute: '2-digit',
-                                      })}
+                                      formatTime(rsvp.checked_in_at, tz)}
                                   </span>
                                 )}
                               </div>
@@ -1072,13 +1066,7 @@ export const EventDetailPage: React.FC = () => {
                       />
                       {event?.actual_start_time && (
                         <p className="mt-1 text-xs text-slate-400">
-                          Currently: {new Date(event.actual_start_time).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                          Currently: {formatShortDateTime(event.actual_start_time, tz)}
                         </p>
                       )}
                     </div>
@@ -1096,13 +1084,7 @@ export const EventDetailPage: React.FC = () => {
                       />
                       {event?.actual_end_time && (
                         <p className="mt-1 text-xs text-slate-400">
-                          Currently: {new Date(event.actual_end_time).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                          Currently: {formatShortDateTime(event.actual_end_time, tz)}
                         </p>
                       )}
                     </div>

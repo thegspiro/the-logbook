@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { trainingService } from '../services/api';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import { getExpirationStatus } from '../utils/eventHelpers';
 import type {
   TrainingCourse,
@@ -20,6 +21,7 @@ import type {
 
 export default function TrainingDashboardPage() {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [expiringCerts, setExpiringCerts] = useState<TrainingRecord[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
@@ -261,7 +263,7 @@ export default function TrainingDashboardPage() {
                           )}
                           {req.due_date && (
                             <div className="text-sm text-slate-300">
-                              <span className="font-medium">Due Date:</span> {formatDate(req.due_date)}
+                              <span className="font-medium">Due Date:</span> {formatDate(req.due_date, tz)}
                             </div>
                           )}
                         </div>
@@ -352,7 +354,7 @@ export default function TrainingDashboardPage() {
                             {cert.certification_number || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
-                            {formatDate(cert.expiration_date)}
+                            {formatDate(cert.expiration_date, tz)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {expStatus && (

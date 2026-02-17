@@ -21,6 +21,8 @@ import toast from 'react-hot-toast';
 import type { Applicant, TargetMembershipType } from '../types';
 import { applicantService } from '../services/api';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDate } from '../../../utils/dateFormatting';
 
 interface ConversionModalProps {
   isOpen: boolean;
@@ -33,6 +35,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   onClose,
   applicant,
 }) => {
+  const tz = useTimezone();
   const { fetchApplicants } = useProspectiveMembersStore();
   const [membershipType, setMembershipType] = useState<TargetMembershipType>(
     applicant?.target_membership_type ?? 'probationary'
@@ -79,14 +82,6 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
     } finally {
       setIsConverting(false);
     }
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
   };
 
   return (
@@ -163,7 +158,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-slate-500" aria-hidden="true" />
                   <span className="text-slate-300">
-                    Applied {formatDate(applicant.created_at)}
+                    Applied {formatDate(applicant.created_at, tz)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">

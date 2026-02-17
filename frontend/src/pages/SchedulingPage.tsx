@@ -13,6 +13,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatTime } from '../utils/dateFormatting';
 import { schedulingService } from '../services/api';
 import type { ShiftRecord, SchedulingSummary } from '../services/api';
 
@@ -49,13 +51,9 @@ const getShiftTemplateColor = (shift: ShiftRecord): string => {
   return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
 };
 
-const formatTime = (isoString: string): string => {
-  const date = new Date(isoString);
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-};
-
 const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
+  const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
 
   const [viewMode, setViewMode] = useState<ViewMode>('week');
@@ -99,8 +97,8 @@ const SchedulingPage: React.FC = () => {
   const formatDateRange = () => {
     const start = weekDates[0];
     const end = weekDates[6];
-    const startMonth = start.toLocaleString('en-US', { month: 'short' });
-    const endMonth = end.toLocaleString('en-US', { month: 'short' });
+    const startMonth = start.toLocaleString('en-US', { month: 'short', timeZone: tz });
+    const endMonth = end.toLocaleString('en-US', { month: 'short', timeZone: tz });
     if (startMonth === endMonth) {
       return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
     }
@@ -385,8 +383,8 @@ const SchedulingPage: React.FC = () => {
                         className={`mb-2 p-2 rounded-lg border text-xs ${getShiftTemplateColor(shift)}`}
                       >
                         <p className="font-medium truncate">
-                          {formatTime(shift.start_time)}
-                          {shift.end_time ? ` - ${formatTime(shift.end_time)}` : ''}
+                          {formatTime(shift.start_time, tz)}
+                          {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
                         </p>
                         {shift.notes && (
                           <p className="mt-1 opacity-80 truncate">{shift.notes}</p>

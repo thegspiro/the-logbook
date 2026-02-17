@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { healthCheckService, type SystemHealth } from '../services/healthCheck';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatTime } from '../utils/dateFormatting';
 
 interface HealthStatusProps {
   eventId?: string;
@@ -13,6 +15,7 @@ interface HealthStatusProps {
  * Can be embedded in pages or shown as a full dashboard.
  */
 const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false }) => {
+  const tz = useTimezone();
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -117,7 +120,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
       {/* Last Updated */}
       <div className="mt-4 pt-4 border-t border-gray-200">
         <p className="text-xs text-gray-500">
-          Last checked: {health.lastUpdated.toLocaleTimeString()}
+          Last checked: {formatTime(health.lastUpdated, tz)}
         </p>
       </div>
     </div>

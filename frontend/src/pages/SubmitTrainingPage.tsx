@@ -15,6 +15,8 @@ import {
   Info,
 } from 'lucide-react';
 import { trainingSubmissionService, trainingService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { getTodayLocalDate } from '../utils/dateFormatting';
 import type {
   TrainingSubmission,
   TrainingSubmissionCreate,
@@ -63,6 +65,7 @@ const SubmissionForm: React.FC<{
   editSubmission?: TrainingSubmission | null;
   onCancelEdit?: () => void;
 }> = ({ config, categories, onSuccess, editSubmission, onCancelEdit }) => {
+  const tz = useTimezone();
   const isEdit = !!editSubmission;
   const [formData, setFormData] = useState<TrainingSubmissionCreate>({
     course_name: '',
@@ -205,7 +208,7 @@ const SubmissionForm: React.FC<{
               onChange={(e) => setFormData({ ...formData, completion_date: e.target.value })}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               required={isFieldRequired('completion_date')}
-              max={new Date().toISOString().split('T')[0]}
+              max={getTodayLocalDate(tz)}
             />
           </div>
         )}

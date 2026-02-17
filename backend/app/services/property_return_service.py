@@ -14,6 +14,7 @@ The report:
 import logging
 from datetime import date, datetime
 from html import escape
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional, List, Tuple
 from uuid import UUID
 
@@ -73,6 +74,7 @@ class PropertyReturnService:
         )
         org = org_result.scalar_one_or_none()
         org_name = org.name if org else "Department"
+        org_tz = ZoneInfo(org.timezone) if org and org.timezone else ZoneInfo("America/New_York")
 
         # Load the officer who performed the action
         officer_result = await self.db.execute(
@@ -119,7 +121,7 @@ class PropertyReturnService:
                 "condition": item.condition.value if item.condition else "unknown",
                 "value": value,
                 "type": "assigned",
-                "assigned_date": a.assigned_date.strftime("%m/%d/%Y") if a.assigned_date else "-",
+                "assigned_date": a.assigned_date.astimezone(org_tz).strftime("%m/%d/%Y") if a.assigned_date else "-",
             })
 
         for c in checkouts:
@@ -133,7 +135,7 @@ class PropertyReturnService:
                 "condition": item.checkout_condition.value if c.checkout_condition else (item.condition.value if item.condition else "unknown"),
                 "value": value,
                 "type": "checked_out",
-                "assigned_date": c.checked_out_at.strftime("%m/%d/%Y") if c.checked_out_at else "-",
+                "assigned_date": c.checked_out_at.astimezone(org_tz).strftime("%m/%d/%Y") if c.checked_out_at else "-",
             })
 
         today = date.today()

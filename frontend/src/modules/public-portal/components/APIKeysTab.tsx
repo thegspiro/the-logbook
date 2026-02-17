@@ -8,6 +8,8 @@
 import React, { useState } from 'react';
 import { useAPIKeys } from '../hooks/usePublicPortal';
 import type { CreateAPIKeyRequest, PublicPortalAPIKey } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDateTime } from '../../../utils/dateFormatting';
 
 interface CreateKeyModalProps {
   isOpen: boolean;
@@ -306,6 +308,7 @@ const RevokeConfirmModal: React.FC<RevokeConfirmModalProps> = ({
 };
 
 export const APIKeysTab: React.FC = () => {
+  const tz = useTimezone();
   const { apiKeys, loading, error, createKey, revokeKey } = useAPIKeys(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
@@ -320,11 +323,6 @@ export const APIKeysTab: React.FC = () => {
     if (!revokeTarget) return;
     await revokeKey(revokeTarget.id);
     setRevokeTarget(null);
-  };
-
-  const formatDate = (isoString: string | null) => {
-    if (!isoString) return 'Never';
-    return new Date(isoString).toLocaleString();
   };
 
   const getStatusBadge = (key: PublicPortalAPIKey) => {
@@ -438,10 +436,10 @@ export const APIKeysTab: React.FC = () => {
                     {key.rate_limit || key.effective_rate_limit}/hour
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(key.last_used_at)}
+                    {formatDateTime(key.last_used_at, tz)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(key.created_at)}
+                    {formatDateTime(key.created_at, tz)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {key.is_active && (

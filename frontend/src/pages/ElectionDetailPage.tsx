@@ -16,6 +16,8 @@ import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -65,6 +67,7 @@ export const ElectionDetailPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
+  const tz = useTimezone();
 
   useEffect(() => {
     if (electionId) {
@@ -154,28 +157,18 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // Format a Date as a local datetime-local string (YYYY-MM-DDTHH:MM)
-  const formatLocalDateTime = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
-
   const extendByHours = (hours: number) => {
     if (!election) return;
     const currentEnd = new Date(election.end_date);
     const newEnd = new Date(currentEnd.getTime() + hours * 60 * 60 * 1000);
-    setNewEndDate(formatLocalDateTime(newEnd));
+    setNewEndDate(formatForDateTimeInput(newEnd, tz));
   };
 
   const extendToEndOfDay = () => {
     if (!election) return;
     const currentEnd = new Date(election.end_date);
     currentEnd.setHours(23, 59, 0, 0);
-    setNewEndDate(formatLocalDateTime(currentEnd));
+    setNewEndDate(formatForDateTimeInput(currentEnd, tz));
   };
 
   const handleRollbackElection = async () => {
@@ -338,16 +331,6 @@ export const ElectionDetailPage: React.FC = () => {
     return previewCandidates.filter((c) => c.position === position && !c.is_write_in);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'open':
@@ -439,13 +422,13 @@ export const ElectionDetailPage: React.FC = () => {
           <div>
             <div className="text-sm text-slate-400">Start Date</div>
             <div className="mt-1 text-sm font-medium text-white">
-              {formatDate(election.start_date)}
+              {formatDateTime(election.start_date, tz)}
             </div>
           </div>
           <div>
             <div className="text-sm text-slate-400">End Date</div>
             <div className="mt-1 text-sm font-medium text-white">
-              {formatDate(election.end_date)}
+              {formatDateTime(election.end_date, tz)}
             </div>
           </div>
           {election.positions && election.positions.length > 0 && (
@@ -575,7 +558,7 @@ export const ElectionDetailPage: React.FC = () => {
                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                   </svg>
-                  Emails sent on {election.email_sent_at ? formatDate(election.email_sent_at) : 'N/A'}
+                  Emails sent on {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
                 </div>
               )}
             </div>
@@ -830,7 +813,7 @@ export const ElectionDetailPage: React.FC = () => {
                                 <td className="px-3 py-2 font-mono text-xs">{v.vote_id.slice(0, 8)}...</td>
                                 <td className="px-3 py-2">{v.position || '—'}</td>
                                 <td className="px-3 py-2">{v.deletion_reason || '—'}</td>
-                                <td className="px-3 py-2">{v.deleted_at ? formatDate(v.deleted_at) : '—'}</td>
+                                <td className="px-3 py-2">{v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -926,7 +909,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {forensicsReport.audit_log.entries.slice(0, 50).map((entry, i) => (
                               <tr key={entry.id || i}>
                                 <td className="px-3 py-2 text-xs text-slate-400 whitespace-nowrap">
-                                  {entry.timestamp ? formatDate(entry.timestamp) : '—'}
+                                  {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                                 </td>
                                 <td className="px-3 py-2 text-xs">{entry.event_type}</td>
                                 <td className="px-3 py-2">
@@ -986,7 +969,7 @@ export const ElectionDetailPage: React.FC = () => {
               {election.email_sent && (
                 <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
                   <p className="text-sm text-yellow-300">
-                    Ballot emails were previously sent{election.email_sent_at ? ` on ${formatDate(election.email_sent_at)}` : ''}.
+                    Ballot emails were previously sent{election.email_sent_at ? ` on ${formatDateTime(election.email_sent_at, tz)}` : ''}.
                     Sending again will generate new voting tokens for all eligible voters.
                   </p>
                 </div>
@@ -1215,7 +1198,7 @@ export const ElectionDetailPage: React.FC = () => {
                     Current End Time
                   </label>
                   <div className="mt-1 text-sm text-white">
-                    {formatDate(election.end_date)}
+                    {formatDateTime(election.end_date, tz)}
                   </div>
                 </div>
 

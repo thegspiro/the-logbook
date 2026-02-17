@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
 import { reportsService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { toLocalDateString } from '../utils/dateFormatting';
 
 interface ReportCard {
   id: string;
@@ -42,7 +44,7 @@ const REPORT_TYPE_MAP: Record<string, string> = {
 
 type DatePreset = 'this-year' | 'last-year' | 'last-90' | 'custom';
 
-const getPresetDates = (preset: DatePreset): { start: string; end: string } => {
+const getPresetDates = (preset: DatePreset, tz?: string): { start: string; end: string } => {
   const now = new Date();
   switch (preset) {
     case 'this-year':
@@ -52,7 +54,7 @@ const getPresetDates = (preset: DatePreset): { start: string; end: string } => {
     case 'last-90': {
       const ago = new Date(now);
       ago.setDate(ago.getDate() - 90);
-      return { start: ago.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) };
+      return { start: toLocalDateString(ago, tz), end: toLocalDateString(now, tz) };
     }
     default:
       return { start: '', end: '' };
@@ -60,19 +62,20 @@ const getPresetDates = (preset: DatePreset): { start: string; end: string } => {
 };
 
 export const ReportsPage: React.FC = () => {
+  const tz = useTimezone();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);
   const [activeReport, setActiveReport] = useState<ReportCard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<DatePreset>('this-year');
-  const [startDate, setStartDate] = useState<string>(() => getPresetDates('this-year').start);
-  const [endDate, setEndDate] = useState<string>(() => getPresetDates('this-year').end);
+  const [startDate, setStartDate] = useState<string>(() => getPresetDates('this-year', tz).start);
+  const [endDate, setEndDate] = useState<string>(() => getPresetDates('this-year', tz).end);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
     if (preset !== 'custom') {
-      const { start, end } = getPresetDates(preset);
+      const { start, end } = getPresetDates(preset, tz);
       setStartDate(start);
       setEndDate(end);
     }

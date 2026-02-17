@@ -8,6 +8,8 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDateTime } from '../utils/dateFormatting';
 import {
   Link2,
   Plus,
@@ -384,6 +386,8 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   isTestingConnection,
   isSyncing,
 }) => {
+  const tz = useTimezone();
+
   const getStatusIcon = () => {
     if (provider.connection_verified) {
       return <CheckCircle className="w-5 h-5 text-green-500" aria-hidden="true" />;
@@ -433,7 +437,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
           <p className="text-xs text-gray-400">Last Sync</p>
           <p className="text-sm text-white">
             {provider.last_sync_at
-              ? new Date(provider.last_sync_at).toLocaleString()
+              ? formatDateTime(provider.last_sync_at, tz)
               : 'Never'}
           </p>
         </div>

@@ -22,6 +22,8 @@ import {
   Info,
 } from 'lucide-react';
 import { trainingSubmissionService } from '../services/api';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 import type {
   TrainingSubmission,
   SelfReportConfig,
@@ -206,6 +208,7 @@ const SubmissionCard: React.FC<{
   onReview: (id: string, review: SubmissionReviewRequest) => Promise<void>;
 }> = ({ submission, onReview }) => {
   const [expanded, setExpanded] = useState(false);
+  const tz = useTimezone();
   const isPending = submission.status === 'pending_review';
 
   return (
@@ -293,7 +296,7 @@ const SubmissionCard: React.FC<{
               )}
               <div>
                 <span className="text-gray-500">Submitted: </span>
-                <span className="text-gray-300">{new Date(submission.submitted_at).toLocaleDateString()}</span>
+                <span className="text-gray-300">{formatDate(submission.submitted_at, tz)}</span>
               </div>
             </div>
             {submission.description && (

@@ -12,6 +12,8 @@ import {
 import toast from 'react-hot-toast';
 import type { TrainingSessionCreate, TrainingType, TrainingCourse } from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
 
 /**
  * Create Training Session Page
@@ -23,6 +25,7 @@ import { getErrorMessage } from '../utils/errorHandling';
  */
 const CreateTrainingSessionPage: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [availableCourses] = useState<TrainingCourse[]>([]);
@@ -209,7 +212,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
-                    value={formData.start_datetime}
+                    value={formatForDateTimeInput(formData.start_datetime, tz)}
                     onChange={(e) => updateField('start_datetime', e.target.value)}
                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
@@ -220,7 +223,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </label>
                   <input
                     type="datetime-local"
-                    value={formData.end_datetime}
+                    value={formatForDateTimeInput(formData.end_datetime, tz)}
                     onChange={(e) => updateField('end_datetime', e.target.value)}
                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
@@ -291,7 +294,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </label>
                     <input
                       type="datetime-local"
-                      value={formData.rsvp_deadline}
+                      value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
                       onChange={(e) => updateField('rsvp_deadline', e.target.value)}
                       className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
@@ -572,8 +575,8 @@ const CreateTrainingSessionPage: React.FC = () => {
               <div className="bg-slate-800/50 rounded-lg p-6 space-y-4">
                 <ReviewSection title="Event Details">
                   <ReviewItem label="Title" value={formData.title} />
-                  <ReviewItem label="Start" value={new Date(formData.start_datetime).toLocaleString()} />
-                  <ReviewItem label="End" value={new Date(formData.end_datetime).toLocaleString()} />
+                  <ReviewItem label="Start" value={formatDateTime(formData.start_datetime, tz)} />
+                  <ReviewItem label="End" value={formatDateTime(formData.end_datetime, tz)} />
                   {formData.location && <ReviewItem label="Location" value={formData.location} />}
                   <ReviewItem label="RSVP Required" value={formData.requires_rsvp ? 'Yes' : 'No'} />
                   <ReviewItem label="Mandatory" value={formData.is_mandatory ? 'Yes' : 'No'} />

@@ -19,6 +19,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { userService, organizationService, trainingService, inventoryService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate } from '../utils/dateFormatting';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences } from '../types/user';
 import type { TrainingRecord } from '../types/training';
@@ -44,6 +46,7 @@ export const MemberProfilePage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const { user: currentUser, checkPermission } = useAuthStore();
+  const tz = useTimezone();
 
   const [user, setUser] = useState<UserWithRoles | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,15 +150,6 @@ export const MemberProfilePage: React.FC = () => {
     } finally {
       setInventoryLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
   };
 
   const getTrainingStatusColor = (status: string) => {
@@ -387,11 +381,11 @@ export const MemberProfilePage: React.FC = () => {
                           )}
                           <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-300">
                             {training.completion_date && (
-                              <span>Completed: {formatDate(training.completion_date)}</span>
+                              <span>Completed: {formatDate(training.completion_date, tz)}</span>
                             )}
                             {training.expiration_date && (
                               <span className={isExpired(training) ? 'text-red-400' : isExpiringSoon(training) ? 'text-yellow-400' : ''}>
-                                Expires: {formatDate(training.expiration_date)}
+                                Expires: {formatDate(training.expiration_date, tz)}
                               </span>
                             )}
                             {training.hours_completed > 0 && (
@@ -484,7 +478,7 @@ export const MemberProfilePage: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-300">
-                          {formatDate(item.assigned_date)}
+                          {formatDate(item.assigned_date, tz)}
                         </td>
                       </tr>
                     ))}
@@ -641,7 +635,7 @@ export const MemberProfilePage: React.FC = () => {
               {user.hire_date && (
                 <div>
                   <p className="text-xs text-slate-400 uppercase font-medium">Hire Date</p>
-                  <p className="text-sm text-white mt-1">{formatDate(user.hire_date)}</p>
+                  <p className="text-sm text-white mt-1">{formatDate(user.hire_date, tz)}</p>
                 </div>
               )}
             </div>

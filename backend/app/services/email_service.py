@@ -11,7 +11,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from loguru import logger
 
 from app.core.config import settings
@@ -30,6 +31,15 @@ class EmailService:
         """
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
+
+    def _format_local_dt(self, dt: datetime, fmt: str = '%B %d, %Y at %I:%M %p') -> str:
+        """Format a datetime in the organization's local timezone."""
+        tz_name = getattr(self.organization, 'timezone', None) if self.organization else None
+        if tz_name:
+            local_dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
+        else:
+            local_dt = dt
+        return local_dt.strftime(fmt)
 
     def _get_smtp_config(self) -> Dict[str, any]:
         """
@@ -213,7 +223,7 @@ class EmailService:
 
             <p>A ballot is now available for your review and vote.</p>
 
-            {'<p><strong>Meeting Date:</strong> ' + meeting_date.strftime('%B %d, %Y at %I:%M %p') + '</p>' if meeting_date else ''}
+            {'<p><strong>Meeting Date:</strong> ' + self._format_local_dt(meeting_date) + '</p>' if meeting_date else ''}
 
             {f'<p>{custom_message}</p>' if custom_message else ''}
 
@@ -241,7 +251,7 @@ Hello {recipient_name},
 
 A ballot is now available for your review and vote.
 
-{"Meeting Date: " + meeting_date.strftime('%B %d, %Y at %I:%M %p') if meeting_date else ''}
+{"Meeting Date: " + self._format_local_dt(meeting_date) if meeting_date else ''}
 
 {custom_message if custom_message else ''}
 
@@ -333,7 +343,7 @@ Please do not reply to this email.
                 </div>
                 <div class="details-row">
                     <span class="details-label">Date:</span>
-                    <span>{event_date.strftime('%B %d, %Y at %I:%M %p')}</span>
+                    <span>{self._format_local_dt(event_date)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Attendees:</span>
@@ -342,7 +352,7 @@ Please do not reply to this email.
                 {f'<div class="details-row"><span class="details-label">Submitted By:</span><span>{submitter_name}</span></div>' if submitter_name else ''}
                 <div class="details-row">
                     <span class="details-label">Deadline:</span>
-                    <span class="warning">{approval_deadline.strftime('%B %d, %Y at %I:%M %p')}</span>
+                    <span class="warning">{self._format_local_dt(approval_deadline)}</span>
                 </div>
             </div>
 
@@ -370,10 +380,10 @@ A training session has been submitted for approval and requires your review.
 
 Course Name: {course_name}
 Event: {event_title}
-Date: {event_date.strftime('%B %d, %Y at %I:%M %p')}
+Date: {self._format_local_dt(event_date)}
 Attendees: {attendee_count} member(s)
 {f"Submitted By: {submitter_name}" if submitter_name else ""}
-Approval Deadline: {approval_deadline.strftime('%B %d, %Y at %I:%M %p')}
+Approval Deadline: {self._format_local_dt(approval_deadline)}
 
 Please review the attendee hours and approve or make adjustments as needed.
 
@@ -601,7 +611,7 @@ Please do not reply to this email.
         Returns:
             Tuple of (success_count, failure_count)
         """
-        timestamp = datetime.utcnow().strftime("%B %d, %Y at %I:%M %p UTC")
+        timestamp = self._format_local_dt(datetime.utcnow())
         ip_display = ip_address or "Unknown"
 
         subject = f"[IT Notice] Password Reset Requested — {organization_name}"

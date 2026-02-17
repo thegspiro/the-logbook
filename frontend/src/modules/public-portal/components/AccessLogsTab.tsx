@@ -8,8 +8,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAccessLogs } from '../hooks/usePublicPortal';
 import type { AccessLogFilters } from '../types';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDateTime } from '../../../utils/dateFormatting';
 
 export const AccessLogsTab: React.FC = () => {
+  const tz = useTimezone();
   const [filters, setFilters] = useState<AccessLogFilters>({
     limit: 50,
     offset: 0,
@@ -22,10 +25,6 @@ export const AccessLogsTab: React.FC = () => {
   useEffect(() => {
     refetch();
   }, [filters, refetch]);
-
-  const formatDate = (isoString: string) => {
-    return new Date(isoString).toLocaleString();
-  };
 
   const getStatusColor = (statusCode: number) => {
     if (statusCode >= 200 && statusCode < 300) return 'text-green-600';
@@ -251,7 +250,7 @@ export const AccessLogsTab: React.FC = () => {
                       className={`hover:bg-gray-50 ${log.flagged_suspicious ? 'bg-red-50' : ''}`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(log.timestamp)}
+                        {formatDateTime(log.timestamp, tz)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-semibold rounded ${getMethodColor(log.method)}`}>

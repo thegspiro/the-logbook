@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDateTime, formatTime } from '../utils/dateFormatting';
 
 /**
  * Error Monitoring Dashboard
@@ -10,6 +12,7 @@ import { errorTracker, type ErrorLog } from '../services/errorTracking';
  * Data is fetched from the backend API.
  */
 const ErrorMonitoringPage: React.FC = () => {
+  const tz = useTimezone();
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const [stats, setStats] = useState<{ total: number; byType: Record<string, number>; recentErrors: ErrorLog[] } | null>(null);
@@ -171,7 +174,7 @@ const ErrorMonitoringPage: React.FC = () => {
                 {errors.map((error) => (
                   <tr key={error.id} className="hover:bg-white/5">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                      {new Date(error.timestamp).toLocaleString()}
+                      {formatDateTime(error.timestamp, tz)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
@@ -219,7 +222,7 @@ const ErrorMonitoringPage: React.FC = () => {
                     <p className="text-sm text-red-300 mt-1">{error.userMessage}</p>
                   </div>
                   <span className="text-xs text-red-600">
-                    {new Date(error.timestamp).toLocaleTimeString()}
+                    {formatTime(error.timestamp, tz)}
                   </span>
                 </div>
               </div>

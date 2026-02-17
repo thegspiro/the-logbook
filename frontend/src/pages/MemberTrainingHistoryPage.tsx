@@ -11,6 +11,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { trainingService, userService } from '../services/api';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
 
@@ -21,6 +23,7 @@ type SortOrder = 'asc' | 'desc';
 export const MemberTrainingHistoryPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const tz = useTimezone();
 
   const [user, setUser] = useState<UserWithRoles | null>(null);
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
@@ -56,15 +59,6 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
   };
 
   const isExpired = (record: TrainingRecord): boolean => {
@@ -334,7 +328,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                         {training.training_type?.replace('_', ' ') || '-'}
                       </td>
                       <td className="px-6 py-4 text-slate-300 text-sm">
-                        {formatDate(training.completion_date || training.scheduled_date)}
+                        {formatDate(training.completion_date || training.scheduled_date, tz)}
                       </td>
                       <td className="px-6 py-4 text-slate-300 text-sm">
                         {training.hours_completed || 0}
@@ -349,7 +343,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                               : 'text-slate-300'
                           }
                         >
-                          {formatDate(training.expiration_date)}
+                          {formatDate(training.expiration_date, tz)}
                         </span>
                       </td>
                       <td className="px-6 py-4">

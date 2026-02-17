@@ -21,6 +21,8 @@ import {
   notificationsService,
 } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { NotificationLogRecord, ShiftRecord } from '../services/api';
 
@@ -32,6 +34,7 @@ import type { NotificationLogRecord, ShiftRecord } from '../services/api';
  */
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
   const [departmentName, setDepartmentName] = useState('Fire Department');
 
   // Notifications
@@ -87,8 +90,8 @@ const Dashboard: React.FC = () => {
 
   const loadUpcomingShifts = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const today = getTodayLocalDate(tz);
+      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
       const data = await schedulingService.getMyShifts({ start_date: today, end_date: nextMonth, limit: 5 });
       setUpcomingShifts(data.shifts || []);
     } catch {
@@ -152,16 +155,12 @@ const Dashboard: React.FC = () => {
 
   const formatShiftDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
   };
 
-  const formatTime = (timeStr?: string) => {
+  const formatShiftTime = (dateStr: string, timeStr?: string) => {
     if (!timeStr) return '';
-    const [h, m] = timeStr.split(':');
-    const hour = parseInt(h, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${m} ${ampm}`;
+    return formatTime(dateStr + 'T' + timeStr, tz);
   };
 
   const totalHours = hours.training + hours.standby + hours.administrative;
@@ -175,7 +174,7 @@ const Dashboard: React.FC = () => {
             Welcome to {departmentName}
           </h2>
           <p className="text-slate-300">
-            {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}
           </p>
         </div>
 
@@ -290,7 +289,7 @@ const Dashboard: React.FC = () => {
                         <p className="text-xs text-slate-400 mt-0.5 truncate">{notification.message || ''}</p>
                       </div>
                       <span className="text-xs text-slate-500 ml-2 whitespace-nowrap">
-                        {new Date(notification.sent_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {formatDate(notification.sent_at, tz)}
                       </span>
                     </div>
                   </button>
@@ -341,7 +340,7 @@ const Dashboard: React.FC = () => {
                           {formatShiftDate(shift.shift_date)}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
+                          {formatShiftTime(shift.shift_date, shift.start_time)} - {formatShiftTime(shift.shift_date, shift.end_time)}
                         </p>
                       </div>
                     </div>

@@ -10,6 +10,8 @@ import { eventService } from '../services/api';
 import type { EventListItem, EventType } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatShortDateTime } from '../utils/dateFormatting';
 
 export const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<EventListItem[]>([]);
@@ -20,6 +22,7 @@ export const EventsPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
+  const tz = useTimezone();
 
   useEffect(() => {
     fetchEvents();
@@ -180,13 +183,7 @@ export const EventsPage: React.FC = () => {
                     <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {new Date(event.start_datetime).toLocaleString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
+                    {formatShortDateTime(event.start_datetime, tz)}
                   </div>
 
                   {(event.location_name || event.location) && (
