@@ -187,7 +187,7 @@ const ModuleConfigTemplate: React.FC = () => {
                   className={`p-4 rounded-lg border-2 text-left transition-all ${
                     isSelected
                       ? 'border-orange-500 bg-orange-500/10'
-                      : 'border-slate-600 bg-slate-800/50 hover:border-slate-500'
+                      : 'border-slate-600 bg-theme-surface-secondary hover:border-slate-500'
                   } ${isAdmin ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -207,7 +207,7 @@ const ModuleConfigTemplate: React.FC = () => {
             })}
           </div>
 
-          <div className="mt-4 p-3 bg-slate-800/50 rounded-lg">
+          <div className="mt-4 p-3 bg-theme-surface-secondary rounded-lg">
             <p className="text-theme-text-muted text-sm">
               <strong className="text-theme-text-primary">Selected roles:</strong>{' '}
               {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).filter(Boolean).join(', ')}

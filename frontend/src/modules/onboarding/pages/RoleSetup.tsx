@@ -842,7 +842,7 @@ const RoleSetup: React.FC = () => {
                                 return (
                                   <div
                                     key={catId}
-                                    className="flex items-center justify-between py-2 px-3 bg-slate-800/50 rounded"
+                                    className="flex items-center justify-between py-2 px-3 bg-theme-surface-secondary rounded"
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
