@@ -101,16 +101,16 @@ const Welcome: React.FC = () => {
 
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
               HIPAA Compliant
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
               Section 508 Accessible
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
               Zero Plain Text Passwords
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-secondary border border-theme-surface-border">
               Tamper-Proof Audit Logs
             </span>
           </div>

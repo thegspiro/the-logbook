@@ -83,7 +83,7 @@ const ModuleConfigTemplate: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={handleSkip}
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="flex items-center text-slate-400 hover:text-white transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Modules
@@ -99,10 +99,10 @@ const ModuleConfigTemplate: React.FC = () => {
         {/* Two-Tier Permission Model Explanation */}
         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
           <div className="flex items-start">
-            <Info className="w-5 h-5 text-blue-700 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+            <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
             <div>
-              <p className="text-blue-700 dark:text-blue-400 font-semibold mb-1">How Permissions Work</p>
-              <p className="text-theme-text-secondary text-sm">
+              <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
+              <p className="text-slate-300 text-sm">
                 <strong>View Access</strong> allows members to see and use basic features.{' '}
                 <strong>Manage Access</strong> allows creating, editing, and administrative actions.
                 All members can view by default; you choose who can manage.
@@ -120,16 +120,16 @@ const ModuleConfigTemplate: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-theme-text-primary font-bold text-lg">View Access</h2>
-                <p className="text-green-700 dark:text-green-400 text-sm">All Members</p>
+                <p className="text-green-400 text-sm">All Members</p>
               </div>
             </div>
             <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.viewDescription}</p>
-            <div className="bg-theme-input-bg rounded-lg p-4">
+            <div className="bg-theme-surface-secondary rounded-lg p-4">
               <p className="text-theme-text-muted text-xs font-semibold mb-2 uppercase">What members can do:</p>
               <ul className="space-y-2">
                 {config?.permissions.view.map((perm, idx) => (
                   <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-green-400 mr-2 flex-shrink-0" />
                     {perm}
                   </li>
                 ))}
@@ -149,16 +149,16 @@ const ModuleConfigTemplate: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-theme-text-primary font-bold text-lg">Manage Access</h2>
-                <p className="text-orange-700 dark:text-orange-400 text-sm">Selected Roles Only</p>
+                <p className="text-orange-400 text-sm">Selected Roles Only</p>
               </div>
             </div>
             <p className="text-theme-text-secondary text-sm mb-4">{config?.permissions.manageDescription}</p>
-            <div className="bg-theme-input-bg rounded-lg p-4">
+            <div className="bg-theme-surface-secondary rounded-lg p-4">
               <p className="text-theme-text-muted text-xs font-semibold mb-2 uppercase">What managers can do:</p>
               <ul className="space-y-2">
                 {config?.permissions.manage.map((perm, idx) => (
                   <li key={idx} className="flex items-center text-theme-text-secondary text-sm">
-                    <Shield className="w-4 h-4 text-orange-700 dark:text-orange-400 mr-2 flex-shrink-0" />
+                    <Shield className="w-4 h-4 text-orange-400 mr-2 flex-shrink-0" />
                     {perm}
                   </li>
                 ))}
@@ -187,27 +187,27 @@ const ModuleConfigTemplate: React.FC = () => {
                   className={`p-4 rounded-lg border-2 text-left transition-all ${
                     isSelected
                       ? 'border-orange-500 bg-orange-500/10'
-                      : 'border-theme-input-border bg-theme-input-bg hover:border-theme-input-border'
+                      : 'border-slate-600 bg-theme-surface-secondary hover:border-slate-500'
                   } ${isAdmin ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`font-semibold ${isSelected ? 'text-orange-700 dark:text-orange-400' : 'text-theme-text-primary'}`}>
+                    <span className={`font-semibold ${isSelected ? 'text-orange-400' : 'text-theme-text-primary'}`}>
                       {role.name}
                     </span>
                     {isSelected && (
-                      <CheckCircle className="w-5 h-5 text-orange-700 dark:text-orange-400" />
+                      <CheckCircle className="w-5 h-5 text-orange-400" />
                     )}
                   </div>
                   <p className="text-theme-text-muted text-xs">{role.description}</p>
                   {isAdmin && (
-                    <p className="text-orange-700 dark:text-orange-400 text-xs mt-1 italic">Always has access</p>
+                    <p className="text-orange-400 text-xs mt-1 italic">Always has access</p>
                   )}
                 </button>
               );
             })}
           </div>
 
-          <div className="mt-4 p-3 bg-theme-input-bg rounded-lg">
+          <div className="mt-4 p-3 bg-theme-surface-secondary rounded-lg">
             <p className="text-theme-text-muted text-sm">
               <strong className="text-theme-text-primary">Selected roles:</strong>{' '}
               {manageRoles.map(r => availableRoles.find(ar => ar.id === r)?.name).filter(Boolean).join(', ')}
@@ -216,19 +216,19 @@ const ModuleConfigTemplate: React.FC = () => {
         </div>
 
         {/* Quick Tips */}
-        <div className="bg-theme-input-bg rounded-lg p-4 border border-theme-surface-border mb-6">
+        <div className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-input-border mb-6">
           <h3 className="text-theme-text-primary font-semibold mb-2">Quick Tips</h3>
           <ul className="text-theme-text-secondary text-sm space-y-2">
             <li className="flex items-start">
-              <span className="text-green-700 dark:text-green-400 mr-2">•</span>
+              <span className="text-green-400 mr-2">•</span>
               <span>You can change these permissions anytime in Settings → Permissions</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-700 dark:text-green-400 mr-2">•</span>
+              <span className="text-green-400 mr-2">•</span>
               <span>Individual users can be granted additional permissions beyond their role</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-700 dark:text-green-400 mr-2">•</span>
+              <span className="text-green-400 mr-2">•</span>
               <span>Some modules have sub-permissions you can configure in detail later</span>
             </li>
           </ul>
@@ -245,7 +245,7 @@ const ModuleConfigTemplate: React.FC = () => {
           </button>
           <button
             onClick={handleSkip}
-            className="sm:w-auto px-6 py-3 bg-transparent border border-theme-input-border hover:border-theme-input-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
+            className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all"
           >
             Use Defaults
           </button>

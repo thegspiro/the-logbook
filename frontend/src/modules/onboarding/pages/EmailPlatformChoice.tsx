@@ -118,7 +118,7 @@ const EmailPlatformChoice: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
-      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
+      <header className="bg-theme-nav-bg backdrop-blur-sm border-b border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
             <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4">
@@ -152,7 +152,7 @@ const EmailPlatformChoice: React.FC = () => {
           {/* Page Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Mail className="w-8 h-8 text-theme-text-primary" />
+              <Mail className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
               Email Platform
@@ -185,8 +185,8 @@ const EmailPlatformChoice: React.FC = () => {
                     <div
                       className={`w-16 h-16 rounded-lg flex items-center justify-center transition-all ${
                         emailPlatform === platform.id
-                          ? `bg-gradient-to-br ${platform.color} text-theme-text-primary`
-                          : 'bg-theme-surface text-theme-text-muted group-hover:bg-theme-surface-hover'
+                          ? `bg-gradient-to-br ${platform.color} text-white`
+                          : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'
                       }`}
                     >
                       {platform.icon}
@@ -205,7 +205,7 @@ const EmailPlatformChoice: React.FC = () => {
                   <ul className="space-y-2 text-sm text-theme-text-secondary mb-4">
                     {platform.features.map((feature, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-green-700 dark:text-green-400 mr-2 flex-shrink-0">✓</span>
+                        <span className="text-green-400 mr-2 flex-shrink-0">✓</span>
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -213,9 +213,9 @@ const EmailPlatformChoice: React.FC = () => {
 
                   {/* Setup Info */}
                   {platform.setupInfo && (
-                    <div className="bg-theme-input-bg rounded-lg p-3 border border-theme-surface-border">
+                    <div className="bg-theme-surface-secondary rounded-lg p-3 border border-theme-input-border">
                       <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-theme-text-muted">
                           {platform.setupInfo}
                         </p>
@@ -228,7 +228,7 @@ const EmailPlatformChoice: React.FC = () => {
                 {emailPlatform === platform.id && (
                   <div className="absolute top-4 right-4 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center">
                     <svg
-                      className="w-5 h-5 text-theme-text-primary"
+                      className="w-5 h-5 text-white"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -250,9 +250,9 @@ const EmailPlatformChoice: React.FC = () => {
           {selectedPlatformData && selectedPlatformData.id !== 'other' && (
             <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-4 mb-8">
               <div className="flex items-start space-x-3">
-                <Info className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-blue-700 dark:text-blue-300 text-sm font-medium mb-1">
+                  <p className="text-blue-300 text-sm font-medium mb-1">
                     Next Step
                   </p>
                   <p className="text-blue-200 text-sm">
@@ -272,7 +272,7 @@ const EmailPlatformChoice: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 emailPlatform
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
+                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -287,7 +287,7 @@ const EmailPlatformChoice: React.FC = () => {
             </p>
 
             {/* Progress Indicator */}
-            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-surface-border" />
+            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
 
             {/* Auto-Save Notification */}
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
@@ -296,12 +296,12 @@ const EmailPlatformChoice: React.FC = () => {
       </main>
 
       {/* Footer with Department Name and Copyright */}
-      <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
+      <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-theme-text-muted text-xs mt-1">
+          <p className="text-slate-500 text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>
