@@ -10,14 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 from uuid import UUID
 
-from app.models.user import Organization, User
+from app.models.user import Organization
 from app.schemas.organization import (
     OrganizationSettings,
     ContactInfoSettings,
+    MembershipIdSettings,
     EnabledModulesResponse,
     ModuleSettings,
     EmailServiceSettings,
-    MembershipIdSettings,
 )
 
 
@@ -89,14 +89,19 @@ class OrganizationService:
         )
 
         # Parse membership ID settings
-        membership_ids_raw = settings_dict.get("membership_ids", {})
-        membership_id_settings = MembershipIdSettings(**membership_ids_raw)
+        membership_id = settings_dict.get("membership_id", {})
+        membership_id_settings = MembershipIdSettings(
+            enabled=membership_id.get("enabled", False),
+            auto_generate=membership_id.get("auto_generate", False),
+            prefix=membership_id.get("prefix", ""),
+            next_number=membership_id.get("next_number", 1),
+        )
 
         return OrganizationSettings(
             contact_info_visibility=contact_settings,
             email_service=email_settings,
             modules=module_settings,
-            membership_ids=membership_id_settings,
+            membership_id=membership_id_settings,
         )
 
     async def update_organization_settings(
@@ -214,57 +219,3 @@ class OrganizationService:
 
         # Return updated enabled modules
         return await self.get_enabled_modules(organization_id)
-
-    # =========================================================================
-    # Membership ID helpers
-    # =========================================================================
-
-    async def get_membership_id_settings(
-        self,
-        organization_id: UUID,
-    ) -> MembershipIdSettings:
-        """Return the membership ID settings for an organization."""
-        org = await self.get_organization(organization_id)
-        if not org:
-            return MembershipIdSettings()
-        settings_dict = (org.settings or {}).get("membership_ids", {})
-        return MembershipIdSettings(**settings_dict)
-
-    async def assign_next_membership_number(
-        self,
-        organization_id: UUID,
-        user: User,
-    ) -> Optional[str]:
-        """
-        Assign the next sequential membership number to *user* and
-        increment the counter stored in organization settings.
-
-        Returns the formatted membership number (e.g. "M-004") or None
-        if membership IDs are disabled for this organization.
-
-        The caller is responsible for calling ``db.commit()`` afterwards.
-        """
-        org = await self.get_organization(organization_id)
-        if not org:
-            return None
-
-        settings_dict = org.settings or {}
-        mid_settings = MembershipIdSettings(**settings_dict.get("membership_ids", {}))
-
-        if not mid_settings.enabled:
-            return None
-
-        # Build the formatted membership number
-        number_part = str(mid_settings.next_number).zfill(mid_settings.padding)
-        membership_number = f"{mid_settings.prefix}{number_part}"
-
-        # Assign to user
-        user.membership_number = membership_number
-
-        # Increment next_number and persist
-        mid_settings.next_number += 1
-        settings_dict["membership_ids"] = mid_settings.model_dump()
-        org.settings = settings_dict
-        flag_modified(org, "settings")
-
-        return membership_number

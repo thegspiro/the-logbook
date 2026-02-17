@@ -18,27 +18,27 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  if (!isOpen) return null;
-
   // Handle escape key
   React.useEffect(() => {
+    if (!isOpen) return;
+
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onCancel();
       }
     };
 
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      // Prevent background scrolling
-      document.body.style.overflow = 'hidden';
-    }
+    document.addEventListener('keydown', handleEscape);
+    // Prevent background scrolling
+    document.body.style.overflow = 'hidden';
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
     };
   }, [isOpen, onCancel]);
+
+  if (!isOpen) return null;
 
   return (
     <>

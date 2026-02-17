@@ -156,7 +156,7 @@ const InventoryPage: React.FC = () => {
       });
       setItems(data.items);
       setTotalItems(data.total);
-    } catch (err: unknown) {
+    } catch (_err: unknown) {
       // Error silently handled - items list will remain unchanged
     }
   };

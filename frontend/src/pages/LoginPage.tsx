@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
       try {
         const response = await axios.get('/api/v1/auth/branding');
         setBranding(response.data);
-      } catch (err) {
+      } catch (_err) {
         // Branding is optional - login page works fine without it
       }
     };
@@ -97,7 +97,7 @@ export const LoginPage: React.FC = () => {
       // ProtectedRoute), or default to /dashboard.
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
-    } catch (err) {
+    } catch (_err) {
       // Error is handled by the store and displayed via error state
     }
   };

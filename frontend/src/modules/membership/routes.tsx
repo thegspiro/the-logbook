@@ -4,18 +4,26 @@
  * This function returns route elements for the membership module.
  * Pages are lazy-loaded for performance.
  *
- * To disable the membership module, simply remove or comment out
- * the call to this function in App.tsx.
+ * Member-facing routes:
+ *   /members - Member directory
+ *   /members/:userId - Member profile
+ *   /members/:userId/training - Member training history
+ *
+ * Admin hub:
+ *   /members/admin - Tabbed admin hub (manage, add, import)
+ *
+ * Legacy redirects:
+ *   /admin/members → /members/admin
+ *   /members/add → /members/admin?tab=add
+ *   /members/import → /members/admin?tab=import
  */
 
 import React, { lazy } from 'react';
-import { Route } from 'react-router-dom';
+import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 
-// Lazy-loaded pages (still in pages/ directory — will be migrated incrementally)
+// Lazy-loaded pages
 const Members = lazy(() => import('../../pages/Members'));
-const AddMember = lazy(() => import('../../pages/AddMember'));
-const ImportMembers = lazy(() => import('../../pages/ImportMembers'));
 const MemberProfilePage = lazy(() =>
   import('../../pages/MemberProfilePage').then((m) => ({
     default: m.MemberProfilePage,
@@ -26,71 +34,34 @@ const MemberTrainingHistoryPage = lazy(() =>
     default: m.MemberTrainingHistoryPage,
   }))
 );
-const MembersAdminPage = lazy(() =>
-  import('../../pages/MembersAdminPage').then((m) => ({
-    default: m.MembersAdminPage,
-  }))
-);
-const MemberLifecyclePage = lazy(() =>
-  import('../../pages/MemberLifecyclePage').then((m) => ({
-    default: m.MemberLifecyclePage,
+const MembersAdminHub = lazy(() =>
+  import('../../pages/MembersAdminHub').then((m) => ({
+    default: m.MembersAdminHub,
   }))
 );
 
 export const getMembershipRoutes = () => {
   return (
     <React.Fragment>
-      {/* Member List */}
+      {/* Member-facing */}
       <Route path="/members" element={<Members />} />
-
-      {/* Add Member */}
-      <Route
-        path="/members/add"
-        element={
-          <ProtectedRoute requiredPermission="members.create">
-            <AddMember />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Import Members */}
-      <Route
-        path="/members/import"
-        element={
-          <ProtectedRoute requiredPermission="members.create">
-            <ImportMembers />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Member Profile */}
       <Route path="/members/:userId" element={<MemberProfilePage />} />
+      <Route path="/members/:userId/training" element={<MemberTrainingHistoryPage />} />
 
-      {/* Member Training History */}
+      {/* Admin Hub */}
       <Route
-        path="/members/:userId/training"
-        element={<MemberTrainingHistoryPage />}
-      />
-
-      {/* Admin: Member Management */}
-      <Route
-        path="/admin/members"
+        path="/members/admin"
         element={
           <ProtectedRoute requiredPermission="members.manage">
-            <MembersAdminPage />
+            <MembersAdminHub />
           </ProtectedRoute>
         }
       />
 
-      {/* Admin: Member Lifecycle (archived, tiers, property returns) */}
-      <Route
-        path="/admin/member-lifecycle"
-        element={
-          <ProtectedRoute requiredPermission="members.manage">
-            <MemberLifecyclePage />
-          </ProtectedRoute>
-        }
-      />
+      {/* Legacy redirects to admin hub */}
+      <Route path="/admin/members" element={<Navigate to="/members/admin" replace />} />
+      <Route path="/members/add" element={<Navigate to="/members/admin?tab=add" replace />} />
+      <Route path="/members/import" element={<Navigate to="/members/admin?tab=import" replace />} />
     </React.Fragment>
   );
 };

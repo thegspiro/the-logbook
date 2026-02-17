@@ -17,6 +17,8 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { trainingService, userService, trainingSubmissionService } from '../services/api';
+import { formatDate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRequirement } from '../types/training';
 
 interface DashboardStats {
@@ -61,6 +63,7 @@ interface CompletionItem {
  */
 const TrainingOfficerDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const tz = useTimezone();
 
   // Data states
   const [loading, setLoading] = useState(true);
@@ -185,7 +188,7 @@ const TrainingOfficerDashboard: React.FC = () => {
       });
 
       setRequirements(reqs);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load training dashboard data. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -208,7 +211,7 @@ const TrainingOfficerDashboard: React.FC = () => {
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
-    return date.toLocaleDateString();
+    return formatDate(dateString, tz);
   };
 
   if (loading) {

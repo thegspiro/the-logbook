@@ -22,10 +22,8 @@ import {
   Truck,
   Vote,
   ClipboardList,
-  ClipboardCheck,
   BookOpen,
   Layers,
-  FileBarChart,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -105,9 +103,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       subItems: [
         { label: 'All Members', path: '/members', icon: Users },
         { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
+        { label: 'Pipeline Settings', path: '/prospective-members/settings', icon: Settings, permission: 'prospective_members.manage' },
+        { label: 'Members Admin', path: '/members/admin', icon: UserCog, permission: 'members.manage' },
       ],
     },
-    { label: 'Events', path: '/events', icon: Calendar },
+    {
+      label: 'Events',
+      path: '#',
+      icon: Calendar,
+      subItems: [
+        { label: 'All Events', path: '/events', icon: Calendar },
+        { label: 'Events Admin', path: '/events/admin', icon: Shield, permission: 'events.manage' },
+      ],
+    },
     { label: 'Documents', path: '/documents', icon: FileText },
     {
       label: 'Training',
@@ -118,11 +126,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
         { label: 'Course Library', path: '/training/courses', icon: BookOpen },
         { label: 'Programs', path: '/training/programs', icon: Layers },
-        { label: 'Shift Reports', path: '/training/shift-reports', icon: FileBarChart },
-        { label: 'Review Submissions', path: '/training/submissions', icon: ClipboardCheck, permission: 'training.manage' },
-        { label: 'Requirements', path: '/training/requirements', icon: ClipboardCheck, permission: 'training.manage' },
-        { label: 'Integrations', path: '/training/integrations', icon: Plug, permission: 'training.manage' },
-        { label: 'Officer Dashboard', path: '/training/officer', icon: Shield, permission: 'training.manage' },
+        { label: 'Training Admin', path: '/training/admin', icon: Shield, permission: 'training.manage' },
       ],
     },
     {
@@ -131,6 +135,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: Package,
       subItems: [
         { label: 'Inventory', path: '/inventory', icon: Package },
+        { label: 'Inventory Admin', path: '/inventory/admin', icon: Shield, permission: 'inventory.manage' },
         { label: 'Scheduling', path: '/scheduling', icon: Clock },
         { label: 'Apparatus', path: '/apparatus', icon: Truck },
       ],
@@ -163,7 +168,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'My Account', path: '/settings/account', icon: UserCog },
         { label: 'Organization', path: '/settings', icon: Building2 },
         { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'roles.manage' },
-        { label: 'Member Admin', path: '/admin/members', icon: UserCog, permission: 'members.manage' },
         { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
         { label: 'Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },
@@ -390,7 +394,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     {/* Sub Items */}
                     {hasSubItems && isExpanded && !collapsed && (
                       <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
-                        {visibleSubItems!.map((subItem) => {
+                        {visibleSubItems.map((subItem) => {
                           const SubIcon = subItem.icon;
                           const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (

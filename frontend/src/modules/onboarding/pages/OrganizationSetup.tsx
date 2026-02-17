@@ -549,7 +549,7 @@ const OrganizationSetup: React.FC = () => {
     if (formData.website && formData.website.trim()) {
       const website = formData.website.trim();
       // Check if URL has protocol, if not, will be auto-prepended
-      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+      const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
       if (!urlPattern.test(website)) {
         errors.website = 'Invalid website URL format';
       }
@@ -557,7 +557,7 @@ const OrganizationSetup: React.FC = () => {
 
     // Phone validation (optional but must be valid if provided)
     if (formData.phone) {
-      const cleaned = formData.phone.replace(/[\s\-\.\(\)]/g, '');
+      const cleaned = formData.phone.replace(/[\s\-.()]/g, '');
       if (!/^\+?[\d]{10,15}$/.test(cleaned)) {
         errors.phone = 'Invalid phone number format';
       }

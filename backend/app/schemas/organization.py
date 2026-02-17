@@ -230,6 +230,28 @@ class MembershipTierSettings(BaseModel):
     )
 
 
+class MembershipIdSettings(BaseModel):
+    """Settings for membership ID number display and generation"""
+    enabled: bool = Field(
+        default=False,
+        description="Whether membership ID numbers are enabled for the organization",
+    )
+    auto_generate: bool = Field(
+        default=False,
+        description="Automatically assign the next sequential ID to new members",
+    )
+    prefix: str = Field(
+        default="",
+        max_length=10,
+        description="Optional prefix for generated IDs (e.g. 'FD-')",
+    )
+    next_number: int = Field(
+        default=1,
+        ge=1,
+        description="Next number to use when auto-generating IDs",
+    )
+
+
 class ITTeamMember(BaseModel):
     """An IT team member stored in organization settings"""
     name: str = ""
@@ -254,36 +276,6 @@ class AuthSettings(BaseModel):
     def is_local_auth(self) -> bool:
         """Check if local password authentication is enabled"""
         return self.provider == "local"
-
-
-class MembershipIdSettings(BaseModel):
-    """
-    Settings for automatic membership ID assignment.
-
-    When enabled, new members receive a sequential membership ID
-    (e.g., "FD-0001", "FD-0002"). The coordinator can override
-    the ID for returning former members.
-    """
-    enabled: bool = Field(
-        default=False,
-        description="Whether automatic membership ID assignment is enabled",
-    )
-    prefix: str = Field(
-        default="",
-        max_length=20,
-        description="Prefix for membership IDs (e.g., 'FD-', 'MEM-')",
-    )
-    next_number: int = Field(
-        default=1,
-        ge=1,
-        description="The next number to assign to a new member",
-    )
-    padding: int = Field(
-        default=4,
-        ge=1,
-        le=10,
-        description="Number of digits to pad (e.g., 4 → '0001')",
-    )
 
 
 class ModuleSettings(BaseModel):
@@ -385,9 +377,9 @@ class OrganizationSettings(BaseModel):
         default_factory=MembershipTierSettings,
         description="Membership tier definitions, years-of-service thresholds, and tier benefits",
     )
-    membership_ids: MembershipIdSettings = Field(
+    membership_id: MembershipIdSettings = Field(
         default_factory=MembershipIdSettings,
-        description="Auto-assignment settings for sequential membership ID numbers",
+        description="Membership ID number configuration",
     )
 
     # Allow additional settings
@@ -424,7 +416,7 @@ class OrganizationSettingsUpdate(BaseModel):
     it_team: Optional[ITTeamSettings] = None
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
-    membership_ids: Optional[MembershipIdSettings] = None
+    membership_id: Optional[MembershipIdSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -448,7 +440,7 @@ class OrganizationSettingsResponse(BaseModel):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
-    membership_ids: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
+    membership_id: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')
 

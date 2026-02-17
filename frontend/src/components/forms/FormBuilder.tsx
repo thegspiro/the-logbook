@@ -136,10 +136,10 @@ const FormBuilder = ({
       try {
         setSaving(true);
         if (editingFieldId) {
-          await formsService.updateField(formId!, editingFieldId, fieldData);
+          await formsService.updateField(formId, editingFieldId, fieldData);
         } else {
           fieldData.sort_order = fields.length;
-          await formsService.addField(formId!, fieldData);
+          await formsService.addField(formId, fieldData);
         }
         await loadFields();
       } catch {
@@ -183,7 +183,7 @@ const FormBuilder = ({
     if (isConnected) {
       try {
         setSaving(true);
-        await formsService.deleteField(formId!, fieldId);
+        await formsService.deleteField(formId, fieldId);
         await loadFields();
       } catch {
         setError('Failed to delete field.');
@@ -216,8 +216,8 @@ const FormBuilder = ({
       try {
         setSaving(true);
         await Promise.all([
-          formsService.updateField(formId!, sorted[idx].id, { sort_order: sorted[idx].sort_order }),
-          formsService.updateField(formId!, sorted[swapIdx].id, { sort_order: sorted[swapIdx].sort_order }),
+          formsService.updateField(formId, sorted[idx].id, { sort_order: sorted[idx].sort_order }),
+          formsService.updateField(formId, sorted[swapIdx].id, { sort_order: sorted[swapIdx].sort_order }),
         ]);
         await loadFields();
       } catch {

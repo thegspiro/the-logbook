@@ -35,7 +35,7 @@ export const MemberListPage: React.FC = () => {
 
         setContactSettings(settings);
         setMembers(users);
-      } catch (err) {
+      } catch (_err) {
         setError('Unable to load the member directory. Please check your connection and refresh the page.');
       } finally {
         setLoading(false);

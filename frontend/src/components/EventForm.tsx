@@ -12,6 +12,8 @@ import type { Role } from '../types/role';
 import { roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatForDateTimeInput } from '../utils/dateFormatting';
 
 interface EventFormProps {
   initialData?: Partial<EventCreate>;
@@ -62,9 +64,28 @@ export const EventForm: React.FC<EventFormProps> = ({
   submitLabel = 'Create Event',
   isSubmitting = false,
 }) => {
+  const tz = useTimezone();
+
+  // Convert any ISO date strings from the API into datetime-local format
+  // in the user's timezone so the inputs display correctly.
+  const normalizedInitial = initialData
+    ? {
+        ...initialData,
+        start_datetime: initialData.start_datetime
+          ? formatForDateTimeInput(initialData.start_datetime, tz)
+          : initialData.start_datetime,
+        end_datetime: initialData.end_datetime
+          ? formatForDateTimeInput(initialData.end_datetime, tz)
+          : initialData.end_datetime,
+        rsvp_deadline: initialData.rsvp_deadline
+          ? formatForDateTimeInput(initialData.rsvp_deadline, tz)
+          : initialData.rsvp_deadline,
+      }
+    : undefined;
+
   const [formData, setFormData] = useState<EventCreate>({
     ...DEFAULT_FORM_DATA,
-    ...initialData,
+    ...normalizedInitial,
   });
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);

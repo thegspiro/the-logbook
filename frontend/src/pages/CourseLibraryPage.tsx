@@ -380,7 +380,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
 // ==================== Main Page ====================
 
 const CourseLibraryPage: React.FC = () => {
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -402,7 +402,7 @@ const CourseLibraryPage: React.FC = () => {
       ]);
       setCourses(coursesData);
       setCategories(categoriesData);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load course library');
     } finally {
       setLoading(false);

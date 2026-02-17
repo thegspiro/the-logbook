@@ -407,7 +407,8 @@ export type RequirementType =
   | 'shifts'
   | 'calls'
   | 'skills_evaluation'
-  | 'checklist';
+  | 'checklist'
+  | 'knowledge_test';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 
@@ -467,6 +468,8 @@ export interface TrainingRequirementEnhancedCreate {
   required_call_types?: string[];
   required_skills?: string[];
   checklist_items?: string[];
+  passing_score?: number;
+  max_attempts?: number;
   frequency: RequirementFrequency;
   time_limit_days?: number;
   applies_to_all?: boolean;

@@ -59,9 +59,18 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'All Members', path: '/members' },
         { label: 'Prospective', path: '/prospective-members', permission: 'prospective_members.manage' },
+        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
+        { label: 'Members Admin', path: '/members/admin', permission: 'members.manage' },
       ],
     },
-    { label: 'Events', path: '/events' },
+    {
+      label: 'Events',
+      path: '/events',
+      subItems: [
+        { label: 'All Events', path: '/events' },
+        { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+      ],
+    },
     { label: 'Documents', path: '/documents' },
     {
       label: 'Training',
@@ -71,11 +80,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit' },
         { label: 'Course Library', path: '/training/courses' },
         { label: 'Programs', path: '/training/programs' },
-        { label: 'Shift Reports', path: '/training/shift-reports' },
-        { label: 'Review Submissions', path: '/training/submissions', permission: 'training.manage' },
-        { label: 'Requirements', path: '/training/requirements', permission: 'training.manage' },
-        { label: 'Integrations', path: '/training/integrations', permission: 'training.manage' },
-        { label: 'Officer Dashboard', path: '/training/officer', permission: 'training.manage' },
+        { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
       ],
     },
     {
@@ -83,6 +88,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       path: '/inventory',
       subItems: [
         { label: 'Inventory', path: '/inventory' },
+        { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
         { label: 'Scheduling', path: '/scheduling' },
         { label: 'Apparatus', path: '/apparatus' },
       ],
@@ -112,7 +118,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'My Account', path: '/settings/account' },
         { label: 'Organization', path: '/settings' },
         { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
-        { label: 'Member Admin', path: '/admin/members', permission: 'members.manage' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
         { label: 'Analytics', path: '/admin/analytics', permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
@@ -229,7 +234,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
                     {openDropdown === item.label && (
                       <div className="absolute top-full left-0 mt-1 w-48 bg-slate-800 border border-white/10 rounded-lg shadow-xl py-1 z-50">
-                        {visibleSubItems!.map((subItem) => {
+                        {visibleSubItems.map((subItem) => {
                           const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (
                           <a
@@ -330,7 +335,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       </button>
                       {isExpanded && (
                         <div className="ml-4 space-y-1 mt-1">
-                          {visibleSubItems!.map((subItem) => {
+                          {visibleSubItems.map((subItem) => {
                             const subActive = isSubItemActive(subItem.path, item.subItems || []);
                             return (
                             <a

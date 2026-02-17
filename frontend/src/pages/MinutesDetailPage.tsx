@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { minutesService, eventService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatDateTime } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
   MeetingMinutes,
@@ -30,38 +32,39 @@ import type {
 import type { Event as EventDetail, EventListItem } from '../types/event';
 
 const STATUS_BADGES: Record<string, string> = {
-  draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  rejected: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  draft: 'bg-yellow-100 text-yellow-800',
+  submitted: 'bg-blue-100 text-blue-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
 };
 
 const MOTION_STATUS_BADGES: Record<string, string> = {
-  passed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  tabled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  withdrawn: 'bg-theme-surface-secondary text-theme-text-primary',
+  passed: 'bg-green-100 text-green-800',
+  failed: 'bg-red-100 text-red-800',
+  tabled: 'bg-yellow-100 text-yellow-800',
+  withdrawn: 'bg-gray-100 text-gray-800',
 };
 
 const PRIORITY_BADGES: Record<string, string> = {
-  low: 'bg-theme-surface-secondary text-theme-text-secondary',
+  low: 'bg-gray-100 text-gray-600',
   medium: 'bg-blue-100 text-blue-700',
   high: 'bg-orange-100 text-orange-700',
   urgent: 'bg-red-100 text-red-700',
 };
 
 const ACTION_STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  cancelled: 'bg-theme-surface-secondary text-theme-text-primary',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  pending: 'bg-yellow-100 text-yellow-800',
+  in_progress: 'bg-blue-100 text-blue-800',
+  completed: 'bg-green-100 text-green-800',
+  cancelled: 'bg-gray-100 text-gray-800',
+  overdue: 'bg-red-100 text-red-800',
 };
 
 export const MinutesDetailPage: React.FC = () => {
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
+  const tz = useTimezone();
   const canManage = checkPermission('meetings.manage');
 
   const [minutes, setMinutes] = useState<MeetingMinutes | null>(null);
@@ -389,17 +392,11 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen">
         <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="text-theme-text-muted text-center py-12" role="status" aria-live="polite">Loading minutes...</div>
+          <div className="text-slate-400 text-center py-12" role="status" aria-live="polite">Loading minutes...</div>
         </div>
       </div>
     );
@@ -410,7 +407,7 @@ export const MinutesDetailPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-            <p className="text-sm text-red-700 dark:text-red-300">{error || 'Minutes not found'}</p>
+            <p className="text-sm text-red-300">{error || 'Minutes not found'}</p>
           </div>
         </div>
       </div>
@@ -427,9 +424,9 @@ export const MinutesDetailPage: React.FC = () => {
         </Link>
         <div className="flex justify-between items-start mt-2">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary">{minutes.title}</h1>
-            <p className="text-theme-text-muted mt-1">
-              {formatDate(minutes.meeting_date)}
+            <h1 className="text-2xl font-bold text-white">{minutes.title}</h1>
+            <p className="text-slate-400 mt-1">
+              {formatDateTime(minutes.meeting_date, tz)}
               {minutes.location && ` \u00b7 ${minutes.location}`}
               {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
             </p>
@@ -442,23 +439,23 @@ export const MinutesDetailPage: React.FC = () => {
         {/* Rejection notice */}
         {minutes.status === 'rejected' && minutes.rejection_reason && (
           <div className="mt-3 bg-red-500/10 border-l-4 border-red-500 p-4">
-            <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
-            <p className="text-sm text-red-700 dark:text-red-300 mt-1">{minutes.rejection_reason}</p>
+            <p className="text-sm font-medium text-red-300">Rejection Reason:</p>
+            <p className="text-sm text-red-300 mt-1">{minutes.rejection_reason}</p>
           </div>
         )}
       </div>
 
       {/* Linked Event */}
       {(linkedEvent || (canManage && isEditable)) && (
-        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-4 mb-6">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-theme-text-primary">Linked Meeting Event</h3>
+            <h3 className="text-sm font-medium text-slate-200">Linked Meeting Event</h3>
             {canManage && isEditable && (
               <div className="flex gap-2">
                 {linkedEvent && (
                   <button
                     onClick={handleUnlinkEvent}
-                    className="text-xs text-red-700 dark:text-red-500 hover:text-red-700"
+                    className="text-xs text-red-500 hover:text-red-700"
                   >
                     Unlink
                   </button>
@@ -474,23 +471,23 @@ export const MinutesDetailPage: React.FC = () => {
           </div>
           {linkedEvent ? (
             <div className="mt-2 flex items-center gap-3">
-              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">Business Meeting</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">Business Meeting</span>
               <Link
                 to={`/events/${linkedEvent.id}`}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
                 {linkedEvent.title}
               </Link>
-              <span className="text-xs text-theme-text-muted">
-                {new Date(linkedEvent.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+              <span className="text-xs text-slate-400">
+                {formatDate(linkedEvent.start_datetime, tz)}
               </span>
               {linkedEvent.location && (
-                <span className="text-xs text-theme-text-muted">{linkedEvent.location}</span>
+                <span className="text-xs text-slate-400">{linkedEvent.location}</span>
               )}
             </div>
           ) : (
             canManage && isEditable && (
-              <p className="mt-1 text-xs text-theme-text-muted italic">
+              <p className="mt-1 text-xs text-slate-500 italic">
                 No event linked. Link to a scheduled meeting to connect attendance and event data.
               </p>
             )
@@ -500,7 +497,7 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Workflow Actions */}
       {canManage && (
-        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-4 mb-6">
           <div className="flex flex-wrap gap-3">
             {(minutes.status === 'draft' || minutes.status === 'rejected') && (
               <button
@@ -539,7 +536,7 @@ export const MinutesDetailPage: React.FC = () => {
             {minutes.published_document_id && (
               <Link
                 to="/documents"
-                className="px-4 py-2 border border-green-500/30 text-green-700 dark:text-green-300 rounded-md hover:bg-green-500/10 inline-flex items-center gap-2"
+                className="px-4 py-2 border border-green-500/30 text-green-300 rounded-md hover:bg-green-500/10 inline-flex items-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" aria-hidden="true" />
                 View in Documents
@@ -548,7 +545,7 @@ export const MinutesDetailPage: React.FC = () => {
             {minutes.status === 'draft' && (
               <button
                 onClick={handleDelete}
-                className="px-4 py-2 bg-theme-surface-hover text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
               >
                 Delete Draft
               </button>
@@ -558,24 +555,24 @@ export const MinutesDetailPage: React.FC = () => {
       )}
 
       {/* Meeting Info */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {minutes.called_to_order_at && (
             <div>
-              <span className="text-theme-text-muted">Called to Order:</span>
-              <div className="font-medium text-theme-text-primary">{formatDate(minutes.called_to_order_at)}</div>
+              <span className="text-slate-400">Called to Order:</span>
+              <div className="font-medium text-white">{formatDateTime(minutes.called_to_order_at, tz)}</div>
             </div>
           )}
           {minutes.adjourned_at && (
             <div>
-              <span className="text-theme-text-muted">Adjourned:</span>
-              <div className="font-medium text-theme-text-primary">{formatDate(minutes.adjourned_at)}</div>
+              <span className="text-slate-400">Adjourned:</span>
+              <div className="font-medium text-white">{formatDateTime(minutes.adjourned_at, tz)}</div>
             </div>
           )}
           {minutes.quorum_met !== null && minutes.quorum_met !== undefined && (
             <div>
-              <span className="text-theme-text-muted">Quorum:</span>
-              <div className={`font-medium ${minutes.quorum_met ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+              <span className="text-slate-400">Quorum:</span>
+              <div className={`font-medium ${minutes.quorum_met ? 'text-green-300' : 'text-red-300'}`}>
                 {minutes.quorum_met ? 'Met' : 'Not Met'}
                 {minutes.quorum_count !== null && ` (${minutes.quorum_count})`}
               </div>
@@ -585,13 +582,13 @@ export const MinutesDetailPage: React.FC = () => {
 
         {/* Attendees */}
         {minutes.attendees && minutes.attendees.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-theme-surface-border">
-            <h3 className="text-sm font-medium text-theme-text-primary mb-2">Attendees ({minutes.attendees.length})</h3>
+          <div className="mt-4 pt-4 border-t border-white/20">
+            <h3 className="text-sm font-medium text-slate-200 mb-2">Attendees ({minutes.attendees.length})</h3>
             <div className="flex flex-wrap gap-2">
               {minutes.attendees.map((a, i) => (
                 <span
                   key={i}
-                  className={`text-xs px-2 py-1 rounded ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 line-through'}`}
+                  className={`text-xs px-2 py-1 rounded ${a.present ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800 line-through'}`}
                 >
                   {a.name}{a.role ? ` (${a.role})` : ''}
                 </span>
@@ -604,7 +601,7 @@ export const MinutesDetailPage: React.FC = () => {
       {/* Dynamic Content Sections */}
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-theme-text-primary">Meeting Sections</h2>
+          <h2 className="text-lg font-semibold text-white">Meeting Sections</h2>
           {canManage && isEditable && (
             <button
               onClick={() => setShowAddSection(!showAddSection)}
@@ -618,16 +615,16 @@ export const MinutesDetailPage: React.FC = () => {
 
         {/* Add Section Form */}
         {showAddSection && (
-          <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 flex items-end gap-3" role="form" aria-label="Add new section">
+          <div className="bg-white/5 border border-white/20 rounded-lg p-4 flex items-end gap-3" role="form" aria-label="Add new section">
             <div className="flex-1">
-              <label htmlFor="new-section-title" className="block text-sm font-medium text-theme-text-primary mb-1">Section Title</label>
+              <label htmlFor="new-section-title" className="block text-sm font-medium text-slate-200 mb-1">Section Title</label>
               <input
                 id="new-section-title"
                 type="text"
                 value={newSectionTitle}
                 onChange={(e) => setNewSectionTitle(e.target.value)}
                 placeholder="e.g., Fire Prevention Report"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
             </div>
             <button
@@ -639,7 +636,7 @@ export const MinutesDetailPage: React.FC = () => {
             </button>
             <button
               onClick={() => { setShowAddSection(false); setNewSectionTitle(''); }}
-              className="px-4 py-2 border border-theme-surface-border text-sm text-theme-text-secondary rounded-md hover:bg-theme-surface-secondary"
+              className="px-4 py-2 border border-white/30 text-sm text-slate-300 rounded-md hover:bg-white/5"
             >
               Cancel
             </button>
@@ -647,8 +644,8 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.sections.length === 0 ? (
-          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-8 text-center">
-            <p className="text-theme-text-muted">No sections defined for these minutes.</p>
+          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-8 text-center">
+            <p className="text-slate-400">No sections defined for these minutes.</p>
             {canManage && isEditable && (
               <button
                 onClick={() => setShowAddSection(true)}
@@ -665,7 +662,7 @@ export const MinutesDetailPage: React.FC = () => {
               const isEditing = editingSection === section.key;
 
               return (
-                <div key={section.key} className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+                <div key={section.key} className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center gap-2">
                       {canManage && isEditable && (
@@ -673,7 +670,7 @@ export const MinutesDetailPage: React.FC = () => {
                           <button
                             onClick={() => handleReorderSection(idx, 'up')}
                             disabled={idx === 0 || saving}
-                            className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
+                            className="text-slate-500 hover:text-slate-300 disabled:opacity-30 p-0.5"
                             aria-label={`Move ${section.title} up`}
                           >
                             <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
@@ -681,14 +678,14 @@ export const MinutesDetailPage: React.FC = () => {
                           <button
                             onClick={() => handleReorderSection(idx, 'down')}
                             disabled={idx === minutes.sections.length - 1 || saving}
-                            className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
+                            className="text-slate-500 hover:text-slate-300 disabled:opacity-30 p-0.5"
                             aria-label={`Move ${section.title} down`}
                           >
                             <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       )}
-                      <h3 className="text-md font-semibold text-theme-text-primary">{section.title}</h3>
+                      <h3 className="text-md font-semibold text-white">{section.title}</h3>
                     </div>
                     <div className="flex items-center gap-2">
                       {canManage && isEditable && !isEditing && (
@@ -702,7 +699,7 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleDeleteSection(section.key)}
-                            className="text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 p-1"
+                            className="text-slate-500 hover:text-red-400 p-1"
                             aria-label={`Delete ${section.title} section`}
                           >
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -720,7 +717,7 @@ export const MinutesDetailPage: React.FC = () => {
                         rows={6}
                         value={sectionValue}
                         onChange={(e) => setSectionValue(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                         aria-label={`${section.title} content`}
                       />
                       <div className="mt-2 flex gap-2">
@@ -733,16 +730,16 @@ export const MinutesDetailPage: React.FC = () => {
                         </button>
                         <button
                           onClick={() => setEditingSection(null)}
-                          className="px-3 py-1.5 text-sm border border-theme-surface-border text-theme-text-secondary rounded-md hover:bg-theme-surface-secondary"
+                          className="px-3 py-1.5 text-sm border border-white/30 text-slate-300 rounded-md hover:bg-white/5"
                         >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : section.content ? (
-                    <div className="text-sm text-theme-text-primary whitespace-pre-wrap">{section.content}</div>
+                    <div className="text-sm text-slate-200 whitespace-pre-wrap">{section.content}</div>
                   ) : (
-                    <p className="text-sm text-theme-text-muted italic">
+                    <p className="text-sm text-slate-500 italic">
                       No content yet.{' '}
                       {canManage && isEditable && (
                         <button
@@ -761,9 +758,9 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
 
       {/* Motions */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-theme-text-primary">Motions ({minutes.motions.length})</h3>
+          <h3 className="text-lg font-semibold text-white">Motions ({minutes.motions.length})</h3>
           {canManage && isEditable && (
             <button
               onClick={() => setShowMotionForm(!showMotionForm)}
@@ -775,7 +772,7 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showMotionForm && (
-          <div className="border border-theme-surface-border rounded-lg p-4 mb-4 bg-theme-surface-secondary space-y-3" role="form" aria-label="Add motion">
+          <div className="border border-white/20 rounded-lg p-4 mb-4 bg-white/5 space-y-3" role="form" aria-label="Add motion">
             <label htmlFor="motion-text" className="sr-only">Motion text</label>
             <textarea
               id="motion-text"
@@ -784,7 +781,7 @@ export const MinutesDetailPage: React.FC = () => {
               onChange={(e) => setMotionForm({ ...motionForm, motion_text: e.target.value })}
               placeholder="Motion text..."
               aria-label="Motion text"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -796,7 +793,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
                   placeholder="Moved by"
                   aria-label="Moved by"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -808,7 +805,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
                   placeholder="Seconded by"
                   aria-label="Seconded by"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -818,7 +815,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={motionForm.status}
                   onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as MotionStatus })}
                   aria-label="Motion status"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <option value="passed">Passed</option>
                   <option value="failed">Failed</option>
@@ -838,7 +835,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Votes for"
                   aria-label="Votes for"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -851,7 +848,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_against: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Votes against"
                   aria-label="Votes against"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -864,7 +861,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_abstain: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Abstentions"
                   aria-label="Abstentions"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
             </div>
@@ -879,21 +876,21 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.motions.length === 0 ? (
-          <p className="text-sm text-theme-text-muted">No motions recorded.</p>
+          <p className="text-sm text-slate-400">No motions recorded.</p>
         ) : (
           <div className="space-y-3">
             {minutes.motions.map((motion, i) => (
-              <div key={motion.id} className="border border-theme-surface-border rounded-lg p-4">
+              <div key={motion.id} className="border border-white/20 rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-theme-text-muted font-mono">#{i + 1}</span>
+                      <span className="text-xs text-slate-500 font-mono">#{i + 1}</span>
                       <span className={`text-xs px-2 py-0.5 rounded font-medium ${MOTION_STATUS_BADGES[motion.status]}`}>
                         {motion.status}
                       </span>
                     </div>
-                    <p className="text-sm text-theme-text-primary">{motion.motion_text}</p>
-                    <div className="mt-2 text-xs text-theme-text-muted space-x-4">
+                    <p className="text-sm text-white">{motion.motion_text}</p>
+                    <div className="mt-2 text-xs text-slate-400 space-x-4">
                       {motion.moved_by && <span>Moved by: {motion.moved_by}</span>}
                       {motion.seconded_by && <span>Seconded by: {motion.seconded_by}</span>}
                       {motion.votes_for !== null && motion.votes_for !== undefined && (
@@ -907,7 +904,7 @@ export const MinutesDetailPage: React.FC = () => {
                   {canManage && isEditable && (
                     <button
                       onClick={() => handleDeleteMotion(motion.id)}
-                      className="text-xs text-red-700 dark:text-red-500 hover:text-red-700 ml-2"
+                      className="text-xs text-red-500 hover:text-red-700 ml-2"
                     >
                       Delete
                     </button>
@@ -920,9 +917,9 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
 
       {/* Action Items */}
-      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-theme-text-primary">Action Items ({minutes.action_items.length})</h3>
+          <h3 className="text-lg font-semibold text-white">Action Items ({minutes.action_items.length})</h3>
           {canManage && isEditable && (
             <button
               onClick={() => setShowActionForm(!showActionForm)}
@@ -934,7 +931,7 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showActionForm && (
-          <div className="border border-theme-surface-border rounded-lg p-4 mb-4 bg-theme-surface-secondary space-y-3" role="form" aria-label="Add action item">
+          <div className="border border-white/20 rounded-lg p-4 mb-4 bg-white/5 space-y-3" role="form" aria-label="Add action item">
             <label htmlFor="action-description" className="sr-only">Action item description</label>
             <textarea
               id="action-description"
@@ -943,7 +940,7 @@ export const MinutesDetailPage: React.FC = () => {
               onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
               placeholder="Action item description..."
               aria-label="Action item description"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -955,7 +952,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
                   placeholder="Assignee name"
                   aria-label="Assignee name"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -966,7 +963,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={actionForm.due_date || ''}
                   onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
                   aria-label="Due date"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -976,7 +973,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={actionForm.priority}
                   onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
                   aria-label="Priority"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -996,11 +993,11 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.action_items.length === 0 ? (
-          <p className="text-sm text-theme-text-muted">No action items.</p>
+          <p className="text-sm text-slate-400">No action items.</p>
         ) : (
           <div className="space-y-3">
             {minutes.action_items.map(item => (
-              <div key={item.id} className="border border-theme-surface-border rounded-lg p-4">
+              <div key={item.id} className="border border-white/20 rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -1011,12 +1008,12 @@ export const MinutesDetailPage: React.FC = () => {
                         {item.priority}
                       </span>
                     </div>
-                    <p className="text-sm text-theme-text-primary">{item.description}</p>
-                    <div className="mt-2 text-xs text-theme-text-muted space-x-4">
+                    <p className="text-sm text-white">{item.description}</p>
+                    <div className="mt-2 text-xs text-slate-400 space-x-4">
                       {item.assignee_name && <span>Assigned to: {item.assignee_name}</span>}
                       {item.due_date && (
                         <span>
-                          Due: {new Date(item.due_date).toLocaleDateString()}
+                          Due: {formatDate(item.due_date, tz)}
                         </span>
                       )}
                     </div>
@@ -1027,7 +1024,7 @@ export const MinutesDetailPage: React.FC = () => {
                         value={item.status}
                         onChange={(e) => handleUpdateActionItemStatus(item.id, e.target.value)}
                         aria-label={`Update status for: ${item.description.substring(0, 30)}`}
-                        className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-2 py-1 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        className="text-xs bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       >
                         <option value="pending">Pending</option>
                         <option value="in_progress">In Progress</option>
@@ -1038,7 +1035,7 @@ export const MinutesDetailPage: React.FC = () => {
                     {canManage && isEditable && (
                       <button
                         onClick={() => handleDeleteActionItem(item.id)}
-                        className="text-xs text-red-700 dark:text-red-500 hover:text-red-700"
+                        className="text-xs text-red-500 hover:text-red-700"
                       >
                         Delete
                       </button>
@@ -1054,24 +1051,24 @@ export const MinutesDetailPage: React.FC = () => {
       {/* Link Event Modal */}
       {showLinkEventModal && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="link-event-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkEventModal(false); }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border flex justify-between items-center">
-              <h3 id="link-event-title" className="text-lg font-medium text-theme-text-primary">Link to Meeting Event</h3>
-              <button onClick={() => setShowLinkEventModal(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full">
+            <div className="px-6 py-4 border-b border-white/20 flex justify-between items-center">
+              <h3 id="link-event-title" className="text-lg font-medium text-white">Link to Meeting Event</h3>
+              <button onClick={() => setShowLinkEventModal(false)} className="text-slate-400 hover:text-slate-200" aria-label="Close dialog">
                 <span aria-hidden="true">&times;</span>
               </button>
             </div>
             <div className="px-6 py-4 max-h-96 overflow-y-auto">
               {loadingEvents ? (
-                <p className="text-sm text-theme-text-muted">Loading events...</p>
+                <p className="text-sm text-slate-400">Loading events...</p>
               ) : availableEvents.length === 0 ? (
-                <p className="text-sm text-theme-text-muted">No business meeting events found.</p>
+                <p className="text-sm text-slate-400">No business meeting events found.</p>
               ) : (
                 <div className="space-y-2">
                   {availableEvents.map(ev => (
@@ -1079,12 +1076,12 @@ export const MinutesDetailPage: React.FC = () => {
                       key={ev.id}
                       onClick={() => handleLinkEvent(ev.id)}
                       className={`w-full text-left p-3 border rounded-lg hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-colors ${
-                        minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-theme-surface-border'
+                        minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-white/20'
                       }`}
                     >
-                      <div className="text-sm font-medium text-theme-text-primary">{ev.title}</div>
-                      <div className="text-xs text-theme-text-muted mt-1">
-                        {new Date(ev.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      <div className="text-sm font-medium text-white">{ev.title}</div>
+                      <div className="text-xs text-slate-400 mt-1">
+                        {formatDateTime(ev.start_datetime, tz)}
                         {ev.location && ` \u00b7 ${ev.location}`}
                       </div>
                     </button>
@@ -1092,10 +1089,10 @@ export const MinutesDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="px-6 py-3 bg-theme-input-bg flex justify-end rounded-b-lg">
+            <div className="px-6 py-3 bg-slate-900/50 flex justify-end rounded-b-lg">
               <button
                 onClick={() => setShowLinkEventModal(false)}
-                className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
               >
                 Cancel
               </button>
@@ -1107,19 +1104,19 @@ export const MinutesDetailPage: React.FC = () => {
       {/* Reject Modal */}
       {showRejectModal && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reject-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRejectModal(false); setRejectReason(''); } }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="reject-title" className="text-lg font-medium text-theme-text-primary">Reject Minutes</h3>
+          <div className="bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-white/20">
+              <h3 id="reject-title" className="text-lg font-medium text-white">Reject Minutes</h3>
             </div>
             <div className="px-6 py-4">
-              <label htmlFor="reject-reason" className="block text-sm font-medium text-theme-text-primary mb-1">
-                Reason for Rejection <span aria-hidden="true">*</span> <span className="text-xs text-theme-text-muted">(min 10 characters)</span>
+              <label htmlFor="reject-reason" className="block text-sm font-medium text-slate-200 mb-1">
+                Reason for Rejection <span aria-hidden="true">*</span> <span className="text-xs text-slate-400">(min 10 characters)</span>
               </label>
               <textarea
                 id="reject-reason"
@@ -1129,12 +1126,12 @@ export const MinutesDetailPage: React.FC = () => {
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Describe what needs to be corrected..."
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <div className="mt-4 flex justify-end gap-3">
                 <button
                   onClick={() => { setShowRejectModal(false); setRejectReason(''); }}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
                 >
                   Cancel
                 </button>

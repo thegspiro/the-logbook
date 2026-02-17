@@ -39,6 +39,8 @@ class TrainingRequirementEnhancedBase(BaseModel):
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[Dict[str, Any]]] = None
     checklist_items: Optional[List[str]] = None
+    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    max_attempts: Optional[int] = Field(None, ge=1)
 
     frequency: str
     time_limit_days: Optional[int] = Field(None, ge=0)
@@ -66,6 +68,8 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[Dict[str, Any]]] = None
     checklist_items: Optional[List[str]] = None
+    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    max_attempts: Optional[int] = Field(None, ge=1)
     frequency: Optional[str] = None
     time_limit_days: Optional[int] = Field(None, ge=0)
     applies_to_all: Optional[bool] = None

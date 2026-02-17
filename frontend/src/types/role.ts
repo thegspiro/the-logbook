@@ -34,6 +34,7 @@ export interface UserWithRoles {
   username: string;
   email?: string;
   first_name?: string;
+  middle_name?: string;
   last_name?: string;
   full_name?: string;
   badge_number?: string;
@@ -43,6 +44,21 @@ export interface UserWithRoles {
   photo_url?: string;
   status: string;
   hire_date?: string;
+  date_of_birth?: string;
+  rank?: string;
+  station?: string;
+  address_street?: string;
+  address_city?: string;
+  address_state?: string;
+  address_zip?: string;
+  address_country?: string;
+  emergency_contacts?: Array<{
+    name: string;
+    relationship: string;
+    phone: string;
+    email?: string;
+    is_primary: boolean;
+  }>;
   notification_preferences?: NotificationPreferences;
   roles: Role[];
 }

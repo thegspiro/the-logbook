@@ -9,10 +9,11 @@ manual API call).
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 from typing import Dict, Any, List, Tuple, Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
@@ -40,6 +41,13 @@ class PropertyReturnReminderService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _to_local(dt: datetime, tz_name: str) -> datetime:
+        """Convert a UTC datetime to the organization's local timezone."""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo(tz_name))
+
     async def process_reminders(
         self,
         organization_id: str,
@@ -50,7 +58,7 @@ class PropertyReturnReminderService:
 
         Returns a summary of what was processed.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         results: List[Dict[str, Any]] = []
 
         # Find all dropped members with a recorded drop date
@@ -64,15 +72,19 @@ class PropertyReturnReminderService:
         )
         dropped_members = dropped_result.scalars().all()
 
-        # Load organization for email
+        # Load organization for email and timezone
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
         org_name = org.name if org else "Department"
+        org_tz = org.timezone if org and org.timezone else "America/New_York"
 
         for member in dropped_members:
-            days_since_drop = (now - member.status_changed_at).days
+            status_changed_utc = member.status_changed_at
+            if status_changed_utc.tzinfo is None:
+                status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
+            days_since_drop = (now - status_changed_utc).days
 
             # Check each threshold
             for threshold in REMINDER_THRESHOLDS:
@@ -100,6 +112,7 @@ class PropertyReturnReminderService:
                     member=member,
                     org=org,
                     org_name=org_name,
+                    org_tz=org_tz,
                     organization_id=organization_id,
                     threshold=threshold,
                     days_since_drop=days_since_drop,
@@ -123,7 +136,14 @@ class PropertyReturnReminderService:
         Get a list of all dropped members who still have outstanding
         inventory items, with days-since-drop and item details.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
+
+        # Load organization for timezone
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        org_tz = org.timezone if org and org.timezone else "America/New_York"
 
         dropped_result = await self.db.execute(
             select(User).where(
@@ -142,7 +162,10 @@ class PropertyReturnReminderService:
             if items_info["count"] == 0:
                 continue
 
-            days_since_drop = (now - member.status_changed_at).days
+            status_changed_utc = member.status_changed_at
+            if status_changed_utc.tzinfo is None:
+                status_changed_utc = status_changed_utc.replace(tzinfo=timezone.utc)
+            days_since_drop = (now - status_changed_utc).days
 
             # Check which reminders have been sent
             reminder_result = await self.db.execute(
@@ -153,12 +176,13 @@ class PropertyReturnReminderService:
             )
             sent_reminders = [r.reminder_type for r in reminder_result.scalars().all()]
 
+            local_drop_date = self._to_local(member.status_changed_at, org_tz)
             overdue_list.append({
                 "user_id": str(member.id),
                 "member_name": member.full_name,
                 "email": member.email,
                 "status": member.status.value,
-                "dropped_date": member.status_changed_at.strftime("%Y-%m-%d"),
+                "dropped_date": local_drop_date.strftime("%Y-%m-%d"),
                 "days_since_drop": days_since_drop,
                 "items_outstanding": items_info["count"],
                 "total_value": float(items_info["total_value"]),
@@ -232,6 +256,7 @@ class PropertyReturnReminderService:
         member: User,
         org: Optional[Organization],
         org_name: str,
+        org_tz: str,
         organization_id: str,
         threshold: Dict[str, Any],
         days_since_drop: int,
@@ -254,7 +279,8 @@ class PropertyReturnReminderService:
                 f"</tr>"
             )
 
-        drop_date_display = member.status_changed_at.strftime("%B %d, %Y")
+        local_drop_date = self._to_local(member.status_changed_at, org_tz)
+        drop_date_display = local_drop_date.strftime("%B %d, %Y")
         drop_type_display = "Voluntary Separation" if member.status == UserStatus.DROPPED_VOLUNTARY else "Involuntary Separation"
 
         escalation_notice = ""

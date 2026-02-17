@@ -10,6 +10,8 @@ import { electionService } from '../services/api';
 import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatForDateTimeInput } from '../utils/dateFormatting';
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -40,6 +42,7 @@ export const ElectionsPage: React.FC = () => {
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
+  const tz = useTimezone();
 
   useEffect(() => {
     fetchElections();
@@ -59,21 +62,11 @@ export const ElectionsPage: React.FC = () => {
       setError(null);
       const data = await electionService.getElections();
       setElections(data);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load elections. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Format a Date as a local datetime-local string (YYYY-MM-DDTHH:MM)
-  const formatLocalDateTime = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
   const handleStartDateChange = (startDate: string) => {
@@ -84,7 +77,7 @@ export const ElectionsPage: React.FC = () => {
       const start = new Date(startDate);
       const end = new Date(start);
       end.setHours(23, 59, 0, 0);
-      setFormData({ ...formData, start_date: startDate, end_date: formatLocalDateTime(end) });
+      setFormData({ ...formData, start_date: startDate, end_date: formatForDateTimeInput(end, tz) });
     }
   };
 
@@ -96,7 +89,7 @@ export const ElectionsPage: React.FC = () => {
 
     const start = new Date(formData.start_date);
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-    setFormData({ ...formData, end_date: formatLocalDateTime(end) });
+    setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
   };
 
   const setEndOfDay = () => {
@@ -108,7 +101,7 @@ export const ElectionsPage: React.FC = () => {
     const start = new Date(formData.start_date);
     const end = new Date(start);
     end.setHours(23, 59, 0, 0);
-    setFormData({ ...formData, end_date: formatLocalDateTime(end) });
+    setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
   };
 
   const handleCreateElection = async (e: React.FormEvent) => {
@@ -172,14 +165,6 @@ export const ElectionsPage: React.FC = () => {
       default:
         return 'bg-theme-surface-secondary text-theme-text-primary';
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
   };
 
   if (loading) {
@@ -285,7 +270,7 @@ export const ElectionsPage: React.FC = () => {
                             />
                           </svg>
                           <span>
-                            {formatDate(election.start_date)} - {formatDate(election.end_date)}
+                            {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
                           </span>
                         </div>
                         {election.positions && election.positions.length > 0 && (

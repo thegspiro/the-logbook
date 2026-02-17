@@ -1,8 +1,8 @@
 /**
  * Settings Page
  *
- * Allows secretary to manage contact information visibility settings
- * and membership ID configuration.
+ * Allows secretary to manage contact information visibility
+ * and membership ID settings.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -16,15 +16,15 @@ export const SettingsPage: React.FC = () => {
     show_phone: true,
     show_mobile: true,
   });
-  const [membershipIdSettings, setMembershipIdSettings] = useState<MembershipIdSettings>({
+  const [membershipId, setMembershipId] = useState<MembershipIdSettings>({
     enabled: false,
+    auto_generate: false,
     prefix: '',
     next_number: 1,
-    padding: 4,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingMembership, setSavingMembership] = useState(false);
+  const [savingMembershipId, setSavingMembershipId] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -36,10 +36,10 @@ export const SettingsPage: React.FC = () => {
 
         const data = await organizationService.getSettings();
         setSettings(data.contact_info_visibility);
-        if (data.membership_ids) {
-          setMembershipIdSettings(data.membership_ids);
+        if (data.membership_id) {
+          setMembershipId(data.membership_id);
         }
-      } catch (err) {
+      } catch (_err) {
         setError('Unable to load settings. Please check your connection and refresh the page.');
       } finally {
         setLoading(false);
@@ -57,29 +57,34 @@ export const SettingsPage: React.FC = () => {
 
       await organizationService.updateContactInfoSettings(settings);
 
-      setSuccessMessage('Contact info settings saved successfully!');
+      setSuccessMessage('Settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to save settings. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveMembershipIds = async () => {
+  const handleSaveMembershipId = async () => {
     try {
-      setSavingMembership(true);
+      setSavingMembershipId(true);
       setError(null);
       setSuccessMessage(null);
 
-      await organizationService.updateMembershipIdSettings(membershipIdSettings);
+      await organizationService.updateMembershipIdSettings(membershipId);
 
       setSuccessMessage('Membership ID settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      setError('Unable to save membership ID settings. Please try again.');
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setError('You do not have permission to update membership ID settings.');
+      } else {
+        setError('Unable to save membership ID settings. Please try again.');
+      }
     } finally {
-      setSavingMembership(false);
+      setSavingMembershipId(false);
     }
   };
 
@@ -90,10 +95,11 @@ export const SettingsPage: React.FC = () => {
     }));
   };
 
-  // Preview the next membership number that will be assigned
-  const previewNextNumber = () => {
-    const numStr = String(membershipIdSettings.next_number).padStart(membershipIdSettings.padding, '0');
-    return `${membershipIdSettings.prefix}${numStr}`;
+  const handleMembershipIdToggle = (field: 'enabled' | 'auto_generate') => {
+    setMembershipId((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }));
   };
 
   if (loading) {
@@ -101,7 +107,7 @@ export const SettingsPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-theme-text-muted">Loading settings...</div>
+            <div className="text-slate-400">Loading settings...</div>
           </div>
         </div>
       </div>
@@ -112,9 +118,9 @@ export const SettingsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
-          <p className="mt-1 text-sm text-theme-text-muted">
-            Manage contact information visibility and membership ID configuration.
+          <h2 className="text-2xl font-bold text-white">Organization Settings</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Manage contact information visibility and membership ID settings.
           </p>
         </div>
 
@@ -123,7 +129,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-red-700 dark:text-red-400"
+                  className="h-5 w-5 text-red-400"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
@@ -147,7 +153,7 @@ export const SettingsPage: React.FC = () => {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-green-700 dark:text-green-400"
+                  className="h-5 w-5 text-green-400"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
@@ -167,11 +173,11 @@ export const SettingsPage: React.FC = () => {
         )}
 
         {/* Contact Information Visibility */}
-        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
+        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-white mb-4">
             Contact Information Visibility
           </h3>
-          <p className="text-sm text-theme-text-muted mb-6">
+          <p className="text-sm text-slate-400 mb-6">
             Control whether contact information is displayed on the member list page.
             When enabled, a privacy notice will be shown to remind users that this information
             is for department purposes only.
@@ -179,12 +185,12 @@ export const SettingsPage: React.FC = () => {
 
           <div className="space-y-4">
             {/* Master Toggle */}
-            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+            <div className="flex items-center justify-between py-4 border-b border-white/20">
               <div>
-                <label htmlFor="enabled" className="text-sm font-medium text-theme-text-primary">
+                <label htmlFor="enabled" className="text-sm font-medium text-white">
                   Show Contact Information
                 </label>
-                <p className="text-sm text-theme-text-muted">
+                <p className="text-sm text-slate-400">
                   Enable display of contact information for all members
                 </p>
               </div>
@@ -192,7 +198,7 @@ export const SettingsPage: React.FC = () => {
                 type="button"
                 onClick={() => handleToggle('enabled')}
                 className={`${
-                  settings.enabled ? 'bg-blue-600' : 'bg-theme-surface-hover'
+                  settings.enabled ? 'bg-blue-600' : 'bg-slate-600'
                 } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                 role="switch"
                 aria-checked={settings.enabled}
@@ -210,7 +216,7 @@ export const SettingsPage: React.FC = () => {
               <div className="pl-4 space-y-4">
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_email" className="text-sm font-medium text-theme-text-primary">
+                    <label htmlFor="show_email" className="text-sm font-medium text-white">
                       Show Email Addresses
                     </label>
                   </div>
@@ -218,7 +224,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => handleToggle('show_email')}
                     className={`${
-                      settings.show_email ? 'bg-blue-600' : 'bg-theme-surface-hover'
+                      settings.show_email ? 'bg-blue-600' : 'bg-slate-600'
                     } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                     role="switch"
                     aria-checked={settings.show_email}
@@ -233,7 +239,7 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_phone" className="text-sm font-medium text-theme-text-primary">
+                    <label htmlFor="show_phone" className="text-sm font-medium text-white">
                       Show Phone Numbers
                     </label>
                   </div>
@@ -241,7 +247,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => handleToggle('show_phone')}
                     className={`${
-                      settings.show_phone ? 'bg-blue-600' : 'bg-theme-surface-hover'
+                      settings.show_phone ? 'bg-blue-600' : 'bg-slate-600'
                     } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                     role="switch"
                     aria-checked={settings.show_phone}
@@ -256,7 +262,7 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_mobile" className="text-sm font-medium text-theme-text-primary">
+                    <label htmlFor="show_mobile" className="text-sm font-medium text-white">
                       Show Mobile Numbers
                     </label>
                   </div>
@@ -264,7 +270,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => handleToggle('show_mobile')}
                     className={`${
-                      settings.show_mobile ? 'bg-blue-600' : 'bg-theme-surface-hover'
+                      settings.show_mobile ? 'bg-blue-600' : 'bg-slate-600'
                     } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                     role="switch"
                     aria-checked={settings.show_mobile}
@@ -286,148 +292,133 @@ export const SettingsPage: React.FC = () => {
               disabled={saving}
               className={`${
                 saving
-                  ? 'bg-theme-surface-hover cursor-not-allowed'
+                  ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
+              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
           </div>
         </div>
 
-        {/* Membership ID Settings */}
-        <div className="mt-6 bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
-            Membership ID Numbers
+        {/* Membership ID Number */}
+        <div className="mt-6 bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-white mb-4">
+            Membership ID Number
           </h3>
-          <p className="text-sm text-theme-text-muted mb-6">
-            Configure automatic membership ID assignment for new members. When enabled,
-            each member who joins the department will receive a sequential membership number.
-            The membership coordinator can also manually assign a number to former members
-            being reinstated.
+          <p className="text-sm text-slate-400 mb-6">
+            Configure membership ID numbers for your organization. When enabled,
+            each member can be assigned a unique ID number displayed on their profile.
           </p>
 
           <div className="space-y-4">
             {/* Enable Toggle */}
-            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+            <div className="flex items-center justify-between py-4 border-b border-white/20">
               <div>
-                <label className="text-sm font-medium text-theme-text-primary">
-                  Auto-Assign Membership Numbers
+                <label className="text-sm font-medium text-white">
+                  Enable Membership ID Numbers
                 </label>
-                <p className="text-sm text-theme-text-muted">
-                  Automatically assign the next sequential membership number when a new member joins
+                <p className="text-sm text-slate-400">
+                  Display membership ID numbers on member profiles and lists
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  setMembershipIdSettings((prev) => ({ ...prev, enabled: !prev.enabled }))
-                }
+                onClick={() => handleMembershipIdToggle('enabled')}
                 className={`${
-                  membershipIdSettings.enabled ? 'bg-blue-600' : 'bg-theme-surface-hover'
+                  membershipId.enabled ? 'bg-blue-600' : 'bg-slate-600'
                 } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                 role="switch"
-                aria-checked={membershipIdSettings.enabled}
+                aria-checked={membershipId.enabled}
               >
                 <span
                   className={`${
-                    membershipIdSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+                    membershipId.enabled ? 'translate-x-5' : 'translate-x-0'
                   } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
                 />
               </button>
             </div>
 
-            {membershipIdSettings.enabled && (
-              <div className="pl-4 space-y-5">
+            {membershipId.enabled && (
+              <div className="pl-4 space-y-4">
+                {/* Auto-Generate Toggle */}
+                <div className="flex items-center justify-between py-3">
+                  <div>
+                    <label className="text-sm font-medium text-white">
+                      Auto-Generate IDs
+                    </label>
+                    <p className="text-sm text-slate-400">
+                      Automatically assign the next sequential ID to new members
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleMembershipIdToggle('auto_generate')}
+                    className={`${
+                      membershipId.auto_generate ? 'bg-blue-600' : 'bg-slate-600'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                    role="switch"
+                    aria-checked={membershipId.auto_generate}
+                  >
+                    <span
+                      className={`${
+                        membershipId.auto_generate ? 'translate-x-5' : 'translate-x-0'
+                      } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                  </button>
+                </div>
+
                 {/* Prefix */}
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
-                    Prefix (optional)
+                <div className="py-3">
+                  <label className="block text-sm font-medium text-white mb-1">
+                    ID Prefix
                   </label>
-                  <p className="text-xs text-theme-text-muted mb-2">
-                    Text prepended to each membership number (e.g. &quot;M-&quot;, &quot;FD-&quot;)
+                  <p className="text-sm text-slate-400 mb-2">
+                    Optional prefix prepended to each ID (e.g. &quot;FD-&quot; produces FD-001)
                   </p>
                   <input
                     type="text"
                     maxLength={10}
-                    value={membershipIdSettings.prefix}
-                    onChange={(e) =>
-                      setMembershipIdSettings((prev) => ({ ...prev, prefix: e.target.value }))
-                    }
-                    placeholder="e.g. M-"
-                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={membershipId.prefix}
+                    onChange={(e) => setMembershipId((prev) => ({ ...prev, prefix: e.target.value }))}
+                    placeholder="e.g. FD-"
+                    className="w-40 rounded-md bg-slate-700 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
                 {/* Next Number */}
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
-                    Next Number
-                  </label>
-                  <p className="text-xs text-theme-text-muted mb-2">
-                    The next sequential number to assign to a new member
-                  </p>
-                  <input
-                    type="number"
-                    min={1}
-                    value={membershipIdSettings.next_number}
-                    onChange={(e) =>
-                      setMembershipIdSettings((prev) => ({
-                        ...prev,
-                        next_number: Math.max(1, parseInt(e.target.value) || 1),
-                      }))
-                    }
-                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Zero Padding */}
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
-                    Zero Padding
-                  </label>
-                  <p className="text-xs text-theme-text-muted mb-2">
-                    Pad the number with leading zeros to this many digits (e.g. 3 = &quot;001&quot;)
-                  </p>
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    value={membershipIdSettings.padding}
-                    onChange={(e) =>
-                      setMembershipIdSettings((prev) => ({
-                        ...prev,
-                        padding: Math.min(10, Math.max(0, parseInt(e.target.value) || 0)),
-                      }))
-                    }
-                    className="w-32 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Preview */}
-                <div className="pt-2 border-t border-theme-surface-border">
-                  <p className="text-sm text-theme-text-muted">
-                    Next membership number to be assigned:{' '}
-                    <span className="font-mono font-semibold text-theme-text-primary">
-                      {previewNextNumber()}
-                    </span>
-                  </p>
-                </div>
+                {membershipId.auto_generate && (
+                  <div className="py-3">
+                    <label className="block text-sm font-medium text-white mb-1">
+                      Next ID Number
+                    </label>
+                    <p className="text-sm text-slate-400 mb-2">
+                      The next number to assign when a new member is added
+                    </p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={membershipId.next_number}
+                      onChange={(e) => setMembershipId((prev) => ({ ...prev, next_number: Math.max(1, parseInt(e.target.value) || 1) }))}
+                      className="w-40 rounded-md bg-slate-700 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           <div className="mt-6 flex justify-end">
             <button
-              onClick={handleSaveMembershipIds}
-              disabled={savingMembership}
+              onClick={handleSaveMembershipId}
+              disabled={savingMembershipId}
               className={`${
-                savingMembership
-                  ? 'bg-theme-surface-hover cursor-not-allowed'
+                savingMembershipId
+                  ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
+              } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >
-              {savingMembership ? 'Saving...' : 'Save Membership ID Settings'}
+              {savingMembershipId ? 'Saving...' : 'Save Membership ID Settings'}
             </button>
           </div>
         </div>
@@ -436,7 +427,7 @@ export const SettingsPage: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
-                className="h-5 w-5 text-yellow-700 dark:text-yellow-400"
+                className="h-5 w-5 text-yellow-400"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 20 20"
                 fill="currentColor"
@@ -452,7 +443,7 @@ export const SettingsPage: React.FC = () => {
               <h3 className="text-sm font-medium text-yellow-800">Note</h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  These settings require <strong>secretary permissions</strong>. In a production environment,
+                  This setting requires <strong>secretary permissions</strong>. In a production environment,
                   only users with the appropriate role will be able to modify these settings.
                 </p>
               </div>

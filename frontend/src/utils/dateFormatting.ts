@@ -102,6 +102,40 @@ export const formatForDateTimeInput = (dateString?: string | Date | null, timezo
 };
 
 /**
+ * Get today's date as YYYY-MM-DD in the given timezone.
+ * Use this instead of `new Date().toISOString().split('T')[0]`
+ * which returns the UTC date and can be off by a day.
+ * @param timezone - IANA timezone (e.g., "America/New_York")
+ * @returns Date string "YYYY-MM-DD"
+ */
+export const getTodayLocalDate = (timezone?: string): string => {
+  const opts: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+  if (timezone) opts.timeZone = timezone;
+  // en-CA produces YYYY-MM-DD natively
+  return new Intl.DateTimeFormat('en-CA', opts).format(new Date());
+};
+
+/**
+ * Convert a Date to a YYYY-MM-DD string in the given timezone.
+ * @param date - Date object
+ * @param timezone - IANA timezone (e.g., "America/New_York")
+ * @returns Date string "YYYY-MM-DD"
+ */
+export const toLocalDateString = (date: Date, timezone?: string): string => {
+  const opts: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+  if (timezone) opts.timeZone = timezone;
+  return new Intl.DateTimeFormat('en-CA', opts).format(date);
+};
+
+/**
  * Calculate days until a date
  * @param dateString - ISO date string or Date object
  * @returns Number of days until the date (negative if past)

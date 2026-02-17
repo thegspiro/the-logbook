@@ -110,7 +110,7 @@ const ImportMembers: React.FC = () => {
 
       setPreviewData(preview);
       toast.success(`File validated successfully! Found ${rows.length - 1} members to import.`);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to parse CSV file. Please check the format.');
     }
     setValidating(false);
@@ -250,7 +250,7 @@ const ImportMembers: React.FC = () => {
       if (result.failed > 0) {
         toast.error(`Failed to import ${result.failed} members. Check the error details below.`);
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to process CSV file. Please try again.');
     }
     setImporting(false);

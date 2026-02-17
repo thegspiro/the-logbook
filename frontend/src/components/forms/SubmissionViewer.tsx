@@ -18,7 +18,7 @@ import {
   Globe, Trash2, Download,
 } from 'lucide-react';
 import { formsService } from '../../services/api';
-import type { FormSubmission, FormField, FormDetailDef, SubmissionsListResponse } from '../../services/api';
+import type { FormSubmission, FormField } from '../../services/api';
 
 export interface SubmissionViewerProps {
   /** Fetch submissions for this form */
@@ -84,7 +84,7 @@ const SubmissionViewer = ({
       const [formData, subsData] = await Promise.all([
         fields.length === 0 ? formsService.getForm(formId) : null,
         formsService.getSubmissions(formId, { skip: page * limit, limit }),
-      ]) as [FormDetailDef | null, SubmissionsListResponse];
+      ]);
 
       if (formData) {
         setFields(formData.fields);
@@ -126,7 +126,7 @@ const SubmissionViewer = ({
   const formatValue = (fieldId: string, value: unknown): string => {
     if (value === null || value === undefined) return '—';
     const type = getFieldType(fieldId);
-    const strVal = String(value);
+    const strVal = typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'boolean' ? String(value) : JSON.stringify(value);
 
     switch (type) {
       case 'date':

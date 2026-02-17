@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { QRCheckInData, RSVP } from '../types/event';
 import { toAppError } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDateTime, formatTime } from '../utils/dateFormatting';
 
 /**
  * Event Self Check-In Page
@@ -15,6 +17,7 @@ import { toAppError } from '../utils/errorHandling';
  */
 const EventSelfCheckInPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
+  const tz = useTimezone();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,28 +85,6 @@ const EventSelfCheckInPage: React.FC = () => {
     }
   };
 
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-theme-surface-secondary">
@@ -158,7 +139,7 @@ const EventSelfCheckInPage: React.FC = () => {
               <div className="space-y-2 text-blue-800">
                 <p>
                   <span className="font-medium">Checked In At:</span>{' '}
-                  {checkInData.checked_in_at && formatTime(checkInData.checked_in_at)}
+                  {checkInData.checked_in_at && formatTime(checkInData.checked_in_at, tz)}
                 </p>
 
                 {qrData?.location && (
@@ -244,21 +225,21 @@ const EventSelfCheckInPage: React.FC = () => {
                 {qrData?.start_datetime && (
                   <p>
                     <span className="font-medium">Event Time:</span>{' '}
-                    {formatTime(qrData.start_datetime)} - {formatTime(qrData.end_datetime)}
+                    {formatTime(qrData.start_datetime, tz)} - {formatTime(qrData.end_datetime, tz)}
                   </p>
                 )}
 
                 {checkInData.checked_in_at && (
                   <p>
                     <span className="font-medium">Checked In At:</span>{' '}
-                    {formatTime(checkInData.checked_in_at)}
+                    {formatTime(checkInData.checked_in_at, tz)}
                   </p>
                 )}
 
                 {isCheckOut && checkInData.checked_out_at && (
                   <p>
                     <span className="font-medium">Checked Out At:</span>{' '}
-                    {formatTime(checkInData.checked_out_at)}
+                    {formatTime(checkInData.checked_out_at, tz)}
                   </p>
                 )}
 
@@ -340,7 +321,7 @@ const EventSelfCheckInPage: React.FC = () => {
             {qrData?.start_datetime && (
               <p className="flex items-start">
                 <span className="font-medium w-24">When:</span>
-                <span className="flex-1">{formatDateTime(qrData.start_datetime)}</span>
+                <span className="flex-1">{formatDateTime(qrData.start_datetime, tz)}</span>
               </p>
             )}
           </div>
@@ -384,7 +365,7 @@ const EventSelfCheckInPage: React.FC = () => {
                   Check-in is only available during the following time window:
                 </p>
                 <p className="font-medium text-yellow-900">
-                  {qrData && formatDateTime(qrData.check_in_start)} to {qrData && formatTime(qrData.check_in_end)}
+                  {qrData && formatDateTime(qrData.check_in_start, tz)} to {qrData && formatTime(qrData.check_in_end, tz)}
                 </p>
                 {qrData?.actual_end_time && (
                   <p className="text-sm text-yellow-700 mt-2">

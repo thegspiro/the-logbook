@@ -6,13 +6,14 @@ Business logic for event management.
 
 from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
-from app.models.user import User, Role, user_roles
+from app.models.user import User, Role, user_roles, Organization
 from app.models.location import Location
 from app.models.training import TrainingSession, TrainingRecord, TrainingStatus
 from app.schemas.event import (
@@ -640,9 +641,16 @@ class EventService:
         if event.is_cancelled:
             return None, "Event has been cancelled"
 
+        # Get organization timezone for user-facing messages
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        tz_name = org.timezone if org else None
+
         # Validate check-in window
         now = datetime.utcnow()
-        is_valid, error_msg = self._validate_check_in_window(event, now)
+        is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
         if not is_valid:
             return None, error_msg
 
@@ -884,7 +892,7 @@ class EventService:
             "require_checkout": event.require_checkout or False,
         }, None
 
-    def _validate_check_in_window(self, event: Event, now: datetime) -> Tuple[bool, Optional[str]]:
+    def _validate_check_in_window(self, event: Event, now: datetime, tz_name: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """
         Validate if check-in is allowed based on event's check-in window settings
 
@@ -911,7 +919,11 @@ class EventService:
             check_in_end = event.end_datetime + timedelta(minutes=minutes_after)
 
         if now < check_in_start:
-            return False, f"Check-in is not available yet. Opens at {check_in_start.strftime('%I:%M %p')}."
+            if tz_name:
+                local_start = check_in_start.replace(tzinfo=dt_timezone.utc).astimezone(ZoneInfo(tz_name))
+            else:
+                local_start = check_in_start
+            return False, f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')}."
 
         if now > check_in_end:
             return False, "Check-in is no longer available. The event has ended."
@@ -957,10 +969,17 @@ class EventService:
         if not user:
             return None, "User not found in organization"
 
+        # Get organization timezone for user-facing messages
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        tz_name = org.timezone if org else None
+
         now = datetime.utcnow()
 
         # Validate check-in window
-        is_valid, error_msg = self._validate_check_in_window(event, now)
+        is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
         if not is_valid:
             return None, error_msg
 
