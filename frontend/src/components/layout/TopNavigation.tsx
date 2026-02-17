@@ -59,6 +59,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'All Members', path: '/members' },
         { label: 'Prospective', path: '/prospective-members', permission: 'prospective_members.manage' },
+        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
         { label: 'Members Admin', path: '/members/admin', permission: 'members.manage' },
       ],
     },

@@ -91,6 +91,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       subItems: [
         { label: 'All Members', path: '/members', icon: Users },
         { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
+        { label: 'Pipeline Settings', path: '/prospective-members/settings', icon: Settings, permission: 'prospective_members.manage' },
         { label: 'Members Admin', path: '/members/admin', icon: UserCog, permission: 'members.manage' },
       ],
     },

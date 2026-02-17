@@ -50,7 +50,6 @@ const EventEditPage = lazy(() => import('./pages/EventEditPage').then(m => ({ de
 const EventsAdminHub = lazy(() => import('./pages/EventsAdminHub').then(m => ({ default: m.EventsAdminHub })));
 
 // Training Module
-const TrainingDashboardPage = lazy(() => import('./pages/TrainingDashboardPage'));
 const TrainingAdminPage = lazy(() => import('./pages/TrainingAdminPage').then(m => ({ default: m.TrainingAdminPage })));
 const TrainingProgramsPage = lazy(() => import('./pages/TrainingProgramsPage'));
 const PipelineDetailPage = lazy(() => import('./pages/PipelineDetailPage'));
@@ -167,7 +166,7 @@ function App() {
               <Route path="/documents" element={<DocumentsPage />} />
 
               {/* Training Module - Member-facing */}
-              <Route path="/training" element={<TrainingDashboardPage />} />
+              <Route path="/training" element={<MyTrainingPage />} />
               <Route path="/training/my-training" element={<MyTrainingPage />} />
               <Route path="/training/submit" element={<SubmitTrainingPage />} />
               <Route path="/training/courses" element={<CourseLibraryPage />} />
