@@ -22,6 +22,8 @@ import {
   Truck,
   Vote,
   ClipboardList,
+  ClipboardCheck,
+  BookOpen,
   BarChart3,
   Bell,
   FormInput,
@@ -90,7 +92,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
-    { label: 'Training', path: '/training', icon: GraduationCap },
+    {
+      label: 'Training',
+      path: '#',
+      icon: GraduationCap,
+      subItems: [
+        { label: 'My Training', path: '/training/my-training', icon: GraduationCap },
+        { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
+        { label: 'Course Library', path: '/training/courses', icon: BookOpen },
+        { label: 'Review Submissions', path: '/training/submissions', icon: ClipboardCheck, permission: 'training.manage' },
+        { label: 'Officer Dashboard', path: '/training/officer', icon: Shield, permission: 'training.manage' },
+      ],
+    },
     {
       label: 'Operations',
       path: '#',
