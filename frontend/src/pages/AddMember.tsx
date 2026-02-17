@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   UserPlus,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
-import { userService } from '../services/api';
+import { userService, organizationService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
@@ -21,6 +21,8 @@ const AddMember: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const [isSaving, setIsSaving] = useState(false);
+  const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
+  const [membershipIdOverride, setMembershipIdOverride] = useState('');
   const [formData, setFormData] = useState<MemberFormData>({
     firstName: '',
     lastName: '',
@@ -52,6 +54,16 @@ const AddMember: React.FC = () => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    organizationService.previewNextMembershipId().then((data) => {
+      if (data.enabled && data.next_id) {
+        setMembershipIdPreview(data.next_id);
+      }
+    }).catch(() => {
+      // Silently ignore - membership ID may not be configured
+    });
+  }, []);
 
   const handleInputChange = (
     field: keyof MemberFormData,
@@ -151,6 +163,7 @@ const AddMember: React.FC = () => {
         middle_name: formData.middleName || undefined,
         last_name: formData.lastName,
         badge_number: formData.departmentId || undefined,
+        membership_id: membershipIdOverride || undefined,
         phone: formData.primaryPhone || undefined,
         mobile: formData.secondaryPhone || undefined,
         date_of_birth: formData.dateOfBirth || undefined,
@@ -188,21 +201,21 @@ const AddMember: React.FC = () => {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-blue-600 rounded-lg p-2">
-                <UserPlus className="w-6 h-6 text-white" />
+                <UserPlus className="w-6 h-6 text-theme-text-primary" />
               </div>
               <div>
-                <h1 className="text-white text-xl font-bold">Add New Member</h1>
-                <p className="text-slate-400 text-sm">Enter member information</p>
+                <h1 className="text-theme-text-primary text-xl font-bold">Add New Member</h1>
+                <p className="text-theme-text-muted text-sm">Enter member information</p>
               </div>
             </div>
             <button
               onClick={handleCancel}
-              className="text-slate-300 hover:text-white transition-colors text-sm"
+              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm"
             >
               ← Back to Members
             </button>
@@ -213,175 +226,202 @@ const AddMember: React.FC = () => {
       <main className="max-w-4xl mx-auto px-6 py-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Personal Information */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
-              <User className="w-5 h-5 text-blue-400" />
-              <h2 className="text-xl font-bold text-white">Personal Information</h2>
+              <User className="w-5 h-5 text-blue-700 dark:text-blue-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Personal Information</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  First Name <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  First Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.firstName ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.firstName ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="John"
                 />
                 {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-400">{errors.firstName}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.firstName}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Middle Name
                 </label>
                 <input
                   type="text"
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Michael"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Last Name <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Last Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.lastName ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.lastName ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="Doe"
                 />
                 {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-400">{errors.lastName}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.lastName}</p>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Department ID <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Department ID <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.departmentId}
                   onChange={(e) => handleInputChange('departmentId', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.departmentId ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.departmentId ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="FF-001"
                 />
                 {errors.departmentId && (
-                  <p className="mt-1 text-sm text-red-400">{errors.departmentId}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.departmentId}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Date of Birth
                 </label>
                 <input
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
+
+            {/* Membership ID - shown when membership IDs are enabled */}
+            {membershipIdPreview && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Membership ID
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={membershipIdOverride}
+                    onChange={(e) => setMembershipIdOverride(e.target.value)}
+                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={membershipIdPreview}
+                  />
+                  <span className="text-sm text-theme-text-muted">
+                    {membershipIdOverride
+                      ? 'Manual override'
+                      : `Auto-assigned: ${membershipIdPreview}`
+                    }
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-theme-text-muted">
+                  Leave blank to auto-assign the next ID. Enter a value to manually assign (e.g., for returning former members).
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Home Address */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
-              <MapPin className="w-5 h-5 text-green-400" />
-              <h2 className="text-xl font-bold text-white">Home Address</h2>
+              <MapPin className="w-5 h-5 text-green-700 dark:text-green-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Home Address</h2>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Street Address <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Street Address <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.street}
                   onChange={(e) => handleInputChange('street', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.street ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.street ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="123 Main Street"
                 />
                 {errors.street && (
-                  <p className="mt-1 text-sm text-red-400">{errors.street}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.street}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2">
-                    City <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                    City <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.city}
                     onChange={(e) => handleInputChange('city', e.target.value)}
-                    className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                      errors.city ? 'border-red-500' : 'border-slate-600'
-                    } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                      errors.city ? 'border-red-500' : 'border-theme-input-border'
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     placeholder="Springfield"
                   />
                   {errors.city && (
-                    <p className="mt-1 text-sm text-red-400">{errors.city}</p>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.city}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2">
-                    State <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                    State <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.state}
                     onChange={(e) => handleInputChange('state', e.target.value)}
-                    className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                      errors.state ? 'border-red-500' : 'border-slate-600'
-                    } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                      errors.state ? 'border-red-500' : 'border-theme-input-border'
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     placeholder="IL"
                     maxLength={2}
                   />
                   {errors.state && (
-                    <p className="mt-1 text-sm text-red-400">{errors.state}</p>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.state}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2">
-                    ZIP Code <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                    ZIP Code <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.zipCode}
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
-                    className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                      errors.zipCode ? 'border-red-500' : 'border-slate-600'
-                    } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                      errors.zipCode ? 'border-red-500' : 'border-theme-input-border'
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     placeholder="62701"
                   />
                   {errors.zipCode && (
-                    <p className="mt-1 text-sm text-red-400">{errors.zipCode}</p>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.zipCode}</p>
                   )}
                 </div>
               </div>
@@ -389,64 +429,64 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
-              <Phone className="w-5 h-5 text-purple-400" />
-              <h2 className="text-xl font-bold text-white">Contact Information</h2>
+              <Phone className="w-5 h-5 text-purple-700 dark:text-purple-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Contact Information</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Primary Phone <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Primary Phone <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="tel"
                   value={formData.primaryPhone}
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.primaryPhone ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.primaryPhone && (
-                  <p className="mt-1 text-sm text-red-400">{errors.primaryPhone}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.primaryPhone}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Secondary Phone
                 </label>
                 <input
                   type="tel"
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="(555) 987-6543"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Email <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Email <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.email ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.email ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && (
-                  <p className="mt-1 text-sm text-red-400">{errors.email}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Preferred Contact Method
                 </label>
                 <select
@@ -454,7 +494,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) =>
                     handleInputChange('preferredContact', e.target.value as 'phone' | 'email' | 'text')
                   }
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="phone">Phone</option>
                   <option value="email">Email</option>
@@ -465,33 +505,33 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Department Information */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
-              <Calendar className="w-5 h-5 text-orange-400" />
-              <h2 className="text-xl font-bold text-white">Department Information</h2>
+              <Calendar className="w-5 h-5 text-orange-700 dark:text-orange-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Department Information</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Join Date
                 </label>
                 <input
                   type="date"
                   value={formData.joinDate}
                   onChange={(e) => handleInputChange('joinDate', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Status
                 </label>
                 <select
                   value={formData.status}
                   onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -501,13 +541,13 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Membership Type <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Membership Type <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <select
                   value={formData.membershipType}
                   onChange={(e) => handleInputChange('membershipType', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="probationary">Probationary</option>
                   <option value="regular">Regular</option>
@@ -517,40 +557,40 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Rank
                 </label>
                 <input
                   type="text"
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Firefighter"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Role
                 </label>
                 <input
                   type="text"
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Engine Operator"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Station
                 </label>
                 <input
                   type="text"
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Station 1"
                 />
               </div>
@@ -558,76 +598,76 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Emergency Contact 1 */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
-              <AlertCircle className="w-5 h-5 text-red-400" />
-              <h2 className="text-xl font-bold text-white">Emergency Contact (Primary)</h2>
+              <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Emergency Contact (Primary)</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Name <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.emergencyName1}
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.emergencyName1 ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="Jane Doe"
                 />
                 {errors.emergencyName1 && (
-                  <p className="mt-1 text-sm text-red-400">{errors.emergencyName1}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyName1}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Relationship <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Relationship <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.emergencyRelationship1}
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.emergencyRelationship1 ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="Spouse"
                 />
                 {errors.emergencyRelationship1 && (
-                  <p className="mt-1 text-sm text-red-400">{errors.emergencyRelationship1}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyRelationship1}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  Phone <span className="text-red-400">*</span>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Phone <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="tel"
                   value={formData.emergencyPhone1}
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
-                  className={`w-full px-4 py-2 bg-slate-900/50 border ${
-                    errors.emergencyPhone1 ? 'border-red-500' : 'border-slate-600'
-                  } rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  className={`w-full px-4 py-2 bg-theme-input-bg border ${
+                    errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.emergencyPhone1 && (
-                  <p className="mt-1 text-sm text-red-400">{errors.emergencyPhone1}</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyPhone1}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email
                 </label>
                 <input
                   type="email"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="jane.doe@example.com"
                 />
               </div>
@@ -635,62 +675,62 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Emergency Contact 2 (Optional) */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
             <div className="flex items-center space-x-2 mb-4">
-              <AlertCircle className="w-5 h-5 text-yellow-400" />
-              <h2 className="text-xl font-bold text-white">Emergency Contact (Secondary)</h2>
-              <span className="text-sm text-slate-400">(Optional)</span>
+              <AlertCircle className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
+              <h2 className="text-xl font-bold text-theme-text-primary">Emergency Contact (Secondary)</h2>
+              <span className="text-sm text-theme-text-muted">(Optional)</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Name
                 </label>
                 <input
                   type="text"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Bob Doe"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Relationship
                 </label>
                 <input
                   type="text"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Parent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Phone
                 </label>
                 <input
                   type="tel"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="(555) 987-6543"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email
                 </label>
                 <input
                   type="email"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="bob.doe@example.com"
                 />
               </div>
@@ -698,12 +738,12 @@ const AddMember: React.FC = () => {
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-between pt-6 border-t border-white/10">
+          <div className="flex items-center justify-between pt-6 border-t border-theme-surface-border">
             <button
               type="button"
               onClick={handleCancel}
               disabled={isSaving}
-              className="flex items-center space-x-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5" />
               <span>Cancel</span>

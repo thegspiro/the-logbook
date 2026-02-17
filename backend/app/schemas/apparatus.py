@@ -237,6 +237,8 @@ class ApparatusStatusListItem(BaseModel):
 
 class ApparatusBase(BaseModel):
     """Base apparatus schema"""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     # Identification
     unit_number: str = Field(..., min_length=1, max_length=50, description="Department unit number")
     name: Optional[str] = Field(None, max_length=200, description="Optional friendly name")
@@ -333,6 +335,8 @@ class ApparatusCreate(ApparatusBase):
 
 class ApparatusUpdate(BaseModel):
     """Schema for updating apparatus"""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     # Identification
     unit_number: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, max_length=200)

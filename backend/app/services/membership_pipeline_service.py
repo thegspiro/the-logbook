@@ -28,7 +28,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
     PipelineStepType,
 )
-from app.models.user import User, UserStatus, generate_uuid
+from app.models.user import User, UserStatus, Organization, generate_uuid
 
 
 class MembershipPipelineService:
@@ -48,7 +48,10 @@ class MembershipPipelineService:
         query = (
             select(MembershipPipeline)
             .where(MembershipPipeline.organization_id == organization_id)
-            .options(selectinload(MembershipPipeline.steps))
+            .options(
+                selectinload(MembershipPipeline.steps),
+                selectinload(MembershipPipeline.prospects),
+            )
             .order_by(MembershipPipeline.is_default.desc(), MembershipPipeline.created_at)
         )
         if not include_templates:
@@ -640,6 +643,7 @@ class MembershipPipelineService:
         organization_id: str,
         transferred_by: str,
         username: Optional[str] = None,
+        membership_id: Optional[str] = None,
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
@@ -653,7 +657,7 @@ class MembershipPipelineService:
             return {"success": False, "message": "Prospect has already been transferred"}
 
         return await self._do_transfer(
-            prospect, transferred_by, username, rank, station, role_ids
+            prospect, transferred_by, username, membership_id, rank, station, role_ids
         )
 
     async def _do_transfer(
@@ -661,6 +665,7 @@ class MembershipPipelineService:
         prospect: ProspectiveMember,
         transferred_by: str,
         username: Optional[str] = None,
+        membership_id: Optional[str] = None,
         rank: Optional[str] = None,
         station: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
@@ -707,6 +712,12 @@ class MembershipPipelineService:
         if not username:
             username = self._generate_username(prospect.first_name, prospect.last_name)
 
+        # Auto-assign membership ID if not manually provided
+        if not membership_id:
+            from app.services.organization_service import OrganizationService
+            org_service = OrganizationService(self.db)
+            membership_id = await org_service.generate_next_membership_id(prospect.organization_id)
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
@@ -722,20 +733,33 @@ class MembershipPipelineService:
             address_city=prospect.address_city,
             address_state=prospect.address_state,
             address_zip=prospect.address_zip,
+            membership_id=membership_id,
             rank=rank,
             station=station,
         )
         self.db.add(new_user)
+
+        # Auto-assign membership number if enabled for this organization
+        from app.services.organization_service import OrganizationService
+        org_service = OrganizationService(self.db)
+        membership_number = await org_service.assign_next_membership_number(
+            organization_id=prospect.organization_id,
+            user=new_user,
+        )
 
         # Update prospect record
         prospect.status = ProspectStatus.TRANSFERRED
         prospect.transferred_user_id = user_id
         prospect.transferred_at = datetime.utcnow()
 
+        transfer_details: Dict[str, Any] = {"user_id": user_id, "username": username}
+        if membership_number:
+            transfer_details["membership_number"] = membership_number
+
         await self._log_activity(
             prospect_id=prospect.id,
             action="transferred_to_membership",
-            details={"user_id": user_id, "username": username},
+            details=transfer_details,
             performed_by=transferred_by,
         )
 
@@ -756,6 +780,7 @@ class MembershipPipelineService:
             "success": True,
             "prospect_id": prospect.id,
             "user_id": user_id,
+            "membership_number": membership_number,
             "message": result_msg,
             "auto_enrollment": enrollment_result,
         }

@@ -21,7 +21,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
           Step {currentStep} of {totalSteps}
         </span>
       </div>
-      <div className="w-full bg-slate-800 rounded-full h-2">
+      <div className="w-full bg-theme-surface rounded-full h-2">
         <div
           className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
           style={{ width: `${percentage}%` }}

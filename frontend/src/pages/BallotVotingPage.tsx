@@ -172,10 +172,10 @@ export const BallotVotingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center">
         <div className="text-center" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-red-600 mb-4"></div>
-          <p className="text-gray-600">Loading your ballot...</p>
+          <p className="text-theme-text-secondary">Loading your ballot...</p>
         </div>
       </div>
     );
@@ -183,12 +183,12 @@ export const BallotVotingPage: React.FC = () => {
 
   if (error && !election) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-theme-surface rounded-lg shadow-lg p-8 text-center">
           <div className="text-red-600 text-5xl mb-4">!</div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Unable to Load Ballot</h1>
-          <p className="text-gray-600">{error}</p>
-          <p className="text-sm text-gray-400 mt-4">
+          <h1 className="text-xl font-bold text-theme-text-primary mb-2">Unable to Load Ballot</h1>
+          <p className="text-theme-text-secondary">{error}</p>
+          <p className="text-sm text-theme-text-muted mt-4">
             If you believe this is an error, please contact your organization secretary.
           </p>
         </div>
@@ -198,16 +198,16 @@ export const BallotVotingPage: React.FC = () => {
 
   if (submitted && submitResult) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+      <div className="min-h-screen bg-theme-surface-secondary flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-theme-surface rounded-lg shadow-lg p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Ballot Submitted</h1>
-          <p className="text-gray-600 mb-4">{submitResult.message}</p>
-          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-theme-text-primary mb-2">Ballot Submitted</h1>
+          <p className="text-theme-text-secondary mb-4">{submitResult.message}</p>
+          <div className="bg-theme-surface-secondary rounded-lg p-4 text-sm text-theme-text-muted">
             <p>Your ballot has been recorded securely and anonymously.</p>
             <p className="mt-2">You may close this page.</p>
           </div>
@@ -221,7 +221,7 @@ export const BallotVotingPage: React.FC = () => {
   const ballotItems = election.ballot_items || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-theme-surface-secondary">
       {/* Header */}
       <div className="bg-red-700 text-white">
         <div className="max-w-2xl mx-auto px-4 py-8 text-center">
@@ -250,7 +250,7 @@ export const BallotVotingPage: React.FC = () => {
         )}
 
         <div className="mb-6">
-          <p className="text-gray-600 text-sm">
+          <p className="text-theme-text-secondary text-sm">
             Please review each item below and make your selection. You may vote for the
             presented option, write in an alternative, or abstain from voting on any item.
           </p>
@@ -266,18 +266,18 @@ export const BallotVotingPage: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                className="bg-theme-surface rounded-lg shadow-sm border border-theme-surface-border overflow-hidden"
               >
                 {/* Item Header */}
-                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-start gap-3">
                     <span className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-sm font-bold">
                       {index + 1}
                     </span>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{item.title}</h3>
+                      <h3 className="font-semibold text-theme-text-primary">{item.title}</h3>
                       {item.description && (
-                        <p className="mt-1 text-sm text-gray-500">{item.description}</p>
+                        <p className="mt-1 text-sm text-theme-text-muted">{item.description}</p>
                       )}
                     </div>
                   </div>
@@ -288,7 +288,7 @@ export const BallotVotingPage: React.FC = () => {
                   {isApprovalType ? (
                     <>
                       {/* Approve */}
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-green-50 hover:border-green-300 transition-colors">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-green-50 hover:border-green-300 transition-colors">
                         <input
                           type="radio"
                           name={`item-${item.id}`}
@@ -296,11 +296,11 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={() => updateChoice(item.id, 'approve')}
                           className="w-4 h-4 text-green-600 focus:ring-green-500"
                         />
-                        <span className="font-medium text-gray-900">Approve</span>
+                        <span className="font-medium text-theme-text-primary">Approve</span>
                       </label>
 
                       {/* Deny */}
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-red-50 hover:border-red-300 transition-colors">
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-red-50 hover:border-red-300 transition-colors">
                         <input
                           type="radio"
                           name={`item-${item.id}`}
@@ -308,7 +308,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={() => updateChoice(item.id, 'deny')}
                           className="w-4 h-4 text-red-600 focus:ring-red-500"
                         />
-                        <span className="font-medium text-gray-900">Deny</span>
+                        <span className="font-medium text-theme-text-primary">Deny</span>
                       </label>
                     </>
                   ) : (
@@ -317,7 +317,7 @@ export const BallotVotingPage: React.FC = () => {
                       {itemCandidates.map((candidate) => (
                         <label
                           key={candidate.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                          className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
                         >
                           <input
                             type="radio"
@@ -327,9 +327,9 @@ export const BallotVotingPage: React.FC = () => {
                             className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                           />
                           <div>
-                            <span className="font-medium text-gray-900">{candidate.name}</span>
+                            <span className="font-medium text-theme-text-primary">{candidate.name}</span>
                             {candidate.statement && (
-                              <p className="text-sm text-gray-500 mt-0.5">{candidate.statement}</p>
+                              <p className="text-sm text-theme-text-muted mt-0.5">{candidate.statement}</p>
                             )}
                           </div>
                         </label>
@@ -343,7 +343,7 @@ export const BallotVotingPage: React.FC = () => {
                       className={`p-3 rounded-lg border transition-colors ${
                         itemChoice?.choice === 'write_in'
                           ? 'border-purple-300 bg-purple-50'
-                          : 'border-gray-200 hover:bg-purple-50 hover:border-purple-300'
+                          : 'border-theme-surface-border hover:bg-purple-50 hover:border-purple-300'
                       }`}
                     >
                       <label className="flex items-center gap-3 cursor-pointer">
@@ -354,7 +354,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={() => updateChoice(item.id, 'write_in')}
                           className="w-4 h-4 text-purple-600 focus:ring-purple-500"
                         />
-                        <span className="font-medium text-gray-900">Write-in</span>
+                        <span className="font-medium text-theme-text-primary">Write-in</span>
                       </label>
                       {itemChoice?.choice === 'write_in' && (
                         <input
@@ -363,7 +363,7 @@ export const BallotVotingPage: React.FC = () => {
                           onChange={(e) => updateWriteInName(item.id, e.target.value)}
                           placeholder="Enter name or option..."
                           aria-label="Enter name or option"
-                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                          className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md shadow-sm py-2 px-3 focus:ring-purple-500 focus:border-purple-500 text-sm bg-theme-input-bg text-theme-text-primary"
                           autoFocus
                         />
                       )}
@@ -371,15 +371,15 @@ export const BallotVotingPage: React.FC = () => {
                   )}
 
                   {/* Abstain */}
-                  <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                  <label className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border cursor-pointer hover:bg-theme-surface-hover transition-colors">
                     <input
                       type="radio"
                       name={`item-${item.id}`}
                       checked={itemChoice?.choice === 'abstain'}
                       onChange={() => updateChoice(item.id, 'abstain')}
-                      className="w-4 h-4 text-gray-400 focus:ring-gray-500"
+                      className="w-4 h-4 text-theme-text-muted focus:ring-gray-500"
                     />
-                    <span className="text-gray-500">Abstain (Do not vote on this item)</span>
+                    <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                   </label>
                 </div>
               </div>
@@ -396,13 +396,13 @@ export const BallotVotingPage: React.FC = () => {
           >
             Submit Ballot
           </button>
-          <p className="mt-2 text-sm text-gray-400">
+          <p className="mt-2 text-sm text-theme-text-muted">
             You will have a chance to review your choices before they are submitted.
           </p>
         </div>
 
         {/* Security notice */}
-        <div className="mt-8 text-center text-xs text-gray-400">
+        <div className="mt-8 text-center text-xs text-theme-text-muted">
           <p>Your vote is anonymous and securely recorded.</p>
           <p>This voting link is unique to you. Do not share it with others.</p>
         </div>
@@ -411,16 +411,16 @@ export const BallotVotingPage: React.FC = () => {
       {/* Confirmation Modal */}
       {showConfirmation && (
         <div
-          className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-ballot-title"
           onKeyDown={(e) => { if (e.key === 'Escape' && !submitting) setShowConfirmation(false); }}
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h3 id="confirm-ballot-title" className="text-lg font-bold text-gray-900">Confirm Your Ballot</h3>
-              <p className="text-sm text-gray-500 mt-1">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border bg-theme-surface-secondary">
+              <h3 id="confirm-ballot-title" className="text-lg font-bold text-theme-text-primary">Confirm Your Ballot</h3>
+              <p className="text-sm text-theme-text-muted mt-1">
                 Please review your selections below. Once submitted, your ballot cannot be changed.
               </p>
             </div>
@@ -435,18 +435,18 @@ export const BallotVotingPage: React.FC = () => {
                     <div
                       key={item.id}
                       className={`flex items-start gap-3 p-3 rounded-lg ${
-                        isAbstain ? 'bg-gray-50' : 'bg-blue-50'
+                        isAbstain ? 'bg-theme-surface-secondary' : 'bg-blue-50'
                       }`}
                     >
-                      <span className="flex-shrink-0 w-6 h-6 bg-gray-200 text-gray-600 rounded-full flex items-center justify-center text-xs font-bold">
+                      <span className="flex-shrink-0 w-6 h-6 bg-theme-surface-secondary text-theme-text-secondary rounded-full flex items-center justify-center text-xs font-bold">
                         {index + 1}
                       </span>
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900">{item.title}</div>
+                        <div className="text-sm font-medium text-theme-text-primary">{item.title}</div>
                         <div
                           className={`text-sm mt-0.5 font-semibold ${
                             isAbstain
-                              ? 'text-gray-400'
+                              ? 'text-theme-text-muted'
                               : choices[item.id]?.choice === 'approve'
                                 ? 'text-green-700'
                                 : choices[item.id]?.choice === 'deny'
@@ -463,12 +463,12 @@ export const BallotVotingPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between">
+            <div className="px-6 py-4 border-t border-theme-surface-border bg-theme-surface-secondary flex justify-between">
               <button
                 type="button"
                 onClick={() => setShowConfirmation(false)}
                 disabled={submitting}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
               >
                 Change Ballot
               </button>

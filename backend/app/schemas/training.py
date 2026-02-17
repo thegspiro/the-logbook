@@ -19,6 +19,17 @@ class DueDateType(str, Enum):
     FIXED_DATE = "fixed_date"  # Due by a specific fixed date
 
 
+class RequirementType(str, Enum):
+    """Type of training requirement"""
+    HOURS = "hours"
+    COURSES = "courses"
+    CERTIFICATION = "certification"
+    SHIFTS = "shifts"
+    CALLS = "calls"
+    SKILLS_EVALUATION = "skills_evaluation"
+    CHECKLIST = "checklist"
+
+
 # Training Category Schemas
 
 class TrainingCategoryBase(BaseModel):
@@ -71,12 +82,12 @@ class TrainingCourseBase(BaseModel):
     training_type: str
     duration_hours: Optional[float] = Field(None, ge=0)
     credit_hours: Optional[float] = Field(None, ge=0)
-    prerequisites: Optional[List[UUID]] = None
+    prerequisites: Optional[List[str]] = None
     expiration_months: Optional[int] = Field(None, ge=0)
     instructor: Optional[str] = Field(None, max_length=255)
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
-    category_ids: Optional[List[UUID]] = None  # Categories this course belongs to
+    category_ids: Optional[List[str]] = None  # Categories this course belongs to
 
 
 class TrainingCourseCreate(TrainingCourseBase):
@@ -92,12 +103,12 @@ class TrainingCourseUpdate(BaseModel):
     training_type: Optional[str] = None
     duration_hours: Optional[float] = Field(None, ge=0)
     credit_hours: Optional[float] = Field(None, ge=0)
-    prerequisites: Optional[List[UUID]] = None
+    prerequisites: Optional[List[str]] = None
     expiration_months: Optional[int] = Field(None, ge=0)
     instructor: Optional[str] = Field(None, max_length=255)
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
-    category_ids: Optional[List[UUID]] = None
+    category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
 
 
@@ -185,13 +196,14 @@ class TrainingRequirementBase(BaseModel):
     """Base training requirement schema"""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    requirement_type: RequirementType
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
-    required_courses: Optional[List[UUID]] = None
+    required_courses: Optional[List[str]] = None
     frequency: str
     year: Optional[int] = Field(None, ge=2020, le=2100)
     applies_to_all: bool = True
-    required_roles: Optional[List[UUID]] = None
+    required_roles: Optional[List[str]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     # Due date calculation fields
@@ -200,7 +212,7 @@ class TrainingRequirementBase(BaseModel):
     period_start_month: int = Field(1, ge=1, le=12)  # Month period starts (1=January)
     period_start_day: int = Field(1, ge=1, le=31)  # Day period starts
     # Category requirements - training in these categories satisfies this requirement
-    category_ids: Optional[List[UUID]] = None
+    category_ids: Optional[List[str]] = None
 
 
 class TrainingRequirementCreate(TrainingRequirementBase):
@@ -212,13 +224,14 @@ class TrainingRequirementUpdate(BaseModel):
     """Schema for updating a training requirement"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    requirement_type: Optional[RequirementType] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
-    required_courses: Optional[List[UUID]] = None
+    required_courses: Optional[List[str]] = None
     frequency: Optional[str] = None
     year: Optional[int] = Field(None, ge=2020, le=2100)
     applies_to_all: Optional[bool] = None
-    required_roles: Optional[List[UUID]] = None
+    required_roles: Optional[List[str]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
     # Due date calculation fields
@@ -226,7 +239,7 @@ class TrainingRequirementUpdate(BaseModel):
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)
     period_start_month: Optional[int] = Field(None, ge=1, le=12)
     period_start_day: Optional[int] = Field(None, ge=1, le=31)
-    category_ids: Optional[List[UUID]] = None
+    category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
 
 
