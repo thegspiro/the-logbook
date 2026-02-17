@@ -3,16 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
-  GraduationCap,
   Users,
   Layers,
   ListChecks,
-  Flag,
   Calendar,
   Copy,
-  Edit2,
-  Trash2,
-  Plus,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -238,7 +233,7 @@ const PipelineDetailPage: React.FC = () => {
 
       // Expand all phases by default
       setExpandedPhases(new Set(phasesData.map((p: ProgramPhase) => p.id)));
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load program');
       navigate('/training/programs');
     } finally {
@@ -246,7 +241,7 @@ const PipelineDetailPage: React.FC = () => {
     }
   };
 
-  const loadEnrollments = async () => {
+  const loadEnrollments = () => {
     if (!programId) return;
     // The API doesn't have a direct "get enrollments by program" endpoint,
     // but we can filter through the program data

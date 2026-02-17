@@ -44,7 +44,7 @@ export default function TrainingDashboardPage() {
       setCourses(coursesData);
       setExpiringCerts(expiringData);
       setRequirements(requirementsData);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load training dashboard data');
     } finally {
       setLoading(false);

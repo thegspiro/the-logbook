@@ -8,7 +8,6 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  AlertCircle,
   RotateCcw,
   Trash2,
   Edit2,
@@ -396,7 +395,7 @@ const SubmitTrainingPage: React.FC = () => {
       setConfig(configData);
       setCategories(categoriesData);
       setSubmissions(submissionsData);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load submission form');
     } finally {
       setLoading(false);

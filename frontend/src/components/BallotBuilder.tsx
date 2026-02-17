@@ -58,7 +58,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     try {
       const data = await electionService.getBallotTemplates();
       setTemplates(data);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - templates list will be empty
     }
   };

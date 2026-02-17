@@ -81,7 +81,7 @@ const Members: React.FC = () => {
     try {
       const settings = await userService.checkContactInfoEnabled();
       setContactInfoEnabled(settings);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - contact info settings default to disabled
     }
   };

@@ -100,7 +100,7 @@ export const MemberProfilePage: React.FC = () => {
       if (inventoryEnabled && userId) {
         fetchInventoryItems();
       }
-    } catch (err) {
+    } catch (_err) {
       // If we can't fetch module status, default to not showing inventory
       setInventoryModuleEnabled(false);
     }
@@ -112,7 +112,7 @@ export const MemberProfilePage: React.FC = () => {
       setError(null);
       const userData = await userService.getUserWithRoles(userId!);
       setUser(userData);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load member information. The member may not exist or you may not have access.');
     } finally {
       setLoading(false);
@@ -124,7 +124,7 @@ export const MemberProfilePage: React.FC = () => {
       setTrainingsLoading(true);
       const records = await trainingService.getRecords({ user_id: userId! });
       setTrainings(records);
-    } catch (err) {
+    } catch (_err) {
       // Don't set error - show empty state
     } finally {
       setTrainingsLoading(false);
@@ -145,7 +145,7 @@ export const MemberProfilePage: React.FC = () => {
         assigned_date: item.assigned_date,
       }));
       setInventoryItems(items);
-    } catch (err) {
+    } catch (_err) {
       // Don't set error - show empty state
     } finally {
       setInventoryLoading(false);

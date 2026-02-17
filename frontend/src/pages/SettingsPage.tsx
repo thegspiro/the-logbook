@@ -39,7 +39,7 @@ export const SettingsPage: React.FC = () => {
         if (data.membership_id) {
           setMembershipId(data.membership_id);
         }
-      } catch (err) {
+      } catch (_err) {
         setError('Unable to load settings. Please check your connection and refresh the page.');
       } finally {
         setLoading(false);
@@ -59,7 +59,7 @@ export const SettingsPage: React.FC = () => {
 
       setSuccessMessage('Settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to save settings. Please check your connection and try again.');
     } finally {
       setSaving(false);

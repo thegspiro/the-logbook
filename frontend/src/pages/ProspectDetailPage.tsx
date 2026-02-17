@@ -33,7 +33,6 @@ import {
   SkipForward,
   ArrowRight,
   UserCheck,
-  FileText,
   MessageSquare,
   Activity,
   X,
@@ -43,7 +42,7 @@ import {
 
 export const ProspectDetailPage: React.FC = () => {
   const { prospectId } = useParams<{ prospectId: string }>();
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
   const [prospect, setProspect] = useState<Prospect | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -295,7 +294,7 @@ export const ProspectDetailPage: React.FC = () => {
         <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Pipeline Steps</h2>
           <div className="space-y-1">
-            {sortedProgress.map((progress, idx) => (
+            {sortedProgress.map((progress, _idx) => (
               <div
                 key={progress.id}
                 className={`flex items-start gap-4 p-4 rounded-lg transition-colors ${
@@ -498,8 +497,8 @@ export const ProspectDetailPage: React.FC = () => {
                     )}
                     {entry.details && (
                       <div className="mt-1 text-xs text-slate-400">
-                        {entry.details.notes ? <span>Note: {String(entry.details.notes)}</span> : null}
-                        {entry.details.to_step_name ? <span>Moved to: {String(entry.details.to_step_name)}</span> : null}
+                        {entry.details.notes ? <span>Note: {typeof entry.details.notes === 'string' ? entry.details.notes : JSON.stringify(entry.details.notes)}</span> : null}
+                        {entry.details.to_step_name ? <span>Moved to: {typeof entry.details.to_step_name === 'string' ? entry.details.to_step_name : JSON.stringify(entry.details.to_step_name)}</span> : null}
                       </div>
                     )}
                   </div>

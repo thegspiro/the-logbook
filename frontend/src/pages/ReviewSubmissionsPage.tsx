@@ -73,7 +73,7 @@ const ReviewPanel: React.FC<{
   const [action, setAction] = useState<'approve' | 'reject' | 'revision_requested'>('approve');
   const [notes, setNotes] = useState('');
   const [overrideHours, setOverrideHours] = useState<number | undefined>();
-  const [overrideCreditHours, setOverrideCreditHours] = useState<number | undefined>();
+  const [overrideCreditHours, _setOverrideCreditHours] = useState<number | undefined>();
   const [overrideType, setOverrideType] = useState<TrainingType | undefined>();
   const [showOverrides, setShowOverrides] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -579,7 +579,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         });
         setSubmissions(data);
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load submissions');
     } finally {
       setLoading(false);

@@ -105,7 +105,7 @@ const DepartmentInfo: React.FC = () => {
     }
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => {
     // Validation
     if (!departmentName.trim()) {
       toast.error('Please enter your department name');
@@ -127,14 +127,14 @@ const DepartmentInfo: React.FC = () => {
     navigate('/onboarding/navigation-choice');
   };
 
-  const handleSkipLogo = async () => {
+  const handleSkipLogo = () => {
     if (!departmentName.trim()) {
       toast.error('Please enter your department name before continuing');
       return;
     }
 
     // Same as handleContinue but without logo
-    await handleContinue();
+    handleContinue();
   };
 
   return (

@@ -98,7 +98,7 @@ export const RegisterPage: React.FC = () => {
         badge_number: formData.badgeNumber || undefined,
       });
       navigate('/');
-    } catch (err) {
+    } catch (_err) {
       // Error is handled by the store and displayed via error state
     }
   };

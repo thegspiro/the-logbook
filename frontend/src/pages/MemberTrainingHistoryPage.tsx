@@ -54,7 +54,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
 
       setUser(userData);
       setTrainings(records);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load training history. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -120,11 +120,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       let compareValue = 0;
 
       switch (sortField) {
-        case 'date':
+        case 'date': {
           const dateA = new Date(a.completion_date || a.scheduled_date || '');
           const dateB = new Date(b.completion_date || b.scheduled_date || '');
           compareValue = dateB.getTime() - dateA.getTime();
           break;
+        }
         case 'course':
           compareValue = a.course_name.localeCompare(b.course_name);
           break;

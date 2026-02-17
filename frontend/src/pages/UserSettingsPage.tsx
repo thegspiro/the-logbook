@@ -25,7 +25,7 @@ export const UserSettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('account');
 
   // Profile state
-  const [profile, setProfile] = useState<UserWithRoles | null>(null);
+  const [_profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState<UserProfileUpdate>({});
@@ -45,7 +45,7 @@ export const UserSettingsPage: React.FC = () => {
   const [trainingReminders, setTrainingReminders] = useState(true);
   const [announcementNotifications, setAnnouncementNotifications] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
-  const [loadingPreferences, setLoadingPreferences] = useState(false);
+  const [_loadingPreferences, setLoadingPreferences] = useState(false);
 
   // Load user profile
   useEffect(() => {

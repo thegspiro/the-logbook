@@ -234,7 +234,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
                     {openDropdown === item.label && (
                       <div className="absolute top-full left-0 mt-1 w-48 bg-slate-800 border border-white/10 rounded-lg shadow-xl py-1 z-50">
-                        {visibleSubItems!.map((subItem) => {
+                        {visibleSubItems.map((subItem) => {
                           const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (
                           <a
@@ -335,7 +335,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       </button>
                       {isExpanded && (
                         <div className="ml-4 space-y-1 mt-1">
-                          {visibleSubItems!.map((subItem) => {
+                          {visibleSubItems.map((subItem) => {
                             const subActive = isSubItemActive(subItem.path, item.subItems || []);
                             return (
                             <a

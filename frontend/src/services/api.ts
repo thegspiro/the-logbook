@@ -107,8 +107,8 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
+  (error: unknown) => {
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 );
 
@@ -133,7 +133,7 @@ api.interceptors.response.use(
 
       const refreshToken = localStorage.getItem('refresh_token');
       if (!refreshToken) {
-        return Promise.reject(error);
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
 
       try {
@@ -165,11 +165,11 @@ api.interceptors.response.use(
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/login';
-        return Promise.reject(refreshError);
+        return Promise.reject(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
       }
     }
 
-    return Promise.reject(error);
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 );
 
@@ -512,7 +512,7 @@ export const authService = {
     try {
       await api.get('/auth/check');
       return true;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   },

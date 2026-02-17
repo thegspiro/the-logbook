@@ -67,7 +67,7 @@ const PublicPortalAdmin: React.FC = () => {
     if (!config) return;
     try {
       await toggleEnabled(!config.enabled);
-    } catch (error) {
+    } catch (_error) {
       // Error already handled by hook
     }
   };

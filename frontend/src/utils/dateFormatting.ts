@@ -15,7 +15,7 @@
  * @param timezone - Optional IANA timezone (e.g., "America/New_York")
  * @returns Formatted date string (e.g., "1/15/2024")
  */
-export const formatDate = (dateString?: string | Date, timezone?: string): string => {
+export const formatDate = (dateString?: string | Date | null, timezone?: string): string => {
   if (!dateString) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {};
   if (timezone) opts.timeZone = timezone;
@@ -28,7 +28,7 @@ export const formatDate = (dateString?: string | Date, timezone?: string): strin
  * @param timezone - Optional IANA timezone (e.g., "America/New_York")
  * @returns Formatted date-time string (e.g., "Monday, January 15, 2024, 2:30 PM")
  */
-export const formatDateTime = (dateString?: string | Date, timezone?: string): string => {
+export const formatDateTime = (dateString?: string | Date | null, timezone?: string): string => {
   if (!dateString) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {
     weekday: 'long',
@@ -48,7 +48,7 @@ export const formatDateTime = (dateString?: string | Date, timezone?: string): s
  * @param timezone - Optional IANA timezone (e.g., "America/New_York")
  * @returns Formatted date-time string (e.g., "Jan 15, 2:30 PM")
  */
-export const formatShortDateTime = (dateString?: string | Date, timezone?: string): string => {
+export const formatShortDateTime = (dateString?: string | Date | null, timezone?: string): string => {
   if (!dateString) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {
     month: 'short',
@@ -66,7 +66,7 @@ export const formatShortDateTime = (dateString?: string | Date, timezone?: strin
  * @param timezone - Optional IANA timezone (e.g., "America/New_York")
  * @returns Formatted time string (e.g., "2:30 PM")
  */
-export const formatTime = (dateString?: string | Date, timezone?: string): string => {
+export const formatTime = (dateString?: string | Date | null, timezone?: string): string => {
   if (!dateString) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {
     hour: 'numeric',
@@ -83,7 +83,7 @@ export const formatTime = (dateString?: string | Date, timezone?: string): strin
  * @param timezone - Optional IANA timezone (e.g., "America/New_York")
  * @returns Formatted string for datetime-local input (e.g., "2024-01-15T14:30")
  */
-export const formatForDateTimeInput = (dateString?: string | Date, timezone?: string): string => {
+export const formatForDateTimeInput = (dateString?: string | Date | null, timezone?: string): string => {
   if (!dateString) return '';
   if (!timezone) {
     return new Date(dateString).toISOString().slice(0, 16);

@@ -61,6 +61,14 @@ const getPresetDates = (preset: DatePreset, tz?: string): { start: string; end: 
   }
 };
 
+/** Safely convert any value to a string (avoids @typescript-eslint/no-base-to-string). */
+const toStr = (v: unknown): string => {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try { return JSON.stringify(v); } catch { return '[object]'; }
+};
+
 export const ReportsPage: React.FC = () => {
   const tz = useTimezone();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -213,11 +221,11 @@ export const ReportsPage: React.FC = () => {
                 {members.map((m, i) => (
                   <tr key={i} className="text-slate-200">
                     <td className="px-4 py-2 whitespace-nowrap">
-                      {String(m.first_name ?? m.name ?? '')} {String(m.last_name ?? '')}
+                      {toStr(m.first_name ?? m.name ?? '')} {toStr(m.last_name ?? '')}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(m.email ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(m.status ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(m.role ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(m.email ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(m.status ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(m.role ?? '-')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -243,7 +251,7 @@ export const ReportsPage: React.FC = () => {
             <span className="font-semibold text-white">
               {typeof completionRate === 'number'
                 ? `${Math.round(completionRate * (completionRate <= 1 ? 100 : 1))}%`
-                : String(completionRate)}
+                : toStr(completionRate)}
             </span>
           </p>
         )}
@@ -262,16 +270,16 @@ export const ReportsPage: React.FC = () => {
                 {entries.map((e, i) => (
                   <tr key={i} className="text-slate-200">
                     <td className="px-4 py-2 whitespace-nowrap">
-                      {String(e.member_name ?? e.member ?? e.name ?? '-')}
+                      {toStr(e.member_name ?? e.member ?? e.name ?? '-')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
-                      {String(e.course ?? e.requirement ?? e.title ?? '-')}
+                      {toStr(e.course ?? e.requirement ?? e.title ?? '-')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap capitalize">
-                      {String(e.status ?? e.completion_status ?? '-')}
+                      {toStr(e.status ?? e.completion_status ?? '-')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
-                      {e.hours != null ? String(e.hours) : '-'}
+                      {e.hours != null ? toStr(e.hours) : '-'}
                     </td>
                   </tr>
                 ))}
@@ -298,7 +306,7 @@ export const ReportsPage: React.FC = () => {
             <span className="font-semibold text-white">
               {typeof overallRate === 'number'
                 ? `${Math.round(overallRate * (overallRate <= 1 ? 100 : 1))}%`
-                : String(overallRate)}
+                : toStr(overallRate)}
             </span>
           </p>
         )}
@@ -319,19 +327,19 @@ export const ReportsPage: React.FC = () => {
                   return (
                     <tr key={i} className="text-slate-200">
                       <td className="px-4 py-2 whitespace-nowrap">
-                        {String(ev.title ?? ev.name ?? ev.event ?? '-')}
+                        {toStr(ev.title ?? ev.name ?? ev.event ?? '-')}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">
-                        {ev.date ? String(ev.date) : '-'}
+                        {ev.date ? toStr(ev.date) : '-'}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">
-                        {ev.attendees != null ? String(ev.attendees) : ev.attendee_count != null ? String(ev.attendee_count) : '-'}
+                        {ev.attendees != null ? toStr(ev.attendees) : ev.attendee_count != null ? toStr(ev.attendee_count) : '-'}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">
                         {rate !== undefined && rate !== null
                           ? typeof rate === 'number'
                             ? `${Math.round(rate * (rate <= 1 ? 100 : 1))}%`
-                            : String(rate)
+                            : toStr(rate)
                           : '-'}
                       </td>
                     </tr>
@@ -358,7 +366,7 @@ export const ReportsPage: React.FC = () => {
         <div className="flex flex-wrap gap-4 mb-4">
           {avgProgress !== undefined && (
             <p className="text-sm text-slate-300">
-              Average progress: <span className="font-semibold text-white">{String(avgProgress)}%</span>
+              Average progress: <span className="font-semibold text-white">{toStr(avgProgress)}%</span>
             </p>
           )}
           {Object.entries(statusSummary).map(([status, count]) => (
@@ -382,8 +390,8 @@ export const ReportsPage: React.FC = () => {
               <tbody className="divide-y divide-white/5">
                 {entries.map((e, i) => (
                   <tr key={i} className="text-slate-200">
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.member_name ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.program_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.program_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
                         <div className="w-24 bg-slate-700 rounded-full h-2">
@@ -392,13 +400,13 @@ export const ReportsPage: React.FC = () => {
                             style={{ width: `${Number(e.progress_percentage ?? 0)}%` }}
                           />
                         </div>
-                        <span className="text-xs">{String(e.progress_percentage ?? 0)}%</span>
+                        <span className="text-xs">{toStr(e.progress_percentage ?? 0)}%</span>
                       </div>
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-xs">
-                      {String(e.requirements_completed ?? 0)} / {String(e.requirements_total ?? 0)}
+                      {toStr(e.requirements_completed ?? 0)} / {toStr(e.requirements_total ?? 0)}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(e.status ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.status ?? '-')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -421,19 +429,19 @@ export const ReportsPage: React.FC = () => {
       <>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{String(summary.total_combined_hours ?? 0)}</div>
+            <div className="text-xl font-bold text-white">{toStr(summary.total_combined_hours ?? 0)}</div>
             <div className="text-xs text-slate-400">Total Hours</div>
           </div>
           <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{String(summary.total_completions ?? 0)}</div>
+            <div className="text-xl font-bold text-white">{toStr(summary.total_completions ?? 0)}</div>
             <div className="text-xs text-slate-400">Completions</div>
           </div>
           <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{String(summary.total_calls_responded ?? 0)}</div>
+            <div className="text-xl font-bold text-white">{toStr(summary.total_calls_responded ?? 0)}</div>
             <div className="text-xs text-slate-400">Calls Responded</div>
           </div>
           <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{String(summary.avg_hours_per_member ?? 0)}</div>
+            <div className="text-xl font-bold text-white">{toStr(summary.avg_hours_per_member ?? 0)}</div>
             <div className="text-xs text-slate-400">Avg Hours/Member</div>
           </div>
         </div>
@@ -469,14 +477,14 @@ export const ReportsPage: React.FC = () => {
               <tbody className="divide-y divide-white/5">
                 {entries.map((e, i) => (
                   <tr key={i} className="text-slate-200">
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.member_name ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap capitalize">{String(e.rank ?? '-')}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.training_hours ?? 0)}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.shift_hours ?? 0)}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.courses_completed ?? 0)}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.shifts_completed ?? 0)}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{String(e.calls_responded ?? 0)}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{e.avg_performance_rating != null ? String(e.avg_performance_rating) : '-'}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.rank ?? '-')}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.training_hours ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.shift_hours ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.courses_completed ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.shifts_completed ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{toStr(e.calls_responded ?? 0)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{e.avg_performance_rating != null ? toStr(e.avg_performance_rating) : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -725,7 +733,7 @@ export const ReportsPage: React.FC = () => {
                       <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
                       {activeReport.usesDateRange && (!!reportData?.period_start || !!reportData?.period_end) && (
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {reportData.period_start ? String(reportData.period_start) : 'Start'} — {reportData.period_end ? String(reportData.period_end) : 'End'}
+                          {reportData.period_start ? toStr(reportData.period_start) : 'Start'} — {reportData.period_end ? toStr(reportData.period_end) : 'End'}
                         </p>
                       )}
                     </div>

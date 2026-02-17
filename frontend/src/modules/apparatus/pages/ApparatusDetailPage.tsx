@@ -113,7 +113,7 @@ export const ApparatusDetailPage: React.FC = () => {
             break;
           }
         }
-      } catch (err) {
+      } catch (_err) {
         // Error silently handled - tab data will show empty state
       } finally {
         setLoadingTab(false);

@@ -37,7 +37,7 @@ const ModuleOverview: React.FC = () => {
     }
   }, [modules, moduleStatuses, setModuleStatuses]);
 
-  const handleModuleAction = async (moduleId: string, action: 'start' | 'skip' | 'ignore') => {
+  const handleModuleAction = (moduleId: string, action: 'start' | 'skip' | 'ignore') => {
     const module = modules.find(m => m.id === moduleId);
 
     if (action === 'start' && module?.configRoute) {

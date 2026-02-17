@@ -78,7 +78,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEventRSVPs(eventId);
       setRsvps(data);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - RSVPs section will show empty
     }
   };
@@ -89,7 +89,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEventStats(eventId);
       setStats(data);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - stats section will show empty
     }
   };
@@ -100,7 +100,7 @@ export const EventDetailPage: React.FC = () => {
     try {
       const data = await eventService.getEligibleMembers(eventId);
       setEligibleMembers(data);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - eligible members list will show empty
     }
   };
@@ -722,7 +722,7 @@ export const EventDetailPage: React.FC = () => {
                               className="h-4 w-4 text-red-600 focus:ring-red-500 border-slate-600"
                             />
                             <span className="ml-2 text-sm text-slate-200">
-                              {getRSVPStatusLabel(status as RSVPStatus)}
+                              {getRSVPStatusLabel(status)}
                             </span>
                           </label>
                         ))}

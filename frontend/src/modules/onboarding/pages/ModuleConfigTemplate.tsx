@@ -63,7 +63,7 @@ const ModuleConfigTemplate: React.FC = () => {
     );
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!moduleId) return;
     setSaving(true);
     setModulePermissionConfig(moduleId, manageRoles);

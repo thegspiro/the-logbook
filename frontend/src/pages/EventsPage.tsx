@@ -42,7 +42,7 @@ export const EventsPage: React.FC = () => {
       setError(null);
       const data = await eventService.getEvents();
       setEvents(data);
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load events. Please try again later.');
     } finally {
       setLoading(false);

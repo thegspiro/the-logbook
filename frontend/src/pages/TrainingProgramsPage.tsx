@@ -48,7 +48,7 @@ const TrainingProgramsPage: React.FC = () => {
         const data = await trainingProgramService.getRequirementsEnhanced();
         setRequirements(data);
       }
-    } catch (error) {
+    } catch (_error) {
       // Error silently handled - empty state shown
     } finally {
       setLoading(false);

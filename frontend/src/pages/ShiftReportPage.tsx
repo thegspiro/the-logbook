@@ -7,7 +7,6 @@ import {
   Star,
   Clock,
   Phone,
-  User,
   Calendar,
   ChevronDown,
   ChevronUp,
@@ -228,7 +227,7 @@ const ShiftReportPage: React.FC = () => {
       setFiledReports(filedData);
       setReceivedReports(receivedData);
       setMyStats(statsData);
-    } catch (error) {
+    } catch (_error) {
       // Error silently handled - empty state shown
     } finally {
       setLoading(false);

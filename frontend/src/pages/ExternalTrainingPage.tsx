@@ -538,7 +538,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
         api_base_url: provider.api_base_url || '',
         api_key: '',
         api_secret: '',
-        auth_type: (provider.auth_type as 'api_key' | 'basic' | 'oauth2') || 'api_key',
+        auth_type: provider.auth_type || 'api_key',
         auto_sync_enabled: provider.auto_sync_enabled || false,
         sync_interval_hours: provider.sync_interval_hours || 24,
       });
@@ -782,7 +782,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
       ]);
       setCategoryMappings(categories);
       setUserMappings(users);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - mappings modal will show empty state
     } finally {
       setLoading(false);
@@ -967,7 +967,7 @@ const ExternalTrainingPage: React.FC = () => {
     try {
       const data = await externalTrainingService.getProviders(false);
       setProviders(data);
-    } catch (err) {
+    } catch (_err) {
       // Error silently handled - empty provider list shown
     } finally {
       setLoading(false);

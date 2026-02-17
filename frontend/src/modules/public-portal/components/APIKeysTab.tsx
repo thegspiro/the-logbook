@@ -33,7 +33,7 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
       // Reset form and close
       setFormData({ name: '', rate_limit: undefined, expires_at: undefined });
       onClose();
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by the hook
     } finally {
       setIsSubmitting(false);

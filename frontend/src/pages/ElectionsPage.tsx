@@ -62,7 +62,7 @@ export const ElectionsPage: React.FC = () => {
       setError(null);
       const data = await electionService.getElections();
       setElections(data);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load elections. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);

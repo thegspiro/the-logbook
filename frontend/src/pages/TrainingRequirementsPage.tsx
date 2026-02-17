@@ -62,7 +62,7 @@ const TrainingRequirementsPage: React.FC = () => {
       ]);
       setRequirements(reqs);
       setCategories(cats);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load training requirements');
     } finally {
       setLoading(false);
@@ -76,7 +76,7 @@ const TrainingRequirementsPage: React.FC = () => {
       await trainingService.deleteRequirement(id);
       setRequirements(requirements.filter(r => r.id !== id));
       toast.success('Requirement deleted');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to delete requirement');
     }
   };
@@ -105,7 +105,7 @@ const TrainingRequirementsPage: React.FC = () => {
       const created = await trainingService.createRequirement(newReq);
       setRequirements([...requirements, created]);
       toast.success('Requirement duplicated');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to duplicate requirement');
     }
   };
@@ -120,7 +120,7 @@ const TrainingRequirementsPage: React.FC = () => {
         r.id === id ? { ...r, active: !r.active } : r
       ));
       toast.success(requirement.active ? 'Requirement deactivated' : 'Requirement activated');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to update requirement');
     }
   };
@@ -138,7 +138,7 @@ const TrainingRequirementsPage: React.FC = () => {
       }
       setShowCreateModal(false);
       setSelectedRequirement(null);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to save requirement');
     }
   };
@@ -300,7 +300,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 setRequirements([...requirements, created]);
                 toast.success(`Template "${template.name}" added`);
                 setShowTemplateModal(false);
-              } catch (error) {
+              } catch (_error) {
                 toast.error('Failed to create requirement from template');
               }
             }}
@@ -557,7 +557,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
   const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error('Name is required');
@@ -583,7 +583,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
       };
 
-      await onSave(data, !!requirement, requirement?.id);
+      onSave(data, !!requirement, requirement?.id);
     } finally {
       setSaving(false);
     }

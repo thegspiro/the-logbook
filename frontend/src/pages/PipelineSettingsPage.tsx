@@ -12,7 +12,6 @@ import { membershipPipelineService } from '../services/membershipPipelineApi';
 import type {
   Pipeline,
   PipelineListItem,
-  PipelineStep,
   PipelineCreate,
   PipelineStepCreate,
 } from '../services/membershipPipelineApi';
@@ -23,10 +22,8 @@ import {
   Settings,
   Trash2,
   Copy,
-  GripVertical,
   ChevronDown,
   ChevronUp,
-  Save,
   Star,
   Zap,
   FileText,
@@ -37,14 +34,13 @@ import {
   FolderOpen,
   Wrench,
   X,
-  AlertCircle,
   Layers,
 } from 'lucide-react';
 
 const PipelineSettingsPage: React.FC = () => {
   const [pipelines, setPipelines] = useState<PipelineListItem[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -70,7 +66,7 @@ const PipelineSettingsPage: React.FC = () => {
   });
 
   // Edit step
-  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [_editingStepId, setEditingStepId] = useState<string | null>(null);
 
   const fetchPipelines = useCallback(async () => {
     try {
@@ -161,7 +157,7 @@ const PipelineSettingsPage: React.FC = () => {
     }
   };
 
-  const handleUpdateStep = async (stepId: string, data: Partial<PipelineStepCreate>) => {
+  const _handleUpdateStep = async (stepId: string, data: Partial<PipelineStepCreate>) => {
     if (!selectedPipeline) return;
     try {
       await membershipPipelineService.updateStep(selectedPipeline.id, stepId, data);

@@ -12,17 +12,12 @@ import { membershipPipelineService } from '../services/membershipPipelineApi';
 import type {
   PipelineListItem,
   KanbanBoard,
-  KanbanColumn,
-  ProspectListItem,
   ProspectCreate,
 } from '../services/membershipPipelineApi';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import {
-  Users,
-  Plus,
   Settings,
-  ChevronRight,
   Search,
   Filter,
   UserPlus,
@@ -69,7 +64,7 @@ const MembershipPipelinePage: React.FC = () => {
         const defaultPipeline = data.find(p => p.is_default) || data[0];
         setSelectedPipelineId(defaultPipeline.id);
       }
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load pipelines');
     }
   }, [selectedPipelineId]);
@@ -81,7 +76,7 @@ const MembershipPipelinePage: React.FC = () => {
       setError(null);
       const board = await membershipPipelineService.getKanbanBoard(selectedPipelineId);
       setKanbanBoard(board);
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load pipeline board');
     } finally {
       setLoading(false);
@@ -258,7 +253,7 @@ const MembershipPipelinePage: React.FC = () => {
       {/* Kanban Board */}
       {!loading && kanbanBoard && filteredColumns && (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {filteredColumns.map((column, idx) => (
+          {filteredColumns.map((column, _idx) => (
             <div
               key={column.step?.id || 'unassigned'}
               className="flex-shrink-0 w-80 bg-slate-800/50 rounded-xl border border-slate-700"

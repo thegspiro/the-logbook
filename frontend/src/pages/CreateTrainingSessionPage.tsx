@@ -69,7 +69,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     setFormData({ ...formData, [field]: value });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     // Validation
     if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
       toast.error('Please fill in all required fields');

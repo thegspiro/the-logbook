@@ -42,7 +42,7 @@ export const RoleManagementPage: React.FC = () => {
 
       setRoles(rolesData);
       setPermissionCategories(permsData);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load roles and permissions. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);

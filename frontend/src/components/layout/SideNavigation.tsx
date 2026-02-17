@@ -22,10 +22,8 @@ import {
   Truck,
   Vote,
   ClipboardList,
-  ClipboardCheck,
   BookOpen,
   Layers,
-  FileBarChart,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -366,7 +364,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     {/* Sub Items */}
                     {hasSubItems && isExpanded && !collapsed && (
                       <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
-                        {visibleSubItems!.map((subItem) => {
+                        {visibleSubItems.map((subItem) => {
                           const SubIcon = subItem.icon;
                           const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (

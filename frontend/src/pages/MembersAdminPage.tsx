@@ -79,7 +79,7 @@ export const MembersAdminPage: React.FC = () => {
 
       setUsers(usersData);
       setRoles(rolesData);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load members and roles. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
@@ -118,7 +118,7 @@ export const MembersAdminPage: React.FC = () => {
         station: fullProfile.station || '',
       });
       setEditingProfile(true);
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to load member profile. Please try again.');
     }
   };
@@ -271,7 +271,7 @@ export const MembersAdminPage: React.FC = () => {
       const newRoleIds = user.roles.map((r) => r.id).filter((id) => id !== roleId);
       await userService.assignUserRoles(user.id, newRoleIds);
       await fetchData();
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to remove the role. Please check your connection and try again.');
     }
   };
@@ -289,7 +289,7 @@ export const MembersAdminPage: React.FC = () => {
       const newRoleIds = user.roles.map((r) => r.id).filter((id) => id !== role.id);
       await userService.assignUserRoles(userId, newRoleIds);
       await fetchData();
-    } catch (err) {
+    } catch (_err) {
       setError('Unable to remove the user from this role. Please check your connection and try again.');
     }
   };
