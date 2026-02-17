@@ -152,6 +152,8 @@ const OverdueReturnsPanel: React.FC = () => {
   const [members, setMembers] = useState<OverdueMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [reportPreview, setReportPreview] = useState<Record<string, unknown> | null>(null);
+  const [loadingReport, setLoadingReport] = useState<string | null>(null);
 
   useEffect(() => {
     loadOverdue();
@@ -179,6 +181,18 @@ const OverdueReturnsPanel: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to process reminders'));
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handlePreviewReport = async (userId: string) => {
+    setLoadingReport(userId);
+    try {
+      const data = await memberStatusService.getPropertyReturnPreview(userId);
+      setReportPreview(data);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load property return report'));
+    } finally {
+      setLoadingReport(null);
     }
   };
 
@@ -253,8 +267,91 @@ const OverdueReturnsPanel: React.FC = () => {
                   </div>
                 </div>
               )}
+              {member.user_id && (
+                <div className="mt-3 pt-3 border-t border-theme-surface-border">
+                  <button
+                    onClick={() => handlePreviewReport(member.user_id)}
+                    disabled={loadingReport === member.user_id}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary border border-theme-surface-border rounded-lg disabled:opacity-50"
+                  >
+                    {loadingReport === member.user_id ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Package className="w-3.5 h-3.5" aria-hidden="true" />
+                    )}
+                    Preview Property Return Report
+                  </button>
+                </div>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Property Return Report Preview Modal */}
+      {reportPreview && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="report-preview-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') setReportPreview(null); }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
+            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border max-h-[80vh] flex flex-col">
+              <div className="px-6 pt-5 pb-3 border-b border-theme-surface-border flex justify-between items-center flex-shrink-0">
+                <h3 id="report-preview-title" className="text-lg font-medium text-theme-text-primary">
+                  Property Return Report - {String(reportPreview.member_name || '')}
+                </h3>
+                <button
+                  onClick={() => setReportPreview(null)}
+                  className="text-theme-text-muted hover:text-theme-text-primary text-xl"
+                  aria-label="Close dialog"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="px-6 py-4 overflow-y-auto flex-1">
+                <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                  <div>
+                    <span className="text-theme-text-muted">Items: </span>
+                    <span className="text-theme-text-primary font-medium">{String(reportPreview.item_count ?? 0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-theme-text-muted">Total Value: </span>
+                    <span className="text-theme-text-primary font-medium">${Number(reportPreview.total_value ?? 0).toFixed(2)}</span>
+                  </div>
+                </div>
+                {reportPreview.html ? (
+                  <div
+                    className="prose prose-sm max-w-none text-theme-text-primary dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: String(reportPreview.html) }}
+                  />
+                ) : Array.isArray(reportPreview.items) && reportPreview.items.length > 0 ? (
+                  <div className="space-y-2">
+                    {(reportPreview.items as unknown[]).map((item: unknown, i: number) => (
+                      <div key={i} className="bg-theme-surface-secondary rounded p-3 text-sm text-theme-text-primary">
+                        {typeof item === 'object' && item !== null
+                          ? (item as Record<string, string>).name || JSON.stringify(item)
+                          : String(item)}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-theme-text-muted">No items in this report.</p>
+                )}
+              </div>
+              <div className="px-6 py-3 border-t border-theme-surface-border flex justify-end flex-shrink-0">
+                <button
+                  onClick={() => setReportPreview(null)}
+                  className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

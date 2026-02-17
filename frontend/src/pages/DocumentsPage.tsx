@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   FileText,
   FolderOpen,
@@ -13,6 +15,7 @@ import {
   File,
   ArrowLeft,
   Upload,
+  User,
 } from 'lucide-react';
 import {
   documentsService,
@@ -21,12 +24,15 @@ import {
   type DocumentsSummary,
 } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type ViewMode = 'grid' | 'list';
 
 const DocumentsPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
+  const [loadingMyFolder, setLoadingMyFolder] = useState(false);
 
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
@@ -102,6 +108,14 @@ const DocumentsPage: React.FC = () => {
     init();
   }, [fetchFolders, fetchSummary]);
 
+  // Handle folder query param (e.g., /documents?folder=xxx)
+  useEffect(() => {
+    const folderParam = searchParams.get('folder');
+    if (folderParam && !loading) {
+      setSelectedFolder(folderParam);
+    }
+  }, [searchParams, loading]);
+
   // Fetch documents when folder is selected
   useEffect(() => {
     if (selectedFolder) {
@@ -114,6 +128,18 @@ const DocumentsPage: React.FC = () => {
   // -------------------------------------------------------
   // Handlers
   // -------------------------------------------------------
+
+  const handleGoToMyFolder = async () => {
+    setLoadingMyFolder(true);
+    try {
+      const folder = await documentsService.getMyFolder();
+      setSelectedFolder(folder.id);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load personal folder'));
+    } finally {
+      setLoadingMyFolder(false);
+    }
+  };
 
   const handleCreateFolder = useCallback(async () => {
     if (!folderForm.name.trim()) return;
@@ -253,24 +279,38 @@ const DocumentsPage: React.FC = () => {
               </p>
             </div>
           </div>
-          {canManage && (
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setShowCreateFolder(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-hover hover:bg-theme-input-bg text-theme-text-primary rounded-lg transition-colors"
-              >
-                <Folder className="w-4 h-4" aria-hidden="true" />
-                <span>New Folder</span>
-              </button>
-              <button
-                onClick={handleOpenUploadModal}
-                className="flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Upload Document</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleGoToMyFolder}
+              disabled={loadingMyFolder}
+              className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors disabled:opacity-50"
+            >
+              {loadingMyFolder ? (
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <User className="w-4 h-4" aria-hidden="true" />
+              )}
+              <span>My Folder</span>
+            </button>
+            {canManage && (
+              <>
+                <button
+                  onClick={() => setShowCreateFolder(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-hover hover:bg-theme-input-bg text-theme-text-primary rounded-lg transition-colors"
+                >
+                  <Folder className="w-4 h-4" aria-hidden="true" />
+                  <span>New Folder</span>
+                </button>
+                <button
+                  onClick={handleOpenUploadModal}
+                  className="flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Document</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Error Toast */}

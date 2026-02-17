@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Shield,
@@ -16,6 +17,7 @@ import {
   User,
   Mail,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import { roleService } from '../services/api';
 import type { RoleWithUserCount, PermissionCategory, Permission, Role } from '../types/role';
@@ -25,6 +27,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 type ViewTab = 'permissions' | 'members';
 
 export const RoleManagementPage: React.FC = () => {
+  const navigate = useNavigate();
   const [roles, setRoles] = useState<RoleWithUserCount[]>([]);
   const [permissionCategories, setPermissionCategories] = useState<PermissionCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -459,6 +462,14 @@ export const RoleManagementPage: React.FC = () => {
                                     </span>
                                   )}
                                 </div>
+                                <button
+                                  onClick={() => navigate(`/settings/roles/user/${user.id}/permissions`)}
+                                  className="p-1.5 rounded-md text-theme-text-muted hover:text-blue-700 dark:hover:text-blue-400 hover:bg-theme-surface-hover transition-colors flex-shrink-0"
+                                  title="View Permissions"
+                                  aria-label={`View permissions for ${user.full_name || user.username}`}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
                               </div>
                             ))}
                           </div>

@@ -4027,3 +4027,33 @@ export const prospectiveMemberService = {
     return response.data;
   },
 };
+
+// ==================== Scheduled Tasks ====================
+
+export interface ScheduledTask {
+  id: string;
+  description: string;
+  frequency: string;
+  recommended_time: string;
+  cron: string;
+}
+
+export const scheduledTasksService = {
+  /**
+   * List all available scheduled tasks
+   */
+  async listTasks(): Promise<{ tasks: ScheduledTask[] }> {
+    const response = await api.get<{ tasks: ScheduledTask[] }>('/scheduled/tasks');
+    return response.data;
+  },
+
+  /**
+   * Manually trigger a scheduled task
+   */
+  async runTask(taskName: string): Promise<Record<string, unknown>> {
+    const response = await api.post<Record<string, unknown>>('/scheduled/run-task', null, {
+      params: { task: taskName },
+    });
+    return response.data;
+  },
+};

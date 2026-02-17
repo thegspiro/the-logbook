@@ -47,6 +47,7 @@ export const EventDetailPage: React.FC = () => {
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
+  const [loadingFolder, setLoadingFolder] = useState(false);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -167,6 +168,19 @@ export const EventDetailPage: React.FC = () => {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete attachment');
     } finally {
       setDeletingAttachmentId(null);
+    }
+  };
+
+  const handleOpenDocumentsFolder = async () => {
+    if (!eventId) return;
+    setLoadingFolder(true);
+    try {
+      const folder = await eventService.getEventFolder(eventId);
+      navigate(`/documents?folder=${folder.id}`);
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to open documents folder');
+    } finally {
+      setLoadingFolder(false);
     }
   };
 
@@ -536,17 +550,29 @@ export const EventDetailPage: React.FC = () => {
                 <h2 className="text-lg font-medium text-theme-text-primary">
                   Attachments {attachments.length > 0 && <span className="text-sm text-theme-text-muted font-normal">({attachments.length})</span>}
                 </h2>
-                {canManage && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowUploadModal(true)}
-                    className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                    onClick={handleOpenDocumentsFolder}
+                    disabled={loadingFolder}
+                    className="inline-flex items-center px-3 py-1.5 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
                   >
                     <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
-                    Upload
+                    {loadingFolder ? 'Opening...' : 'Documents Folder'}
                   </button>
-                )}
+                  {canManage && (
+                    <button
+                      onClick={() => setShowUploadModal(true)}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                    >
+                      <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Upload
+                    </button>
+                  )}
+                </div>
               </div>
 
               {attachments.length === 0 ? (
