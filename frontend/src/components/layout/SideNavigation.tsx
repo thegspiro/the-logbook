@@ -258,31 +258,25 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         <div className="flex flex-col h-full">
           {/* Logo Section */}
           <div className="p-4 border-b border-white/10">
-            <div className="flex items-center justify-between">
-              <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
-                {logoPreview ? (
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <img
-                      src={logoPreview}
-                      alt=""
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
-                    <Home className="w-6 h-6 text-white" />
-                  </div>
-                )}
-                {!collapsed && (
-                  <div className="ml-3 min-w-0">
-                    <span className="text-white text-sm font-semibold block break-words leading-tight">
-                      {departmentName}
-                    </span>
-                    <p className="text-slate-300 text-xs">Dashboard</p>
-                  </div>
-                )}
-              </a>
-              {!collapsed && (
+            {collapsed ? (
+              <>
+                <div className="flex items-center justify-center">
+                  <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                    {logoPreview ? (
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <img
+                          src={logoPreview}
+                          alt=""
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                        <Home className="w-6 h-6 text-white" />
+                      </div>
+                    )}
+                  </a>
+                </div>
                 <button
                   onClick={() => setCollapsed(false)}
                   className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -292,35 +286,36 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </button>
               </>
             ) : (
-              <>
-                <div className="flex items-start justify-between">
-                  <a href="/dashboard" className="flex flex-col items-center w-full focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
-                    {logoPreview ? (
-                      <div className="w-14 h-14 rounded-lg flex items-center justify-center overflow-hidden">
-                        <img
-                          src={logoPreview}
-                          alt=""
-                          className="max-w-full max-h-full object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-14 h-14 bg-red-600 rounded-lg flex items-center justify-center" aria-hidden="true">
-                        <Home className="w-8 h-8 text-white" />
-                      </div>
-                    )}
-                    <span className="mt-2 text-theme-text-primary text-sm font-semibold truncate block text-center w-full">
+              <div className="flex items-center justify-between">
+                <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                  {logoPreview ? (
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <img
+                        src={logoPreview}
+                        alt=""
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                      <Home className="w-6 h-6 text-white" />
+                    </div>
+                  )}
+                  <div className="ml-3 min-w-0">
+                    <span className="text-white text-sm font-semibold block break-words leading-tight">
                       {departmentName}
                     </span>
-                  </a>
-                  <button
-                    onClick={() => setCollapsed(true)}
-                    className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                    aria-label="Collapse navigation"
-                  >
-                    <ChevronRight className="w-5 h-5 rotate-180" aria-hidden="true" />
-                  </button>
-                </div>
-              </>
+                    <p className="text-slate-300 text-xs">Dashboard</p>
+                  </div>
+                </a>
+                <button
+                  onClick={() => setCollapsed(true)}
+                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  aria-label="Collapse navigation"
+                >
+                  <ChevronRight className="w-5 h-5 rotate-180" aria-hidden="true" />
+                </button>
+              </div>
             )}
           </div>
 
