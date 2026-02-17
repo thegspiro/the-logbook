@@ -124,11 +124,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           logoPreview={logoPreview}
           onLogout={handleLogoutClick}
         />
-        <div className="lg:ml-64 min-h-screen flex flex-col pt-16 lg:pt-0">
+        <div className="md:ml-64 min-h-screen flex flex-col pt-16 md:pt-0">
           <div className="flex-1" id="main-content" role="main">
             {content}
           </div>
-          <div className="lg:ml-0">{footer}</div>
+          <div className="md:ml-0">{footer}</div>
         </div>
         <LogoutConfirmModal
           isOpen={showLogoutModal}

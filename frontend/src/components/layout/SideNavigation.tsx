@@ -190,7 +190,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   return (
     <>
       {/* Mobile Header */}
-      <header className="lg:hidden bg-slate-900 border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50" role="banner">
+      <header className="md:hidden bg-slate-900 border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50" role="banner">
         <div className="flex items-center justify-between h-16 px-4">
           <a href="/dashboard" className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
             {logoPreview ? (
@@ -225,7 +225,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40 mt-16"
+          className="md:hidden fixed inset-0 bg-black/50 z-40 mt-16"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
@@ -241,7 +241,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           collapsed ? 'w-20' : 'w-64'
         } ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
+        } md:translate-x-0`}
       >
         <div className="flex flex-col h-full">
           {/* Logo Section */}
@@ -265,7 +265,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </a>
                 <button
                   onClick={() => setCollapsed(false)}
-                  className="hidden lg:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
                   aria-label="Expand navigation"
                 >
                   <ChevronRight className="w-5 h-5 mx-auto" aria-hidden="true" />
@@ -294,7 +294,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   </a>
                   <button
                     onClick={() => setCollapsed(true)}
-                    className="hidden lg:block text-theme-text-secondary hover:text-theme-text-primary p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0"
+                    className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0"
                     aria-label="Collapse navigation"
                   >
                     <ChevronRight className="w-5 h-5 rotate-180" aria-hidden="true" />
