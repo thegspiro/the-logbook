@@ -116,6 +116,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
+  const isSubItemActive = (path: string, siblings: { path: string }[]) => {
+    if (location.pathname === path) return true;
+    if (!location.pathname.startsWith(path + '/')) return false;
+    // Don't prefix-match if a sibling is a more specific match
+    return !siblings.some(s =>
+      s.path !== path &&
+      s.path.length > path.length &&
+      (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
+    );
+  };
+
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
       return item.subItems.some(sub => isActive(sub.path));
@@ -170,9 +181,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 <Home className="w-6 h-6 text-white" />
               </div>
             )}
-            <div className="ml-3">
-              <span className="text-theme-text-primary text-lg font-semibold">{departmentName}</span>
-              <p className="text-theme-text-secondary text-xs">Dashboard</p>
+            <div className="ml-3 min-w-0">
+              <span className="text-white text-lg font-semibold break-words leading-tight">{departmentName}</span>
+              <p className="text-slate-300 text-xs">Dashboard</p>
             </div>
           </a>
 
@@ -209,22 +220,25 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     </button>
 
                     {openDropdown === item.label && (
-                      <div className="absolute top-full left-0 mt-1 w-48 bg-theme-surface border border-theme-surface-border rounded-lg shadow-xl py-1 z-50">
-                        {visibleSubItems!.map((subItem) => (
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-slate-800 border border-white/10 rounded-lg shadow-xl py-1 z-50">
+                        {visibleSubItems!.map((subItem) => {
+                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
+                          return (
                           <a
                             key={subItem.path}
                             href={subItem.path}
                             onClick={(e) => handleNavigation(subItem.path, e)}
-                            aria-current={isActive(subItem.path) ? 'page' : undefined}
+                            aria-current={subActive ? 'page' : undefined}
                             className={`block px-4 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-500 ${
-                              isActive(subItem.path)
+                              subActive
                                 ? 'bg-red-600 text-white'
                                 : 'text-theme-text-secondary hover:bg-white/10 hover:text-white'
                             }`}
                           >
                             {subItem.label}
                           </a>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -308,21 +322,24 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       </button>
                       {isExpanded && (
                         <div className="ml-4 space-y-1 mt-1">
-                          {visibleSubItems!.map((subItem) => (
+                          {visibleSubItems!.map((subItem) => {
+                            const subActive = isSubItemActive(subItem.path, item.subItems || []);
+                            return (
                             <a
                               key={subItem.path}
                               href={subItem.path}
                               onClick={(e) => handleNavigation(subItem.path, e)}
-                              aria-current={isActive(subItem.path) ? 'page' : undefined}
+                              aria-current={subActive ? 'page' : undefined}
                               className={`block px-3 py-2 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                                isActive(subItem.path)
+                                subActive
                                   ? 'bg-red-600 text-white'
                                   : 'text-theme-text-secondary hover:bg-white/10 hover:text-white'
                               }`}
                             >
                               {subItem.label}
                             </a>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

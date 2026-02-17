@@ -60,7 +60,7 @@ class ReportsService:
         """Generate a member roster report"""
         query = (
             select(User)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .order_by(User.last_name, User.first_name)
         )
 
@@ -125,7 +125,7 @@ class ReportsService:
         # Get training records
         records_query = (
             select(TrainingRecord)
-            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.organization_id == str(organization_id))
         )
 
         if start_date:
@@ -139,7 +139,7 @@ class ReportsService:
         # Get active users
         users_result = await self.db.execute(
             select(User)
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
         )
         users = users_result.scalars().all()
@@ -147,7 +147,7 @@ class ReportsService:
         # Total courses
         courses_result = await self.db.execute(
             select(func.count(TrainingCourse.id))
-            .where(TrainingCourse.organization_id == organization_id)
+            .where(TrainingCourse.organization_id == str(organization_id))
         )
         total_courses = courses_result.scalar() or 0
 
@@ -201,7 +201,7 @@ class ReportsService:
         """Generate an event attendance report"""
         events_query = (
             select(Event)
-            .where(Event.organization_id == organization_id)
+            .where(Event.organization_id == str(organization_id))
         )
 
         if start_date:
@@ -290,7 +290,7 @@ class ReportsService:
 
         # Get member map
         users_result = await self.db.execute(
-            select(User).where(User.organization_id == organization_id)
+            select(User).where(User.organization_id == str(organization_id))
         )
         users = users_result.scalars().all()
         member_map = {str(u.id): f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username for u in users}

@@ -57,7 +57,7 @@ class RoleManagementService:
         """
         query = (
             select(Role)
-            .where(Role.organization_id == organization_id)
+            .where(Role.organization_id == str(organization_id))
             .order_by(Role.priority.desc(), Role.name)
         )
 
@@ -326,7 +326,7 @@ class RoleManagementService:
         count_result = await db.execute(
             select(func.count())
             .select_from(user_roles)
-            .where(user_roles.c.role_id == role_id)
+            .where(user_roles.c.role_id == str(role_id))
         )
         affected_users = count_result.scalar() or 0
 
@@ -426,7 +426,7 @@ class RoleManagementService:
         result = await db.execute(
             select(Role)
             .join(user_roles, Role.id == user_roles.c.role_id)
-            .where(user_roles.c.user_id == user_id)
+            .where(user_roles.c.user_id == str(user_id))
             .order_by(Role.priority.desc(), Role.name)
         )
         return list(result.scalars().all())
@@ -472,7 +472,7 @@ class RoleManagementService:
         await db.commit()
 
         # Get role name for audit
-        role = await db.execute(select(Role.name).where(Role.id == role_id))
+        role = await db.execute(select(Role.name).where(Role.id == str(role_id)))
         role_name = role.scalar()
 
         # Audit log
@@ -512,7 +512,7 @@ class RoleManagementService:
             True if removed, False if wasn't assigned
         """
         # Get role name for audit before deletion
-        role = await db.execute(select(Role.name).where(Role.id == role_id))
+        role = await db.execute(select(Role.name).where(Role.id == str(role_id)))
         role_name = role.scalar()
 
         # Delete assignment

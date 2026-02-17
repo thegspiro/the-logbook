@@ -163,6 +163,18 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
+  const isSubItemActive = (path: string, siblings: { path: string }[]) => {
+    if (path === '#') return false;
+    if (location.pathname === path) return true;
+    if (!location.pathname.startsWith(path + '/')) return false;
+    // Don't prefix-match if a sibling is a more specific match
+    return !siblings.some(s =>
+      s.path !== path &&
+      s.path.length > path.length &&
+      (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
+    );
+  };
+
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
       return item.subItems.some(sub => isActive(sub.path));
@@ -206,8 +218,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 <Home className="w-6 h-6 text-white" />
               </div>
             )}
-            <div className="ml-3">
-              <span className="text-theme-text-primary text-lg font-semibold">{departmentName}</span>
+            <div className="ml-3 min-w-0 flex-1">
+              <span className="text-white text-lg font-semibold break-words leading-tight">{departmentName}</span>
             </div>
           </a>
           <button
@@ -245,24 +257,32 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       >
         <div className="flex flex-col h-full">
           {/* Logo Section */}
-          <div className="p-4 border-b border-theme-surface-border">
-            {collapsed ? (
-              <>
-                <a href="/dashboard" className="flex justify-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
-                  {logoPreview ? (
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
-                      <img
-                        src={logoPreview}
-                        alt=""
-                        className="max-w-full max-h-full object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center" aria-hidden="true">
-                      <Home className="w-6 h-6 text-white" />
-                    </div>
-                  )}
-                </a>
+          <div className="p-4 border-b border-white/10">
+            <div className="flex items-center justify-between">
+              <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                {logoPreview ? (
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img
+                      src={logoPreview}
+                      alt=""
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                    <Home className="w-6 h-6 text-white" />
+                  </div>
+                )}
+                {!collapsed && (
+                  <div className="ml-3 min-w-0">
+                    <span className="text-white text-sm font-semibold block break-words leading-tight">
+                      {departmentName}
+                    </span>
+                    <p className="text-slate-300 text-xs">Dashboard</p>
+                  </div>
+                )}
+              </a>
+              {!collapsed && (
                 <button
                   onClick={() => setCollapsed(false)}
                   className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -364,7 +384,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
                         {visibleSubItems!.map((subItem) => {
                           const SubIcon = subItem.icon;
-                          const subActive = isActive(subItem.path);
+                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (
                             <li key={subItem.path}>
                               <button

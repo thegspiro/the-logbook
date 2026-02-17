@@ -34,7 +34,7 @@ class QuorumService:
         }
         """
         result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
+            select(Organization).where(Organization.id == str(organization_id))
         )
         org = result.scalar_one_or_none()
         if not org:
@@ -45,7 +45,7 @@ class QuorumService:
         """Count active members in the organization (denominator for percentage quorum)."""
         result = await self.db.execute(
             select(func.count(User.id))
-            .where(User.organization_id == organization_id)
+            .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
             .where(User.deleted_at.is_(None))
         )
@@ -64,7 +64,7 @@ class QuorumService:
         result = await self.db.execute(
             select(MeetingMinutes)
             .where(MeetingMinutes.id == minutes_id)
-            .where(MeetingMinutes.organization_id == organization_id)
+            .where(MeetingMinutes.organization_id == str(organization_id))
         )
         minutes = result.scalar_one_or_none()
         if not minutes:

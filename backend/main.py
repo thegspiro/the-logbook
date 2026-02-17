@@ -294,6 +294,87 @@ MIGRATION_ONLY_TABLES = [
 SEED_DATA_FILE = '20260203_0023_seed_apparatus_data.py'
 
 
+def _cleanup_duplicate_revisions(versions_dir):
+    """
+    Detect and remove migration files with duplicate revision IDs.
+
+    Stale migration files can appear when Docker images cache old COPY layers,
+    or from incomplete git operations. Duplicate revision IDs crash Alembic's
+    revision graph walker with "overlaps with other requested revisions".
+    """
+    import re
+
+    if not os.path.isdir(versions_dir):
+        return
+
+    revision_re = re.compile(r"^revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
+    down_revision_re = re.compile(
+        r"^down_revision\s*=\s*['\"](.+?)['\"]", re.MULTILINE
+    )
+
+    # Map revision ID -> list of (filepath, down_revision)
+    rev_to_files = {}
+    for filename in os.listdir(versions_dir):
+        if not filename.endswith('.py') or filename.startswith('__'):
+            continue
+        filepath = os.path.join(versions_dir, filename)
+        try:
+            with open(filepath, 'r') as f:
+                content = f.read(2048)  # revision is always near the top
+            rev_match = revision_re.search(content)
+            if not rev_match:
+                continue
+            rev_id = rev_match.group(1)
+            down_match = down_revision_re.search(content)
+            down_rev = down_match.group(1) if down_match else None
+            rev_to_files.setdefault(rev_id, []).append(
+                (filepath, filename, down_rev)
+            )
+        except Exception:
+            continue
+
+    # Build set of down_revisions that other files depend on.
+    # A file that is depended on by another file is part of the chain.
+    referenced_revisions = set()
+    for rev_id, files in rev_to_files.items():
+        for _, _, down_rev in files:
+            if down_rev:
+                referenced_revisions.add(down_rev)
+
+    # For each duplicate, keep the file that's referenced by other migrations
+    # (i.e., part of the active chain). Remove extras.
+    for rev_id, files in rev_to_files.items():
+        if len(files) <= 1:
+            continue
+
+        logger.warning(
+            f"Duplicate revision '{rev_id}' found in {len(files)} files: "
+            f"{[f[1] for f in files]}"
+        )
+
+        # Determine which file to keep: the one whose revision is in the
+        # referenced set (depended on by another migration).
+        # If none or multiple are referenced, keep the one that appears first
+        # alphabetically (most likely the original).
+        files_sorted = sorted(files, key=lambda f: f[1])
+        keep = files_sorted[0]
+        for fp, fn, dr in files_sorted:
+            if rev_id in referenced_revisions:
+                keep = (fp, fn, dr)
+                break
+
+        for fp, fn, dr in files:
+            if fp != keep[0]:
+                stale_path = fp + '.stale'
+                logger.warning(
+                    f"Renaming stale duplicate migration: {fn} -> {fn}.stale"
+                )
+                try:
+                    os.rename(fp, stale_path)
+                except Exception as rename_err:
+                    logger.error(f"Failed to rename {fn}: {rename_err}")
+
+
 def _import_all_models():
     """Import all SQLAlchemy models to ensure Base.metadata is complete."""
     import app.models  # noqa: F401 - triggers __init__.py which imports all models
@@ -448,9 +529,23 @@ def run_migrations():
     alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
     alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
 
+    # Clean up duplicate/stale migration files before Alembic loads the graph.
+    # Stale files can appear when Docker images cache old COPY layers and the
+    # bind-mount doesn't fully override them, or from incomplete git operations.
+    versions_dir = os.path.join(base_dir, "alembic", "versions")
+    _cleanup_duplicate_revisions(versions_dir)
+
     script_dir = ScriptDirectory.from_config(alembic_cfg)
-    all_revisions = list(script_dir.walk_revisions())
-    total_migrations = len(all_revisions)
+    try:
+        all_revisions = list(script_dir.walk_revisions())
+        total_migrations = len(all_revisions)
+    except Exception as walk_err:
+        logger.warning(f"Could not walk revision graph: {walk_err}")
+        # Fall back to counting .py migration files
+        total_migrations = len([
+            f for f in os.listdir(versions_dir)
+            if f.endswith('.py') and not f.startswith('__')
+        ])
     startup_status.migrations_total = total_migrations
 
     head_revision = script_dir.get_current_head()

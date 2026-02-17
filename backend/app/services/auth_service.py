@@ -40,7 +40,7 @@ async def _check_password_history(db: AsyncSession, user_id: str, new_password: 
 
     result = await db.execute(
         select(PasswordHistory)
-        .where(PasswordHistory.user_id == user_id)
+        .where(PasswordHistory.user_id == str(user_id))
         .order_by(PasswordHistory.created_at.desc())
         .limit(history_count)
     )

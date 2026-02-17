@@ -63,7 +63,7 @@ class SchedulingService:
         """Get shifts with date filtering and pagination"""
         query = (
             select(Shift)
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
         )
 
         if start_date:
@@ -89,8 +89,8 @@ class SchedulingService:
         """Get a shift by ID"""
         result = await self.db.execute(
             select(Shift)
-            .where(Shift.id == shift_id)
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.id == str(shift_id))
+            .where(Shift.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -163,7 +163,7 @@ class SchedulingService:
 
         result = await self.db.execute(
             select(ShiftAttendance)
-            .where(ShiftAttendance.shift_id == shift_id)
+            .where(ShiftAttendance.shift_id == str(shift_id))
             .order_by(ShiftAttendance.created_at)
         )
         return result.scalars().all()
@@ -176,8 +176,8 @@ class SchedulingService:
             result = await self.db.execute(
                 select(ShiftAttendance)
                 .join(Shift, ShiftAttendance.shift_id == Shift.id)
-                .where(ShiftAttendance.id == attendance_id)
-                .where(Shift.organization_id == organization_id)
+                .where(ShiftAttendance.id == str(attendance_id))
+                .where(Shift.organization_id == str(organization_id))
             )
             attendance = result.scalar_one_or_none()
             if not attendance:
@@ -207,8 +207,8 @@ class SchedulingService:
             result = await self.db.execute(
                 select(ShiftAttendance)
                 .join(Shift, ShiftAttendance.shift_id == Shift.id)
-                .where(ShiftAttendance.id == attendance_id)
-                .where(Shift.organization_id == organization_id)
+                .where(ShiftAttendance.id == str(attendance_id))
+                .where(Shift.organization_id == str(organization_id))
             )
             attendance = result.scalar_one_or_none()
             if not attendance:
@@ -261,7 +261,7 @@ class SchedulingService:
         # Total shifts
         total_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
         )
         total_shifts = total_result.scalar() or 0
 
@@ -270,7 +270,7 @@ class SchedulingService:
         week_end = week_start + timedelta(days=6)
         week_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= week_start)
             .where(Shift.shift_date <= week_end)
         )
@@ -280,7 +280,7 @@ class SchedulingService:
         first_of_month = today.replace(day=1)
         month_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= first_of_month)
         )
         shifts_this_month = month_result.scalar() or 0
@@ -289,7 +289,7 @@ class SchedulingService:
         hours_result = await self.db.execute(
             select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0))
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= first_of_month)
         )
         total_minutes = hours_result.scalar() or 0
@@ -340,8 +340,8 @@ class SchedulingService:
 
         result = await self.db.execute(
             select(ShiftCall)
-            .where(ShiftCall.shift_id == shift_id)
-            .where(ShiftCall.organization_id == organization_id)
+            .where(ShiftCall.shift_id == str(shift_id))
+            .where(ShiftCall.organization_id == str(organization_id))
             .order_by(ShiftCall.dispatched_at.asc())
         )
         return result.scalars().all()
@@ -352,8 +352,8 @@ class SchedulingService:
         """Get a shift call by ID"""
         result = await self.db.execute(
             select(ShiftCall)
-            .where(ShiftCall.id == call_id)
-            .where(ShiftCall.organization_id == organization_id)
+            .where(ShiftCall.id == str(call_id))
+            .where(ShiftCall.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -421,7 +421,7 @@ class SchedulingService:
         """Get all shift templates for an organization"""
         query = (
             select(ShiftTemplate)
-            .where(ShiftTemplate.organization_id == organization_id)
+            .where(ShiftTemplate.organization_id == str(organization_id))
         )
         if active_only:
             query = query.where(ShiftTemplate.is_active == True)
@@ -436,8 +436,8 @@ class SchedulingService:
         """Get a shift template by ID"""
         result = await self.db.execute(
             select(ShiftTemplate)
-            .where(ShiftTemplate.id == template_id)
-            .where(ShiftTemplate.organization_id == organization_id)
+            .where(ShiftTemplate.id == str(template_id))
+            .where(ShiftTemplate.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -505,7 +505,7 @@ class SchedulingService:
         """Get all shift patterns for an organization"""
         query = (
             select(ShiftPattern)
-            .where(ShiftPattern.organization_id == organization_id)
+            .where(ShiftPattern.organization_id == str(organization_id))
         )
         if active_only:
             query = query.where(ShiftPattern.is_active == True)
@@ -520,8 +520,8 @@ class SchedulingService:
         """Get a shift pattern by ID"""
         result = await self.db.execute(
             select(ShiftPattern)
-            .where(ShiftPattern.id == pattern_id)
-            .where(ShiftPattern.organization_id == organization_id)
+            .where(ShiftPattern.id == str(pattern_id))
+            .where(ShiftPattern.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -714,8 +714,8 @@ class SchedulingService:
 
         result = await self.db.execute(
             select(ShiftAssignment)
-            .where(ShiftAssignment.shift_id == shift_id)
-            .where(ShiftAssignment.organization_id == organization_id)
+            .where(ShiftAssignment.shift_id == str(shift_id))
+            .where(ShiftAssignment.organization_id == str(organization_id))
             .order_by(ShiftAssignment.created_at.asc())
         )
         return result.scalars().all()
@@ -731,8 +731,8 @@ class SchedulingService:
         query = (
             select(ShiftAssignment)
             .join(Shift, ShiftAssignment.shift_id == Shift.id)
-            .where(ShiftAssignment.user_id == user_id)
-            .where(ShiftAssignment.organization_id == organization_id)
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(ShiftAssignment.organization_id == str(organization_id))
         )
 
         if start_date:
@@ -751,8 +751,8 @@ class SchedulingService:
         try:
             result = await self.db.execute(
                 select(ShiftAssignment)
-                .where(ShiftAssignment.id == assignment_id)
-                .where(ShiftAssignment.organization_id == organization_id)
+                .where(ShiftAssignment.id == str(assignment_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
             )
             assignment = result.scalar_one_or_none()
             if not assignment:
@@ -776,8 +776,8 @@ class SchedulingService:
         try:
             result = await self.db.execute(
                 select(ShiftAssignment)
-                .where(ShiftAssignment.id == assignment_id)
-                .where(ShiftAssignment.organization_id == organization_id)
+                .where(ShiftAssignment.id == str(assignment_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
             )
             assignment = result.scalar_one_or_none()
             if not assignment:
@@ -797,8 +797,8 @@ class SchedulingService:
         try:
             result = await self.db.execute(
                 select(ShiftAssignment)
-                .where(ShiftAssignment.id == assignment_id)
-                .where(ShiftAssignment.user_id == user_id)
+                .where(ShiftAssignment.id == str(assignment_id))
+                .where(ShiftAssignment.user_id == str(user_id))
             )
             assignment = result.scalar_one_or_none()
             if not assignment:
@@ -847,7 +847,7 @@ class SchedulingService:
         """Get swap requests with optional filtering and pagination"""
         query = (
             select(ShiftSwapRequest)
-            .where(ShiftSwapRequest.organization_id == organization_id)
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
         )
 
         if status:
@@ -878,8 +878,8 @@ class SchedulingService:
         """Get a swap request by ID"""
         result = await self.db.execute(
             select(ShiftSwapRequest)
-            .where(ShiftSwapRequest.id == request_id)
-            .where(ShiftSwapRequest.organization_id == organization_id)
+            .where(ShiftSwapRequest.id == str(request_id))
+            .where(ShiftSwapRequest.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -912,7 +912,7 @@ class SchedulingService:
                     select(ShiftAssignment)
                     .where(ShiftAssignment.shift_id == swap_request.offering_shift_id)
                     .where(ShiftAssignment.user_id == swap_request.requesting_user_id)
-                    .where(ShiftAssignment.organization_id == organization_id)
+                    .where(ShiftAssignment.organization_id == str(organization_id))
                 )
                 req_assignment = req_assign_result.scalar_one_or_none()
 
@@ -923,7 +923,7 @@ class SchedulingService:
                         select(ShiftAssignment)
                         .where(ShiftAssignment.shift_id == swap_request.requesting_shift_id)
                         .where(ShiftAssignment.user_id == swap_request.target_user_id)
-                        .where(ShiftAssignment.organization_id == organization_id)
+                        .where(ShiftAssignment.organization_id == str(organization_id))
                     )
                     target_assign = target_assign_result.scalar_one_or_none()
 
@@ -999,13 +999,13 @@ class SchedulingService:
         """Get time-off requests with optional filtering and pagination"""
         query = (
             select(ShiftTimeOff)
-            .where(ShiftTimeOff.organization_id == organization_id)
+            .where(ShiftTimeOff.organization_id == str(organization_id))
         )
 
         if status:
             query = query.where(ShiftTimeOff.status == status)
         if user_id:
-            query = query.where(ShiftTimeOff.user_id == user_id)
+            query = query.where(ShiftTimeOff.user_id == str(user_id))
 
         # Count
         count_query = select(func.count()).select_from(query.subquery())
@@ -1025,8 +1025,8 @@ class SchedulingService:
         """Get a time-off request by ID"""
         result = await self.db.execute(
             select(ShiftTimeOff)
-            .where(ShiftTimeOff.id == time_off_id)
-            .where(ShiftTimeOff.organization_id == organization_id)
+            .where(ShiftTimeOff.id == str(time_off_id))
+            .where(ShiftTimeOff.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -1089,7 +1089,7 @@ class SchedulingService:
         """Get users who have approved time-off in a date range"""
         result = await self.db.execute(
             select(ShiftTimeOff)
-            .where(ShiftTimeOff.organization_id == organization_id)
+            .where(ShiftTimeOff.organization_id == str(organization_id))
             .where(ShiftTimeOff.status == TimeOffStatus.APPROVED)
             .where(ShiftTimeOff.start_date <= end_date)
             .where(ShiftTimeOff.end_date >= start_date)
@@ -1125,7 +1125,7 @@ class SchedulingService:
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
             .join(User, ShiftAttendance.user_id == User.id)
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .group_by(ShiftAttendance.user_id, User.email)
@@ -1154,7 +1154,7 @@ class SchedulingService:
             # Get shifts for this date
             shift_result = await self.db.execute(
                 select(Shift)
-                .where(Shift.organization_id == organization_id)
+                .where(Shift.organization_id == str(organization_id))
                 .where(Shift.shift_date == current)
             )
             shifts = shift_result.scalars().all()
@@ -1167,7 +1167,7 @@ class SchedulingService:
                 assign_result = await self.db.execute(
                     select(ShiftAssignment)
                     .where(ShiftAssignment.shift_id == shift.id)
-                    .where(ShiftAssignment.organization_id == organization_id)
+                    .where(ShiftAssignment.organization_id == str(organization_id))
                 )
                 assignments = assign_result.scalars().all()
                 assigned_count = len(assignments)
@@ -1203,7 +1203,7 @@ class SchedulingService:
         result = await self.db.execute(
             select(ShiftCall)
             .join(Shift, ShiftCall.shift_id == Shift.id)
-            .where(ShiftCall.organization_id == organization_id)
+            .where(ShiftCall.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .order_by(Shift.shift_date.asc())
@@ -1279,17 +1279,17 @@ class SchedulingService:
         # Build subquery for shifts with assignments or attendance for this user
         assignment_shift_ids = (
             select(ShiftAssignment.shift_id)
-            .where(ShiftAssignment.user_id == user_id)
-            .where(ShiftAssignment.organization_id == organization_id)
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(ShiftAssignment.organization_id == str(organization_id))
         )
         attendance_shift_ids = (
             select(ShiftAttendance.shift_id)
-            .where(ShiftAttendance.user_id == user_id)
+            .where(ShiftAttendance.user_id == str(user_id))
         )
 
         query = (
             select(Shift)
-            .where(Shift.organization_id == organization_id)
+            .where(Shift.organization_id == str(organization_id))
             .where(
                 or_(
                     Shift.id.in_(assignment_shift_ids),
@@ -1320,7 +1320,7 @@ class SchedulingService:
             assign_result = await self.db.execute(
                 select(ShiftAssignment)
                 .where(ShiftAssignment.shift_id == shift.id)
-                .where(ShiftAssignment.user_id == user_id)
+                .where(ShiftAssignment.user_id == str(user_id))
             )
             assignment = assign_result.scalar_one_or_none()
 
@@ -1328,7 +1328,7 @@ class SchedulingService:
             att_result = await self.db.execute(
                 select(ShiftAttendance)
                 .where(ShiftAttendance.shift_id == shift.id)
-                .where(ShiftAttendance.user_id == user_id)
+                .where(ShiftAttendance.user_id == str(user_id))
             )
             attendance = att_result.scalar_one_or_none()
 

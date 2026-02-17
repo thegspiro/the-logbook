@@ -89,7 +89,7 @@ class DocumentsService:
         """
         query = (
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
         )
 
         if parent_id:
@@ -145,8 +145,8 @@ class DocumentsService:
         """Get a folder by ID"""
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.id == folder_id)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.id == str(folder_id))
+            .where(DocumentFolder.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -231,11 +231,11 @@ class DocumentsService:
         """Get documents with filtering and pagination"""
         query = (
             select(Document)
-            .where(Document.organization_id == organization_id)
+            .where(Document.organization_id == str(organization_id))
         )
 
         if folder_id:
-            query = query.where(Document.folder_id == folder_id)
+            query = query.where(Document.folder_id == str(folder_id))
 
         if status:
             query = query.where(Document.status == status)
@@ -268,8 +268,8 @@ class DocumentsService:
         """Get a document by ID"""
         result = await self.db.execute(
             select(Document)
-            .where(Document.id == document_id)
-            .where(Document.organization_id == organization_id)
+            .where(Document.id == str(document_id))
+            .where(Document.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
 
@@ -319,7 +319,7 @@ class DocumentsService:
         # Find the 'members' system folder
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == "members")
             .where(DocumentFolder.is_system.is_(True))
         )
@@ -395,7 +395,7 @@ class DocumentsService:
         # Find the 'apparatus' system folder
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == "apparatus")
             .where(DocumentFolder.is_system.is_(True))
         )
@@ -477,7 +477,7 @@ class DocumentsService:
         # Find the apparatus root
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == "apparatus")
             .where(DocumentFolder.is_system.is_(True))
         )
@@ -538,7 +538,7 @@ class DocumentsService:
         # Find the 'facilities' system folder
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == "facilities")
             .where(DocumentFolder.is_system.is_(True))
         )
@@ -618,7 +618,7 @@ class DocumentsService:
         """
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == "facilities")
             .where(DocumentFolder.is_system.is_(True))
         )
@@ -672,7 +672,7 @@ class DocumentsService:
         # Find the 'events' system folder
         result = await self.db.execute(
             select(DocumentFolder)
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == "events")
             .where(DocumentFolder.is_system.is_(True))
         )
@@ -732,7 +732,7 @@ class DocumentsService:
         # Total documents
         total_result = await self.db.execute(
             select(func.count(Document.id))
-            .where(Document.organization_id == organization_id)
+            .where(Document.organization_id == str(organization_id))
             .where(Document.status == DocumentStatus.ACTIVE)
         )
         total_documents = total_result.scalar() or 0
@@ -740,14 +740,14 @@ class DocumentsService:
         # Total folders
         folder_result = await self.db.execute(
             select(func.count(DocumentFolder.id))
-            .where(DocumentFolder.organization_id == organization_id)
+            .where(DocumentFolder.organization_id == str(organization_id))
         )
         total_folders = folder_result.scalar() or 0
 
         # Total size
         size_result = await self.db.execute(
             select(func.coalesce(func.sum(Document.file_size), 0))
-            .where(Document.organization_id == organization_id)
+            .where(Document.organization_id == str(organization_id))
             .where(Document.status == DocumentStatus.ACTIVE)
         )
         total_size = size_result.scalar() or 0
@@ -756,7 +756,7 @@ class DocumentsService:
         first_of_month = date.today().replace(day=1)
         month_result = await self.db.execute(
             select(func.count(Document.id))
-            .where(Document.organization_id == organization_id)
+            .where(Document.organization_id == str(organization_id))
             .where(Document.created_at >= datetime.combine(first_of_month, datetime.min.time()))
         )
         documents_this_month = month_result.scalar() or 0

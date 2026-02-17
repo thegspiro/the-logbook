@@ -89,7 +89,7 @@ class IPSecurityService:
         # Check for existing active/pending exception for same IP and user
         existing = await db.execute(
             select(IPException)
-            .where(IPException.user_id == user_id)
+            .where(IPException.user_id == str(user_id))
             .where(IPException.ip_address == ip_address)
             .where(IPException.approval_status.in_([
                 IPExceptionApprovalStatus.PENDING,
@@ -399,7 +399,7 @@ class IPSecurityService:
         )
 
         if organization_id:
-            query = query.where(IPException.organization_id == organization_id)
+            query = query.where(IPException.organization_id == str(organization_id))
 
         query = query.limit(limit).offset(offset)
 
@@ -420,7 +420,7 @@ class IPSecurityService:
         """
         Get all IP exceptions for a specific user.
         """
-        query = select(IPException).where(IPException.user_id == user_id)
+        query = select(IPException).where(IPException.user_id == str(user_id))
 
         if not include_expired:
             query = query.where(
@@ -451,7 +451,7 @@ class IPSecurityService:
 
         result = await db.execute(
             select(IPException.ip_address)
-            .where(IPException.user_id == user_id)
+            .where(IPException.user_id == str(user_id))
             .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
             .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
             .where(IPException.valid_from <= now)
@@ -485,7 +485,7 @@ class IPSecurityService:
         )
 
         if organization_id:
-            query = query.where(IPException.organization_id == organization_id)
+            query = query.where(IPException.organization_id == str(organization_id))
 
         result = await db.execute(query)
         return set(result.scalars().all())

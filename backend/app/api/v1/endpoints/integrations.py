@@ -90,7 +90,7 @@ async def list_integrations(
     await ensure_catalog(db, current_user.organization_id)
     result = await db.execute(
         select(Integration)
-        .where(Integration.organization_id == current_user.organization_id)
+        .where(Integration.organization_id == str(current_user.organization_id))
         .order_by(Integration.name)
     )
     integrations = result.scalars().all()
@@ -123,7 +123,7 @@ async def get_integration(
     result = await db.execute(
         select(Integration).where(
             Integration.id == integration_id,
-            Integration.organization_id == current_user.organization_id,
+            Integration.organization_id == str(current_user.organization_id),
         )
     )
     integration = result.scalar_one_or_none()
@@ -156,7 +156,7 @@ async def connect_integration(
     result = await db.execute(
         select(Integration).where(
             Integration.id == integration_id,
-            Integration.organization_id == current_user.organization_id,
+            Integration.organization_id == str(current_user.organization_id),
         )
     )
     integration = result.scalar_one_or_none()
@@ -196,7 +196,7 @@ async def disconnect_integration(
     result = await db.execute(
         select(Integration).where(
             Integration.id == integration_id,
-            Integration.organization_id == current_user.organization_id,
+            Integration.organization_id == str(current_user.organization_id),
         )
     )
     integration = result.scalar_one_or_none()
@@ -220,7 +220,7 @@ async def update_integration(
     result = await db.execute(
         select(Integration).where(
             Integration.id == integration_id,
-            Integration.organization_id == current_user.organization_id,
+            Integration.organization_id == str(current_user.organization_id),
         )
     )
     integration = result.scalar_one_or_none()

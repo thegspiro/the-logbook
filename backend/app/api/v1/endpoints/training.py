@@ -184,7 +184,7 @@ async def list_records(
     )
 
     if user_id:
-        query = query.where(TrainingRecord.user_id == user_id)
+        query = query.where(TrainingRecord.user_id == str(user_id))
 
     if status:
         query = query.where(TrainingRecord.status == status)
@@ -825,7 +825,7 @@ async def enroll_member_in_program(
     user_result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
-        .where(User.organization_id == current_user.organization_id)
+        .where(User.organization_id == str(current_user.organization_id))
     )
     member = user_result.scalar_one_or_none()
     if not member:
