@@ -510,7 +510,7 @@ const OnboardingCheck: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={handleRetry}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-semibold rounded-lg transition-all duration-300"
             >
               Try Again
             </button>

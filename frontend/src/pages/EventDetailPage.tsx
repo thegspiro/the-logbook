@@ -376,7 +376,7 @@ export const EventDetailPage: React.FC = () => {
                 </span>
               )}
               {event.is_mandatory && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                   Mandatory
                 </span>
               )}
@@ -736,7 +736,7 @@ export const EventDetailPage: React.FC = () => {
                         </button>
                       )}
                       {rsvp.checked_in && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                           Checked In
                         </span>
                       )}
@@ -1134,7 +1134,7 @@ export const EventDetailPage: React.FC = () => {
                           </div>
                           <div>
                             {isCheckedIn ? (
-                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                 Checked In
                               </span>
                             ) : (

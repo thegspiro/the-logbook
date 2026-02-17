@@ -249,7 +249,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                     aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
                   >
                     {showCurrentPassword ? (
@@ -285,7 +285,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
                   >
                     {showNewPassword ? (
@@ -348,7 +348,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? (
@@ -447,10 +447,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Email Notifications Toggle */}
               <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="emailNotifications" className="text-sm font-medium text-theme-text-primary">
+                  <span id="emailNotifications-label" className="text-sm font-medium text-theme-text-primary">
                     Email Notifications
-                  </label>
-                  <p className="text-sm text-theme-text-secondary">
+                  </span>
+                  <p id="emailNotifications-desc" className="text-sm text-theme-text-secondary">
                     Receive email notifications for important updates
                   </p>
                 </div>
@@ -462,6 +462,8 @@ export const UserSettingsPage: React.FC = () => {
                   } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={emailNotifications}
+                  aria-labelledby="emailNotifications-label"
+                  aria-describedby="emailNotifications-desc"
                 >
                   <span
                     className={`${
@@ -474,10 +476,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Event Reminders Toggle */}
               <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="eventReminders" className="text-sm font-medium text-theme-text-primary">
+                  <span id="eventReminders-label" className="text-sm font-medium text-theme-text-primary">
                     Event Reminders
-                  </label>
-                  <p className="text-sm text-theme-text-secondary">
+                  </span>
+                  <p id="eventReminders-desc" className="text-sm text-theme-text-secondary">
                     Get reminders before scheduled events
                   </p>
                 </div>
@@ -489,6 +491,8 @@ export const UserSettingsPage: React.FC = () => {
                   } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={eventReminders}
+                  aria-labelledby="eventReminders-label"
+                  aria-describedby="eventReminders-desc"
                 >
                   <span
                     className={`${
@@ -501,10 +505,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Training Reminders Toggle */}
               <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="trainingReminders" className="text-sm font-medium text-theme-text-primary">
+                  <span id="trainingReminders-label" className="text-sm font-medium text-theme-text-primary">
                     Training Reminders
-                  </label>
-                  <p className="text-sm text-theme-text-secondary">
+                  </span>
+                  <p id="trainingReminders-desc" className="text-sm text-theme-text-secondary">
                     Notifications for training deadlines and requirements
                   </p>
                 </div>
@@ -516,6 +520,8 @@ export const UserSettingsPage: React.FC = () => {
                   } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={trainingReminders}
+                  aria-labelledby="trainingReminders-label"
+                  aria-describedby="trainingReminders-desc"
                 >
                   <span
                     className={`${
@@ -528,10 +534,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Announcement Notifications Toggle */}
               <div className="flex items-center justify-between py-4">
                 <div>
-                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-theme-text-primary">
+                  <span id="announcementNotifications-label" className="text-sm font-medium text-theme-text-primary">
                     Announcement Notifications
-                  </label>
-                  <p className="text-sm text-theme-text-secondary">
+                  </span>
+                  <p id="announcementNotifications-desc" className="text-sm text-theme-text-secondary">
                     Stay updated with department announcements
                   </p>
                 </div>
@@ -543,6 +549,8 @@ export const UserSettingsPage: React.FC = () => {
                   } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white`}
                   role="switch"
                   aria-checked={announcementNotifications}
+                  aria-labelledby="announcementNotifications-label"
+                  aria-describedby="announcementNotifications-desc"
                 >
                   <span
                     className={`${

@@ -30,16 +30,16 @@ import type {
 import type { Event as EventDetail, EventListItem } from '../types/event';
 
 const STATUS_BADGES: Record<string, string> = {
-  draft: 'bg-yellow-100 text-yellow-800',
-  submitted: 'bg-blue-100 text-blue-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
+  draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  rejected: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 const MOTION_STATUS_BADGES: Record<string, string> = {
-  passed: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  tabled: 'bg-yellow-100 text-yellow-800',
+  passed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  tabled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   withdrawn: 'bg-theme-surface-secondary text-theme-text-primary',
 };
 
@@ -51,11 +51,11 @@ const PRIORITY_BADGES: Record<string, string> = {
 };
 
 const ACTION_STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   cancelled: 'bg-theme-surface-secondary text-theme-text-primary',
-  overdue: 'bg-red-100 text-red-800',
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
 export const MinutesDetailPage: React.FC = () => {
@@ -474,7 +474,7 @@ export const MinutesDetailPage: React.FC = () => {
           </div>
           {linkedEvent ? (
             <div className="mt-2 flex items-center gap-3">
-              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">Business Meeting</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">Business Meeting</span>
               <Link
                 to={`/events/${linkedEvent.id}`}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -591,7 +591,7 @@ export const MinutesDetailPage: React.FC = () => {
               {minutes.attendees.map((a, i) => (
                 <span
                   key={i}
-                  className={`text-xs px-2 py-1 rounded ${a.present ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800 line-through'}`}
+                  className={`text-xs px-2 py-1 rounded ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 line-through'}`}
                 >
                   {a.name}{a.role ? ` (${a.role})` : ''}
                 </span>

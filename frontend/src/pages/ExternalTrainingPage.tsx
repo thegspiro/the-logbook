@@ -168,7 +168,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 placeholder="e.g., Vector Solutions - Main Account"
                 required
                 aria-required="true"
@@ -184,7 +184,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="url"
                 value={formData.api_base_url}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 placeholder={formData.provider_type === 'vector_solutions' ? 'https://app.targetsolutions.com/v1' : 'https://api.example.com'}
                 required
                 aria-required="true"
@@ -205,7 +205,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   id="provider-auth-type"
                   value={formData.auth_type}
                   onChange={(e) => setFormData(prev => ({ ...prev, auth_type: e.target.value as 'api_key' | 'basic' | 'oauth2' }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 >
                   <option value="api_key">API Key</option>
                   <option value="basic">Basic Auth</option>
@@ -223,7 +223,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 type="password"
                 value={formData.api_key}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 placeholder={formData.provider_type === 'vector_solutions' ? 'Enter your TargetSolutions AccessToken' : 'Enter your API key'}
                 required
                 aria-required="true"
@@ -248,7 +248,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                     ...prev,
                     config: { ...prev.config, site_id: e.target.value || undefined }
                   }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                   placeholder="Enter your TargetSolutions Site ID"
                 />
                 <p className="mt-1 text-xs text-theme-text-muted">
@@ -267,7 +267,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   type="password"
                   value={formData.api_secret || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                   placeholder="Enter your API secret"
                 />
               </div>
@@ -281,7 +281,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 id="provider-description"
                 value={formData.description || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 placeholder="Optional description for this integration"
                 rows={3}
               />
@@ -328,7 +328,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                     id="provider-sync-interval"
                     value={formData.sync_interval_hours}
                     onChange={(e) => setFormData(prev => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
-                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                   >
                     <option value={6}>Every 6 hours</option>
                     <option value={12}>Every 12 hours</option>
@@ -632,7 +632,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
               required
               aria-required="true"
             />
@@ -647,7 +647,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="url"
               value={formData.api_base_url}
               onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
               required
               aria-required="true"
             />
@@ -662,7 +662,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               type="password"
               value={formData.api_key}
               onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
               placeholder="Enter new API key to update"
             />
           </div>
@@ -677,7 +677,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 type="password"
                 value={formData.api_secret}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_secret: e.target.value }))}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 placeholder="Enter new API secret to update"
               />
             </div>
@@ -691,7 +691,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
               id="edit-provider-description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+              className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
               rows={3}
             />
           </div>
@@ -734,7 +734,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                   id="edit-provider-sync-interval"
                   value={formData.sync_interval_hours}
                   onChange={(e) => setFormData(prev => ({ ...prev, sync_interval_hours: parseInt(e.target.value) }))}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:border-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                 >
                   <option value={6}>Every 6 hours</option>
                   <option value={12}>Every 12 hours</option>
@@ -1075,7 +1075,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                               value={mapping.internal_category_id || ''}
                               onChange={(e) => { if (e.target.value) handleMapCategory(mapping.id, e.target.value); }}
                               disabled={savingMapping === mapping.id}
-                              className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:border-red-500"
+                              className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                               aria-label="Change category mapping"
                             >
                               <option value="">Change...</option>
@@ -1091,7 +1091,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                               defaultValue=""
                               onChange={(e) => { if (e.target.value) handleMapCategory(mapping.id, e.target.value); }}
                               disabled={savingMapping === mapping.id}
-                              className="px-3 py-1.5 bg-theme-input-bg border border-red-500 rounded text-sm text-theme-text-primary focus:outline-none focus:border-red-600"
+                              className="px-3 py-1.5 bg-theme-input-bg border border-red-500 rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600"
                               aria-label={`Map ${mapping.external_category_name} to internal category`}
                             >
                               <option value="" disabled>Select category...</option>
@@ -1148,7 +1148,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                               value={mapping.internal_user_id || ''}
                               onChange={(e) => { if (e.target.value) handleMapUser(mapping.id, e.target.value); }}
                               disabled={savingMapping === mapping.id}
-                              className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:border-red-500"
+                              className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                               aria-label="Change user mapping"
                             >
                               <option value="">Change...</option>
@@ -1164,7 +1164,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
                               defaultValue=""
                               onChange={(e) => { if (e.target.value) handleMapUser(mapping.id, e.target.value); }}
                               disabled={savingMapping === mapping.id}
-                              className="px-3 py-1.5 bg-theme-input-bg border border-red-500 rounded text-sm text-theme-text-primary focus:outline-none focus:border-red-600"
+                              className="px-3 py-1.5 bg-theme-input-bg border border-red-500 rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-600 focus:border-red-600"
                               aria-label={`Map ${mapping.external_name || mapping.external_username || 'user'} to internal user`}
                             >
                               <option value="" disabled>Select member...</option>
@@ -1353,7 +1353,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers }) => {
             id="import-provider-filter"
             value={selectedProviderId}
             onChange={(e) => setSelectedProviderId(e.target.value)}
-            className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-red-500"
+            className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
           >
             {providers.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -1365,7 +1365,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers }) => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-red-500"
+            className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
             aria-label="Filter by status"
           >
             <option value="">All statuses</option>
@@ -1594,7 +1594,7 @@ const AllMappingsPanel: React.FC<AllMappingsPanelProps> = ({ providers }) => {
             id="mappings-provider-filter"
             value={selectedProviderId}
             onChange={(e) => setSelectedProviderId(e.target.value)}
-            className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-red-500"
+            className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
           >
             {providers.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -1683,7 +1683,7 @@ const AllMappingsPanel: React.FC<AllMappingsPanelProps> = ({ providers }) => {
                       value={mapping.is_mapped ? (mapping.internal_category_id || '') : ''}
                       onChange={(e) => { if (e.target.value) handleMapCategory(mapping.id, e.target.value); }}
                       disabled={savingMapping === mapping.id}
-                      className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:border-red-500"
+                      className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                       aria-label={`Map ${mapping.external_category_name}`}
                     >
                       <option value="">{mapping.is_mapped ? 'Change...' : 'Select category...'}</option>
@@ -1736,7 +1736,7 @@ const AllMappingsPanel: React.FC<AllMappingsPanelProps> = ({ providers }) => {
                       value={mapping.is_mapped ? (mapping.internal_user_id || '') : ''}
                       onChange={(e) => { if (e.target.value) handleMapUser(mapping.id, e.target.value); }}
                       disabled={savingMapping === mapping.id}
-                      className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:border-red-500"
+                      className="px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                       aria-label={`Map ${mapping.external_name || mapping.external_username || 'user'}`}
                     >
                       <option value="">{mapping.is_mapped ? 'Change...' : 'Select member...'}</option>

@@ -146,13 +146,13 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
       case 'scheduled':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'failed':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       case 'cancelled':
         return 'bg-theme-surface-secondary text-theme-text-secondary';
       default:
@@ -434,12 +434,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                             {training.status.replace('_', ' ')}
                           </span>
                           {isExpired(training) && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-red-100 text-red-800">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
                               expired
                             </span>
                           )}
                           {!isExpired(training) && isExpiringSoon(training) && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-yellow-100 text-yellow-800">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium w-fit bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               expiring soon
                             </span>
                           )}

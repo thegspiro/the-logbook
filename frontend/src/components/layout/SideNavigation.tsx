@@ -294,7 +294,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   </a>
                   <button
                     onClick={() => setCollapsed(true)}
-                    className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0"
+                    className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                     aria-label="Collapse navigation"
                   >
                     <ChevronRight className="w-5 h-5 rotate-180" aria-hidden="true" />

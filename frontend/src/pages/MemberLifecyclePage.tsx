@@ -420,7 +420,7 @@ const TierConfigPanel: React.FC = () => {
                       type="text"
                       value={tier.name}
                       onChange={(e) => updateTier(index, { name: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:border-red-500"
+                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                       placeholder="e.g., Senior Member"
                     />
                   </div>
@@ -431,7 +431,7 @@ const TierConfigPanel: React.FC = () => {
                       min={0}
                       value={tier.years_required}
                       onChange={(e) => updateTier(index, { years_required: parseInt(e.target.value) || 0 })}
-                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:border-red-500"
+                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
                   <div>
@@ -441,7 +441,7 @@ const TierConfigPanel: React.FC = () => {
                       min={0}
                       value={tier.sort_order}
                       onChange={(e) => updateTier(index, { sort_order: parseInt(e.target.value) || 0 })}
-                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:border-red-500"
+                      className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
                 </div>
@@ -505,7 +505,7 @@ const TierConfigPanel: React.FC = () => {
                         max={100}
                         value={tier.benefits.voting_min_attendance_pct}
                         onChange={(e) => updateBenefits(index, { voting_min_attendance_pct: parseFloat(e.target.value) || 0 })}
-                        className="w-20 px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:border-red-500"
+                        className="w-20 px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                       />
                     </div>
                     <div>
@@ -516,7 +516,7 @@ const TierConfigPanel: React.FC = () => {
                         max={60}
                         value={tier.benefits.voting_attendance_period_months}
                         onChange={(e) => updateBenefits(index, { voting_attendance_period_months: parseInt(e.target.value) || 12 })}
-                        className="w-20 px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:border-red-500"
+                        className="w-20 px-2 py-1 bg-theme-input-bg border border-theme-input-border rounded text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                       />
                     </div>
                   </div>

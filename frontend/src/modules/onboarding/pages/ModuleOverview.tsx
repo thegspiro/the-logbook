@@ -168,7 +168,7 @@ const ModuleOverview: React.FC = () => {
               disabled={isSaving || enabledCount === 0}
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary'
+                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
                   : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
             >

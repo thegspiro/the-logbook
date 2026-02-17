@@ -36,11 +36,11 @@ export const AccessLogsTab: React.FC = () => {
 
   const getMethodColor = (method: string) => {
     switch (method) {
-      case 'GET': return 'bg-blue-100 text-blue-800';
-      case 'POST': return 'bg-green-100 text-green-800';
-      case 'PUT': return 'bg-yellow-100 text-yellow-800';
-      case 'PATCH': return 'bg-orange-100 text-orange-800';
-      case 'DELETE': return 'bg-red-100 text-red-800';
+      case 'GET': return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
+      case 'POST': return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
+      case 'PUT': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
+      case 'PATCH': return 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400';
+      case 'DELETE': return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default: return 'bg-theme-surface-secondary text-theme-text-primary';
     }
   };
@@ -274,7 +274,7 @@ export const AccessLogsTab: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {log.flagged_suspicious && (
-                          <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">
+                          <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
                             Suspicious
                           </span>
                         )}

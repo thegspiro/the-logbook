@@ -43,7 +43,7 @@ const StarRating: React.FC<{
           key={star}
           type="button"
           onClick={() => onChange(star)}
-          className="focus:outline-none"
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 rounded"
         >
           <Star
             className={`${sizeClass} ${star <= value ? 'text-yellow-700 dark:text-yellow-400 fill-yellow-400' : 'text-theme-text-secondary'}`}

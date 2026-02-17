@@ -70,7 +70,7 @@ const HealthStatus: React.FC<HealthStatusProps> = ({ eventId, compact = false })
   if (compact) {
     return (
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${getStatusColor(health.overall)} ${health.overall === 'healthy' ? 'animate-pulse' : ''}`}></div>
+        <div className={`w-2 h-2 rounded-full ${getStatusColor(health.overall)} ${health.overall === 'healthy' ? 'animate-pulse' : ''}`} aria-hidden="true"></div>
         <span className="text-sm text-theme-text-secondary">
           System: {getStatusText(health.overall)}
         </span>

@@ -354,13 +354,13 @@ export const ElectionDetailPage: React.FC = () => {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'open':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400';
       case 'closed':
         return 'bg-theme-surface-secondary text-theme-text-primary';
       case 'draft':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'cancelled':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
         return 'bg-theme-surface-secondary text-theme-text-primary';
     }
@@ -409,7 +409,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="flex items-center gap-2 mb-2">
               <h2 className="text-2xl font-bold text-theme-text-primary">{election.title}</h2>
               {election.is_runoff && (
-                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">
+                <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400 rounded">
                   Runoff Round {election.runoff_round}
                 </span>
               )}
@@ -458,7 +458,7 @@ export const ElectionDetailPage: React.FC = () => {
                 {election.positions.map((position) => (
                   <span
                     key={position}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
                   >
                     {position}
                   </span>
@@ -934,8 +934,8 @@ export const ElectionDetailPage: React.FC = () => {
                                 <td className="px-3 py-2 text-xs">{entry.event_type}</td>
                                 <td className="px-3 py-2">
                                   <span className={`text-xs px-2 py-0.5 rounded ${
-                                    entry.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                                    entry.severity === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                    entry.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' :
+                                    entry.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' :
                                     'bg-theme-surface-secondary text-theme-text-primary'
                                   }`}>
                                     {entry.severity || 'info'}

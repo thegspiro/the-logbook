@@ -378,7 +378,14 @@ const MyTrainingPage: React.FC = () => {
                       </span>
                       <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
                     </div>
-                    <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-2">
+                    <div
+                      className="w-full bg-theme-surface-hover rounded-full h-2 mb-2"
+                      role="progressbar"
+                      aria-valuenow={Math.round(e.progress_percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`Pipeline progress: ${Math.round(e.progress_percentage)}%`}
+                    >
                       <div
                         className={`h-2 rounded-full transition-all ${
                           e.progress_percentage >= 75 ? 'bg-green-500' :

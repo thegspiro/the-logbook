@@ -363,7 +363,7 @@ const ModuleSelection: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 isSaving
                   ? 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
-                  : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
+                  : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
             >
               {isSaving ? 'Saving Module Configuration...' : 'Continue to Admin Setup'}

@@ -452,8 +452,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => handleMoveItem(index, 'up')}
                       disabled={index === 0 || saving}
-                      className="p-1 text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30"
-                      title="Move up"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                      aria-label="Move up"
                     >
                       &#9650;
                     </button>
@@ -461,8 +461,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => handleMoveItem(index, 'down')}
                       disabled={index === ballotItems.length - 1 || saving}
-                      className="p-1 text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30"
-                      title="Move down"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                      aria-label="Move down"
                     >
                       &#9660;
                     </button>
@@ -470,8 +470,8 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => handleRemoveItem(item.id)}
                       disabled={saving}
-                      className="p-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-30 ml-1"
-                      title="Remove item"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-30 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded"
+                      aria-label="Remove item"
                     >
                       &#10005;
                     </button>

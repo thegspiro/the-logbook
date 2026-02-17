@@ -529,7 +529,7 @@ const ConfigEditor: React.FC<{
                   type="text"
                   value={fc.label}
                   onChange={(e) => updateField(name, 'label', e.target.value)}
-                  className="bg-transparent border-none text-theme-text-secondary text-sm focus:outline-none flex-1 min-w-0"
+                  className="bg-transparent border-none text-theme-text-secondary text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:rounded flex-1 min-w-0"
                 />
               </div>
               <label className="flex items-center space-x-2 ml-4 flex-shrink-0">

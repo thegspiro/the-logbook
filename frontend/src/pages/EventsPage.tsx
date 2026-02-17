@@ -174,7 +174,7 @@ export const EventsPage: React.FC = () => {
                         {getEventTypeLabel(event.event_type)}
                       </span>
                       {event.is_mandatory && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                           Mandatory
                         </span>
                       )}

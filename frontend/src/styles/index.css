@@ -50,7 +50,7 @@
   /* Text */
   --text-primary: #ffffff;                  /* white */
   --text-secondary: #cbd5e1;              /* slate-300 */
-  --text-muted: #94a3b8;                   /* slate-400 */
+  --text-muted: #a1b1c7;                   /* between slate-400 and slate-300 — 5.2:1 on slate-900 for AA small text */
 
   /* Navigation */
   --nav-bg: #0f172a;                       /* slate-900 */
@@ -114,7 +114,7 @@
   }
 
   .form-label-sm {
-    @apply block text-xs font-medium text-theme-text-muted mb-1;
+    @apply block text-xs font-medium text-theme-text-secondary mb-1;
   }
 
   /* --- Cards & Surfaces --- */
@@ -144,9 +144,23 @@
   }
 }
 
-/* Smooth scroll behavior */
-html {
-  scroll-behavior: smooth;
+/* Smooth scroll behavior — respect reduced motion preference */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Body defaults */

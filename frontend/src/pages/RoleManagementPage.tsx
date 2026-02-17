@@ -300,7 +300,7 @@ export const RoleManagementPage: React.FC = () => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-lg font-semibold text-theme-text-primary">{role.name}</h3>
                           {role.is_system && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                               System
                             </span>
                           )}
@@ -406,7 +406,7 @@ export const RoleManagementPage: React.FC = () => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-lg font-semibold text-theme-text-primary">{role.name}</h3>
                           {role.is_system && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                               System
                             </span>
                           )}
@@ -454,7 +454,7 @@ export const RoleManagementPage: React.FC = () => {
                                     {user.email}
                                   </p>
                                   {!user.is_active && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 mt-1">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 mt-1">
                                       Inactive
                                     </span>
                                   )}

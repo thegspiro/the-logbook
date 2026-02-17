@@ -44,11 +44,11 @@ interface TrainingStatusBadgeProps {
 }
 
 const trainingStatusConfig: Record<TrainingStatus, { label: string; classes: string }> = {
-  scheduled: { label: 'Scheduled', classes: 'bg-blue-100 text-blue-800' },
-  in_progress: { label: 'In Progress', classes: 'bg-yellow-100 text-yellow-800' },
-  completed: { label: 'Completed', classes: 'bg-green-100 text-green-800' },
+  scheduled: { label: 'Scheduled', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
+  in_progress: { label: 'In Progress', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' },
+  completed: { label: 'Completed', classes: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
   cancelled: { label: 'Cancelled', classes: 'bg-theme-surface-secondary text-theme-text-primary' },
-  failed: { label: 'Failed', classes: 'bg-red-100 text-red-800' },
+  failed: { label: 'Failed', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
 };
 
 export const TrainingStatusBadge: React.FC<TrainingStatusBadgeProps> = ({
@@ -104,7 +104,14 @@ export const RequirementProgressBar: React.FC<RequirementProgressBarProps> = ({
           {showPercentage && <span className="text-theme-text-muted">{Math.round(clamped)}%</span>}
         </div>
       )}
-      <div className={`w-full overflow-hidden rounded-full bg-theme-surface-secondary ${progressBarHeight[size]}`}>
+      <div
+        className={`w-full overflow-hidden rounded-full bg-theme-surface-secondary ${progressBarHeight[size]}`}
+        role="progressbar"
+        aria-valuenow={Math.round(clamped)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label ? `${label}: ${Math.round(clamped)}%` : `${Math.round(clamped)}% complete`}
+      >
         <div
           className={`${progressBarHeight[size]} rounded-full transition-all duration-300 ${getProgressColor(clamped)}`}
           style={{ width: `${clamped}%` }}
