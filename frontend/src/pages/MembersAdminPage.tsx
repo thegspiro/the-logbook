@@ -88,8 +88,14 @@ export const MembersAdminPage: React.FC = () => {
 
       setEditingRoles(false);
       setSelectedUser(null);
-    } catch (err) {
-      setError('Unable to save role assignments. Please check your connection and try again.');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setError('You do not have permission to assign roles. Contact an administrator.');
+      } else {
+        setError(detail || 'Unable to save role assignments. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -139,8 +145,14 @@ export const MembersAdminPage: React.FC = () => {
 
       setEditingMembers(false);
       setSelectedRole(null);
-    } catch (err) {
-      setError('Unable to update member assignments. Please check your connection and try again.');
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setError('You do not have permission to assign roles. Contact an administrator.');
+      } else {
+        setError(detail || 'Unable to update member assignments. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
