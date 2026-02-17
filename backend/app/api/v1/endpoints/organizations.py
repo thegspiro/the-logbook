@@ -15,6 +15,7 @@ from app.schemas.organization import (
     ContactInfoSettings,
     EnabledModulesResponse,
     ModuleSettingsUpdate,
+    MembershipIdSettings,
 )
 from app.services.organization_service import OrganizationService
 from app.api.dependencies import get_current_user, require_permission
@@ -225,3 +226,87 @@ async def update_module_settings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/settings/membership-id", response_model=MembershipIdSettings)
+async def get_membership_id_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get membership ID settings for the organization.
+
+    **Authentication required**
+    """
+    org_service = OrganizationService(db)
+    return await org_service.get_membership_id_settings(current_user.organization_id)
+
+
+@router.patch("/settings/membership-id", response_model=MembershipIdSettings)
+async def update_membership_id_settings(
+    membership_id_settings: MembershipIdSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("settings.manage_contact_visibility", "organization.update_settings")),
+):
+    """
+    Update membership ID settings.
+
+    Configure automatic membership ID assignment including prefix,
+    next number, and padding.
+
+    **Authentication and permission required**
+    """
+    org_service = OrganizationService(db)
+
+    settings_dict = {
+        "membership_id": {
+            "enabled": membership_id_settings.enabled,
+            "prefix": membership_id_settings.prefix,
+            "next_number": membership_id_settings.next_number,
+            "padding": membership_id_settings.padding,
+        }
+    }
+
+    try:
+        await org_service.update_organization_settings(current_user.organization_id, settings_dict)
+
+        await log_audit_event(
+            db=db,
+            event_type="organization_settings_updated",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "settings_changed": ["membership_id"],
+                "membership_id_enabled": membership_id_settings.enabled,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+        return membership_id_settings
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/settings/membership-id/preview")
+async def preview_next_membership_id(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Preview the next membership ID that would be assigned without incrementing.
+
+    **Authentication required**
+    """
+    org_service = OrganizationService(db)
+    settings = await org_service.get_membership_id_settings(current_user.organization_id)
+
+    if not settings.enabled:
+        return {"enabled": False, "next_id": None}
+
+    number_str = str(settings.next_number).zfill(settings.padding)
+    next_id = f"{settings.prefix}{number_str}"
+    return {"enabled": True, "next_id": next_id}

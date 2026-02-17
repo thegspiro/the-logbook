@@ -35,7 +35,7 @@ router = APIRouter()
 # Meeting Endpoints
 # ============================================
 
-@router.get("/", response_model=MeetingsListResponse)
+@router.get("", response_model=MeetingsListResponse)
 async def list_meetings(
     meeting_type: Optional[str] = None,
     status: Optional[str] = None,
@@ -43,7 +43,7 @@ async def list_meetings(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("meetings.view", "minutes.view")),
 ):
     """List all meetings for the organization"""
     service = MeetingsService(db)
@@ -64,7 +64,7 @@ async def list_meetings(
     }
 
 
-@router.post("/", response_model=MeetingDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=MeetingDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_meeting(
     meeting: MeetingCreate,
     db: AsyncSession = Depends(get_db),
@@ -85,7 +85,7 @@ async def create_meeting(
 async def get_meeting(
     meeting_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("meetings.view", "minutes.view")),
 ):
     """Get a meeting by ID with attendees and action items"""
     service = MeetingsService(db)
@@ -232,7 +232,7 @@ async def delete_action_item(
 async def get_open_action_items(
     assigned_to: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("meetings.view", "minutes.view")),
 ):
     """Get all open action items"""
     service = MeetingsService(db)
@@ -248,7 +248,7 @@ async def get_open_action_items(
 @router.get("/stats/summary", response_model=MeetingsSummary)
 async def get_meetings_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("meetings.view")),
+    current_user: User = Depends(require_permission("meetings.view", "minutes.view")),
 ):
     """Get meetings module summary statistics"""
     service = MeetingsService(db)

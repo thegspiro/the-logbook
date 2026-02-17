@@ -659,6 +659,7 @@ async def transfer_prospect(
         organization_id=current_user.organization_id,
         transferred_by=current_user.id,
         username=data.username,
+        membership_id=data.membership_id,
         rank=data.rank,
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,

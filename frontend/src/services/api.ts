@@ -5,9 +5,11 @@
  */
 
 import axios from 'axios';
-import type { User, ContactInfoSettings, ContactInfoUpdate } from '../types/user';
+import type { User, ContactInfoSettings, ContactInfoUpdate, MembershipIdSettings } from '../types/user';
 import type {
   Role,
+  RoleWithUserCount,
+  RoleUsersResponse,
   Permission,
   PermissionCategory,
   UserWithRoles,
@@ -258,6 +260,7 @@ export const userService = {
     middle_name?: string;
     last_name: string;
     badge_number?: string;
+    membership_id?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
@@ -317,7 +320,7 @@ export const organizationService = {
   /**
    * Get organization settings
    */
-  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings }> {
+  async getSettings(): Promise<{ contact_info_visibility: ContactInfoSettings; membership_ids?: MembershipIdSettings }> {
     const response = await api.get('/organization/settings');
     return response.data;
   },
@@ -345,6 +348,102 @@ export const organizationService = {
     const response = await this.getEnabledModules();
     return response.enabled_modules.includes(moduleId);
   },
+
+  /**
+   * Update membership ID settings
+   */
+  async updateMembershipIdSettings(settings: MembershipIdSettings): Promise<void> {
+    await api.patch('/organization/settings', { membership_ids: settings });
+  },
+
+  /**
+   * Preview the next membership ID that would be auto-assigned
+   */
+  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id: string | null }> {
+    const response = await api.get<{ enabled: boolean; next_id: string | null }>('/organization/settings/membership-id/preview');
+    return response.data;
+  },
+
+  /**
+   * Assign membership number to a member (coordinator action)
+   */
+  async assignMembershipNumber(userId: string, membershipNumber: string): Promise<User> {
+    const response = await api.put(`/users/${userId}/membership-number`, {
+      membership_number: membershipNumber,
+    });
+    return response.data;
+  },
+};
+
+// ==================== Member Status & Lifecycle ====================
+
+export const memberStatusService = {
+  async changeStatus(
+    userId: string,
+    request: import('../types/user').MemberStatusChangeRequest
+  ): Promise<import('../types/user').MemberStatusChangeResponse> {
+    const response = await api.patch(`/users/${userId}/status`, request);
+    return response.data;
+  },
+
+  async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
+    const response = await api.get(`/users/${userId}/property-return-report`);
+    return response.data;
+  },
+
+  async processPropertyReturnReminders(): Promise<{ processed: number; reminders_sent: number }> {
+    const response = await api.post('/users/property-return-reminders/process');
+    return response.data;
+  },
+
+  async getOverduePropertyReturns(): Promise<import('../types/user').OverduePropertyReturnsResponse> {
+    const response = await api.get('/users/property-return-reminders/overdue');
+    return response.data;
+  },
+
+  async archiveMember(
+    userId: string,
+    request: import('../types/user').ArchiveMemberRequest
+  ): Promise<{ user_id: string; member_name: string; previous_status: string; new_status: string; archived_at: string }> {
+    const response = await api.post(`/users/${userId}/archive`, request);
+    return response.data;
+  },
+
+  async reactivateMember(
+    userId: string,
+    request: import('../types/user').ReactivateMemberRequest
+  ): Promise<{ user_id: string; member_name: string; previous_status: string; new_status: string }> {
+    const response = await api.post(`/users/${userId}/reactivate`, request);
+    return response.data;
+  },
+
+  async getArchivedMembers(): Promise<import('../types/user').ArchivedMembersResponse> {
+    const response = await api.get('/users/archived');
+    return response.data;
+  },
+
+  async changeMembershipType(
+    userId: string,
+    request: import('../types/user').MembershipTypeChangeRequest
+  ): Promise<import('../types/user').MembershipTypeChangeResponse> {
+    const response = await api.patch(`/users/${userId}/membership-type`, request);
+    return response.data;
+  },
+
+  async advanceMembershipTiers(): Promise<import('../types/user').AdvanceTiersResponse> {
+    const response = await api.post('/users/advance-membership-tiers');
+    return response.data;
+  },
+
+  async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
+    const response = await api.get('/users/membership-tiers/config');
+    return response.data;
+  },
+
+  async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<{ message: string; tiers: import('../types/user').MembershipTier[] }> {
+    const response = await api.put('/users/membership-tiers/config', config);
+    return response.data;
+  },
 };
 
 export const roleService = {
@@ -365,10 +464,20 @@ export const roleService = {
   },
 
   /**
-   * Get all roles
+   * Get all roles (with user counts)
    */
-  async getRoles(): Promise<Role[]> {
-    const response = await api.get<Role[]>('/roles');
+  async getRoles(): Promise<RoleWithUserCount[]> {
+    const response = await api.get<RoleWithUserCount[]>('/roles', {
+      params: { include_user_count: true },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get users assigned to a specific role
+   */
+  async getRoleUsers(roleId: string): Promise<RoleUsersResponse> {
+    const response = await api.get<RoleUsersResponse>(`/roles/${roleId}/users`);
     return response.data;
   },
 
@@ -1510,6 +1619,53 @@ export const eventService = {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
     return response.data;
   },
+
+  // Attachments
+  async uploadAttachment(eventId: string, file: File, description?: string): Promise<import('../types/event').EventAttachmentUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (description) {
+      formData.append('description', description);
+    }
+    const response = await api.post<import('../types/event').EventAttachmentUploadResponse>(
+      `/events/${eventId}/attachments`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async getAttachments(eventId: string): Promise<import('../types/event').EventAttachment[]> {
+    const response = await api.get<import('../types/event').EventAttachment[]>(`/events/${eventId}/attachments`);
+    return response.data;
+  },
+
+  async downloadAttachment(eventId: string, attachmentId: string): Promise<Blob> {
+    const response = await api.get(`/events/${eventId}/attachments/${attachmentId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async deleteAttachment(eventId: string, attachmentId: string): Promise<void> {
+    await api.delete(`/events/${eventId}/attachments/${attachmentId}`);
+  },
+
+  async getEventFolder(eventId: string): Promise<import('../types/event').EventDocumentFolder> {
+    const response = await api.get<import('../types/event').EventDocumentFolder>(`/events/${eventId}/folder`);
+    return response.data;
+  },
+
+  // Module Settings
+  async getModuleSettings(): Promise<import('../types/event').EventModuleSettings> {
+    const response = await api.get<import('../types/event').EventModuleSettings>('/events/settings');
+    return response.data;
+  },
+
+  async updateModuleSettings(data: Partial<import('../types/event').EventModuleSettings>): Promise<import('../types/event').EventModuleSettings> {
+    const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
+    return response.data;
+  },
 };
 
 export interface UserInventoryItem {
@@ -1948,7 +2104,7 @@ export const formsService = {
     skip?: number;
     limit?: number;
   }): Promise<FormsListResponse> {
-    const response = await api.get<FormsListResponse>('/forms/', { params });
+    const response = await api.get<FormsListResponse>('/forms', { params });
     return response.data;
   },
 
@@ -1958,7 +2114,7 @@ export const formsService = {
   },
 
   async createForm(data: FormCreate): Promise<FormDetailDef> {
-    const response = await api.post<FormDetailDef>('/forms/', data);
+    const response = await api.post<FormDetailDef>('/forms', data);
     return response.data;
   },
 
@@ -2133,7 +2289,7 @@ export const documentsService = {
   },
 
   async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/documents/', { params });
+    const response = await api.get('/documents', { params });
     return response.data;
   },
 
@@ -2229,12 +2385,12 @@ export interface MeetingsSummary {
 
 export const meetingsService = {
   async getMeetings(params?: { meeting_type?: string; status?: string; search?: string; skip?: number; limit?: number }): Promise<{ meetings: MeetingRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get('/meetings/', { params });
+    const response = await api.get('/meetings', { params });
     return response.data;
   },
 
   async createMeeting(data: Record<string, unknown>): Promise<MeetingRecord> {
-    const response = await api.post<MeetingRecord>('/meetings/', data);
+    const response = await api.post<MeetingRecord>('/meetings', data);
     return response.data;
   },
 

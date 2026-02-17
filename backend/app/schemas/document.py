@@ -91,6 +91,8 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class DocumentListItem(BaseModel):
     """Compact document listing"""
@@ -106,3 +108,5 @@ class DocumentListItem(BaseModel):
     tags: Optional[List[str]] = None
     created_by: Optional[str] = None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

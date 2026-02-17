@@ -75,7 +75,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Additional Notes', field_type: 'textarea', required: false },
     ],
     icon: <AlertTriangle className="w-6 h-6" aria-hidden="true" />,
-    color: 'text-red-400',
+    color: 'text-red-700 dark:text-red-400',
   },
   {
     id: 'membership-interest',
@@ -100,7 +100,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Additional Information', field_type: 'textarea', required: false },
     ],
     icon: <Globe className="w-6 h-6" aria-hidden="true" />,
-    color: 'text-cyan-400',
+    color: 'text-cyan-700 dark:text-cyan-400',
     isPublic: true,
     integrationHint: 'membership_interest',
   },
@@ -124,7 +124,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Next Inspection Due', field_type: 'date', required: false },
     ],
     icon: <ClipboardCheck className="w-6 h-6" aria-hidden="true" />,
-    color: 'text-emerald-400',
+    color: 'text-emerald-700 dark:text-emerald-400',
   },
   {
     id: 'equipment-assignment',
@@ -144,7 +144,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Notes', field_type: 'textarea', required: false },
     ],
     icon: <Plug className="w-6 h-6" aria-hidden="true" />,
-    color: 'text-orange-400',
+    color: 'text-orange-700 dark:text-orange-400',
     integrationHint: 'equipment_assignment',
   },
   {
@@ -175,7 +175,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Overall Status', field_type: 'radio', required: true },
     ],
     icon: <Clipboard className="w-6 h-6" aria-hidden="true" />,
-    color: 'text-blue-400',
+    color: 'text-blue-700 dark:text-blue-400',
   },
   {
     id: 'member-feedback',
@@ -195,7 +195,7 @@ const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Additional comments', field_type: 'textarea', required: false },
     ],
     icon: <FileText className="w-6 h-6" aria-hidden="true" />,
-    color: 'text-purple-400',
+    color: 'text-purple-700 dark:text-purple-400',
   },
 ];
 
@@ -436,10 +436,10 @@ const FormsPage: React.FC = () => {
 
   const statusColor = (s: string) => {
     switch (s) {
-      case 'published': return 'bg-green-500/10 text-green-400 border-green-500/30';
-      case 'draft': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30';
-      case 'archived': return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/30';
+      case 'published': return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
+      case 'draft': return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+      case 'archived': return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
+      default: return 'bg-slate-500/10 text-theme-text-muted border-slate-500/30';
     }
   };
 
@@ -450,11 +450,11 @@ const FormsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-pink-600 rounded-lg p-2">
-              <FormInput className="w-6 h-6 text-white" aria-hidden="true" />
+              <FormInput className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-white text-2xl font-bold">Custom Forms</h1>
-              <p className="text-slate-400 text-sm">
+              <h1 className="text-theme-text-primary text-2xl font-bold">Custom Forms</h1>
+              <p className="text-theme-text-muted text-sm">
                 Create custom forms, public-facing pages, and cross-module integrations
               </p>
             </div>
@@ -462,7 +462,7 @@ const FormsPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={loadData}
-              className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
               aria-label="Refresh forms"
             >
               <RefreshCw className="w-5 h-5" aria-hidden="true" />
@@ -482,25 +482,25 @@ const FormsPage: React.FC = () => {
         {/* Stats */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8" role="region" aria-label="Forms statistics">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-xs font-medium uppercase">Total Forms</p>
-              <p className="text-white text-2xl font-bold mt-1">{summary.total_forms}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Total Forms</p>
+              <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary.total_forms}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-xs font-medium uppercase">Published</p>
-              <p className="text-green-400 text-2xl font-bold mt-1">{summary.published_forms}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Published</p>
+              <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary.published_forms}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-xs font-medium uppercase">Drafts</p>
-              <p className="text-yellow-400 text-2xl font-bold mt-1">{summary.draft_forms}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Drafts</p>
+              <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{summary.draft_forms}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-xs font-medium uppercase">Public Forms</p>
-              <p className="text-cyan-400 text-2xl font-bold mt-1">{summary.public_forms}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Public Forms</p>
+              <p className="text-cyan-700 dark:text-cyan-400 text-2xl font-bold mt-1">{summary.public_forms}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-xs font-medium uppercase">Submissions This Month</p>
-              <p className="text-pink-400 text-2xl font-bold mt-1">{summary.submissions_this_month}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Submissions This Month</p>
+              <p className="text-pink-700 dark:text-pink-400 text-2xl font-bold mt-1">{summary.submissions_this_month}</p>
             </div>
           </div>
         )}
@@ -509,9 +509,9 @@ const FormsPage: React.FC = () => {
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6" role="alert">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" aria-hidden="true" />
-              <p className="text-red-300 text-sm">{error}</p>
-              <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300" aria-label="Dismiss error">
+              <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" aria-hidden="true" />
+              <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
+              <button onClick={() => setError(null)} className="ml-auto text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300" aria-label="Dismiss error">
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
@@ -519,13 +519,13 @@ const FormsPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Forms views">
+        <div className="flex space-x-1 mb-6 bg-theme-surface-secondary rounded-lg p-1 w-fit" role="tablist" aria-label="Forms views">
           <button
             onClick={() => setActiveTab('forms')}
             role="tab"
             aria-selected={activeTab === 'forms'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+              activeTab === 'forms' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
             }`}
           >
             My Forms
@@ -535,7 +535,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'templates'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+              activeTab === 'templates' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
             }`}
           >
             Starter Templates
@@ -545,7 +545,7 @@ const FormsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'submissions'}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+              activeTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
             }`}
           >
             Submissions
@@ -553,10 +553,10 @@ const FormsPage: React.FC = () => {
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6" role="search" aria-label="Search and filter forms">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search and filter forms">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <label htmlFor="forms-search" className="sr-only">Search forms</label>
               <input
                 id="forms-search"
@@ -564,17 +564,17 @@ const FormsPage: React.FC = () => {
                 placeholder="Search forms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-pink-500"
               />
             </div>
             <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-slate-400" aria-hidden="true" />
+              <Filter className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <label htmlFor="forms-category-filter" className="sr-only">Filter by category</label>
               <select
                 id="forms-category-filter"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value as FormCategory)}
-                className="px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                className="px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
               >
                 <option value="all">All Categories</option>
                 <option value="Safety">Safety</option>
@@ -590,15 +590,15 @@ const FormsPage: React.FC = () => {
         {activeTab === 'forms' && (
           <>
             {loading ? (
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <RefreshCw className="w-8 h-8 text-slate-400 mx-auto mb-3 animate-spin" aria-hidden="true" />
-                <p className="text-slate-300" role="status" aria-live="polite">Loading forms...</p>
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+                <RefreshCw className="w-8 h-8 text-theme-text-muted mx-auto mb-3 animate-spin" aria-hidden="true" />
+                <p className="text-theme-text-secondary" role="status" aria-live="polite">Loading forms...</p>
               </div>
             ) : forms.length === 0 ? (
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <FormInput className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
-                <h3 className="text-white text-xl font-bold mb-2">No Custom Forms</h3>
-                <p className="text-slate-300 mb-6">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+                <FormInput className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Custom Forms</h3>
+                <p className="text-theme-text-secondary mb-6">
                   Create a custom form from scratch or start from a starter template.
                 </p>
                 {canManage && (
@@ -612,7 +612,7 @@ const FormsPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setActiveTab('templates')}
-                      className="px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg transition-colors inline-flex items-center space-x-2"
+                      className="px-6 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors inline-flex items-center space-x-2"
                     >
                       <Copy className="w-5 h-5" aria-hidden="true" />
                       <span>Use Template</span>
@@ -623,19 +623,19 @@ const FormsPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {forms.map((form) => (
-                  <div key={form.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:border-pink-500/30 transition-all">
+                  <div key={form.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-pink-500/30 transition-all">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="text-white font-semibold">{form.name}</h3>
+                        <h3 className="text-theme-text-primary font-semibold">{form.name}</h3>
                         <div className="flex items-center space-x-2 mt-1 flex-wrap gap-y-1">
                           <span className={`px-2 py-0.5 text-xs rounded border ${statusColor(form.status)}`}>
                             {form.status}
                           </span>
-                          <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
+                          <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-700 dark:text-pink-400 rounded border border-pink-500/30">
                             {form.category}
                           </span>
                           {form.is_public && (
-                            <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30 inline-flex items-center space-x-1">
+                            <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 rounded border border-cyan-500/30 inline-flex items-center space-x-1">
                               <Globe className="w-3 h-3" aria-hidden="true" />
                               <span>Public</span>
                             </span>
@@ -644,21 +644,21 @@ const FormsPage: React.FC = () => {
                       </div>
                     </div>
                     {form.description && (
-                      <p className="text-slate-300 text-sm mb-3 line-clamp-2">{form.description}</p>
+                      <p className="text-theme-text-secondary text-sm mb-3 line-clamp-2">{form.description}</p>
                     )}
 
                     {/* Public URL */}
                     {form.is_public && form.public_slug && form.status === 'published' && (
                       <div className="flex items-center space-x-2 mb-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-3 py-2">
-                        <Link className="w-4 h-4 text-cyan-400 flex-shrink-0" aria-hidden="true" />
-                        <span className="text-cyan-300 text-xs truncate flex-1">{getPublicUrl(form.public_slug)}</span>
+                        <Link className="w-4 h-4 text-cyan-700 dark:text-cyan-400 flex-shrink-0" aria-hidden="true" />
+                        <span className="text-cyan-700 dark:text-cyan-300 text-xs truncate flex-1">{getPublicUrl(form.public_slug)}</span>
                         <button
                           onClick={() => copyPublicUrl(form.public_slug!)}
-                          className="flex-shrink-0 text-cyan-400 hover:text-cyan-300 transition-colors"
+                          className="flex-shrink-0 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"
                           aria-label="Copy public URL"
                         >
                           {copiedSlug === form.public_slug ? (
-                            <Check className="w-4 h-4 text-green-400" aria-hidden="true" />
+                            <Check className="w-4 h-4 text-green-700 dark:text-green-400" aria-hidden="true" />
                           ) : (
                             <Copy className="w-4 h-4" aria-hidden="true" />
                           )}
@@ -667,7 +667,7 @@ const FormsPage: React.FC = () => {
                     )}
 
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4 text-xs text-slate-400">
+                      <div className="flex items-center space-x-4 text-xs text-theme-text-muted">
                         <span>{form.field_count ?? 0} fields</span>
                         <span>{form.submission_count ?? 0} submissions</span>
                       </div>
@@ -675,7 +675,7 @@ const FormsPage: React.FC = () => {
                         {canManage && (
                           <button
                             onClick={() => handleEditForm(form.id)}
-                            className="p-1.5 text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 rounded transition-colors"
+                            className="p-1.5 text-pink-700 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 hover:bg-pink-500/10 rounded transition-colors"
                             aria-label="Edit form fields"
                           >
                             <Pencil className="w-4 h-4" aria-hidden="true" />
@@ -683,7 +683,7 @@ const FormsPage: React.FC = () => {
                         )}
                         <button
                           onClick={() => handleViewSubmissions(form.id)}
-                          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded transition-colors"
                           aria-label="View submissions"
                         >
                           <Eye className="w-4 h-4" aria-hidden="true" />
@@ -691,7 +691,7 @@ const FormsPage: React.FC = () => {
                         {canManage && (
                           <button
                             onClick={() => handleShareForm(form)}
-                            className="p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
+                            className="p-1.5 text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 hover:bg-cyan-500/10 rounded transition-colors"
                             aria-label="Public sharing settings"
                           >
                             <Globe className="w-4 h-4" aria-hidden="true" />
@@ -700,7 +700,7 @@ const FormsPage: React.FC = () => {
                         {canManage && (
                           <button
                             onClick={() => handleOpenIntegrationModal(form.id)}
-                            className="p-1.5 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
+                            className="p-1.5 text-orange-700 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors"
                             aria-label="Manage integrations"
                           >
                             <Plug className="w-4 h-4" aria-hidden="true" />
@@ -709,7 +709,7 @@ const FormsPage: React.FC = () => {
                         {canManage && form.status === 'draft' && (
                           <button
                             onClick={() => handlePublish(form.id)}
-                            className="p-1.5 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
+                            className="p-1.5 text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded transition-colors"
                             aria-label="Publish form"
                           >
                             <Send className="w-4 h-4" aria-hidden="true" />
@@ -718,7 +718,7 @@ const FormsPage: React.FC = () => {
                         {canManage && form.status === 'published' && (
                           <button
                             onClick={() => handleArchive(form.id)}
-                            className="p-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
+                            className="p-1.5 text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded transition-colors"
                             aria-label="Archive form"
                           >
                             <Archive className="w-4 h-4" aria-hidden="true" />
@@ -727,7 +727,7 @@ const FormsPage: React.FC = () => {
                         {canManage && (
                           <button
                             onClick={() => handleDelete(form.id)}
-                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                            className="p-1.5 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                             aria-label="Delete form"
                           >
                             <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -746,40 +746,40 @@ const FormsPage: React.FC = () => {
         {activeTab === 'templates' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredTemplates.map((template) => (
-              <div key={template.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-5 border border-white/20 hover:border-pink-500/30 transition-all">
+              <div key={template.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-pink-500/30 transition-all">
                 <div className="flex items-start space-x-4">
-                  <div className={`p-3 rounded-lg bg-white/5 ${template.color}`}>
+                  <div className={`p-3 rounded-lg bg-theme-surface-secondary ${template.color}`}>
                     {template.icon}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
-                      <h3 className="text-white font-semibold">{template.name}</h3>
+                      <h3 className="text-theme-text-primary font-semibold">{template.name}</h3>
                       <div className="flex items-center space-x-1">
                         {template.isPublic && (
-                          <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/30">
+                          <span className="px-2 py-0.5 text-xs bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 rounded border border-cyan-500/30">
                             Public
                           </span>
                         )}
-                        <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
+                        <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-700 dark:text-pink-400 rounded border border-pink-500/30">
                           {template.category}
                         </span>
                       </div>
                     </div>
-                    <p className="text-slate-300 text-sm mt-1">{template.description}</p>
+                    <p className="text-theme-text-secondary text-sm mt-1">{template.description}</p>
                     {template.integrationHint && (
                       <div className="flex items-center space-x-1 mt-2">
-                        <Plug className="w-3 h-3 text-orange-400" aria-hidden="true" />
-                        <span className="text-orange-400 text-xs">Supports cross-module integration</span>
+                        <Plug className="w-3 h-3 text-orange-700 dark:text-orange-400" aria-hidden="true" />
+                        <span className="text-orange-700 dark:text-orange-400 text-xs">Supports cross-module integration</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between mt-3">
-                      <span className="text-slate-400 text-xs">{template.fields.length} fields</span>
+                      <span className="text-theme-text-muted text-xs">{template.fields.length} fields</span>
                       <div className="flex space-x-2">
                         {canManage && (
                           <button
                             onClick={() => handleUseTemplate(template)}
                             disabled={creating}
-                            className="px-3 py-1 text-xs bg-pink-600/20 text-pink-400 hover:bg-pink-600/30 rounded transition-colors flex items-center space-x-1 disabled:opacity-50"
+                            className="px-3 py-1 text-xs bg-pink-600/20 text-pink-700 dark:text-pink-400 hover:bg-pink-600/30 rounded transition-colors flex items-center space-x-1 disabled:opacity-50"
                           >
                             <Copy className="w-3 h-3" aria-hidden="true" />
                             <span>{creating ? 'Creating...' : 'Use Template'}</span>
@@ -800,12 +800,12 @@ const FormsPage: React.FC = () => {
             {selectedFormId ? (
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-white text-lg font-semibold">
+                  <h2 className="text-theme-text-primary text-lg font-semibold">
                     Submissions
                   </h2>
                   <button
                     onClick={() => setSelectedFormId(null)}
-                    className="text-slate-400 hover:text-white text-sm"
+                    className="text-theme-text-muted hover:text-theme-text-primary text-sm"
                   >
                     Clear selection
                   </button>
@@ -816,15 +816,15 @@ const FormsPage: React.FC = () => {
                 />
               </div>
             ) : (
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-                <FileCheck className="w-16 h-16 text-slate-500 mx-auto mb-4" aria-hidden="true" />
-                <h3 className="text-white text-xl font-bold mb-2">View Submissions</h3>
-                <p className="text-slate-300 mb-6">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+                <FileCheck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">View Submissions</h3>
+                <p className="text-theme-text-secondary mb-6">
                   Select a form from the &quot;My Forms&quot; tab to view its submissions.
                 </p>
                 <button
                   onClick={() => setActiveTab('forms')}
-                  className="px-4 py-2 bg-pink-600/20 text-pink-400 hover:bg-pink-600/30 rounded-lg transition-colors"
+                  className="px-4 py-2 bg-pink-600/20 text-pink-700 dark:text-pink-400 hover:bg-pink-600/30 rounded-lg transition-colors"
                 >
                   Go to My Forms
                 </button>
@@ -836,7 +836,7 @@ const FormsPage: React.FC = () => {
         {/* Form Detail / Editor View */}
         {editingForm && (
           <div
-            className="fixed inset-0 z-50 bg-slate-900/95 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/95 overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="form-editor-title"
@@ -848,34 +848,34 @@ const FormsPage: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleCloseEditor}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
                     aria-label="Close editor"
                   >
                     <ArrowLeft className="w-5 h-5" aria-hidden="true" />
                   </button>
                   <div>
-                    <h2 id="form-editor-title" className="text-white text-xl font-bold">{editingForm.name}</h2>
-                    <p className="text-slate-400 text-sm">{editingForm.description || 'No description'}</p>
+                    <h2 id="form-editor-title" className="text-theme-text-primary text-xl font-bold">{editingForm.name}</h2>
+                    <p className="text-theme-text-muted text-sm">{editingForm.description || 'No description'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-0.5 text-xs rounded border ${statusColor(editingForm.status)}`}>
                     {editingForm.status}
                   </span>
-                  <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-400 rounded border border-pink-500/30">
+                  <span className="px-2 py-0.5 text-xs bg-pink-500/10 text-pink-700 dark:text-pink-400 rounded border border-pink-500/30">
                     {editingForm.category}
                   </span>
                 </div>
               </div>
 
               {/* Detail Tabs */}
-              <div className="flex space-x-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist" aria-label="Form editor views">
+              <div className="flex space-x-1 mb-6 bg-theme-surface-secondary rounded-lg p-1 w-fit" role="tablist" aria-label="Form editor views">
                 <button
                   onClick={() => setDetailTab('builder')}
                   role="tab"
                   aria-selected={detailTab === 'builder'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+                    detailTab === 'builder' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
                   }`}
                 >
                   Form Builder
@@ -885,7 +885,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'preview'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+                    detailTab === 'preview' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
                   }`}
                 >
                   Preview & Submit
@@ -895,7 +895,7 @@ const FormsPage: React.FC = () => {
                   role="tab"
                   aria-selected={detailTab === 'submissions'}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:text-white'
+                    detailTab === 'submissions' ? 'bg-pink-600 text-white' : 'text-theme-text-muted hover:text-white'
                   }`}
                 >
                   Submissions
@@ -904,14 +904,14 @@ const FormsPage: React.FC = () => {
 
               {/* Builder Tab */}
               {detailTab === 'builder' && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-xl p-6">
                   <FormBuilder formId={editingForm.id} />
                 </div>
               )}
 
               {/* Preview & Submit Tab */}
               {detailTab === 'preview' && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-xl p-6">
                   <FormRenderer
                     formId={editingForm.id}
                     submitLabel="Submit Form"
@@ -922,7 +922,7 @@ const FormsPage: React.FC = () => {
 
               {/* Submissions Tab */}
               {detailTab === 'submissions' && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-xl p-6">
                   <SubmissionViewer
                     formId={editingForm.id}
                     allowDelete={canManage}
@@ -944,32 +944,32 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 id="create-form-title" className="text-lg font-medium text-white">Create New Form</h3>
-                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                    <h3 id="create-form-title" className="text-lg font-medium text-theme-text-primary">Create New Form</h3>
+                    <button onClick={() => setShowCreateModal(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="form-name" className="block text-sm font-medium text-slate-300 mb-1">Form Name <span aria-hidden="true">*</span></label>
+                      <label htmlFor="form-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Form Name <span aria-hidden="true">*</span></label>
                       <input
                         id="form-name"
                         type="text" required aria-required="true" value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
                         placeholder="e.g., Monthly Safety Report"
                       />
                     </div>
                     <div>
-                      <label htmlFor="form-category" className="block text-sm font-medium text-slate-300 mb-1">Category</label>
+                      <label htmlFor="form-category" className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
                       <select
                         id="form-category"
                         value={formData.category}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
                       >
                         <option value="Safety">Safety</option>
                         <option value="Operations">Operations</option>
@@ -978,12 +978,12 @@ const FormsPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="form-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="form-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
                       <textarea
                         id="form-description"
                         rows={3} value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-pink-500"
                         placeholder="Describe the purpose of this form..."
                       />
                     </div>
@@ -996,18 +996,18 @@ const FormsPage: React.FC = () => {
                         className="w-4 h-4 text-cyan-600 rounded"
                       />
                       <label htmlFor="is_public" className="text-sm cursor-pointer">
-                        <span className="text-cyan-300 font-medium">Public Form</span>
-                        <p className="text-slate-400 text-xs mt-0.5">
+                        <span className="text-cyan-700 dark:text-cyan-300 font-medium">Public Form</span>
+                        <p className="text-theme-text-muted text-xs mt-0.5">
                           Allow anyone to fill out this form via a public URL (no login required)
                         </p>
                       </label>
                     </div>
                   </div>
                 </div>
-                <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                   >
                     Cancel
                   </button>
@@ -1035,14 +1035,14 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 id="share-form-title" className="text-lg font-medium text-white flex items-center space-x-2">
-                      <Globe className="w-5 h-5 text-cyan-400" aria-hidden="true" />
+                    <h3 id="share-form-title" className="text-lg font-medium text-theme-text-primary flex items-center space-x-2">
+                      <Globe className="w-5 h-5 text-cyan-700 dark:text-cyan-400" aria-hidden="true" />
                       <span>Public Sharing Settings</span>
                     </h3>
-                    <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                    <button onClick={() => setShowShareModal(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
@@ -1051,10 +1051,10 @@ const FormsPage: React.FC = () => {
                     if (!form) return null;
                     return (
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                        <div className="flex items-center justify-between p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
                           <div>
-                            <p className="text-white font-medium">Public Access</p>
-                            <p className="text-slate-400 text-xs mt-0.5">
+                            <p className="text-theme-text-primary font-medium">Public Access</p>
+                            <p className="text-theme-text-muted text-xs mt-0.5">
                               Anyone with the link can view and submit this form
                             </p>
                           </div>
@@ -1062,7 +1062,7 @@ const FormsPage: React.FC = () => {
                             onClick={() => handleTogglePublic(form)}
                             aria-label={form.is_public ? 'Disable public access' : 'Enable public access'}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              form.is_public ? 'bg-cyan-600' : 'bg-slate-600'
+                              form.is_public ? 'bg-cyan-600' : 'bg-theme-surface-hover'
                             }`}
                           >
                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1074,18 +1074,18 @@ const FormsPage: React.FC = () => {
                         {form.is_public && form.public_slug && (
                           <>
                             <div>
-                              <label htmlFor="share-public-url" className="block text-sm font-medium text-slate-300 mb-2">Public URL</label>
+                              <label htmlFor="share-public-url" className="block text-sm font-medium text-theme-text-secondary mb-2">Public URL</label>
                               <div className="flex items-center space-x-2">
                                 <input
                                   id="share-public-url"
                                   readOnly
                                   value={getPublicUrl(form.public_slug)}
-                                  className="flex-1 px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-cyan-300 text-sm"
+                                  className="flex-1 px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-cyan-700 dark:text-cyan-300 text-sm"
                                   aria-label="Public URL"
                                 />
                                 <button
                                   onClick={() => copyPublicUrl(form.public_slug!)}
-                                  className="px-3 py-2 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
+                                  className="px-3 py-2 bg-cyan-600/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
                                   aria-label="Copy public URL"
                                 >
                                   {copiedSlug === form.public_slug ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
@@ -1094,7 +1094,7 @@ const FormsPage: React.FC = () => {
                                   href={getPublicUrl(form.public_slug)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="px-3 py-2 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
+                                  className="px-3 py-2 bg-cyan-600/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors"
                                   aria-label="Open public URL in new tab"
                                 >
                                   <ExternalLink className="w-4 h-4" aria-hidden="true" />
@@ -1104,7 +1104,7 @@ const FormsPage: React.FC = () => {
 
                             {/* QR Code */}
                             <div>
-                              <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center space-x-2">
+                              <label className="block text-sm font-medium text-theme-text-secondary mb-2 flex items-center space-x-2">
                                 <QrCode className="w-4 h-4" aria-hidden="true" />
                                 <span>QR Code</span>
                               </label>
@@ -1137,7 +1137,7 @@ const FormsPage: React.FC = () => {
                                     };
                                     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
                                   }}
-                                  className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
+                                  className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
                                   aria-label="Download QR code as PNG"
                                 >
                                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
@@ -1155,21 +1155,21 @@ const FormsPage: React.FC = () => {
                                     a.click();
                                     URL.revokeObjectURL(a.href);
                                   }}
-                                  className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
+                                  className="flex items-center space-x-1 px-3 py-1.5 bg-cyan-600/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-600/30 rounded-lg transition-colors text-sm"
                                   aria-label="Download QR code as SVG"
                                 >
                                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
                                   <span>Download SVG</span>
                                 </button>
                               </div>
-                              <p className="text-slate-400 text-xs text-center mt-2">
+                              <p className="text-theme-text-muted text-xs text-center mt-2">
                                 Print this QR code and place it where users can scan to access the form.
                               </p>
                             </div>
 
                             {form.status !== 'published' && (
                               <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                <p className="text-yellow-300 text-sm">
+                                <p className="text-yellow-700 dark:text-yellow-300 text-sm">
                                   This form must be published before the public URL will be active.
                                 </p>
                               </div>
@@ -1177,8 +1177,8 @@ const FormsPage: React.FC = () => {
                           </>
                         )}
 
-                        <div className="p-3 bg-white/5 border border-white/10 rounded-lg">
-                          <p className="text-slate-300 text-sm">
+                        <div className="p-3 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+                          <p className="text-theme-text-secondary text-sm">
                             Public forms allow anyone to submit without logging in. Submissions include the
                             submitter&apos;s name and email (optional) and are marked as &quot;Public&quot; in your submissions list.
                           </p>
@@ -1187,10 +1187,10 @@ const FormsPage: React.FC = () => {
                     );
                   })()}
                 </div>
-                <div className="bg-slate-900/50 px-6 py-3 flex justify-end rounded-b-lg">
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end rounded-b-lg">
                   <button
                     onClick={() => setShowShareModal(false)}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
                   >
                     Done
                   </button>
@@ -1211,14 +1211,14 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 id="integration-modal-title" className="text-lg font-medium text-white flex items-center space-x-2">
-                      <Plug className="w-5 h-5 text-orange-400" aria-hidden="true" />
+                    <h3 id="integration-modal-title" className="text-lg font-medium text-theme-text-primary flex items-center space-x-2">
+                      <Plug className="w-5 h-5 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                       <span>Cross-Module Integrations</span>
                     </h3>
-                    <button onClick={() => setShowIntegrationModal(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                    <button onClick={() => setShowIntegrationModal(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
@@ -1226,21 +1226,21 @@ const FormsPage: React.FC = () => {
                   {/* Current integrations */}
                   {selectedFormDetail?.integrations && selectedFormDetail.integrations.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-slate-300 text-sm font-medium mb-2">Active Integrations</p>
+                      <p className="text-theme-text-secondary text-sm font-medium mb-2">Active Integrations</p>
                       <div className="space-y-2">
                         {selectedFormDetail.integrations.map((integ) => (
                           <div key={integ.id} className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
                             <div>
-                              <p className="text-orange-300 text-sm font-medium capitalize">
+                              <p className="text-orange-700 dark:text-orange-300 text-sm font-medium capitalize">
                                 {integ.target_module} - {integ.integration_type.replace(/_/g, ' ')}
                               </p>
-                              <p className="text-slate-400 text-xs">
+                              <p className="text-theme-text-muted text-xs">
                                 {integ.is_active ? 'Active' : 'Inactive'}
                               </p>
                             </div>
                             <button
                               onClick={() => handleDeleteIntegration(integ.id)}
-                              className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                              className="p-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded"
                               aria-label="Delete integration"
                             >
                               <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -1252,11 +1252,11 @@ const FormsPage: React.FC = () => {
                   )}
 
                   {/* Add integration */}
-                  <div className="border-t border-white/10 pt-4">
-                    <p className="text-slate-300 text-sm font-medium mb-3">Add Integration</p>
+                  <div className="border-t border-theme-surface-border pt-4">
+                    <p className="text-theme-text-secondary text-sm font-medium mb-3">Add Integration</p>
                     <div className="space-y-3">
                       <div>
-                        <label htmlFor="integration-target" className="block text-xs text-slate-400 mb-1">Target Module</label>
+                        <label htmlFor="integration-target" className="block text-xs text-theme-text-muted mb-1">Target Module</label>
                         <select
                           id="integration-target"
                           value={integrationTarget}
@@ -1266,19 +1266,19 @@ const FormsPage: React.FC = () => {
                               e.target.value === 'membership' ? 'membership_interest' : 'equipment_assignment'
                             );
                           }}
-                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                         >
                           <option value="membership">Membership</option>
                           <option value="inventory">Inventory</option>
                         </select>
                       </div>
                       <div>
-                        <label htmlFor="integration-type" className="block text-xs text-slate-400 mb-1">Integration Type</label>
+                        <label htmlFor="integration-type" className="block text-xs text-theme-text-muted mb-1">Integration Type</label>
                         <select
                           id="integration-type"
                           value={integrationType}
                           onChange={(e) => setIntegrationType(e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                         >
                           {integrationTarget === 'membership' ? (
                             <option value="membership_interest">Membership Interest (captures prospective member data)</option>
@@ -1288,8 +1288,8 @@ const FormsPage: React.FC = () => {
                         </select>
                       </div>
 
-                      <div className="p-3 bg-white/5 border border-white/10 rounded-lg">
-                        <p className="text-slate-300 text-xs">
+                      <div className="p-3 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
+                        <p className="text-theme-text-secondary text-xs">
                           {integrationTarget === 'membership'
                             ? 'Membership interest integration captures form submissions as prospective member records. Admins can review and process them from the submissions view.'
                             : 'Equipment assignment integration maps form fields to inventory assignments. Use member_lookup fields to select members and map equipment fields to create assignments automatically.'
@@ -1299,7 +1299,7 @@ const FormsPage: React.FC = () => {
 
                       <button
                         onClick={handleAddIntegration}
-                        className="w-full px-4 py-2 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                        className="w-full px-4 py-2 bg-orange-600/20 text-orange-700 dark:text-orange-400 hover:bg-orange-600/30 rounded-lg transition-colors flex items-center justify-center space-x-2"
                       >
                         <Plus className="w-4 h-4" aria-hidden="true" />
                         <span>Add Integration</span>
@@ -1307,10 +1307,10 @@ const FormsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <div className="bg-slate-900/50 px-6 py-3 flex justify-end rounded-b-lg">
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end rounded-b-lg">
                   <button
                     onClick={() => setShowIntegrationModal(false)}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
                   >
                     Done
                   </button>

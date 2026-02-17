@@ -59,7 +59,7 @@ const Welcome: React.FC = () => {
   // Show a brief loading state while we check onboarding status
   if (checking) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
         </div>
@@ -68,11 +68,11 @@ const Welcome: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-3xl w-full text-center space-y-8">
         {/* Title */}
         <h1
-          className={`text-6xl md:text-7xl font-bold text-white transition-all duration-1000 ${
+          className={`text-6xl md:text-7xl font-bold text-theme-text-primary transition-all duration-1000 ${
             showTitle
               ? 'opacity-100 translate-y-0'
               : 'opacity-0 translate-y-8'
@@ -92,7 +92,7 @@ const Welcome: React.FC = () => {
               : 'opacity-0 translate-y-8'
           }`}
         >
-          <p className="text-xl md:text-2xl text-slate-300 leading-relaxed">
+          <p className="text-xl md:text-2xl text-theme-text-secondary leading-relaxed">
             A secure, HIPAA-compliant department intranet built by a local
             volunteer fire department and shared with the world to help other
             volunteer departments manage their operations, training, and
@@ -101,16 +101,16 @@ const Welcome: React.FC = () => {
 
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
-            <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               HIPAA Compliant
             </span>
-            <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               Section 508 Accessible
             </span>
-            <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               Zero Plain Text Passwords
             </span>
-            <span className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-slate-200 border border-white/20">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               Tamper-Proof Audit Logs
             </span>
           </div>
@@ -126,7 +126,7 @@ const Welcome: React.FC = () => {
           </div>
 
           {/* Footer */}
-          <div className="mt-12 text-slate-400 text-sm">
+          <div className="mt-12 text-theme-text-muted text-sm">
             <p>
               Built with care by volunteer firefighters, for volunteer
               firefighters

@@ -77,16 +77,16 @@ const PublicPortalAdmin: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">Loading public portal...</p>
+          <p className="mt-4 text-theme-text-secondary">Loading public portal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-theme-surface-secondary">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-theme-surface border-b border-theme-surface-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <div className="flex items-center justify-between">
@@ -95,10 +95,10 @@ const PublicPortalAdmin: React.FC = () => {
                   <Globe className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">
+                  <h1 className="text-2xl font-bold text-theme-text-primary">
                     Public Portal
                   </h1>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-theme-text-muted">
                     Manage public API access for external websites
                   </p>
                 </div>
@@ -109,15 +109,15 @@ const PublicPortalAdmin: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   {config?.enabled ? (
                     <>
-                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-500" />
                       <span className="text-sm font-medium text-green-700">
                         Portal Enabled
                       </span>
                     </>
                   ) : (
                     <>
-                      <XCircle className="w-5 h-5 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-500">
+                      <XCircle className="w-5 h-5 text-theme-text-muted" />
+                      <span className="text-sm font-medium text-theme-text-muted">
                         Portal Disabled
                       </span>
                     </>
@@ -154,7 +154,7 @@ const PublicPortalAdmin: React.FC = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex space-x-1 border-b border-gray-200">
+          <div className="flex space-x-1 border-b border-theme-surface-border">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -164,7 +164,7 @@ const PublicPortalAdmin: React.FC = () => {
                   className={`flex items-center space-x-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border'
                   }`}
                 >
                   <Icon className="w-4 h-4" />

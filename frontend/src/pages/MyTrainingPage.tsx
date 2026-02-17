@@ -18,6 +18,7 @@ import {
   Star,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   AlertTriangle,
   CheckCircle2,
   Settings,
@@ -28,36 +29,30 @@ import {
 } from 'lucide-react';
 import { trainingModuleConfigService } from '../services/api';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
-
-// ==================== Helpers ====================
-
-const formatDate = (d: string | null | undefined) => {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
+import { formatDate } from '../utils/dateFormatting';
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'completed': return 'bg-green-500/20 text-green-400';
-    case 'approved': return 'bg-green-500/20 text-green-400';
-    case 'active': return 'bg-blue-500/20 text-blue-400';
-    case 'in_progress': return 'bg-blue-500/20 text-blue-400';
-    case 'pending_review': return 'bg-yellow-500/20 text-yellow-400';
-    case 'rejected': return 'bg-red-500/20 text-red-400';
-    case 'revision_requested': return 'bg-orange-500/20 text-orange-400';
-    default: return 'bg-gray-500/20 text-gray-400';
+    case 'completed': return 'bg-green-500/20 text-green-700 dark:text-green-400';
+    case 'approved': return 'bg-green-500/20 text-green-700 dark:text-green-400';
+    case 'active': return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
+    case 'in_progress': return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
+    case 'pending_review': return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+    case 'rejected': return 'bg-red-500/20 text-red-700 dark:text-red-400';
+    case 'revision_requested': return 'bg-orange-500/20 text-orange-700 dark:text-orange-400';
+    default: return 'bg-theme-surface-secondary text-theme-text-muted';
   }
 };
 
 // ==================== Stat Card ====================
 
 const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number; color?: string }> = ({
-  icon: Icon, label, value, color = 'text-white',
+  icon: Icon, label, value, color = 'text-theme-text-primary',
 }) => (
-  <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
     <div className="flex items-center space-x-2 mb-1">
-      <Icon className="w-4 h-4 text-slate-400" />
-      <span className="text-xs text-slate-400">{label}</span>
+      <Icon className="w-4 h-4 text-theme-text-muted" />
+      <span className="text-xs text-theme-text-muted">{label}</span>
     </div>
     <p className={`text-xl font-bold ${color}`}>{value}</p>
   </div>
@@ -70,16 +65,16 @@ const Section: React.FC<{ title: string; icon: React.ElementType; children: Reac
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+    <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/5 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-theme-surface-secondary transition-colors"
       >
         <div className="flex items-center space-x-3">
-          <Icon className="w-5 h-5 text-red-500" />
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+          <Icon className="w-5 h-5 text-red-700 dark:text-red-500" />
+          <h2 className="text-lg font-semibold text-theme-text-primary">{title}</h2>
         </div>
-        {open ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+        {open ? <ChevronUp className="w-5 h-5 text-theme-text-muted" /> : <ChevronDown className="w-5 h-5 text-theme-text-muted" />}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
     </div>
@@ -133,26 +128,26 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-theme-text-muted">
         Control what training data members can see on their personal training page.
         Officers and administrators always see the full dataset regardless of these settings.
       </p>
 
       {groups.map((group) => (
         <div key={group}>
-          <h4 className="text-sm font-semibold text-slate-300 mb-3">{group}</h4>
+          <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">{group}</h4>
           <div className="space-y-2">
             {VISIBILITY_FIELDS.filter((f) => f.group === group).map((field) => (
-              <label key={field.key} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800/70 transition-colors">
+              <label key={field.key} className="flex items-center justify-between bg-theme-surface/50 rounded-lg p-3 cursor-pointer hover:bg-theme-surface/70 transition-colors">
                 <div>
-                  <p className="text-sm font-medium text-white">{field.label}</p>
-                  <p className="text-xs text-slate-500">{field.description}</p>
+                  <p className="text-sm font-medium text-theme-text-primary">{field.label}</p>
+                  <p className="text-xs text-theme-text-muted">{field.description}</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={getCurrentValue(field.key)}
                   onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded bg-theme-surface-hover border-theme-input-border text-red-600 focus:ring-red-500"
                 />
               </label>
             ))}
@@ -226,7 +221,7 @@ const MyTrainingPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-center items-center h-64">
-          <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+          <Loader2 className="w-8 h-8 text-red-700 dark:text-red-500 animate-spin" />
         </div>
       </div>
     );
@@ -236,7 +231,7 @@ const MyTrainingPage: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
       </div>
     );
@@ -248,11 +243,11 @@ const MyTrainingPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center space-x-3">
-              <GraduationCap className="w-8 h-8 text-red-500" />
+            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
+              <GraduationCap className="w-8 h-8 text-red-700 dark:text-red-500" />
               <span>My Training</span>
             </h1>
-            <p className="text-slate-400 mt-1">
+            <p className="text-theme-text-muted mt-1">
               Your training records, certifications, pipeline progress, and shift experience
             </p>
           </div>
@@ -274,7 +269,7 @@ const MyTrainingPage: React.FC = () => {
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'overview' ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+              activeTab === 'overview' ? 'bg-red-600 text-white' : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             My Training
@@ -282,7 +277,7 @@ const MyTrainingPage: React.FC = () => {
           <button
             onClick={() => setActiveTab('settings')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'settings' ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+              activeTab === 'settings' ? 'bg-red-600 text-white' : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             <Settings className="w-4 h-4" />
@@ -340,30 +335,30 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Certifications" icon={Award}>
               <div className="space-y-2">
                 {data.certifications.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                  <div key={c.id} className="flex items-center justify-between bg-theme-surface/50 rounded-lg p-3">
                     <div>
-                      <p className="text-sm font-medium text-white">{c.course_name}</p>
+                      <p className="text-sm font-medium text-theme-text-primary">{c.course_name}</p>
                       {c.certification_number && (
-                        <p className="text-xs text-slate-500">#{c.certification_number}</p>
+                        <p className="text-xs text-theme-text-muted">#{c.certification_number}</p>
                       )}
                     </div>
                     <div className="text-right">
                       {c.is_expired ? (
-                        <span className="flex items-center space-x-1 text-red-400 text-sm">
+                        <span className="flex items-center space-x-1 text-red-700 dark:text-red-400 text-sm">
                           <AlertTriangle className="w-4 h-4" />
                           <span>Expired</span>
                         </span>
                       ) : c.days_until_expiry !== null && c.days_until_expiry <= 90 ? (
-                        <span className="text-yellow-400 text-sm">
+                        <span className="text-yellow-700 dark:text-yellow-400 text-sm">
                           Expires in {c.days_until_expiry} days
                         </span>
                       ) : (
-                        <span className="flex items-center space-x-1 text-green-400 text-sm">
+                        <span className="flex items-center space-x-1 text-green-700 dark:text-green-400 text-sm">
                           <CheckCircle2 className="w-4 h-4" />
                           <span>Valid</span>
                         </span>
                       )}
-                      <p className="text-xs text-slate-500">{formatDate(c.expiration_date)}</p>
+                      <p className="text-xs text-theme-text-muted">{formatDate(c.expiration_date)}</p>
                     </div>
                   </div>
                 ))}
@@ -376,14 +371,21 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Pipeline Progress" icon={TrendingUp}>
               <div className="space-y-4">
                 {data.enrollments.map((e) => (
-                  <div key={e.id} className="bg-slate-800/50 rounded-lg p-4">
+                  <div key={e.id} className="bg-theme-surface/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-xs px-2 py-1 rounded ${getStatusColor(e.status)}`}>
                         {e.status.replace('_', ' ')}
                       </span>
-                      <span className="text-sm text-white font-semibold">{Math.round(e.progress_percentage)}%</span>
+                      <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                    <div
+                      className="w-full bg-theme-surface-hover rounded-full h-2 mb-2"
+                      role="progressbar"
+                      aria-valuenow={Math.round(e.progress_percentage)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`Pipeline progress: ${Math.round(e.progress_percentage)}%`}
+                    >
                       <div
                         className={`h-2 rounded-full transition-all ${
                           e.progress_percentage >= 75 ? 'bg-green-500' :
@@ -393,7 +395,7 @@ const MyTrainingPage: React.FC = () => {
                         style={{ width: `${e.progress_percentage}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-theme-text-muted">
                       <span>Enrolled: {formatDate(e.enrolled_at)}</span>
                       {e.target_completion_date && <span>Target: {formatDate(e.target_completion_date)}</span>}
                     </div>
@@ -401,21 +403,29 @@ const MyTrainingPage: React.FC = () => {
                       <div className="mt-3 space-y-1">
                         {e.requirements.map((r) => (
                           <div key={r.id} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 min-w-0">
                               {r.status === 'completed' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 flex-shrink-0" />
                               ) : (
-                                <div className="w-3.5 h-3.5 rounded-full border border-slate-600" />
+                                <div className="w-3.5 h-3.5 rounded-full border border-theme-input-border flex-shrink-0" />
                               )}
-                              <span className="text-slate-300">{Math.round(r.progress_percentage)}%</span>
+                              <span className="text-theme-text-primary truncate">{r.requirement_name || 'Requirement'}</span>
+                              <span className="text-theme-text-muted flex-shrink-0">{Math.round(r.progress_percentage)}%</span>
                             </div>
-                            <span className={`px-1.5 py-0.5 rounded ${getStatusColor(r.status)}`}>
+                            <span className={`px-1.5 py-0.5 rounded flex-shrink-0 ml-2 ${getStatusColor(r.status)}`}>
                               {r.status.replace('_', ' ')}
                             </span>
                           </div>
                         ))}
                       </div>
                     )}
+                    <button
+                      onClick={() => navigate('/training/my-progress')}
+                      className="mt-3 flex items-center space-x-1 text-xs text-red-700 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors"
+                    >
+                      <span>View Details</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -427,7 +437,7 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Training History" icon={FileText} defaultOpen={false}>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                  <thead className="text-xs text-theme-text-muted uppercase bg-theme-input-bg">
                     <tr>
                       <th className="px-4 py-2">Course</th>
                       <th className="px-4 py-2">Type</th>
@@ -438,7 +448,7 @@ const MyTrainingPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {data.training_records.map((r) => (
-                      <tr key={r.id} className="text-slate-200">
+                      <tr key={r.id} className="text-theme-text-primary">
                         <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date)}</td>
@@ -461,33 +471,33 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Shift Completion Reports" icon={ClipboardList} defaultOpen={false}>
               <div className="space-y-3">
                 {data.shift_reports.map((sr) => (
-                  <div key={sr.id} className="bg-slate-800/50 rounded-lg p-4">
+                  <div key={sr.id} className="bg-theme-surface/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium text-white">{formatDate(sr.shift_date)}</p>
-                      <div className="flex items-center space-x-3 text-xs text-slate-400">
+                      <p className="text-sm font-medium text-theme-text-primary">{formatDate(sr.shift_date)}</p>
+                      <div className="flex items-center space-x-3 text-xs text-theme-text-muted">
                         <span>{sr.hours_on_shift}h</span>
                         <span>{sr.calls_responded} calls</span>
                         {v?.show_performance_rating && sr.performance_rating && (
                           <span className="flex items-center space-x-1">
-                            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                            <Star className="w-3 h-3 text-yellow-700 dark:text-yellow-400 fill-yellow-400" />
                             <span>{sr.performance_rating}/5</span>
                           </span>
                         )}
                       </div>
                     </div>
                     {v?.show_areas_of_strength && sr.areas_of_strength && (
-                      <p className="text-xs text-green-400 mb-1"><span className="font-medium">Strengths:</span> {sr.areas_of_strength}</p>
+                      <p className="text-xs text-green-700 dark:text-green-400 mb-1"><span className="font-medium">Strengths:</span> {sr.areas_of_strength}</p>
                     )}
                     {v?.show_areas_for_improvement && sr.areas_for_improvement && (
-                      <p className="text-xs text-yellow-400 mb-1"><span className="font-medium">Improvement:</span> {sr.areas_for_improvement}</p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mb-1"><span className="font-medium">Improvement:</span> {sr.areas_for_improvement}</p>
                     )}
                     {v?.show_officer_narrative && sr.officer_narrative && (
-                      <p className="text-xs text-slate-300 mb-1"><span className="font-medium">Narrative:</span> {sr.officer_narrative}</p>
+                      <p className="text-xs text-theme-text-secondary mb-1"><span className="font-medium">Narrative:</span> {sr.officer_narrative}</p>
                     )}
                     {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
-                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-hover text-theme-text-muted'}`}>
                             {s.skill_name}
                           </span>
                         ))}
@@ -504,7 +514,7 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                  <thead className="text-xs text-theme-text-muted uppercase bg-theme-input-bg">
                     <tr>
                       <th className="px-4 py-2">Course</th>
                       <th className="px-4 py-2">Date</th>
@@ -515,7 +525,7 @@ const MyTrainingPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {data.submissions.map((s) => (
-                      <tr key={s.id} className="text-slate-200">
+                      <tr key={s.id} className="text-theme-text-primary">
                         <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
@@ -524,7 +534,7 @@ const MyTrainingPage: React.FC = () => {
                             {s.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-500">{formatDate(s.submitted_at)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap text-xs text-theme-text-muted">{formatDate(s.submitted_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -536,7 +546,7 @@ const MyTrainingPage: React.FC = () => {
           {/* Empty State (only for detailed sections, stats always show above) */}
           {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && !data.certifications?.length && (
             <div className="text-center py-8 bg-white/5 border border-white/10 rounded-lg">
-              <p className="text-slate-400 mb-4">
+              <p className="text-theme-text-muted mb-4">
                 No detailed training records yet. Submit external training to get started.
               </p>
               <button

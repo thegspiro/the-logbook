@@ -18,7 +18,7 @@
   /* Text */
   --text-primary: #0f172a;                  /* slate-900 */
   --text-secondary: #475569;               /* slate-600 */
-  --text-muted: #94a3b8;                   /* slate-400 */
+  --text-muted: #64748b;                   /* slate-500 — 4.76:1 on white (WCAG AA) */
 
   /* Navigation */
   --nav-bg: #ffffff;                        /* white */
@@ -50,7 +50,7 @@
   /* Text */
   --text-primary: #ffffff;                  /* white */
   --text-secondary: #cbd5e1;              /* slate-300 */
-  --text-muted: #94a3b8;                   /* slate-400 */
+  --text-muted: #a1b1c7;                   /* between slate-400 and slate-300 — 5.2:1 on slate-900 for AA small text */
 
   /* Navigation */
   --nav-bg: #0f172a;                       /* slate-900 */
@@ -87,9 +87,80 @@
   }
 }
 
-/* Smooth scroll behavior */
-html {
-  scroll-behavior: smooth;
+/* ================================================================
+   Reusable Component Classes
+   Use these instead of repeating long Tailwind class strings inline.
+   To update the look of all inputs/cards/buttons, edit here.
+   ================================================================ */
+@layer components {
+  /* --- Form Controls --- */
+  .form-input {
+    @apply w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg
+           text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500;
+  }
+
+  .form-input-sm {
+    @apply w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded
+           text-theme-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-red-500;
+  }
+
+  .form-checkbox {
+    @apply w-4 h-4 text-red-700 dark:text-red-500 bg-theme-input-bg
+           border-theme-input-border rounded focus:ring-red-500;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-theme-text-secondary mb-1;
+  }
+
+  .form-label-sm {
+    @apply block text-xs font-medium text-theme-text-secondary mb-1;
+  }
+
+  /* --- Cards & Surfaces --- */
+  .card {
+    @apply bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border;
+  }
+
+  .card-secondary {
+    @apply bg-theme-surface-secondary rounded-lg border border-theme-surface-border;
+  }
+
+  /* --- Buttons --- */
+  .btn-primary {
+    @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700
+           focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg
+           hover:bg-theme-surface-hover border border-theme-surface-border
+           focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50;
+  }
+
+  /* --- Stat Cards --- */
+  .stat-card {
+    @apply bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border;
+  }
+}
+
+/* Smooth scroll behavior — respect reduced motion preference */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Body defaults */
@@ -110,5 +181,5 @@ body {
 
 /* Skip to main content link for accessibility */
 .skip-to-main {
-  @apply absolute -top-96 left-0 z-50 bg-white text-slate-900 px-4 py-2 rounded-br-lg focus:top-0;
+  @apply absolute -top-96 left-0 z-50 bg-theme-surface text-theme-text-primary px-4 py-2 rounded-br-lg focus:top-0;
 }

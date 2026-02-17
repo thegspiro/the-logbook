@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-15 (includes system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix; plus duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-16 (includes database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements; plus system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -17,18 +17,19 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 5. [Network & Connection Problems](#network--connection-problems)
 6. [Image Upload Issues](#image-upload-issues)
 7. [Database & Migration Issues](#database--migration-issues)
-8. [Prospective Members Module Issues](#prospective-members-module-issues)
-9. [Elections Module Issues](#elections-module-issues)
-10. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
-11. [Documents Module Issues](#documents-module-issues)
-12. [Events Module Issues](#events-module-issues)
-13. [Facilities Module](#facilities-module)
-14. [Theme & Display Issues](#theme--display-issues)
-15. [Dashboard Issues](#dashboard-issues)
-16. [TypeScript Build Issues](#typescript-build-issues)
-17. [Error Message Reference](#error-message-reference)
-18. [Error Handling Patterns](#error-handling-patterns)
-19. [Getting Help](#getting-help)
+8. [Startup Sequence Issues](#startup-sequence-issues)
+9. [Prospective Members Module Issues](#prospective-members-module-issues)
+10. [Elections Module Issues](#elections-module-issues)
+11. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
+12. [Documents Module Issues](#documents-module-issues)
+13. [Events Module Issues](#events-module-issues)
+14. [Facilities Module](#facilities-module)
+15. [Theme & Display Issues](#theme--display-issues)
+16. [Dashboard Issues](#dashboard-issues)
+17. [TypeScript Build Issues](#typescript-build-issues)
+18. [Error Message Reference](#error-message-reference)
+19. [Error Handling Patterns](#error-handling-patterns)
+20. [Getting Help](#getting-help)
 
 ---
 
@@ -2802,7 +2803,49 @@ WHERE organization_id = 'YOUR_ORG_ID'
 ORDER BY sort_order;
 ```
 
-Expected: 7 system folders (SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents)
+Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Training Materials, Meeting Minutes, General Documents, Member Files, Apparatus Files, Facility Files)
+
+---
+
+### My Personal Folder Not Appearing
+
+**Symptoms**: Member cannot find their personal document folder.
+
+**Explanation**: Per-member folders are created lazily under the "Member Files" system folder on first access.
+
+**Solutions**:
+1. **Use the My Folder endpoint**: Navigate to Documents and look for "Member Files" > your name
+2. **Check via API**: `GET /api/v1/documents/my-folder` returns your personal folder (creates it if it doesn't exist)
+3. **Check permissions**: Members need `documents.view` permission to access their folder
+
+---
+
+### Apparatus/Facility/Event Folders Not Appearing
+
+**Symptoms**: No document folders appear for a specific apparatus, facility, or event.
+
+**Explanation**: Hierarchical folders are created lazily on first access, not when the parent entity is created.
+
+**Solutions**:
+1. **Access the folders endpoint**:
+   - Apparatus: `GET /api/v1/apparatus/{id}/folders` — creates Photos, Registration & Insurance, Maintenance Records, Inspection & Compliance, Manuals & References sub-folders
+   - Facilities: `GET /api/v1/facilities/{id}/folders` — creates Photos, Blueprints & Permits, Maintenance Records, Inspection Reports, Insurance & Leases, Capital Projects sub-folders
+   - Events: `GET /api/v1/events/{id}/folder` — creates the event folder
+2. **Refresh the page** after first access to see newly created folders
+3. **Check the parent system folder exists**: Member Files, Apparatus Files, and Facility Files should appear as system folders in the Documents page
+
+---
+
+### Folder Access Denied
+
+**Symptoms**: User gets 403 error when trying to access a document folder.
+
+**Explanation**: Folders now have visibility controls: `organization` (everyone), `leadership` (officers+), or `owner` (folder owner only).
+
+**Solutions**:
+1. **Check folder visibility**: Member personal folders are `owner` visibility — only the member and admins can access them
+2. **Check your role**: Leadership-restricted folders require an officer-level role
+3. **Admins**: Users with `documents.manage` permission can access all folders regardless of visibility
 
 ---
 
@@ -3256,59 +3299,98 @@ docker exec -it intranet-backend alembic downgrade <revision_id>
 
 ## Startup Sequence Issues
 
-### Database Initialization Takes 25-30 Minutes (First Startup)
+### Database Initialization (First Startup)
 
 **Symptoms:**
 - Backend shows "Connecting to database..." for extended period
 - Multiple retry attempts logged
 - Eventually connects successfully
-- Migrations take significant time
 
 **This is NORMAL behavior** on first startup:
 
 1. **MySQL Container Initialization** (~6 minutes)
-   - MySQL needs time to initialize database
+   - MySQL needs time to initialize its data directory
    - Creates system tables and sets up permissions
    - First-time setup is slower than subsequent restarts
+   - Health check uses TCP (`-h 127.0.0.1 --port=3306`) to avoid false-positive from MySQL's temporary init server
 
-2. **Backend Connection Retries** (up to 20 attempts)
+2. **Backend Connection Retries** (up to 40 attempts)
    - Backend retries every 2-15 seconds with exponential backoff
-   - Logged as: `Database connection attempt X/20...`
-   - Usually connects within first few attempts once MySQL is ready
+   - Logged as: `Database connection attempt X/40...`
+   - 40 retries (~10 min) covers MySQL's ~6 min first-time init
 
-3. **Database Migrations** (~23 minutes for 38 migrations)
-   - Creates comprehensive database schema for fire department intranet
-   - Includes tables for users, organizations, training, events, elections, inventory, and audit logs
-   - Logged as: `Running 38 database migrations...`
-   - **Protected by 30-minute timeout** to prevent infinite hangs
+3. **Fast-Path Database Initialization** (seconds, not minutes)
+   - Fresh databases use `create_all()` instead of running 45+ Alembic migrations sequentially
+   - Creates all 127+ tables in a single pass
+   - Progress logged every 25 tables for visibility
+   - **Protected by 20-minute timeout** to prevent hangs
+   - Self-healing: retries on failure, repairs missing tables, ensures `FK_CHECKS` is always re-enabled
 
 **Total Expected Time:**
-- **First startup**: 25-30 minutes (~6 min MySQL + ~23 min migrations)
+- **First startup**: ~7-10 minutes (mostly MySQL init; table creation takes seconds)
 - **Subsequent restarts**: 10-30 seconds (MySQL already initialized)
+- **Resource-constrained environments** (e.g., Unraid NAS): May take longer; optimized with single-connection DDL, batched operations, and `NullPool`
 
 **What the Frontend Shows:**
 - "Database Connection: Establishing connection to MySQL database (may retry while database initializes)"
 - "Database Setup: Preparing your intranet with membership, training, events, elections, inventory, and audit capabilities"
-- Migration progress bar showing X/38 migrations complete
 - Educational tips rotating every 15 seconds while waiting
 
 **When to Worry:**
-- If connection attempts exceed 20 retries
-- If migrations fail with errors (not warnings)
-- **If the process takes more than 35 minutes** (migration timeout will trigger at 30 minutes)
-- If migrations time out (indicates deadlock, infinite loop, or network issue)
+- If connection attempts exceed 40 retries
+- If initialization fails with errors (not warnings)
+- **If the process takes more than 20 minutes** (init timeout will trigger)
+- If you see `FK_CHECKS` warnings (self-healing should handle this, but check logs)
 
 **Troubleshooting:**
 ```bash
 # Check MySQL logs
 docker logs intranet-mysql
 
-# Check if MySQL is ready
-docker exec intranet-mysql mysqladmin ping -h localhost
+# Check if MySQL is ready (use TCP, not Unix socket)
+docker exec intranet-mysql mysqladmin ping -h 127.0.0.1 --port=3306
 
 # Check backend logs for specific errors
 docker logs intranet-backend | grep ERROR
+
+# Check if fast-path init completed
+docker logs intranet-backend | grep "fast_path"
+
+# Check table count (should be 127+)
+docker logs intranet-backend | grep "validate_schema"
 ```
+
+### Fast-Path Init Crashes on Leftover Tables
+
+**Symptoms:**
+- Backend crashes with `Duplicate key name` error during startup
+- Happens after a previous startup was interrupted or failed
+
+**Cause:** Leftover tables from a partial previous boot conflict with `create_all()`.
+
+**Resolution:** This is now self-healing. The fast-path init dynamically discovers and drops ALL tables (except `alembic_version`) before running `create_all()`. If you still see this issue:
+```bash
+# Force clean restart
+docker-compose down -v
+docker-compose up --build
+```
+
+### Startup Fails Silently (No Tables Created)
+
+**Symptoms:**
+- Backend appears to start successfully
+- API calls fail with "table does not exist" errors
+- No error messages in logs about initialization failure
+
+**Cause:** Previously, `_fast_path_init()` was wrapped in a try/except that swallowed all exceptions.
+
+**Resolution:** This has been fixed. The fast-path init now:
+1. Runs outside the forgiving try/except
+2. Validates schema after fast-path completes
+3. Crashes the app if validation fails (fail-fast)
+4. Logs clear error messages
+
+If you see schema validation failures, check that all model files are imported in `models/__init__.py`.
 
 ---
 
@@ -3366,25 +3448,16 @@ user = User(..., status=UserStatus.ACTIVE, ...)
 
 ---
 
-#### 🔴 Migration Timeout Protection
+#### 🔴 Migration & Init Timeout Protection
 
-**Status**: ✅ **ADDED** in commit `eed280e`
+**Status**: ✅ **ADDED** (commit `eed280e`), ✅ **IMPROVED** (fast-path init, commit `5841063`)
 
-**Issue:**
-- Database migrations had NO timeout
-- Could hang indefinitely on deadlocks, infinite loops, or network issues
-- Highest-risk hang point in startup process
-
-**Protection Added:**
-- 30-minute timeout on migrations (normal time: ~23 minutes)
-- Fail-fast with clear error messages
-- Prevents silent hangs
-
-**Implementation:**
-```python
-with timeout_context(1800, "Database migrations"):
-    command.upgrade(alembic_cfg, "head")
-```
+**Current Protection:**
+- Fast-path `create_all()` has a 20-minute timeout (normal time: seconds)
+- Self-healing retry after 2 seconds on failure
+- Schema validation after init, with automatic repair via `create_all(checkfirst=True)`
+- `FK_CHECKS` always re-enabled in `finally` block
+- Fail-fast with clear error messages if validation fails
 
 **Error Handling:**
 - TimeoutError raised with descriptive message
@@ -3394,17 +3467,15 @@ with timeout_context(1800, "Database migrations"):
 
 ---
 
-#### 🟢 Accurate Startup Time Estimates
+#### 🟢 Fast-Path Database Initialization
 
-**Status**: ✅ **UPDATED** in commit `5b8e63f`
+**Status**: ✅ **IMPLEMENTED** — replaces the old 23-minute migration approach
 
 **Changes:**
-- Frontend now shows accurate 25-30 minute estimate (was 1-3 minutes)
-- Reflects actual observed times: ~6 min MySQL + ~23 min migrations
-- Updated in multiple locations:
-  - OnboardingCheck initialization page
-  - "What's Happening?" help section
-  - Expected Timeline breakdown
+- Fresh databases now use `create_all()` instead of running 45+ Alembic migrations sequentially
+- First-boot time reduced from ~25-30 minutes to ~7-10 minutes (mostly MySQL init; table creation takes seconds)
+- Resource-constrained environments (Unraid NAS) supported with optimized DDL and batched operations
+- Progress logged every 25 tables during creation
 
 ---
 
