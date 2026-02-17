@@ -69,7 +69,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'My Training', path: '/training/my-training' },
         { label: 'Submit Training', path: '/training/submit' },
-        { label: 'Dashboard', path: '/training/dashboard', permission: 'training.manage' },
+        { label: 'Course Library', path: '/training/courses' },
+        { label: 'Programs', path: '/training/programs' },
+        { label: 'Shift Reports', path: '/training/shift-reports' },
+        { label: 'Review Submissions', path: '/training/submissions', permission: 'training.manage' },
+        { label: 'Requirements', path: '/training/requirements', permission: 'training.manage' },
+        { label: 'Integrations', path: '/training/integrations', permission: 'training.manage' },
+        { label: 'Officer Dashboard', path: '/training/officer', permission: 'training.manage' },
       ],
     },
     {
@@ -108,6 +114,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
         { label: 'Member Admin', path: '/admin/members', permission: 'members.manage' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
+        { label: 'Analytics', path: '/admin/analytics', permission: 'analytics.view' },
+        { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
       ],
     },
   ];
