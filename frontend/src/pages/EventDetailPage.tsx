@@ -9,7 +9,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
-import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
+import type { Event, RSVP, RSVPStatus, EventStats, EventAttachment } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -41,6 +41,12 @@ export const EventDetailPage: React.FC = () => {
   const [memberSearch, setMemberSearch] = useState('');
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
+  const [attachments, setAttachments] = useState<EventAttachment[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
@@ -48,6 +54,7 @@ export const EventDetailPage: React.FC = () => {
   useEffect(() => {
     if (eventId) {
       fetchEvent();
+      fetchAttachments();
       if (canManage) {
         fetchRSVPs();
         fetchStats();
@@ -101,6 +108,81 @@ export const EventDetailPage: React.FC = () => {
     } catch (err) {
       // Error silently handled - eligible members list will show empty
     }
+  };
+
+  const fetchAttachments = async () => {
+    if (!eventId) return;
+    try {
+      const data = await eventService.getAttachments(eventId);
+      setAttachments(data);
+    } catch {
+      // Attachments section will show empty
+    }
+  };
+
+  const handleUploadAttachment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId || !uploadFile) return;
+
+    try {
+      setUploading(true);
+      await eventService.uploadAttachment(eventId, uploadFile, uploadDescription || undefined);
+      toast.success('Attachment uploaded successfully');
+      setShowUploadModal(false);
+      setUploadFile(null);
+      setUploadDescription('');
+      await fetchAttachments();
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to upload attachment');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownloadAttachment = async (attachment: EventAttachment) => {
+    if (!eventId) return;
+    try {
+      const blob = await eventService.downloadAttachment(eventId, attachment.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = attachment.file_name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to download attachment');
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!eventId) return;
+    try {
+      setDeletingAttachmentId(attachmentId);
+      await eventService.deleteAttachment(eventId, attachmentId);
+      toast.success('Attachment deleted');
+      await fetchAttachments();
+    } catch (err) {
+      toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete attachment');
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (fileType: string): string => {
+    if (fileType.startsWith('image/')) return '🖼';
+    if (fileType === 'application/pdf') return '📄';
+    if (fileType.includes('spreadsheet') || fileType.includes('excel') || fileType.includes('.sheet')) return '📊';
+    if (fileType.includes('presentation') || fileType.includes('powerpoint')) return '📽';
+    if (fileType.includes('word') || fileType.includes('document')) return '📝';
+    return '📎';
   };
 
   const openCheckInModal = () => {
@@ -446,6 +528,76 @@ export const EventDetailPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Attachments */}
+          {(attachments.length > 0 || canManage) && (
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-theme-text-primary">
+                  Attachments {attachments.length > 0 && <span className="text-sm text-theme-text-muted font-normal">({attachments.length})</span>}
+                </h2>
+                {canManage && (
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                  >
+                    <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Upload
+                  </button>
+                )}
+              </div>
+
+              {attachments.length === 0 ? (
+                <p className="text-sm text-theme-text-muted">No attachments yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between p-3 bg-theme-input-bg rounded-lg"
+                    >
+                      <div className="flex items-center min-w-0 flex-1">
+                        <span className="text-lg mr-3 flex-shrink-0" aria-hidden="true">{getFileIcon(attachment.file_type)}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-theme-text-primary truncate">{attachment.file_name}</p>
+                          <p className="text-xs text-theme-text-muted">
+                            {formatFileSize(attachment.file_size)}
+                            {attachment.description && <> &middot; {attachment.description}</>}
+                            {' '}&middot; {new Date(attachment.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-3 flex-shrink-0">
+                        <button
+                          onClick={() => handleDownloadAttachment(attachment)}
+                          className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded"
+                          title="Download"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => handleDeleteAttachment(attachment.id)}
+                            disabled={deletingAttachmentId === attachment.id}
+                            className="p-1.5 text-theme-text-muted hover:text-red-400 rounded disabled:opacity-50"
+                            title="Delete"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Training Session Details */}
           {event.event_type === 'training' && event.custom_fields && (
@@ -1131,6 +1283,93 @@ export const EventDetailPage: React.FC = () => {
                     onClick={() => {
                       setShowRecordTimesModal(false);
                       setSubmitError(null);
+                    }}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Attachment Modal */}
+      {showUploadModal && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-modal-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') { setShowUploadModal(false); setUploadFile(null); setUploadDescription(''); } }}
+        >
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <form onSubmit={handleUploadAttachment}>
+                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="upload-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Upload Attachment</h3>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="attachment-file" className="block text-sm font-medium text-slate-200 mb-1">
+                        File <span aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        type="file"
+                        id="attachment-file"
+                        required
+                        aria-required="true"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.gif"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                        className="block w-full text-sm text-theme-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-red-600 file:text-white hover:file:bg-red-700"
+                      />
+                      <p className="mt-1 text-xs text-theme-text-muted">
+                        PDF, DOC, XLS, PPT, TXT, CSV, JPG, PNG, GIF. Max 25 MB.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label htmlFor="attachment-description" className="block text-sm font-medium text-slate-200 mb-1">
+                        Description (optional)
+                      </label>
+                      <input
+                        type="text"
+                        id="attachment-description"
+                        value={uploadDescription}
+                        onChange={(e) => setUploadDescription(e.target.value)}
+                        placeholder="Brief description of this file"
+                        className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      />
+                    </div>
+
+                    {uploadFile && (
+                      <div className="bg-theme-surface-secondary rounded-lg p-3">
+                        <p className="text-sm text-theme-text-primary">{uploadFile.name}</p>
+                        <p className="text-xs text-theme-text-muted">{formatFileSize(uploadFile.size)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-theme-input-bg px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="submit"
+                    disabled={uploading || !uploadFile}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  >
+                    {uploading ? 'Uploading...' : 'Upload'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      setUploadFile(null);
+                      setUploadDescription('');
                     }}
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
