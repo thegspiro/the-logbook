@@ -46,22 +46,16 @@ const EventDetailPage = lazy(() => import('./pages/EventDetailPage').then(m => (
 const EventQRCodePage = lazy(() => import('./pages/EventQRCodePage'));
 const EventSelfCheckInPage = lazy(() => import('./pages/EventSelfCheckInPage'));
 const EventCheckInMonitoringPage = lazy(() => import('./pages/EventCheckInMonitoringPage'));
-const EventCreatePage = lazy(() => import('./pages/EventCreatePage').then(m => ({ default: m.EventCreatePage })));
 const EventEditPage = lazy(() => import('./pages/EventEditPage').then(m => ({ default: m.EventEditPage })));
+const EventsAdminHub = lazy(() => import('./pages/EventsAdminHub').then(m => ({ default: m.EventsAdminHub })));
 
 // Training Module
 const TrainingDashboardPage = lazy(() => import('./pages/TrainingDashboardPage'));
-const TrainingOfficerDashboard = lazy(() => import('./pages/TrainingOfficerDashboard'));
-const TrainingRequirementsPage = lazy(() => import('./pages/TrainingRequirementsPage'));
+const TrainingAdminPage = lazy(() => import('./pages/TrainingAdminPage').then(m => ({ default: m.TrainingAdminPage })));
 const TrainingProgramsPage = lazy(() => import('./pages/TrainingProgramsPage'));
-const CreateTrainingSessionPage = lazy(() => import('./pages/CreateTrainingSessionPage'));
-const CreatePipelinePage = lazy(() => import('./pages/CreatePipelinePage'));
 const PipelineDetailPage = lazy(() => import('./pages/PipelineDetailPage'));
 const CourseLibraryPage = lazy(() => import('./pages/CourseLibraryPage'));
-const ExternalTrainingPage = lazy(() => import('./pages/ExternalTrainingPage'));
 const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
-const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
-const ShiftReportPage = lazy(() => import('./pages/ShiftReportPage'));
 const MyTrainingPage = lazy(() => import('./pages/MyTrainingPage'));
 
 // Admin/Monitoring
@@ -74,6 +68,7 @@ const DocumentsPage = lazy(() => import('./pages/DocumentsPage'));
 
 // Inventory Module
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+const InventoryAdminHub = lazy(() => import('./pages/InventoryAdminHub').then(m => ({ default: m.InventoryAdminHub })));
 
 // Scheduling Module
 const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
@@ -151,36 +146,49 @@ function App() {
               {/* Main Dashboard */}
               <Route path="/dashboard" element={<Dashboard />} />
 
-              {/* Events Module */}
+              {/* Events Module - Member-facing */}
               <Route path="/events" element={<EventsPage />} />
-              <Route path="/events/new" element={<ProtectedRoute requiredPermission="events.manage"><EventCreatePage /></ProtectedRoute>} />
-              <Route path="/events/:id/edit" element={<ProtectedRoute requiredPermission="events.manage"><EventEditPage /></ProtectedRoute>} />
               <Route path="/events/:id" element={<EventDetailPage />} />
               <Route path="/events/:id/qr-code" element={<EventQRCodePage />} />
               <Route path="/events/:id/check-in" element={<EventSelfCheckInPage />} />
+
+              {/* Events Module - Admin Hub */}
+              <Route path="/events/admin" element={<ProtectedRoute requiredPermission="events.manage"><EventsAdminHub /></ProtectedRoute>} />
+
+              {/* Events Module - Per-event admin (stays as separate routes) */}
+              <Route path="/events/:id/edit" element={<ProtectedRoute requiredPermission="events.manage"><EventEditPage /></ProtectedRoute>} />
               <Route path="/events/:id/monitoring" element={<ProtectedRoute requiredPermission="events.manage"><EventCheckInMonitoringPage /></ProtectedRoute>} />
               <Route path="/events/:id/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><AnalyticsDashboardPage /></ProtectedRoute>} />
+
+              {/* Events Module - Legacy redirect */}
+              <Route path="/events/new" element={<Navigate to="/events/admin?tab=create" replace />} />
 
               {/* Documents Module */}
               <Route path="/documents" element={<DocumentsPage />} />
 
-              {/* Training Module */}
+              {/* Training Module - Member-facing */}
               <Route path="/training" element={<TrainingDashboardPage />} />
-              <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
-              <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
-              <Route path="/training/programs" element={<TrainingProgramsPage />} />
-              <Route path="/training/programs/new" element={<ProtectedRoute requiredPermission="training.manage"><CreatePipelinePage /></ProtectedRoute>} />
-              <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
-              <Route path="/training/courses" element={<CourseLibraryPage />} />
-              <Route path="/training/sessions/new" element={<ProtectedRoute requiredPermission="training.manage"><CreateTrainingSessionPage /></ProtectedRoute>} />
-              <Route path="/training/submit" element={<SubmitTrainingPage />} />
-              <Route path="/training/submissions" element={<ProtectedRoute requiredPermission="training.manage"><ReviewSubmissionsPage /></ProtectedRoute>} />
-              <Route path="/training/shift-reports" element={<ShiftReportPage />} />
-              <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
               <Route path="/training/my-training" element={<MyTrainingPage />} />
+              <Route path="/training/submit" element={<SubmitTrainingPage />} />
+              <Route path="/training/courses" element={<CourseLibraryPage />} />
+              <Route path="/training/programs" element={<TrainingProgramsPage />} />
+              <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
+
+              {/* Training Module - Admin Hub */}
+              <Route path="/training/admin" element={<ProtectedRoute requiredPermission="training.manage"><TrainingAdminPage /></ProtectedRoute>} />
+
+              {/* Training Module - Legacy redirects to admin hub tabs */}
+              <Route path="/training/officer" element={<Navigate to="/training/admin?tab=dashboard" replace />} />
+              <Route path="/training/submissions" element={<Navigate to="/training/admin?tab=submissions" replace />} />
+              <Route path="/training/requirements" element={<Navigate to="/training/admin?tab=requirements" replace />} />
+              <Route path="/training/sessions/new" element={<Navigate to="/training/admin?tab=sessions" replace />} />
+              <Route path="/training/programs/new" element={<Navigate to="/training/admin?tab=pipelines" replace />} />
+              <Route path="/training/shift-reports" element={<Navigate to="/training/admin?tab=shift-reports" replace />} />
+              <Route path="/training/integrations" element={<Navigate to="/training/admin?tab=integrations" replace />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/inventory/admin" element={<ProtectedRoute requiredPermission="inventory.manage"><InventoryAdminHub /></ProtectedRoute>} />
 
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />
