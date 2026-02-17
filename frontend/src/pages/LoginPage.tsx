@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { authService } from '../services/api';
 import axios from 'axios';
 
 // OAuth configuration - these would be loaded from organization settings
@@ -112,12 +113,12 @@ export const LoginPage: React.FC = () => {
 
   const handleGoogleLogin = () => {
     // Redirect to Google OAuth endpoint
-    window.location.href = '/api/v1/auth/oauth/google';
+    window.location.href = authService.getGoogleOAuthUrl();
   };
 
   const handleMicrosoftLogin = () => {
     // Redirect to Microsoft OAuth endpoint
-    window.location.href = '/api/v1/auth/oauth/microsoft';
+    window.location.href = authService.getMicrosoftOAuthUrl();
   };
 
   const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;

@@ -112,6 +112,7 @@ export interface ArchivedMembersResponse {
 }
 
 export interface OverdueMember {
+  user_id: string;
   member_name: string;
   drop_date: string;
   days_since_drop: number;
