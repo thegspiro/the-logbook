@@ -37,6 +37,7 @@ export interface UserWithRoles {
   last_name?: string;
   full_name?: string;
   badge_number?: string;
+  membership_id?: string;
   phone?: string;
   mobile?: string;
   photo_url?: string;
@@ -44,6 +45,27 @@ export interface UserWithRoles {
   hire_date?: string;
   notification_preferences?: NotificationPreferences;
   roles: Role[];
+}
+
+export interface RoleWithUserCount extends Role {
+  user_count: number;
+}
+
+export interface RoleUserItem {
+  id: string;
+  username: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  is_active: boolean;
+}
+
+export interface RoleUsersResponse {
+  role_id: string;
+  role_name: string;
+  users: RoleUserItem[];
+  total_count: number;
 }
 
 export interface RoleAssignment {

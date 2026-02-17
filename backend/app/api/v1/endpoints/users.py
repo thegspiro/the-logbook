@@ -10,7 +10,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
-from uuid import UUID
+
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
@@ -20,6 +20,7 @@ from app.schemas.user import (
     ContactInfoUpdate,
     UserProfileResponse,
     AdminUserCreate,
+    MembershipNumberAssignment,
 )
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
 from app.services.user_service import UserService
@@ -35,7 +36,7 @@ from app.core.config import settings
 router = APIRouter()
 
 
-@router.get("/", response_model=List[UserListResponse])
+@router.get("", response_model=List[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -83,7 +84,7 @@ async def list_users(
     return users
 
 
-@router.post("/", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
 async def create_member(
     user_data: AdminUserCreate,
     background_tasks: BackgroundTasks,
@@ -150,6 +151,12 @@ async def create_member(
     # Generate temporary password
     temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
 
+    # Auto-assign membership ID if enabled and not manually provided
+    membership_id = user_data.membership_id
+    if not membership_id:
+        org_service = OrganizationService(db)
+        membership_id = await org_service.generate_next_membership_id(current_user.organization_id)
+
     # Create new user
     new_user = User(
         id=str(uuid4()),
@@ -161,6 +168,7 @@ async def create_member(
         middle_name=user_data.middle_name,
         last_name=user_data.last_name,
         badge_number=user_data.badge_number,
+        membership_id=membership_id,
         phone=user_data.phone,
         mobile=user_data.mobile,
         date_of_birth=user_data.date_of_birth,
@@ -182,6 +190,13 @@ async def create_member(
 
     db.add(new_user)
     await db.flush()  # Flush to get the user ID
+
+    # Auto-assign membership number if enabled for this organization
+    org_service = OrganizationService(db)
+    await org_service.assign_next_membership_number(
+        organization_id=current_user.organization_id,
+        user=new_user,
+    )
 
     # Assign initial roles if provided
     if user_data.role_ids:
@@ -308,7 +323,7 @@ async def list_users_with_roles(
 
 @router.get("/{user_id}/roles", response_model=UserRoleResponse)
 async def get_user_roles(
-    user_id: UUID,
+    user_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -342,7 +357,7 @@ async def get_user_roles(
 
 @router.put("/{user_id}/roles", response_model=UserRoleResponse)
 async def assign_user_roles(
-    user_id: UUID,
+    user_id: str,
     role_assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
@@ -421,8 +436,8 @@ async def assign_user_roles(
 
 @router.post("/{user_id}/roles/{role_id}", response_model=UserRoleResponse)
 async def add_role_to_user(
-    user_id: UUID,
-    role_id: UUID,
+    user_id: str,
+    role_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
 ):
@@ -500,8 +515,8 @@ async def add_role_to_user(
 
 @router.delete("/{user_id}/roles/{role_id}", response_model=UserRoleResponse)
 async def remove_role_from_user(
-    user_id: UUID,
-    role_id: UUID,
+    user_id: str,
+    role_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.update_roles", "members.assign_roles")),
 ):
@@ -531,7 +546,7 @@ async def remove_role_from_user(
     # Find and remove role
     role_to_remove = None
     for role in user.roles:
-        if role.id == role_id:
+        if str(role.id) == str(role_id):
             role_to_remove = role
             break
 
@@ -570,7 +585,7 @@ async def remove_role_from_user(
 
 @router.get("/{user_id}/with-roles", response_model=UserProfileResponse)
 async def get_user_with_roles(
-    user_id: UUID,
+    user_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -615,7 +630,7 @@ async def get_user_with_roles(
 
 @router.patch("/{user_id}/contact-info", response_model=UserProfileResponse)
 async def update_contact_info(
-    user_id: UUID,
+    user_id: str,
     contact_update: ContactInfoUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -628,7 +643,7 @@ async def update_contact_info(
     **Authentication required**
     """
     # Check if user is updating their own profile or has admin permissions
-    if current_user.id != user_id:
+    if str(current_user.id) != str(user_id):
         # Admins with users.update or members.manage can update other users
         user_permissions = []
         for role in current_user.roles:
@@ -661,7 +676,7 @@ async def update_contact_info(
             select(User)
             .where(User.email == contact_update.email)
             .where(User.organization_id == str(current_user.organization_id))
-            .where(User.id != user_id)
+            .where(User.id != str(user_id))
             .where(User.deleted_at.is_(None))
         )
         if existing.scalar_one_or_none():
@@ -691,6 +706,73 @@ async def update_contact_info(
         event_data={
             "updated_user_id": str(user_id),
             "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return user
+
+
+@router.put("/{user_id}/membership-number", response_model=UserProfileResponse)
+async def assign_membership_number(
+    user_id: str,
+    assignment: MembershipNumberAssignment,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Manually assign or update a member's membership number.
+
+    Use this when reinstating a former member and assigning them their
+    previous membership number, or when the coordinator needs to
+    override the auto-assigned value.
+
+    Requires `members.manage` permission.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+        .options(selectinload(User.roles))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Check that the membership number is not already in use by another member
+    existing = await db.execute(
+        select(User)
+        .where(User.membership_number == assignment.membership_number)
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.id != str(user_id))
+        .where(User.deleted_at.is_(None))
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This membership number is already assigned to another member"
+        )
+
+    user.membership_number = assignment.membership_number
+    await db.commit()
+    await db.refresh(user)
+
+    await log_audit_event(
+        db=db,
+        event_type="membership_number_assigned",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(user_id),
+            "membership_number": assignment.membership_number,
         },
         user_id=str(current_user.id),
         username=current_user.username,

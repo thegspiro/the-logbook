@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
@@ -31,6 +31,7 @@ import {
   Bell,
   FormInput,
   Plug,
+  Send,
 } from 'lucide-react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -71,6 +72,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
+
+  // Auto-expand parent menu when navigating to a child route
+  useEffect(() => {
+    setExpandedMenus(prev => {
+      const activeParent = navItems.find(item =>
+        item.subItems?.some(sub => location.pathname === sub.path || location.pathname.startsWith(sub.path + '/'))
+      );
+      if (activeParent && !prev.includes(activeParent.label)) {
+        return [...prev, activeParent.label];
+      }
+      return prev;
+    });
+  }, [location.pathname]);
 
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system'] as const;
@@ -201,7 +215,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   return (
     <>
       {/* Mobile Header */}
-      <header className="lg:hidden bg-slate-900 border-b border-white/10 fixed top-0 left-0 right-0 z-50" role="banner">
+      <header className="md:hidden bg-theme-nav-bg border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50" role="banner">
         <div className="flex items-center justify-between h-16 px-4">
           <a href="/dashboard" className="flex items-center focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
             {logoPreview ? (
@@ -223,7 +237,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </a>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-white p-2 rounded-md hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
             aria-expanded={mobileMenuOpen}
             aria-controls="side-navigation"
             aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
@@ -236,7 +250,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40 mt-16"
+          className="md:hidden fixed inset-0 bg-black/50 z-40 mt-16"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
@@ -248,57 +262,73 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed top-0 left-0 h-full bg-slate-900 border-r border-white/10 transition-all duration-300 z-40 ${
+        className={`fixed top-0 left-0 h-full bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 ${
           collapsed ? 'w-20' : 'w-64'
         } ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
+        } md:translate-x-0`}
       >
         <div className="flex flex-col h-full">
           {/* Logo Section */}
           <div className="p-4 border-b border-white/10">
-            <div className="flex items-center justify-between">
-              <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
-                {logoPreview ? (
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <img
-                      src={logoPreview}
-                      alt=""
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
-                    <Home className="w-6 h-6 text-white" />
-                  </div>
-                )}
-                {!collapsed && (
+            {collapsed ? (
+              <>
+                <div className="flex items-center justify-center">
+                  <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                    {logoPreview ? (
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <img
+                          src={logoPreview}
+                          alt=""
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                        <Home className="w-6 h-6 text-white" />
+                      </div>
+                    )}
+                  </a>
+                </div>
+                <button
+                  onClick={() => setCollapsed(false)}
+                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  aria-label="Expand navigation"
+                >
+                  <ChevronRight className="w-5 h-5 mx-auto" aria-hidden="true" />
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <a href="/dashboard" className="flex items-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-red-500 rounded-lg">
+                  {logoPreview ? (
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <img
+                        src={logoPreview}
+                        alt=""
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                      <Home className="w-6 h-6 text-white" />
+                    </div>
+                  )}
                   <div className="ml-3 min-w-0">
                     <span className="text-white text-sm font-semibold block break-words leading-tight">
                       {departmentName}
                     </span>
                     <p className="text-slate-300 text-xs">Dashboard</p>
                   </div>
-                )}
-              </a>
-              {!collapsed && (
+                </a>
                 <button
                   onClick={() => setCollapsed(true)}
-                  className="hidden lg:block text-slate-300 hover:text-white p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                   aria-label="Collapse navigation"
                 >
                   <ChevronRight className="w-5 h-5 rotate-180" aria-hidden="true" />
                 </button>
-              )}
-            </div>
-            {collapsed && (
-              <button
-                onClick={() => setCollapsed(false)}
-                className="hidden lg:block mt-2 w-full text-slate-300 hover:text-white p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                aria-label="Expand navigation"
-              >
-                <ChevronRight className="w-5 h-5" aria-hidden="true" />
-              </button>
+              </div>
             )}
           </div>
 
@@ -335,8 +365,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                         parentActive && !hasSubItems
                           ? 'bg-red-600 text-white'
                           : parentActive && hasSubItems
-                          ? 'bg-white/5 text-white'
-                          : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                          ? 'bg-theme-surface-secondary text-theme-text-primary'
+                          : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                       }`}
                       title={collapsed ? item.label : undefined}
                       aria-label={collapsed ? item.label : undefined}
@@ -371,7 +401,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                                 className={`w-full flex items-center px-4 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                                   subActive
                                     ? 'bg-red-600 text-white'
-                                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                                 }`}
                               >
                                 <SubIcon className="w-4 h-4 mr-3 flex-shrink-0" aria-hidden="true" />
@@ -389,10 +419,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </nav>
 
           {/* Theme Toggle & Logout */}
-          <div className="p-4 border-t border-white/10 space-y-1">
+          <div className="p-4 border-t border-theme-surface-border space-y-1">
             <button
               onClick={cycleTheme}
-              className={`w-full flex items-center text-slate-300 hover:bg-white/10 hover:text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                 collapsed ? 'justify-center p-3' : 'px-4 py-3'
               }`}
               title={collapsed ? `Theme: ${themeLabel}` : undefined}
@@ -403,7 +433,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             </button>
             <button
               onClick={onLogout}
-              className={`w-full flex items-center text-slate-300 hover:bg-white/10 hover:text-white rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
+              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                 collapsed ? 'justify-center p-3' : 'px-4 py-3'
               }`}
               title={collapsed ? 'Logout' : undefined}

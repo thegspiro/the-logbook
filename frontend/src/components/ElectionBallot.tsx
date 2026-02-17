@@ -195,8 +195,8 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-        <div className="text-slate-400 text-center py-4">Loading ballot...</div>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+        <div className="text-theme-text-muted text-center py-4">Loading ballot...</div>
       </div>
     );
   }
@@ -209,14 +209,14 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
     return (
       <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-6">
         <div className="flex items-center">
-          <svg className="h-6 w-6 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="h-6 w-6 text-green-700 dark:text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
               clipRule="evenodd"
             />
           </svg>
-          <span className="text-green-300 font-medium">You have already voted in this election.</span>
+          <span className="text-green-700 dark:text-green-300 font-medium">You have already voted in this election.</span>
         </div>
       </div>
     );
@@ -225,7 +225,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
   if (!eligibility.is_eligible && !eligibility.has_voted) {
     return (
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6">
-        <p className="text-yellow-300">{eligibility.reason || 'You are not eligible to vote in this election.'}</p>
+        <p className="text-yellow-700 dark:text-yellow-300">{eligibility.reason || 'You are not eligible to vote in this election.'}</p>
       </div>
     );
   }
@@ -248,13 +248,13 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
-        <h3 className="text-lg font-medium text-white mb-2">Cast Your Vote</h3>
-        <p className="text-sm text-slate-400 mb-4">{getMethodLabel()}</p>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6">
+        <h3 className="text-lg font-medium text-theme-text-primary mb-2">Cast Your Vote</h3>
+        <p className="text-sm text-theme-text-muted mb-4">{getMethodLabel()}</p>
 
         {error && (
           <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded p-3">
-            <p className="text-sm text-red-300">{error}</p>
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
 
@@ -266,10 +266,10 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
             return (
               <div key={position} className="mb-6">
                 {position !== '_default' && (
-                  <h4 className="text-md font-semibold text-slate-200 mb-3">{position}</h4>
+                  <h4 className="text-md font-semibold text-theme-text-primary mb-3">{position}</h4>
                 )}
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                  <div className="flex items-center text-green-300">
+                  <div className="flex items-center text-green-700 dark:text-green-300">
                     <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                       <path
                         fillRule="evenodd"
@@ -287,11 +287,11 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
           return (
             <div key={position} className="mb-6">
               {position !== '_default' && (
-                <h4 className="text-md font-semibold text-slate-200 mb-3">{position}</h4>
+                <h4 className="text-md font-semibold text-theme-text-primary mb-3">{position}</h4>
               )}
 
               {positionCandidates.length === 0 ? (
-                <p className="text-sm text-slate-400">No candidates for this position</p>
+                <p className="text-sm text-theme-text-muted">No candidates for this position</p>
               ) : (
                 <>
                   {/* Ranked Choice: Show ranking */}
@@ -299,22 +299,22 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                     <div className="space-y-2">
                       {(rankings[position] || []).length > 0 && (
                         <div className="mb-4 p-3 bg-blue-500/10 rounded-lg">
-                          <p className="text-sm font-medium text-blue-300 mb-2">Your Rankings:</p>
+                          <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">Your Rankings:</p>
                           {(rankings[position] || []).map((candidateId, idx) => {
                             const candidate = positionCandidates.find((c) => c.id === candidateId);
                             return (
                               <div
                                 key={candidateId}
-                                className="flex items-center justify-between py-1 px-2 bg-white/5 rounded mb-1"
+                                className="flex items-center justify-between py-1 px-2 bg-theme-surface-secondary rounded mb-1"
                               >
-                                <span className="text-sm text-white">
-                                  <span className="font-bold text-blue-400 mr-2">#{idx + 1}</span>
+                                <span className="text-sm text-theme-text-primary">
+                                  <span className="font-bold text-blue-700 dark:text-blue-400 mr-2">#{idx + 1}</span>
                                   {candidate?.name}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => handleRankingRemove(position, candidateId)}
-                                  className="text-red-400 hover:text-red-300 text-xs"
+                                  className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs"
                                 >
                                   Remove
                                 </button>
@@ -334,15 +334,15 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                               isRanked
                                 ? 'border-blue-500 bg-blue-500/10 opacity-60'
-                                : 'border-white/20 hover:border-blue-400 hover:bg-blue-500/10'
+                                : 'border-theme-surface-border hover:border-blue-400 hover:bg-blue-500/10'
                             }`}
                           >
-                            <div className="font-medium text-white">{candidate.name}</div>
+                            <div className="font-medium text-theme-text-primary">{candidate.name}</div>
                             {candidate.statement && (
-                              <p className="mt-1 text-sm text-slate-400">{candidate.statement}</p>
+                              <p className="mt-1 text-sm text-theme-text-muted">{candidate.statement}</p>
                             )}
                             {isRanked && (
-                              <span className="text-xs text-blue-400">
+                              <span className="text-xs text-blue-700 dark:text-blue-400">
                                 Ranked #{(rankings[position] || []).indexOf(candidate.id) + 1}
                               </span>
                             )}
@@ -365,17 +365,17 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                               isApproved
                                 ? 'border-green-500 bg-green-500/10'
-                                : 'border-white/20 hover:border-green-400 hover:bg-green-500/10'
+                                : 'border-theme-surface-border hover:border-green-400 hover:bg-green-500/10'
                             }`}
                           >
                             <div className="flex items-center">
                               <div
                                 className={`w-5 h-5 rounded border-2 mr-3 flex items-center justify-center ${
-                                  isApproved ? 'bg-green-500 border-green-500' : 'border-slate-500'
+                                  isApproved ? 'bg-green-500 border-green-500' : 'border-theme-input-border'
                                 }`}
                               >
                                 {isApproved && (
-                                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <svg className="w-3 h-3 text-theme-text-primary" fill="currentColor" viewBox="0 0 20 20">
                                     <path
                                       fillRule="evenodd"
                                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -385,9 +385,9 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                                 )}
                               </div>
                               <div>
-                                <div className="font-medium text-white">{candidate.name}</div>
+                                <div className="font-medium text-theme-text-primary">{candidate.name}</div>
                                 {candidate.statement && (
-                                  <p className="mt-1 text-sm text-slate-400">{candidate.statement}</p>
+                                  <p className="mt-1 text-sm text-theme-text-muted">{candidate.statement}</p>
                                 )}
                               </div>
                             </div>
@@ -410,21 +410,21 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                             className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                               isSelected
                                 ? 'border-blue-500 bg-blue-500/10'
-                                : 'border-white/20 hover:border-blue-400 hover:bg-blue-500/10'
+                                : 'border-theme-surface-border hover:border-blue-400 hover:bg-blue-500/10'
                             }`}
                           >
                             <div className="flex items-center">
                               <div
                                 className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${
-                                  isSelected ? 'border-blue-500' : 'border-slate-500'
+                                  isSelected ? 'border-blue-500' : 'border-theme-input-border'
                                 }`}
                               >
                                 {isSelected && <div className="w-3 h-3 rounded-full bg-blue-500" />}
                               </div>
                               <div>
-                                <div className="font-medium text-white">{candidate.name}</div>
+                                <div className="font-medium text-theme-text-primary">{candidate.name}</div>
                                 {candidate.statement && (
-                                  <p className="mt-1 text-sm text-slate-400">{candidate.statement}</p>
+                                  <p className="mt-1 text-sm text-theme-text-muted">{candidate.statement}</p>
                                 )}
                               </div>
                             </div>

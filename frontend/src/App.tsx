@@ -48,6 +48,7 @@ const EventSelfCheckInPage = lazy(() => import('./pages/EventSelfCheckInPage'));
 const EventCheckInMonitoringPage = lazy(() => import('./pages/EventCheckInMonitoringPage'));
 const EventCreatePage = lazy(() => import('./pages/EventCreatePage').then(m => ({ default: m.EventCreatePage })));
 const EventEditPage = lazy(() => import('./pages/EventEditPage').then(m => ({ default: m.EventEditPage })));
+const EventsSettingsPage = lazy(() => import('./pages/EventsSettingsPage'));
 
 // Training Module
 const TrainingDashboardPage = lazy(() => import('./pages/TrainingDashboardPage'));
@@ -63,6 +64,7 @@ const SubmitTrainingPage = lazy(() => import('./pages/SubmitTrainingPage'));
 const ReviewSubmissionsPage = lazy(() => import('./pages/ReviewSubmissionsPage'));
 const ShiftReportPage = lazy(() => import('./pages/ShiftReportPage'));
 const MyTrainingPage = lazy(() => import('./pages/MyTrainingPage'));
+const MemberProgressPage = lazy(() => import('./pages/MemberProgressPage'));
 
 // Admin/Monitoring
 const ErrorMonitoringPage = lazy(() => import('./pages/ErrorMonitoringPage'));
@@ -74,9 +76,11 @@ const DocumentsPage = lazy(() => import('./pages/DocumentsPage'));
 
 // Inventory Module
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+const InventoryCheckoutsPage = lazy(() => import('./pages/InventoryCheckoutsPage'));
 
 // Scheduling Module
 const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
+const ShiftAttendancePage = lazy(() => import('./pages/ShiftAttendancePage'));
 
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
@@ -97,10 +101,10 @@ const PublicFormPage = lazy(() => import('./pages/PublicFormPage'));
 // Integrations Module
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
 
-// Membership Pipeline Module
-const MembershipPipelinePage = lazy(() => import('./pages/MembershipPipelinePage'));
-const ProspectDetailPage = lazy(() => import('./pages/ProspectDetailPage'));
-const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage'));
+// Training Approval (Public)
+const TrainingApprovalPage = lazy(() => import('./pages/TrainingApprovalPage'));
+
+// Membership Pipeline — superseded by prospective-members module routes
 
 // Settings & Reports
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -153,6 +157,7 @@ function App() {
 
               {/* Events Module */}
               <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/settings" element={<ProtectedRoute requiredPermission="events.manage"><EventsSettingsPage /></ProtectedRoute>} />
               <Route path="/events/new" element={<ProtectedRoute requiredPermission="events.manage"><EventCreatePage /></ProtectedRoute>} />
               <Route path="/events/:id/edit" element={<ProtectedRoute requiredPermission="events.manage"><EventEditPage /></ProtectedRoute>} />
               <Route path="/events/:id" element={<EventDetailPage />} />
@@ -165,7 +170,8 @@ function App() {
               <Route path="/documents" element={<DocumentsPage />} />
 
               {/* Training Module */}
-              <Route path="/training" element={<TrainingDashboardPage />} />
+              <Route path="/training" element={<Navigate to="/training/my-training" replace />} />
+              <Route path="/training/dashboard" element={<ProtectedRoute requiredPermission="training.manage"><TrainingDashboardPage /></ProtectedRoute>} />
               <Route path="/training/officer" element={<ProtectedRoute requiredPermission="training.manage"><TrainingOfficerDashboard /></ProtectedRoute>} />
               <Route path="/training/requirements" element={<ProtectedRoute requiredPermission="training.manage"><TrainingRequirementsPage /></ProtectedRoute>} />
               <Route path="/training/programs" element={<TrainingProgramsPage />} />
@@ -178,16 +184,19 @@ function App() {
               <Route path="/training/shift-reports" element={<ShiftReportPage />} />
               <Route path="/training/integrations" element={<ProtectedRoute requiredPermission="training.manage"><ExternalTrainingPage /></ProtectedRoute>} />
               <Route path="/training/my-training" element={<MyTrainingPage />} />
+              <Route path="/training/my-progress" element={<MemberProgressPage />} />
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/inventory/checkouts" element={<InventoryCheckoutsPage />} />
 
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />
+              <Route path="/scheduling/shifts/:shiftId/attendance" element={<ShiftAttendancePage />} />
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
-              <Route path="/elections/:id" element={<ElectionDetailPage />} />
+              <Route path="/elections/:electionId" element={<ElectionDetailPage />} />
 
               {/* Minutes Module */}
               <Route path="/minutes" element={<MinutesPage />} />
@@ -222,6 +231,9 @@ function App() {
             {/* Public Ballot Voting Page (token-based, no auth required) */}
             <Route path="/ballot" element={<BallotVotingPage />} />
 
+            {/* Public Training Approval Page (token-based, no auth required) */}
+            <Route path="/training/approve/:token" element={<TrainingApprovalPage />} />
+
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />
 
@@ -240,20 +252,20 @@ function App() {
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#1e293b',
-              color: '#fff',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'var(--surface-bg)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--surface-border)',
             },
             success: {
               iconTheme: {
                 primary: '#10b981',
-                secondary: '#fff',
+                secondary: 'var(--surface-bg)',
               },
             },
             error: {
               iconTheme: {
                 primary: '#ef4444',
-                secondary: '#fff',
+                secondary: 'var(--surface-bg)',
               },
             },
           }}

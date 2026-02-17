@@ -921,6 +921,7 @@ app = FastAPI(
     redoc_url="/redoc" if settings.ENABLE_DOCS else None,
     openapi_url="/openapi.json" if settings.ENABLE_DOCS else None,
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 # ============================================

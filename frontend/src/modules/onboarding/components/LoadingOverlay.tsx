@@ -34,14 +34,14 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
 
   return (
     <div
-      className={`absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg ${className}`}
+      className={`absolute inset-0 bg-theme-input-bg backdrop-blur-sm flex items-center justify-center z-50 rounded-lg ${className}`}
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
       <div className="text-center">
-        <Loader2 className="w-8 h-8 text-red-500 animate-spin mx-auto mb-3" />
-        <p className="text-white text-sm font-medium">{message}</p>
+        <Loader2 className="w-8 h-8 text-red-700 dark:text-red-500 animate-spin mx-auto mb-3" />
+        <p className="text-theme-text-primary text-sm font-medium">{message}</p>
       </div>
     </div>
   );

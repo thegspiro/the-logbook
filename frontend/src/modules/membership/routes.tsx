@@ -31,6 +31,11 @@ const MembersAdminPage = lazy(() =>
     default: m.MembersAdminPage,
   }))
 );
+const MemberLifecyclePage = lazy(() =>
+  import('../../pages/MemberLifecyclePage').then((m) => ({
+    default: m.MemberLifecyclePage,
+  }))
+);
 
 export const getMembershipRoutes = () => {
   return (
@@ -73,6 +78,16 @@ export const getMembershipRoutes = () => {
         element={
           <ProtectedRoute requiredPermission="members.manage">
             <MembersAdminPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin: Member Lifecycle (archived, tiers, property returns) */}
+      <Route
+        path="/admin/member-lifecycle"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <MemberLifecyclePage />
           </ProtectedRoute>
         }
       />

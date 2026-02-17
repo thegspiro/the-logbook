@@ -256,6 +256,36 @@ class AuthSettings(BaseModel):
         return self.provider == "local"
 
 
+class MembershipIdSettings(BaseModel):
+    """
+    Settings for automatic membership ID assignment.
+
+    When enabled, new members receive a sequential membership ID
+    (e.g., "FD-0001", "FD-0002"). The coordinator can override
+    the ID for returning former members.
+    """
+    enabled: bool = Field(
+        default=False,
+        description="Whether automatic membership ID assignment is enabled",
+    )
+    prefix: str = Field(
+        default="",
+        max_length=20,
+        description="Prefix for membership IDs (e.g., 'FD-', 'MEM-')",
+    )
+    next_number: int = Field(
+        default=1,
+        ge=1,
+        description="The next number to assign to a new member",
+    )
+    padding: int = Field(
+        default=4,
+        ge=1,
+        le=10,
+        description="Number of digits to pad (e.g., 4 → '0001')",
+    )
+
+
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization"""
     # Essential modules are always enabled
@@ -355,6 +385,10 @@ class OrganizationSettings(BaseModel):
         default_factory=MembershipTierSettings,
         description="Membership tier definitions, years-of-service thresholds, and tier benefits",
     )
+    membership_ids: MembershipIdSettings = Field(
+        default_factory=MembershipIdSettings,
+        description="Auto-assignment settings for sequential membership ID numbers",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -390,6 +424,7 @@ class OrganizationSettingsUpdate(BaseModel):
     it_team: Optional[ITTeamSettings] = None
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
+    membership_ids: Optional[MembershipIdSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra='allow')
@@ -413,6 +448,7 @@ class OrganizationSettingsResponse(BaseModel):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     it_team: ITTeamSettings = Field(default_factory=ITTeamSettings)
     modules: ModuleSettings = Field(default_factory=ModuleSettings)
+    membership_ids: MembershipIdSettings = Field(default_factory=MembershipIdSettings)
 
     model_config = ConfigDict(from_attributes=True, extra='allow')
 

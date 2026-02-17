@@ -35,23 +35,23 @@ export const ForgotPasswordPage: React.FC = () => {
 
   if (success) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-8 text-center">
+          <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
-              <CheckCircle className="h-10 w-10 text-green-400" aria-hidden="true" />
+              <CheckCircle className="h-10 w-10 text-green-700 dark:text-green-400" aria-hidden="true" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">Check Your Email</h2>
-            <p className="text-slate-300 mb-6">
-              If an account exists with the email <strong className="text-white">{email}</strong>,
+            <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Check Your Email</h2>
+            <p className="text-theme-text-secondary mb-6">
+              If an account exists with the email <strong className="text-theme-text-primary">{email}</strong>,
               you will receive a password reset link shortly.
             </p>
-            <p className="text-sm text-slate-400 mb-6">
+            <p className="text-sm text-theme-text-muted mb-6">
               The link will expire in 1 hour. If you don't see the email, check your spam folder.
             </p>
             <Link
               to="/login"
-              className="inline-flex items-center space-x-2 text-red-400 hover:text-red-300 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-3 py-2"
+              className="inline-flex items-center space-x-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-3 py-2"
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               <span>Back to Login</span>
@@ -63,24 +63,24 @@ export const ForgotPasswordPage: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-white mb-2">
+          <h1 className="text-3xl font-extrabold text-theme-text-primary mb-2">
             Forgot Your Password?
           </h1>
-          <p className="text-slate-300">
+          <p className="text-theme-text-secondary">
             Enter your email address and we'll send you a link to reset your password
           </p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-8">
+        <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="rounded-md bg-red-500/20 border border-red-500/50 p-4" role="alert" aria-live="polite">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg className="h-5 w-5 text-red-700 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -92,12 +92,12 @@ export const ForgotPasswordPage: React.FC = () => {
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-theme-text-primary mb-2">
                 Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                  <Mail className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                 </div>
                 <input
                   id="email"
@@ -105,7 +105,7 @@ export const ForgotPasswordPage: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full pl-10 pr-3 py-2 border border-white/20 rounded-md bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-3 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -122,7 +122,7 @@ export const ForgotPasswordPage: React.FC = () => {
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-theme-text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -138,7 +138,7 @@ export const ForgotPasswordPage: React.FC = () => {
           <div className="mt-6 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center space-x-2 text-sm text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-3 py-2"
+              className="inline-flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-3 py-2"
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               <span>Back to Login</span>
@@ -148,11 +148,11 @@ export const ForgotPasswordPage: React.FC = () => {
 
         <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <svg className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             <div>
-              <h4 className="text-sm font-medium text-blue-300 mb-1">
+              <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
                 Security Note
               </h4>
               <p className="text-sm text-blue-200">

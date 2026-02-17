@@ -176,18 +176,18 @@ const SectionHeader: React.FC<{
   <button
     type="button"
     onClick={onToggle}
-    className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800/70 rounded-lg transition-colors"
+    className="w-full flex items-center justify-between p-4 bg-theme-input-bg hover:bg-theme-input-bg rounded-lg transition-colors"
   >
     <div className="flex items-center gap-3">
-      <span className="text-red-400">{icon}</span>
-      <span className="text-white font-semibold">{title}</span>
-      {required && !isComplete && <span className="text-red-400 text-sm">*</span>}
-      {isComplete && <Check className="w-5 h-5 text-green-400 ml-2" />}
+      <span className="text-red-700 dark:text-red-400">{icon}</span>
+      <span className="text-theme-text-primary font-semibold">{title}</span>
+      {required && !isComplete && <span className="text-red-700 dark:text-red-400 text-sm">*</span>}
+      {isComplete && <Check className="w-5 h-5 text-green-700 dark:text-green-400 ml-2" />}
     </div>
     {expanded ? (
-      <ChevronUp className="w-5 h-5 text-slate-400" />
+      <ChevronUp className="w-5 h-5 text-theme-text-muted" />
     ) : (
-      <ChevronDown className="w-5 h-5 text-slate-400" />
+      <ChevronDown className="w-5 h-5 text-theme-text-muted" />
     )}
   </button>
 );
@@ -219,8 +219,8 @@ const InputField: React.FC<{
   onBlur,
 }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
-      {label} {required && <span className="text-red-400">*</span>}
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-primary mb-1">
+      {label} {required && <span className="text-red-700 dark:text-red-400">*</span>}
     </label>
     <input
       type={type}
@@ -230,14 +230,14 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-slate-600'
+      className={`w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+        error ? 'border-red-500' : 'border-theme-input-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
     />
-    {helpText && <p className="mt-1 text-xs text-slate-400">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+    {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
+    {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
   </div>
 );
 
@@ -253,15 +253,15 @@ const SelectField: React.FC<{
   error?: string;
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
-      {label} {required && <span className="text-red-400">*</span>}
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-primary mb-1">
+      {label} {required && <span className="text-red-700 dark:text-red-400">*</span>}
     </label>
     <select
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-slate-600'
+      className={`w-full px-3 py-2 bg-theme-input-bg border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+        error ? 'border-red-500' : 'border-theme-input-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
@@ -272,8 +272,8 @@ const SelectField: React.FC<{
         </option>
       ))}
     </select>
-    {helpText && <p className="mt-1 text-xs text-slate-400">{helpText}</p>}
-    {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+    {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
+    {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
   </div>
 );
 
@@ -695,7 +695,7 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
         <div className="mb-4">
@@ -705,10 +705,10 @@ const OrganizationSetup: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <Building2 className="w-8 h-8 text-white" />
+            <Building2 className="w-8 h-8 text-theme-text-primary" />
           </div>
           <div className="flex items-center justify-center space-x-3 mb-3">
-            <h1 className="text-3xl md:text-4xl font-bold text-white">
+            <h1 className="text-3xl md:text-4xl font-bold text-theme-text-primary">
               Organization Setup
             </h1>
             <HelpLink
@@ -718,15 +718,15 @@ const OrganizationSetup: React.FC = () => {
               tooltipPosition="bottom"
             />
           </div>
-          <p className="text-lg text-slate-300">
+          <p className="text-lg text-theme-text-secondary">
             Let's set up your fire department or emergency services organization
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 space-y-4">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border space-y-4">
           {/* Basic Information */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Basic Information"
               icon={<Building2 className="w-5 h-5" />}
@@ -736,7 +736,7 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.basic}
             />
             {expandedSections.basic && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <InputField
                   label="Organization Name"
                   id="org-name"
@@ -784,7 +784,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Contact Information */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Contact Information"
               icon={<Phone className="w-5 h-5" />}
@@ -792,7 +792,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('contact')}
             />
             {expandedSections.contact && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="Phone Number"
@@ -845,7 +845,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Mailing Address */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Mailing Address"
               icon={<Mail className="w-5 h-5" />}
@@ -855,11 +855,11 @@ const OrganizationSetup: React.FC = () => {
               isComplete={isSectionComplete.mailing}
             />
             {expandedSections.mailing && (
-              <div className="p-4 bg-slate-900/30 space-y-4">
+              <div className="p-4 bg-theme-input-bg space-y-4">
                 {/* Info banner explaining why mailing address is required */}
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                   <div className="flex items-start space-x-2">
-                    <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-blue-200">
                       <strong>Why is this required?</strong> Your mailing address is used for official correspondence,
                       certifications, and legal documentation. If your physical location differs (e.g., PO Box vs. station address),
@@ -879,7 +879,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Physical Address */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Physical Address"
               icon={<MapPin className="w-5 h-5" />}
@@ -887,15 +887,15 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('physical')}
             />
             {expandedSections.physical && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.physicalAddressSame}
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
-                    className="w-5 h-5 rounded border-slate-600 bg-slate-900/50 text-red-500 focus:ring-red-500 focus:ring-offset-0"
+                    className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500 focus:ring-offset-0"
                   />
-                  <span className="text-slate-200">Same as mailing address</span>
+                  <span className="text-theme-text-primary">Same as mailing address</span>
                 </label>
 
                 {!formData.physicalAddressSame && (
@@ -912,7 +912,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Department Identifiers */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Department Identifiers"
               icon={<FileText className="w-5 h-5" />}
@@ -920,8 +920,8 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('identifiers')}
             />
             {expandedSections.identifiers && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
-                <p className="text-sm text-slate-400 mb-4">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
+                <p className="text-sm text-theme-text-muted mb-4">
                   Select the primary identifier your department uses for official reporting.
                 </p>
 
@@ -950,7 +950,7 @@ const OrganizationSetup: React.FC = () => {
                         className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-all ${
                           formData.identifierType === option.value
                             ? 'border-red-500 bg-red-500/10'
-                            : 'border-slate-600 hover:border-slate-500'
+                            : 'border-theme-input-border hover:border-theme-input-border'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -962,11 +962,11 @@ const OrganizationSetup: React.FC = () => {
                             onChange={(e) =>
                               updateFormData('identifierType', e.target.value as IdentifierType)
                             }
-                            className="text-red-500 focus:ring-red-500"
+                            className="text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
-                          <span className="text-white font-medium">{option.label}</span>
+                          <span className="text-theme-text-primary font-medium">{option.label}</span>
                         </div>
-                        <span className="text-xs text-slate-400 mt-1 ml-6">
+                        <span className="text-xs text-theme-text-muted mt-1 ml-6">
                           {option.description}
                         </span>
                       </label>
@@ -1019,7 +1019,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Additional Information */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Additional Information"
               icon={<Clock className="w-5 h-5" />}
@@ -1027,7 +1027,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('additional')}
             />
             {expandedSections.additional && (
-              <div className="p-4 space-y-4 bg-slate-900/30">
+              <div className="p-4 space-y-4 bg-theme-input-bg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     label="County/Jurisdiction"
@@ -1052,7 +1052,7 @@ const OrganizationSetup: React.FC = () => {
           </div>
 
           {/* Logo Upload */}
-          <div className="border border-white/10 rounded-lg overflow-hidden">
+          <div className="border border-theme-surface-border rounded-lg overflow-hidden">
             <SectionHeader
               title="Organization Logo"
               icon={<ImageIcon className="w-5 h-5" />}
@@ -1060,7 +1060,7 @@ const OrganizationSetup: React.FC = () => {
               onToggle={() => toggleSection('logo')}
             />
             {expandedSections.logo && (
-              <div className="p-4 bg-slate-900/30">
+              <div className="p-4 bg-theme-input-bg">
                 <div className="relative">
                   <LoadingOverlay isVisible={isProcessingFile} message="Processing image..." />
 
@@ -1073,7 +1073,7 @@ const OrganizationSetup: React.FC = () => {
                       className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                         dragActive
                           ? 'border-red-500 bg-red-500/10'
-                          : 'border-slate-600 hover:border-red-500 hover:bg-white/5'
+                          : 'border-theme-input-border hover:border-red-500 hover:bg-theme-surface-secondary'
                       }`}
                       onClick={() => fileInputRef.current?.click()}
                       role="button"
@@ -1094,19 +1094,19 @@ const OrganizationSetup: React.FC = () => {
                         aria-label="File input for logo"
                       />
                       <div className="flex flex-col items-center space-y-3">
-                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center">
-                          <Upload className="w-8 h-8 text-slate-400" />
+                        <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
+                          <Upload className="w-8 h-8 text-theme-text-muted" />
                         </div>
                         <div>
-                          <p className="text-white font-medium mb-1">
+                          <p className="text-theme-text-primary font-medium mb-1">
                             Drop your logo here, or click to browse
                           </p>
-                          <p className="text-sm text-slate-400">PNG, JPG or WebP (max 5MB)</p>
+                          <p className="text-sm text-theme-text-muted">PNG, JPG or WebP (max 5MB)</p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="border-2 border-slate-600 rounded-lg p-6 bg-slate-900/50">
+                    <div className="border-2 border-theme-input-border rounded-lg p-6 bg-theme-input-bg">
                       <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0 w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden">
                           <img
@@ -1118,8 +1118,8 @@ const OrganizationSetup: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between">
                             <div>
-                              <p className="text-white font-medium">Logo uploaded</p>
-                              <p className="text-sm text-slate-400 mt-1">
+                              <p className="text-theme-text-primary font-medium">Logo uploaded</p>
+                              <p className="text-sm text-theme-text-muted mt-1">
                                 Click to change or drag a new image
                               </p>
                             </div>
@@ -1135,13 +1135,13 @@ const OrganizationSetup: React.FC = () => {
                               className="flex-shrink-0 ml-4 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
                               aria-label="Remove logo"
                             >
-                              <X className="w-5 h-5 text-red-400" />
+                              <X className="w-5 h-5 text-red-700 dark:text-red-400" />
                             </button>
                           </div>
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="mt-3 text-sm text-red-400 hover:text-red-300 font-medium transition-colors"
+                            className="mt-3 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors"
                           >
                             Change logo
                           </button>
@@ -1150,7 +1150,7 @@ const OrganizationSetup: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-slate-400 flex items-start">
+                <p className="mt-2 text-xs text-theme-text-muted flex items-start">
                   <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
                   <span>
                     Your logo will be displayed in the header and on reports. You can change it
@@ -1175,10 +1175,10 @@ const OrganizationSetup: React.FC = () => {
           {hasAttemptedSubmit && Object.keys(validationErrors).length > 0 && (
             <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-red-400 font-medium">Please fix the following errors:</p>
-                  <ul className="mt-2 text-sm text-red-300 list-disc list-inside">
+                  <p className="text-red-700 dark:text-red-400 font-medium">Please fix the following errors:</p>
+                  <ul className="mt-2 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
                     {Object.entries(validationErrors).map(([key, msg]) => (
                       <li key={key}>{msg}</li>
                     ))}
@@ -1189,14 +1189,14 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-from via-theme-bg-from to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={handleContinue}
               disabled={isSaving}
               className={`w-full px-6 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -1218,17 +1218,17 @@ const OrganizationSetup: React.FC = () => {
           <ProgressIndicator
             currentStep={1}
             totalSteps={10}
-            className="pt-4 border-t border-white/10"
+            className="pt-4 border-t border-theme-surface-border"
           />
         </div>
 
         {/* Help Text */}
         <div className="mt-6 text-center">
-          <p className="text-slate-400 text-sm">
+          <p className="text-theme-text-muted text-sm">
             Need help?{' '}
             <a
               href="/docs"
-              className="text-red-400 hover:text-red-300 underline"
+              className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
               target="_blank"
               rel="noopener noreferrer"
             >

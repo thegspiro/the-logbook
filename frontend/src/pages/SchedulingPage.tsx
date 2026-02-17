@@ -28,9 +28,9 @@ interface ShiftTemplate {
 }
 
 const SHIFT_TEMPLATES: ShiftTemplate[] = [
-  { id: 'day', name: 'Day Shift', startTime: '07:00', endTime: '19:00', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30', icon: <Sun className="w-4 h-4" aria-hidden="true" /> },
-  { id: 'night', name: 'Night Shift', startTime: '19:00', endTime: '07:00', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30', icon: <Moon className="w-4 h-4" aria-hidden="true" /> },
-  { id: 'morning', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30', icon: <Sunrise className="w-4 h-4" aria-hidden="true" /> },
+  { id: 'day', name: 'Day Shift', startTime: '07:00', endTime: '19:00', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30', icon: <Sun className="w-4 h-4" aria-hidden="true" /> },
+  { id: 'night', name: 'Night Shift', startTime: '19:00', endTime: '07:00', color: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30', icon: <Moon className="w-4 h-4" aria-hidden="true" /> },
+  { id: 'morning', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30', icon: <Sunrise className="w-4 h-4" aria-hidden="true" /> },
 ];
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -44,9 +44,9 @@ const formatDateISO = (date: Date): string => {
 
 const getShiftTemplateColor = (shift: ShiftRecord): string => {
   const startHour = new Date(shift.start_time).getHours();
-  if (startHour >= 5 && startHour < 10) return 'bg-orange-500/10 text-orange-400 border-orange-500/30';
-  if (startHour >= 10 && startHour < 17) return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30';
-  return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+  if (startHour >= 5 && startHour < 10) return 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30';
+  if (startHour >= 10 && startHour < 17) return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+  return 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30';
 };
 
 const formatTime = (isoString: string): string => {
@@ -88,15 +88,42 @@ const SchedulingPage: React.FC = () => {
     });
   };
 
-  const weekDates = getWeekDates();
+  const getMonthDates = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    // Pad to start on Sunday
+    const startPad = firstDay.getDay();
+    const start = new Date(firstDay);
+    start.setDate(start.getDate() - startPad);
+    // Pad to fill complete weeks (up to 6 rows)
+    const totalDays = startPad + lastDay.getDate();
+    const rows = Math.ceil(totalDays / 7);
+    return Array.from({ length: rows * 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  };
 
-  const navigateWeek = (direction: number) => {
+  const weekDates = getWeekDates();
+  const monthDates = viewMode === 'month' ? getMonthDates() : [];
+
+  const navigate_ = (direction: number) => {
     const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + (direction * 7));
+    if (viewMode === 'month') {
+      newDate.setMonth(newDate.getMonth() + direction);
+    } else {
+      newDate.setDate(newDate.getDate() + (direction * 7));
+    }
     setCurrentDate(newDate);
   };
 
   const formatDateRange = () => {
+    if (viewMode === 'month') {
+      return currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    }
     const start = weekDates[0];
     const end = weekDates[6];
     const startMonth = start.toLocaleString('en-US', { month: 'short' });
@@ -114,15 +141,23 @@ const SchedulingPage: React.FC = () => {
       date.getFullYear() === today.getFullYear();
   };
 
-  // Fetch shifts for the current week whenever weekDates change
+  // Fetch shifts for the current view whenever date or viewMode changes
   useEffect(() => {
     const fetchShifts = async () => {
       setLoading(true);
       setError(null);
       try {
-        const weekStartStr = formatDateISO(weekDates[0]);
-        const weekShifts = await schedulingService.getWeekCalendar(weekStartStr);
-        setShifts(weekShifts);
+        let fetchedShifts: ShiftRecord[];
+        if (viewMode === 'month') {
+          fetchedShifts = await schedulingService.getMonthCalendar(
+            currentDate.getFullYear(),
+            currentDate.getMonth() + 1
+          );
+        } else {
+          const weekStartStr = formatDateISO(weekDates[0]);
+          fetchedShifts = await schedulingService.getWeekCalendar(weekStartStr);
+        }
+        setShifts(fetchedShifts);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to load shifts';
         setError(message);
@@ -133,7 +168,7 @@ const SchedulingPage: React.FC = () => {
 
     fetchShifts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate]);
+  }, [currentDate, viewMode]);
 
   // Fetch summary on mount
   useEffect(() => {
@@ -189,10 +224,18 @@ const SchedulingPage: React.FC = () => {
         notes: shiftForm.notes || undefined,
       });
 
-      // Refresh shifts for the current week
-      const weekStartStr = formatDateISO(weekDates[0]);
-      const weekShifts = await schedulingService.getWeekCalendar(weekStartStr);
-      setShifts(weekShifts);
+      // Refresh shifts for the current view
+      let refreshedShifts: ShiftRecord[];
+      if (viewMode === 'month') {
+        refreshedShifts = await schedulingService.getMonthCalendar(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 1
+        );
+      } else {
+        const weekStartStr = formatDateISO(weekDates[0]);
+        refreshedShifts = await schedulingService.getWeekCalendar(weekStartStr);
+      }
+      setShifts(refreshedShifts);
 
       // Refresh summary
       try {
@@ -229,11 +272,11 @@ const SchedulingPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
             <div className="bg-violet-600 rounded-lg p-2">
-              <Clock className="w-6 h-6 text-white" aria-hidden="true" />
+              <Clock className="w-6 h-6 text-theme-text-primary" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-white text-2xl font-bold">Scheduling & Shifts</h1>
-              <p className="text-slate-400 text-sm">
+              <h1 className="text-theme-text-primary text-2xl font-bold">Scheduling & Shifts</h1>
+              <p className="text-theme-text-muted text-sm">
                 Create shift schedules, manage duty rosters, and handle shift trades
               </p>
             </div>
@@ -252,17 +295,17 @@ const SchedulingPage: React.FC = () => {
         {/* Summary Stats */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-sm">Total Shifts</p>
-              <p className="text-white text-2xl font-bold">{summary.total_shifts}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-sm">Total Shifts</p>
+              <p className="text-theme-text-primary text-2xl font-bold">{summary.total_shifts}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-sm">This Week</p>
-              <p className="text-white text-2xl font-bold">{summary.shifts_this_week}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-sm">This Week</p>
+              <p className="text-theme-text-primary text-2xl font-bold">{summary.shifts_this_week}</p>
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-              <p className="text-slate-400 text-sm">This Month</p>
-              <p className="text-white text-2xl font-bold">{summary.shifts_this_month}</p>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
+              <p className="text-theme-text-muted text-sm">This Month</p>
+              <p className="text-theme-text-primary text-2xl font-bold">{summary.shifts_this_month}</p>
             </div>
           </div>
         )}
@@ -270,14 +313,14 @@ const SchedulingPage: React.FC = () => {
         {/* Shift Templates */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {SHIFT_TEMPLATES.map((shift) => (
-            <div key={shift.id} className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+            <div key={shift.id} className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
               <div className="flex items-center space-x-3">
                 <div className={`p-2 rounded-lg border ${shift.color}`}>
                   {shift.icon}
                 </div>
                 <div>
-                  <h3 className="text-white font-medium">{shift.name}</h3>
-                  <p className="text-slate-400 text-sm">{shift.startTime} - {shift.endTime}</p>
+                  <h3 className="text-theme-text-primary font-medium">{shift.name}</h3>
+                  <p className="text-theme-text-muted text-sm">{shift.startTime} - {shift.endTime}</p>
                 </div>
               </div>
             </div>
@@ -285,21 +328,21 @@ const SchedulingPage: React.FC = () => {
         </div>
 
         {/* Calendar Navigation */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-6">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => navigateWeek(-1)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                aria-label="Previous week"
+                onClick={() => navigate_(-1)}
+                className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                aria-label={viewMode === 'month' ? 'Previous month' : 'Previous week'}
               >
                 <ChevronLeft className="w-5 h-5" aria-hidden="true" />
               </button>
-              <h2 className="text-white font-semibold text-lg">{formatDateRange()}</h2>
+              <h2 className="text-theme-text-primary font-semibold text-lg">{formatDateRange()}</h2>
               <button
-                onClick={() => navigateWeek(1)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                aria-label="Next week"
+                onClick={() => navigate_(1)}
+                className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                aria-label={viewMode === 'month' ? 'Next month' : 'Next week'}
               >
                 <ChevronRight className="w-5 h-5" aria-hidden="true" />
               </button>
@@ -307,16 +350,16 @@ const SchedulingPage: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentDate(new Date())}
-                className="px-3 py-1.5 text-sm text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-sm text-violet-700 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
               >
                 Today
               </button>
-              <div className="flex bg-slate-900/50 rounded-lg p-1" role="tablist" aria-label="Calendar view mode">
+              <div className="flex bg-theme-input-bg rounded-lg p-1" role="tablist" aria-label="Calendar view mode">
                 <button
                   onClick={() => setViewMode('week')}
                   role="tab"
                   aria-selected={viewMode === 'week'}
-                  className={`px-3 py-1 rounded text-sm ${viewMode === 'week' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  className={`px-3 py-1 rounded text-sm ${viewMode === 'week' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-white'}`}
                 >
                   Week
                 </button>
@@ -324,7 +367,7 @@ const SchedulingPage: React.FC = () => {
                   onClick={() => setViewMode('month')}
                   role="tab"
                   aria-selected={viewMode === 'month'}
-                  className={`px-3 py-1 rounded text-sm ${viewMode === 'month' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  className={`px-3 py-1 rounded text-sm ${viewMode === 'month' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-white'}`}
                 >
                   Month
                 </button>
@@ -336,33 +379,33 @@ const SchedulingPage: React.FC = () => {
         {/* Error State */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6 flex items-center space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-            <p className="text-red-300">{error}</p>
+            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0" />
+            <p className="text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
 
         {/* Loading State */}
         {loading && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-12 text-center mb-8">
-            <Loader2 className="w-8 h-8 text-violet-400 mx-auto mb-3 animate-spin" />
-            <p className="text-slate-300">Loading shifts...</p>
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-12 text-center mb-8">
+            <Loader2 className="w-8 h-8 text-violet-700 dark:text-violet-400 mx-auto mb-3 animate-spin" />
+            <p className="text-theme-text-secondary">Loading shifts...</p>
           </div>
         )}
 
         {/* Week Calendar Grid */}
-        {!loading && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden mb-8">
-            <div className="grid grid-cols-7 border-b border-white/10">
+        {!loading && viewMode === 'week' && (
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+            <div className="grid grid-cols-7 border-b border-theme-surface-border">
               {weekDates.map((date, i) => (
                 <div
                   key={i}
-                  className={`p-3 text-center border-r border-white/10 last:border-r-0 ${
+                  className={`p-3 text-center border-r border-theme-surface-border last:border-r-0 ${
                     isToday(date) ? 'bg-violet-600/20' : ''
                   }`}
                 >
-                  <p className="text-slate-400 text-xs uppercase">{DAYS_OF_WEEK[i]}</p>
+                  <p className="text-theme-text-muted text-xs uppercase">{DAYS_OF_WEEK[i]}</p>
                   <p className={`text-lg font-bold mt-1 ${
-                    isToday(date) ? 'text-violet-400' : 'text-white'
+                    isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
                   }`}>
                     {date.getDate()}
                   </p>
@@ -375,7 +418,7 @@ const SchedulingPage: React.FC = () => {
                 return (
                   <div
                     key={i}
-                    className={`p-2 border-r border-white/10 last:border-r-0 ${
+                    className={`p-2 border-r border-theme-surface-border last:border-r-0 ${
                       isToday(date) ? 'bg-violet-600/5' : ''
                     }`}
                   >
@@ -403,12 +446,55 @@ const SchedulingPage: React.FC = () => {
           </div>
         )}
 
+        {/* Month Calendar Grid */}
+        {!loading && viewMode === 'month' && (
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden mb-8">
+            <div className="grid grid-cols-7 border-b border-theme-surface-border">
+              {DAYS_OF_WEEK.map((day) => (
+                <div key={day} className="p-3 text-center border-r border-theme-surface-border last:border-r-0">
+                  <p className="text-theme-text-muted text-xs uppercase">{day}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {monthDates.map((date, i) => {
+                const dayShifts = getShiftsForDate(date);
+                const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+                return (
+                  <div
+                    key={i}
+                    className={`p-2 border-r border-b border-theme-surface-border last:border-r-0 min-h-[100px] ${
+                      isToday(date) ? 'bg-violet-600/5' : ''
+                    } ${!isCurrentMonth ? 'opacity-40' : ''}`}
+                  >
+                    <p className={`text-sm font-medium mb-1 ${
+                      isToday(date) ? 'text-violet-700 dark:text-violet-400' : 'text-theme-text-primary'
+                    }`}>
+                      {date.getDate()}
+                    </p>
+                    {dayShifts.map((shift) => (
+                      <div
+                        key={shift.id}
+                        className={`mb-1 px-1.5 py-1 rounded border text-xs ${getShiftTemplateColor(shift)}`}
+                      >
+                        <p className="font-medium truncate">
+                          {formatTime(shift.start_time)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
         {!loading && !hasShifts && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-12 border border-white/20 text-center">
-            <CalendarDays className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-white text-xl font-bold mb-2">No Schedules Created</h3>
-            <p className="text-slate-300 mb-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
+            <CalendarDays className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+            <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Schedules Created</h3>
+            <p className="text-theme-text-secondary mb-6">
               Start building shift schedules and duty rosters for your department.
             </p>
             {canManage && (
@@ -434,32 +520,32 @@ const SchedulingPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateShift(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 id="create-schedule-title" className="text-lg font-medium text-white">Create Schedule</h3>
-                    <button onClick={() => setShowCreateShift(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                    <h3 id="create-schedule-title" className="text-lg font-medium text-theme-text-primary">Create Schedule</h3>
+                    <button onClick={() => setShowCreateShift(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Schedule Name</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Schedule Name</label>
                       <input
                         id="schedule-name"
                         type="text" required aria-required="true" value={shiftForm.name}
                         onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                         placeholder="e.g., February Week 3 Schedule"
                       />
                     </div>
                     <div>
-                      <label htmlFor="shift-template" className="block text-sm font-medium text-slate-300 mb-1">Shift Template</label>
+                      <label htmlFor="shift-template" className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Template</label>
                       <select
                         id="shift-template"
                         value={shiftForm.shiftTemplate}
                         onChange={(e) => setShiftForm({ ...shiftForm, shiftTemplate: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                       >
                         {SHIFT_TEMPLATES.map(t => (
                           <option key={t.id} value={t.id}>{t.name} ({t.startTime} - {t.endTime})</option>
@@ -468,51 +554,51 @@ const SchedulingPage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Start Date *</label>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
                         <input
                           id="schedule-start-date"
                           type="date" value={shiftForm.startDate}
                           onChange={(e) => setShiftForm({ ...shiftForm, startDate: e.target.value })}
-                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                       </div>
                       <div>
-                        <label htmlFor="schedule-end-date" className="block text-sm font-medium text-slate-300 mb-1">End Date</label>
+                        <label htmlFor="schedule-end-date" className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
                         <input
                           id="schedule-end-date"
                           type="date" value={shiftForm.endDate}
                           onChange={(e) => setShiftForm({ ...shiftForm, endDate: e.target.value })}
-                          className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
                       <textarea
                         value={shiftForm.notes}
                         onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
                         rows={3}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
                         placeholder="Optional notes for this shift..."
                       />
                     </div>
                     {createError && (
                       <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                         <div className="flex items-start space-x-2">
-                          <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                          <p className="text-red-300 text-sm">{createError}</p>
+                          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                          <p className="text-red-700 dark:text-red-300 text-sm">{createError}</p>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
-                <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => {
                       setShowCreateShift(false);
                       setCreateError(null);
                     }}
-                    className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                   >
                     Cancel
                   </button>
