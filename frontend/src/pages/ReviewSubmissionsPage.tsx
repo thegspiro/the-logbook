@@ -83,7 +83,7 @@ const ReviewPanel: React.FC<{
         action,
         reviewer_notes: notes || undefined,
         override_hours: overrideHours,
-        override_credit_hours: overrideCreditHours,
+        override_credit_hours: overrideHours ?? overrideCreditHours,
         override_training_type: overrideType,
       });
     } finally {
@@ -156,7 +156,7 @@ const ReviewPanel: React.FC<{
             {showOverrides ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           {showOverrides && (
-            <div className="grid grid-cols-3 gap-3 mt-2">
+            <div className="grid grid-cols-2 gap-3 mt-2">
               <div>
                 <label className="text-xs text-theme-text-muted">Hours</label>
                 <input
@@ -345,7 +345,6 @@ const DEFAULT_FIELD_CONFIG: Record<string, FieldConfig> = {
   training_type: { visible: true, required: true, label: 'Training Type' },
   completion_date: { visible: true, required: true, label: 'Date Completed' },
   hours_completed: { visible: true, required: true, label: 'Hours Completed' },
-  credit_hours: { visible: true, required: false, label: 'Credit Hours' },
   course_code: { visible: true, required: false, label: 'Course Code' },
   description: { visible: true, required: false, label: 'Description / Notes' },
   instructor: { visible: true, required: false, label: 'Instructor Name' },

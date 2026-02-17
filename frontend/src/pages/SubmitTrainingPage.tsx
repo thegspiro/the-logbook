@@ -104,11 +104,13 @@ const SubmissionForm: React.FC<{
     setError('');
 
     try {
+      // Credit hours = hours completed (same concept for department training)
+      const submitData = { ...formData, credit_hours: formData.hours_completed };
       if (isEdit && editSubmission) {
-        await trainingSubmissionService.updateSubmission(editSubmission.id, formData);
+        await trainingSubmissionService.updateSubmission(editSubmission.id, submitData);
         toast.success('Submission updated');
       } else {
-        await trainingSubmissionService.createSubmission(formData);
+        await trainingSubmissionService.createSubmission(submitData);
         toast.success(config.require_approval ? 'Training submitted for review!' : 'Training recorded!');
       }
       onSuccess();
