@@ -47,6 +47,8 @@ interface RequirementFormData {
   required_hours: string;
   required_shifts: string;
   required_calls: string;
+  passing_score: string;
+  max_attempts: string;
   checklist_items: string[];
   is_required: boolean;
   sort_order: number;
@@ -96,6 +98,8 @@ const emptyRequirement = (sortOrder: number): RequirementFormData => ({
   required_hours: '',
   required_shifts: '',
   required_calls: '',
+  passing_score: '',
+  max_attempts: '',
   checklist_items: [],
   is_required: true,
   sort_order: sortOrder,
@@ -439,6 +443,7 @@ const StepRequirements: React.FC<{
                           <option value="hours">Training Hours</option>
                           <option value="courses">Course Completion</option>
                           <option value="skills_evaluation">Skills Evaluation</option>
+                          <option value="knowledge_test">Knowledge Test</option>
                           <option value="checklist">Checklist</option>
                           <option value="certification">Certification</option>
                           <option value="shifts">Shift Hours</option>
@@ -537,6 +542,34 @@ const StepRequirements: React.FC<{
                       />
                     </div>
                   )}
+
+                  {req.requirement_type === 'knowledge_test' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Passing Score (%)</label>
+                        <input
+                          type="number"
+                          value={req.passing_score}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'passing_score', e.target.value)}
+                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          placeholder="e.g., 70"
+                          min={0}
+                          max={100}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Max Attempts</label>
+                        <input
+                          type="number"
+                          value={req.max_attempts}
+                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'max_attempts', e.target.value)}
+                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                          placeholder="Unlimited"
+                          min={1}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -552,11 +585,12 @@ const StepMilestones: React.FC<{
   onAddMilestone: (phaseId: string) => void;
   onRemoveMilestone: (phaseId: string, msId: string) => void;
   onUpdateMilestone: (phaseId: string, msId: string, field: string, value: string) => void;
-}> = ({ phases, onAddMilestone, onRemoveMilestone, onUpdateMilestone }) => (
+  onMoveMilestone: (phaseId: string, msId: string, direction: 'up' | 'down') => void;
+}> = ({ phases, onAddMilestone, onRemoveMilestone, onUpdateMilestone, onMoveMilestone }) => (
   <div className="space-y-6">
     <div>
       <h2 className="text-xl font-semibold text-white mb-1">Milestones</h2>
-      <p className="text-gray-400 text-sm">Define milestones to celebrate member progress and trigger notifications.</p>
+      <p className="text-gray-400 text-sm">Define milestones to celebrate member progress and trigger notifications. Use the arrows to reorder.</p>
     </div>
 
     {phases.length === 0 ? (
@@ -584,31 +618,52 @@ const StepMilestones: React.FC<{
             <p className="text-gray-500 text-sm text-center py-4">No milestones for this phase (optional).</p>
           ) : (
             <div className="space-y-3">
-              {phase.milestones.map((ms) => (
+              {phase.milestones.map((ms, msIndex) => (
                 <div key={ms.id} className="bg-gray-700/50 rounded-lg p-3 space-y-3">
                   <div className="flex items-start justify-between">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">Milestone Name *</label>
-                        <input
-                          type="text"
-                          value={ms.name}
-                          onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'name', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
-                          placeholder="e.g., Halfway Complete"
-                        />
+                    <div className="flex items-start space-x-2">
+                      {/* Reorder buttons */}
+                      <div className="flex flex-col space-y-0.5 pt-1">
+                        <button
+                          onClick={() => onMoveMilestone(phase.id, ms.id, 'up')}
+                          disabled={msIndex === 0}
+                          className="p-0.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          aria-label="Move milestone up"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onMoveMilestone(phase.id, ms.id, 'down')}
+                          disabled={msIndex === phase.milestones.length - 1}
+                          className="p-0.5 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          aria-label="Move milestone down"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">Trigger at (% complete)</label>
-                        <input
-                          type="number"
-                          value={ms.completion_percentage_threshold}
-                          onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'completion_percentage_threshold', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
-                          placeholder="e.g., 50"
-                          min={1}
-                          max={100}
-                        />
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Milestone Name *</label>
+                          <input
+                            type="text"
+                            value={ms.name}
+                            onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'name', e.target.value)}
+                            className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                            placeholder="e.g., Halfway Complete"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Trigger at (% complete)</label>
+                          <input
+                            type="number"
+                            value={ms.completion_percentage_threshold}
+                            onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'completion_percentage_threshold', e.target.value)}
+                            className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                            placeholder="e.g., 50"
+                            min={1}
+                            max={100}
+                          />
+                        </div>
                       </div>
                     </div>
                     <button
@@ -618,7 +673,7 @@ const StepMilestones: React.FC<{
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  <div>
+                  <div className="pl-7">
                     <label className="block text-xs font-medium text-gray-400 mb-1">Notification Message</label>
                     <input
                       type="text"
@@ -875,6 +930,21 @@ const CreatePipelinePage: React.FC = () => {
     );
   };
 
+  const moveMilestone = (phaseId: string, msId: string, direction: 'up' | 'down') => {
+    setPhases((prev) =>
+      prev.map((p) => {
+        if (p.id !== phaseId) return p;
+        const idx = p.milestones.findIndex((m) => m.id === msId);
+        if (idx < 0) return p;
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= p.milestones.length) return p;
+        const updated = [...p.milestones];
+        [updated[idx], updated[swapIdx]] = [updated[swapIdx], updated[idx]];
+        return { ...p, milestones: updated };
+      })
+    );
+  };
+
   // ---- Submit ----
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -916,6 +986,8 @@ const CreatePipelinePage: React.FC = () => {
             required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
             required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
             required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
+            passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
+            max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
             checklist_items: reqData.checklist_items.filter((i) => i.trim()),
             is_editable: true,
             applies_to_all: false,
@@ -1046,6 +1118,7 @@ const CreatePipelinePage: React.FC = () => {
               onAddMilestone={addMilestone}
               onRemoveMilestone={removeMilestone}
               onUpdateMilestone={updateMilestone}
+              onMoveMilestone={moveMilestone}
             />
           )}
           {currentStep === 'review' && <StepReview info={info} phases={phases} />}

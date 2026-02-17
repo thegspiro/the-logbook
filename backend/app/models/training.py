@@ -73,6 +73,7 @@ class RequirementType(str, enum.Enum):
     CALLS = "calls"  # Minimum number of calls/incidents
     SKILLS_EVALUATION = "skills_evaluation"  # Skills checkoff/evaluation
     CHECKLIST = "checklist"  # Checklist items to complete
+    KNOWLEDGE_TEST = "knowledge_test"  # Written/paper-based knowledge test
 
 
 class RequirementSource(str, enum.Enum):
@@ -312,6 +313,8 @@ class TrainingRequirement(Base):
     required_call_types = Column(JSON)  # Specific incident types required
     required_skills = Column(JSON)  # For SKILLS_EVALUATION type - skill IDs
     checklist_items = Column(JSON)  # For CHECKLIST type - list of items
+    passing_score = Column(Float)  # For KNOWLEDGE_TEST type - minimum passing percentage
+    max_attempts = Column(Integer)  # For KNOWLEDGE_TEST type - max number of attempts
 
     # Frequency
     frequency = Column(Enum(RequirementFrequency, values_callable=lambda x: [e.value for e in x]), nullable=False)

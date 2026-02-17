@@ -76,6 +76,8 @@ class TrainingProgramService:
             required_call_types=requirement_data.required_call_types,
             required_skills=requirement_data.required_skills,
             checklist_items=requirement_data.checklist_items,
+            passing_score=getattr(requirement_data, 'passing_score', None),
+            max_attempts=getattr(requirement_data, 'max_attempts', None),
             frequency=requirement_data.frequency,
             time_limit_days=requirement_data.time_limit_days,
             applies_to_all=requirement_data.applies_to_all,
@@ -205,8 +207,8 @@ class TrainingProgramService:
         Get a training program by ID with optional eager loading
         """
         query = select(TrainingProgram).where(
-            TrainingProgram.id == program_id,
-            TrainingProgram.organization_id == organization_id
+            TrainingProgram.id == str(program_id),
+            TrainingProgram.organization_id == str(organization_id)
         )
 
         if include_phases:
@@ -262,7 +264,7 @@ class TrainingProgramService:
         # Check for duplicate phase numbers
         existing_phase = await self.db.execute(
             select(ProgramPhase).where(
-                ProgramPhase.program_id == phase_data.program_id,
+                ProgramPhase.program_id == str(phase_data.program_id),
                 ProgramPhase.phase_number == phase_data.phase_number
             )
         )
@@ -336,8 +338,8 @@ class TrainingProgramService:
         if program_requirement_data.phase_id:
             phase_result = await self.db.execute(
                 select(ProgramPhase)
-                .where(ProgramPhase.id == program_requirement_data.phase_id)
-                .where(ProgramPhase.program_id == program_requirement_data.program_id)
+                .where(ProgramPhase.id == str(program_requirement_data.phase_id))
+                .where(ProgramPhase.program_id == str(program_requirement_data.program_id))
             )
             if not phase_result.scalar_one_or_none():
                 return None, "Program phase not found"
@@ -345,9 +347,9 @@ class TrainingProgramService:
         # Check for duplicate
         existing = await self.db.execute(
             select(ProgramRequirement).where(
-                ProgramRequirement.program_id == program_requirement_data.program_id,
-                ProgramRequirement.requirement_id == program_requirement_data.requirement_id,
-                ProgramRequirement.phase_id == program_requirement_data.phase_id
+                ProgramRequirement.program_id == str(program_requirement_data.program_id),
+                ProgramRequirement.requirement_id == str(program_requirement_data.requirement_id),
+                ProgramRequirement.phase_id == (str(program_requirement_data.phase_id) if program_requirement_data.phase_id else None)
             )
         )
         if existing.scalar_one_or_none():
@@ -416,8 +418,8 @@ class TrainingProgramService:
         if milestone_data.phase_id:
             phase_result = await self.db.execute(
                 select(ProgramPhase)
-                .where(ProgramPhase.id == milestone_data.phase_id)
-                .where(ProgramPhase.program_id == milestone_data.program_id)
+                .where(ProgramPhase.id == str(milestone_data.phase_id))
+                .where(ProgramPhase.program_id == str(milestone_data.program_id))
             )
             if not phase_result.scalar_one_or_none():
                 return None, "Program phase not found"
@@ -467,8 +469,8 @@ class TrainingProgramService:
         # Check for existing active enrollment
         existing = await self.db.execute(
             select(ProgramEnrollment).where(
-                ProgramEnrollment.user_id == enrollment_data.user_id,
-                ProgramEnrollment.program_id == enrollment_data.program_id,
+                ProgramEnrollment.user_id == str(enrollment_data.user_id),
+                ProgramEnrollment.program_id == str(enrollment_data.program_id),
                 ProgramEnrollment.status == EnrollmentStatus.ACTIVE
             )
         )
