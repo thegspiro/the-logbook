@@ -16,6 +16,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import {
   trainingProgramService,
+  trainingModuleConfigService,
   schedulingService,
   notificationsService,
 } from '../services/api';
@@ -99,10 +100,13 @@ const Dashboard: React.FC = () => {
 
   const loadHours = async () => {
     try {
-      const summary = await schedulingService.getSummary();
+      const [schedulingSummary, trainingSummary] = await Promise.all([
+        schedulingService.getSummary().catch(() => null),
+        trainingModuleConfigService.getMyTraining().catch(() => null),
+      ]);
       setHours({
-        training: 0,
-        standby: summary.total_hours_this_month || 0,
+        training: trainingSummary?.hours_summary?.total_hours ?? 0,
+        standby: schedulingSummary?.total_hours_this_month || 0,
         administrative: 0,
       });
     } catch {
