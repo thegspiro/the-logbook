@@ -201,7 +201,7 @@ export const PipelineSettingsPage: React.FC = () => {
       <div className="grid grid-cols-12 gap-6">
         {/* Pipeline List Sidebar */}
         <div className="col-span-4">
-          <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg">
+          <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg">
             <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
               <h2 className="text-sm font-medium text-theme-text-primary">Pipelines</h2>
               <button
@@ -223,7 +223,7 @@ export const PipelineSettingsPage: React.FC = () => {
                 <span className="sr-only">Loading pipelines...</span>
               </div>
             ) : pipelines.length === 0 ? (
-              <div className="p-4 text-center text-sm text-slate-500">
+              <div className="p-4 text-center text-sm text-theme-text-muted">
                 No pipelines yet
               </div>
             ) : (
@@ -244,11 +244,11 @@ export const PipelineSettingsPage: React.FC = () => {
                       </span>
                       <span
                         className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          p.is_active ? 'bg-emerald-400' : 'bg-slate-600'
+                          p.is_active ? 'bg-emerald-400' : 'bg-theme-surface-hover'
                         }`}
                       />
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-theme-text-muted mt-1">
                       {p.stage_count} stages &middot; {p.applicant_count} applicants
                     </p>
                   </button>
@@ -266,8 +266,8 @@ export const PipelineSettingsPage: React.FC = () => {
               <span className="sr-only">Loading pipeline...</span>
             </div>
           ) : !currentPipeline ? (
-            <div className="text-center py-20 bg-slate-800/30 rounded-lg border border-dashed border-theme-surface-border">
-              <Settings className="w-12 h-12 text-slate-600 mx-auto mb-4" aria-hidden="true" />
+            <div className="text-center py-20 bg-theme-input-bg rounded-lg border border-dashed border-theme-surface-border">
+              <Settings className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-lg font-medium text-theme-text-primary mb-2">
                 {pipelines.length === 0
                   ? 'Create your first pipeline'
@@ -294,7 +294,7 @@ export const PipelineSettingsPage: React.FC = () => {
           ) : (
             <div>
               {/* Pipeline Name & Controls */}
-              <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4 mb-4">
+              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4 mb-4">
                 {editingPipelineName ? (
                   <div className="space-y-3">
                     <input
@@ -302,7 +302,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       value={pipelineName}
                       onChange={(e) => setPipelineName(e.target.value)}
                       aria-label="Pipeline name"
-                      className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <textarea
                       value={pipelineDescription}
@@ -310,7 +310,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       placeholder="Description (optional)"
                       aria-label="Pipeline description"
                       rows={2}
-                      className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -343,7 +343,7 @@ export const PipelineSettingsPage: React.FC = () => {
                           className={`text-xs px-2 py-0.5 rounded ${
                             currentPipeline.is_active
                               ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                              : 'bg-slate-500/20 text-theme-text-muted'
+                              : 'bg-theme-surface-hover text-theme-text-muted'
                           }`}
                         >
                           {currentPipeline.is_active ? 'Active' : 'Inactive'}
@@ -387,7 +387,7 @@ export const PipelineSettingsPage: React.FC = () => {
               </div>
 
               {/* Stage Builder */}
-              <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4">
+              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-4">
                   Pipeline Stages
                 </h3>
@@ -398,14 +398,14 @@ export const PipelineSettingsPage: React.FC = () => {
               </div>
 
               {/* Inactivity Configuration */}
-              <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg p-4 mt-4">
+              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4 mt-4">
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="w-4 h-4 text-amber-700 dark:text-amber-400" aria-hidden="true" />
                   <h3 className="text-sm font-medium text-theme-text-secondary">
                     Inactivity Timeout
                   </h3>
                 </div>
-                <p className="text-xs text-slate-500 mb-5">
+                <p className="text-xs text-theme-text-muted mb-5">
                   Applications with no activity within the timeout period will be automatically
                   marked inactive. Individual stages can override this default in their settings.
                 </p>
@@ -455,7 +455,7 @@ export const PipelineSettingsPage: React.FC = () => {
                             custom_timeout_days: Math.max(1, Number(e.target.value)),
                           })
                         }
-                        className="w-32 bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
                   )}
@@ -487,7 +487,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         </span>
                       </div>
                       {warningDays && effectiveTimeoutDays && (
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-theme-text-muted mt-1">
                           Warning at {warningDays} days, inactive at {effectiveTimeoutDays} days
                         </p>
                       )}
@@ -511,7 +511,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               notify_coordinator: e.target.checked,
                             })
                           }
-                          className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                         />
                         Notify membership coordinator when applications approach timeout
                       </label>
@@ -525,7 +525,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               notify_applicant: e.target.checked,
                             })
                           }
-                          className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                          className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                         />
                         Notify the applicant that their application is going inactive
                       </label>
@@ -548,7 +548,7 @@ export const PipelineSettingsPage: React.FC = () => {
                             auto_purge_enabled: e.target.checked,
                           })
                         }
-                        className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                        className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                       />
                       Permanently delete inactive applications after a set period
                     </label>
@@ -567,7 +567,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               })
                             }
                             aria-label="Days after becoming inactive before purging"
-                            className="w-24 bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                            className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                           />
                           <span className="text-sm text-theme-text-muted">
                             days after becoming inactive
@@ -616,7 +616,7 @@ export const PipelineSettingsPage: React.FC = () => {
           aria-labelledby="create-pipeline-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
         >
-          <div className="bg-slate-800 border border-theme-surface-border rounded-xl max-w-md w-full">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 id="create-pipeline-title" className="text-lg font-bold text-theme-text-primary">Create Pipeline</h2>
               <button
@@ -640,7 +640,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   placeholder="e.g., New Member Onboarding"
                   required
                   aria-required="true"
-                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
               <div>
@@ -653,7 +653,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   onChange={(e) => setPipelineDescription(e.target.value)}
                   placeholder="Describe this pipeline's purpose..."
                   rows={3}
-                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 />
               </div>
             </div>

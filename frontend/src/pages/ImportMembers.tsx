@@ -383,7 +383,7 @@ const ImportMembers: React.FC = () => {
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-500 hover:border-blue-500 rounded-lg p-12 text-center cursor-pointer transition-colors"
+            className="border-2 border-dashed border-theme-input-border hover:border-blue-500 rounded-lg p-12 text-center cursor-pointer transition-colors"
           >
             <Upload className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             {file ? (

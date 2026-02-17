@@ -119,7 +119,7 @@ const EventQRCodePage: React.FC = () => {
       <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-2xl font-semibold text-theme-text-primary mb-2">{qrData.event_name}</h2>
 
-        <div className="space-y-2 text-slate-200">
+        <div className="space-y-2 text-theme-text-primary">
           {qrData.event_type && (
             <p className="capitalize">
               <span className="font-medium">Type:</span> {qrData.event_type.replace('_', ' ')}

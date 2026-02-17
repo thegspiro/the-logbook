@@ -22,37 +22,37 @@ import { getErrorMessage } from '../utils/errorHandling';
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
   'google-calendar': {
     icon: <Calendar className="w-6 h-6" />,
-    color: 'text-blue-700 dark:text-blue-400',
+    color: 'text-blue-700',
     bgColor: 'bg-blue-500/10',
     features: ['Event sync', 'Two-way sync', 'Auto-create events'],
   },
   'outlook': {
     icon: <Calendar className="w-6 h-6" />,
-    color: 'text-sky-700 dark:text-sky-400',
+    color: 'text-sky-700',
     bgColor: 'bg-sky-500/10',
     features: ['Calendar sync', 'Email notifications', 'Contact sync'],
   },
   'slack': {
     icon: <MessageSquare className="w-6 h-6" />,
-    color: 'text-purple-700 dark:text-purple-400',
+    color: 'text-purple-700',
     bgColor: 'bg-purple-500/10',
     features: ['Event alerts', 'Training reminders', 'Custom channels'],
   },
   'discord': {
     icon: <MessageSquare className="w-6 h-6" />,
-    color: 'text-indigo-700 dark:text-indigo-400',
+    color: 'text-indigo-700',
     bgColor: 'bg-indigo-500/10',
     features: ['Webhook notifications', 'Event reminders', 'Duty alerts'],
   },
   'csv-import': {
     icon: <Database className="w-6 h-6" />,
-    color: 'text-emerald-700 dark:text-emerald-400',
+    color: 'text-emerald-700',
     bgColor: 'bg-emerald-500/10',
     features: ['Member import', 'Training export', 'Inventory export'],
   },
   'ical': {
     icon: <Link className="w-6 h-6" />,
-    color: 'text-orange-700 dark:text-orange-400',
+    color: 'text-orange-700',
     bgColor: 'bg-orange-500/10',
     features: ['Calendar feed URL', 'Auto-updates', 'Filtered feeds'],
   },
@@ -169,11 +169,11 @@ const IntegrationsPage: React.FC = () => {
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Connected</p>
-            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{connectedCount}</p>
+            <p className="text-green-700 text-2xl font-bold mt-1">{connectedCount}</p>
           </div>
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Ready to Connect</p>
-            <p className="text-indigo-700 dark:text-indigo-400 text-2xl font-bold mt-1">{availableCount}</p>
+            <p className="text-indigo-700 text-2xl font-bold mt-1">{availableCount}</p>
           </div>
         </div>
 
@@ -189,7 +189,7 @@ const IntegrationsPage: React.FC = () => {
                 placeholder="Search integrations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div className="flex space-x-2" role="group" aria-label="Filter by category">
@@ -225,11 +225,11 @@ const IntegrationsPage: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-theme-text-primary font-semibold">{integration.name}</h3>
-                      <span className="text-slate-500 text-xs">{category}</span>
+                      <span className="text-theme-text-muted text-xs">{category}</span>
                     </div>
                   </div>
                   {integration.status === 'connected' && (
-                    <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30 rounded">
+                    <span className="flex items-center space-x-1 px-2 py-0.5 text-xs bg-green-500/10 text-green-700 border border-green-500/30 rounded">
                       <Wifi className="w-3 h-3" />
                       <span>Connected</span>
                     </span>
@@ -252,7 +252,7 @@ const IntegrationsPage: React.FC = () => {
                   {integration.status === 'available' && canManage && (
                     <button
                       onClick={() => setShowConnectModal(integration.id)}
-                      className="px-4 py-1.5 text-sm bg-indigo-600/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-600/30 rounded-lg transition-colors flex items-center space-x-1"
+                      className="px-4 py-1.5 text-sm bg-indigo-600/20 text-indigo-700 hover:bg-indigo-600/30 rounded-lg transition-colors flex items-center space-x-1"
                     >
                       <Plug className="w-3.5 h-3.5" />
                       <span>Connect</span>
@@ -280,7 +280,7 @@ const IntegrationsPage: React.FC = () => {
             <div className="fixed inset-0 z-50 overflow-y-auto">
               <div className="flex items-center justify-center min-h-screen px-4">
                 <div className="fixed inset-0 bg-black/60" onClick={() => setShowConnectModal(null)} />
-                <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+                <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
                       <div className="flex items-center space-x-3">
@@ -300,7 +300,7 @@ const IntegrationsPage: React.FC = () => {
                       <h4 className="text-theme-text-primary text-sm font-medium">Features included:</h4>
                       {ui.features.map((feature) => (
                         <div key={feature} className="flex items-center space-x-2">
-                          <Check className="w-4 h-4 text-green-700 dark:text-green-400" />
+                          <Check className="w-4 h-4 text-green-700" />
                           <span className="text-theme-text-secondary text-sm">{feature}</span>
                         </div>
                       ))}
@@ -308,8 +308,8 @@ const IntegrationsPage: React.FC = () => {
 
                     <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
                       <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-indigo-700 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-indigo-700 dark:text-indigo-300 text-sm">
+                        <AlertCircle className="w-4 h-4 text-indigo-700 mt-0.5 flex-shrink-0" />
+                        <p className="text-indigo-700 text-sm">
                           Clicking Connect will enable this integration for your organization. You can disconnect it at any time.
                         </p>
                       </div>
@@ -318,7 +318,7 @@ const IntegrationsPage: React.FC = () => {
                   <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                     <button
                       onClick={() => setShowConnectModal(null)}
-                      className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                      className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                     >
                       Cancel
                     </button>

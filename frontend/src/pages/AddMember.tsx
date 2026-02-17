@@ -231,7 +231,7 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   First Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -240,7 +240,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.firstName ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="John"
                 />
                 {errors.firstName && (
@@ -249,20 +249,20 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Middle Name
                 </label>
                 <input
                   type="text"
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Michael"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Last Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -271,7 +271,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.lastName ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="Doe"
                 />
                 {errors.lastName && (
@@ -282,7 +282,7 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Department ID <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -291,7 +291,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('departmentId', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.departmentId ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="FF-001"
                 />
                 {errors.departmentId && (
@@ -300,7 +300,7 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Date of Birth
                 </label>
                 <input
@@ -315,7 +315,7 @@ const AddMember: React.FC = () => {
             {/* Membership ID - shown when membership IDs are enabled */}
             {membershipIdPreview && (
               <div className="mt-4">
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Membership ID
                 </label>
                 <div className="flex items-center gap-3">
@@ -323,7 +323,7 @@ const AddMember: React.FC = () => {
                     type="text"
                     value={membershipIdOverride}
                     onChange={(e) => setMembershipIdOverride(e.target.value)}
-                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 max-w-xs px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder={membershipIdPreview}
                   />
                   <span className="text-sm text-theme-text-muted">
@@ -349,7 +349,7 @@ const AddMember: React.FC = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Street Address <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -358,7 +358,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('street', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.street ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="123 Main Street"
                 />
                 {errors.street && (
@@ -368,7 +368,7 @@ const AddMember: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2">
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">
                     City <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
@@ -377,7 +377,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.city ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     placeholder="Springfield"
                   />
                   {errors.city && (
@@ -386,7 +386,7 @@ const AddMember: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2">
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">
                     State <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
@@ -395,7 +395,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('state', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.state ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     placeholder="IL"
                     maxLength={2}
                   />
@@ -405,7 +405,7 @@ const AddMember: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-2">
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">
                     ZIP Code <span className="text-red-700 dark:text-red-400">*</span>
                   </label>
                   <input
@@ -414,7 +414,7 @@ const AddMember: React.FC = () => {
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
                     className={`w-full px-4 py-2 bg-theme-input-bg border ${
                       errors.zipCode ? 'border-red-500' : 'border-theme-input-border'
-                    } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     placeholder="62701"
                   />
                   {errors.zipCode && (
@@ -434,7 +434,7 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Primary Phone <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -443,7 +443,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.primaryPhone && (
@@ -452,20 +452,20 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Secondary Phone
                 </label>
                 <input
                   type="tel"
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="(555) 987-6543"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -474,7 +474,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.email ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="john.doe@example.com"
                 />
                 {errors.email && (
@@ -483,7 +483,7 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Preferred Contact Method
                 </label>
                 <select
@@ -510,7 +510,7 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Join Date
                 </label>
                 <input
@@ -522,7 +522,7 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Status
                 </label>
                 <select
@@ -538,7 +538,7 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Membership Type <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <select
@@ -554,40 +554,40 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Rank
                 </label>
                 <input
                   type="text"
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Firefighter"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Role
                 </label>
                 <input
                   type="text"
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Engine Operator"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Station
                 </label>
                 <input
                   type="text"
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Station 1"
                 />
               </div>
@@ -603,7 +603,7 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Name <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -612,7 +612,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="Jane Doe"
                 />
                 {errors.emergencyName1 && (
@@ -621,7 +621,7 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Relationship <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -630,7 +630,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="Spouse"
                 />
                 {errors.emergencyRelationship1 && (
@@ -639,7 +639,7 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Phone <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <input
@@ -648,7 +648,7 @@ const AddMember: React.FC = () => {
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
                   className={`w-full px-4 py-2 bg-theme-input-bg border ${
                     errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'
-                  } rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  } rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   placeholder="(555) 123-4567"
                 />
                 {errors.emergencyPhone1 && (
@@ -657,14 +657,14 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email
                 </label>
                 <input
                   type="email"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="jane.doe@example.com"
                 />
               </div>
@@ -681,53 +681,53 @@ const AddMember: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Name
                 </label>
                 <input
                   type="text"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Bob Doe"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Relationship
                 </label>
                 <input
                   type="text"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Parent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Phone
                 </label>
                 <input
                   type="tel"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="(555) 987-6543"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Email
                 </label>
                 <input
                   type="email"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="bob.doe@example.com"
                 />
               </div>
@@ -740,7 +740,7 @@ const AddMember: React.FC = () => {
               type="button"
               onClick={handleCancel}
               disabled={isSaving}
-              className="flex items-center space-x-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5" />
               <span>Cancel</span>

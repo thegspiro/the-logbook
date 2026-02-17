@@ -250,21 +250,21 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       {/* Add Candidate Form */}
       {showAddForm && (
         <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
-          <h4 className="text-sm font-semibold text-slate-200 mb-3">Add New Candidate</h4>
+          <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Add New Candidate</h4>
           <div className="space-y-3">
             {/* Member Search */}
             <div>
-              <label className="block text-sm font-medium text-slate-200">Select Member</label>
+              <label className="block text-sm font-medium text-theme-text-primary">Select Member</label>
               <div className="relative">
                 <input
                   type="text"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Search members by name or badge number..."
                 />
                 {filteredMembers.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-600 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-10 mt-1 w-full bg-theme-surface border border-theme-input-border rounded-md shadow-lg max-h-48 overflow-y-auto">
                     {filteredMembers.map((member) => (
                       <button
                         key={member.id}
@@ -276,7 +276,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           {member.first_name} {member.last_name}
                         </span>
                         {member.badge_number && (
-                          <span className="text-xs text-slate-500">#{member.badge_number}</span>
+                          <span className="text-xs text-theme-text-muted">#{member.badge_number}</span>
                         )}
                       </button>
                     ))}
@@ -289,7 +289,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, name: '', user_id: '' }))}
-                    className="ml-2 text-slate-500 hover:text-red-400"
+                    className="ml-2 text-theme-text-muted hover:text-red-400"
                   >
                     (clear)
                   </button>
@@ -299,21 +299,21 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
             {/* Manual name entry (fallback or override) */}
             <div>
-              <label className="block text-sm font-medium text-slate-200">
+              <label className="block text-sm font-medium text-theme-text-primary">
                 Name {formData.user_id ? '' : '*'}
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value, user_id: '' }))}
-                className="mt-1 block w-full bg-slate-900/50 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder={formData.user_id ? formData.name : 'Or type a name manually'}
               />
             </div>
 
             {positions.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-slate-200">Position</label>
+                <label className="block text-sm font-medium text-theme-text-primary">Position</label>
                 <select
                   value={formData.position}
                   onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
@@ -330,7 +330,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-200">Statement</label>
+              <label className="block text-sm font-medium text-theme-text-primary">Statement</label>
               <textarea
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
@@ -348,7 +348,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 onChange={(e) => setFormData((prev) => ({ ...prev, is_write_in: e.target.checked }))}
                 className="rounded border-theme-input-border text-blue-600"
               />
-              <label htmlFor="is_write_in" className="text-sm text-slate-200">
+              <label htmlFor="is_write_in" className="text-sm text-theme-text-primary">
                 Write-in candidate
               </label>
             </div>
@@ -357,7 +357,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-2 text-sm border border-white/30 rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
               >
                 Cancel
               </button>
@@ -431,7 +431,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           <button
                             type="button"
                             onClick={cancelEdit}
-                            className="px-3 py-1 text-sm border border-white/30 rounded text-theme-text-secondary hover:bg-theme-surface-secondary"
+                            className="px-3 py-1 text-sm border border-theme-surface-border rounded text-theme-text-secondary hover:bg-theme-surface-secondary"
                           >
                             Cancel
                           </button>

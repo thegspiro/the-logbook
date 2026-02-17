@@ -142,26 +142,26 @@ export const ProspectDetailPage: React.FC = () => {
   };
 
   const getStepIcon = (progress?: StepProgress) => {
-    if (!progress) return <Circle className="h-5 w-5 text-slate-500" />;
+    if (!progress) return <Circle className="h-5 w-5 text-theme-text-muted" />;
     switch (progress.status) {
       case 'completed':
-        return <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-500" />;
+        return <CheckCircle2 className="h-5 w-5 text-green-700" />;
       case 'in_progress':
-        return <Clock className="h-5 w-5 text-blue-700 dark:text-blue-500" />;
+        return <Clock className="h-5 w-5 text-blue-700" />;
       case 'skipped':
-        return <SkipForward className="h-5 w-5 text-yellow-700 dark:text-yellow-500" />;
+        return <SkipForward className="h-5 w-5 text-yellow-700" />;
       default:
-        return <Circle className="h-5 w-5 text-slate-500" />;
+        return <Circle className="h-5 w-5 text-theme-text-muted" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      active: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30',
-      approved: 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30',
-      rejected: 'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30',
-      withdrawn: 'bg-gray-500/20 text-theme-text-muted border-gray-500/30',
-      transferred: 'bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/30',
+      active: 'bg-blue-500/20 text-blue-700 border-blue-500/30',
+      approved: 'bg-green-500/20 text-green-700 border-green-500/30',
+      rejected: 'bg-red-500/20 text-red-700 border-red-500/30',
+      withdrawn: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
+      transferred: 'bg-purple-500/20 text-purple-700 border-purple-500/30',
     };
     return (
       <span className={`px-3 py-1 rounded-full text-sm font-medium border ${styles[status] || styles.active}`}>
@@ -184,7 +184,7 @@ export const ProspectDetailPage: React.FC = () => {
         <Link to="/membership-pipeline" className="flex items-center gap-2 text-theme-text-muted hover:text-theme-text-primary">
           <ArrowLeft className="h-4 w-4" /> Back to Pipeline
         </Link>
-        <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-4">
+        <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-4">
           {error || 'Prospect not found'}
         </div>
       </div>
@@ -205,10 +205,10 @@ export const ProspectDetailPage: React.FC = () => {
       </Link>
 
       {/* Header */}
-      <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+      <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 bg-slate-700 rounded-full flex items-center justify-center text-2xl font-bold text-theme-text-primary">
+            <div className="h-16 w-16 bg-theme-input-bg rounded-full flex items-center justify-center text-2xl font-bold text-theme-text-primary">
               {prospect.first_name[0]}{prospect.last_name[0]}
             </div>
             <div>
@@ -222,7 +222,7 @@ export const ProspectDetailPage: React.FC = () => {
                 )}
                 {prospect.current_step && (
                   <>
-                    <ChevronRight className="h-4 w-4 text-slate-500" />
+                    <ChevronRight className="h-4 w-4 text-theme-text-muted" />
                     <span className="text-sm text-theme-text-secondary">{prospect.current_step.name}</span>
                   </>
                 )}
@@ -247,7 +247,7 @@ export const ProspectDetailPage: React.FC = () => {
               </button>
               <button
                 onClick={handleReject}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-red-700 dark:text-red-400 rounded-lg hover:bg-slate-600 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-theme-input-bg text-red-700 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
               >
                 <X className="h-4 w-4" />
                 Reject
@@ -257,7 +257,7 @@ export const ProspectDetailPage: React.FC = () => {
           {prospect.status === 'transferred' && prospect.transferred_user_id && (
             <Link
               to={`/members/${prospect.transferred_user_id}`}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-600/30 transition-colors text-sm border border-purple-500/30"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 text-purple-700 rounded-lg hover:bg-purple-600/30 transition-colors text-sm border border-purple-500/30"
             >
               <User className="h-4 w-4" />
               View Member Profile
@@ -289,14 +289,14 @@ export const ProspectDetailPage: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'progress' && (
-        <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+        <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Pipeline Steps</h2>
           <div className="space-y-1">
             {sortedProgress.map((progress, idx) => (
               <div
                 key={progress.id}
                 className={`flex items-start gap-4 p-4 rounded-lg transition-colors ${
-                  progress.status === 'in_progress' ? 'bg-blue-500/10 border border-blue-500/20' : 'hover:bg-slate-700/50'
+                  progress.status === 'in_progress' ? 'bg-blue-500/10 border border-blue-500/20' : 'hover:bg-theme-input-bg/50'
                 }`}
               >
                 <div className="mt-0.5">{getStepIcon(progress)}</div>
@@ -307,16 +307,16 @@ export const ProspectDetailPage: React.FC = () => {
                       {progress.step?.step_type && (
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                           progress.step.step_type === 'action'
-                            ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                            ? 'bg-blue-500/20 text-blue-700'
                             : progress.step.step_type === 'note'
-                            ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                            : 'bg-green-500/20 text-green-700 dark:text-green-400'
+                            ? 'bg-yellow-500/20 text-yellow-700'
+                            : 'bg-green-500/20 text-green-700'
                         }`}>
                           {progress.step.step_type}
                         </span>
                       )}
                       {progress.step?.required && (
-                        <span className="ml-1 text-xs text-red-700 dark:text-red-400">*</span>
+                        <span className="ml-1 text-xs text-red-700">*</span>
                       )}
                     </div>
                     {progress.completed_at && (
@@ -329,7 +329,7 @@ export const ProspectDetailPage: React.FC = () => {
                     <p className="text-sm text-theme-text-muted mt-1">{progress.step.description}</p>
                   )}
                   {progress.notes && (
-                    <div className="mt-2 bg-slate-700/50 rounded-lg p-2 text-sm text-theme-text-secondary">
+                    <div className="mt-2 bg-theme-input-bg/50 rounded-lg p-2 text-sm text-theme-text-secondary">
                       <MessageSquare className="h-3 w-3 inline mr-1 text-theme-text-muted" />
                       {progress.notes}
                     </div>
@@ -345,7 +345,7 @@ export const ProspectDetailPage: React.FC = () => {
                             value={stepNotes}
                             onChange={e => setStepNotes(e.target.value)}
                             rows={2}
-                            className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                           />
                           <div className="flex gap-2">
                             <button
@@ -356,7 +356,7 @@ export const ProspectDetailPage: React.FC = () => {
                             </button>
                             <button
                               onClick={() => { setCompletingStepId(null); setStepNotes(''); }}
-                              className="px-3 py-1.5 bg-slate-700 text-theme-text-secondary rounded-lg text-xs hover:bg-slate-600 transition-colors"
+                              className="px-3 py-1.5 bg-theme-input-bg text-theme-text-secondary rounded-lg text-xs hover:bg-theme-surface-hover transition-colors"
                             >
                               Cancel
                             </button>
@@ -365,7 +365,7 @@ export const ProspectDetailPage: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => setCompletingStepId(progress.step_id)}
-                          className="text-xs text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                          className="text-xs text-blue-700 hover:text-blue-600 transition-colors"
                         >
                           Mark as complete
                         </button>
@@ -381,7 +381,7 @@ export const ProspectDetailPage: React.FC = () => {
 
       {activeTab === 'info' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+          <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Contact Information</h2>
             <dl className="space-y-3">
               <div className="flex items-center gap-3">
@@ -412,7 +412,7 @@ export const ProspectDetailPage: React.FC = () => {
               )}
             </dl>
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+          <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Address</h2>
             {prospect.address_street ? (
               <div className="flex items-start gap-3">
@@ -426,13 +426,13 @@ export const ProspectDetailPage: React.FC = () => {
               <p className="text-sm text-theme-text-muted">No address provided</p>
             )}
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+          <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Application Details</h2>
             <dl className="space-y-3">
               {prospect.interest_reason && (
                 <div>
                   <dt className="text-sm text-theme-text-muted mb-1">Interest / Reason</dt>
-                  <dd className="text-sm text-theme-text-primary bg-slate-700/50 rounded-lg p-3">{prospect.interest_reason}</dd>
+                  <dd className="text-sm text-theme-text-primary bg-theme-input-bg/50 rounded-lg p-3">{prospect.interest_reason}</dd>
                 </div>
               )}
               {prospect.referral_source && (
@@ -444,12 +444,12 @@ export const ProspectDetailPage: React.FC = () => {
               {prospect.notes && (
                 <div>
                   <dt className="text-sm text-theme-text-muted mb-1">Notes</dt>
-                  <dd className="text-sm text-theme-text-primary bg-slate-700/50 rounded-lg p-3">{prospect.notes}</dd>
+                  <dd className="text-sm text-theme-text-primary bg-theme-input-bg/50 rounded-lg p-3">{prospect.notes}</dd>
                 </div>
               )}
             </dl>
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+          <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Dates</h2>
             <dl className="space-y-3">
               <div className="flex justify-between">
@@ -472,14 +472,14 @@ export const ProspectDetailPage: React.FC = () => {
       )}
 
       {activeTab === 'activity' && (
-        <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+        <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Activity Log</h2>
           {activityLog.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No activity recorded yet.</p>
           ) : (
             <div className="space-y-3">
               {activityLog.map(entry => (
-                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-700/50">
+                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-theme-input-bg/50">
                   <Activity className="h-4 w-4 text-theme-text-muted mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -510,7 +510,7 @@ export const ProspectDetailPage: React.FC = () => {
       {/* Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-theme-surface-border w-full max-w-lg">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Transfer to Membership</h2>
               <button onClick={() => setShowTransferModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -519,14 +519,14 @@ export const ProspectDetailPage: React.FC = () => {
             </div>
             <form onSubmit={handleTransfer} className="p-6 space-y-4">
               <div className="bg-blue-900/30 border border-blue-700/30 rounded-lg p-3 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-blue-700 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <AlertCircle className="h-4 w-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-blue-700">
                   This will create a new member account for <strong>{prospect.first_name} {prospect.last_name}</strong> and
                   mark this prospect as transferred.
                 </p>
               </div>
               {transferError && (
-                <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-3 text-sm">
+                <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-3 text-sm">
                   {transferError}
                 </div>
               )}
@@ -537,7 +537,7 @@ export const ProspectDetailPage: React.FC = () => {
                   value={transferData.username || ''}
                   onChange={e => setTransferData(prev => ({ ...prev, username: e.target.value }))}
                   placeholder="Auto-generated if left blank"
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -548,7 +548,7 @@ export const ProspectDetailPage: React.FC = () => {
                     value={transferData.rank || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, rank: e.target.value }))}
                     placeholder="e.g., Probationary"
-                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -558,7 +558,7 @@ export const ProspectDetailPage: React.FC = () => {
                     value={transferData.station || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, station: e.target.value }))}
                     placeholder="e.g., Station 1"
-                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -568,7 +568,7 @@ export const ProspectDetailPage: React.FC = () => {
                   id="send_welcome"
                   checked={transferData.send_welcome_email}
                   onChange={e => setTransferData(prev => ({ ...prev, send_welcome_email: e.target.checked }))}
-                  className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                  className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                 />
                 <label htmlFor="send_welcome" className="text-sm text-theme-text-secondary">
                   Send welcome email with login credentials
@@ -578,7 +578,7 @@ export const ProspectDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
+                  className="px-4 py-2 bg-theme-input-bg text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition-colors"
                 >
                   Cancel
                 </button>

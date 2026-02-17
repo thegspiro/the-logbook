@@ -538,7 +538,7 @@ const CourseLibraryPage: React.FC = () => {
           </div>
         ) : filteredCourses.length === 0 ? (
           <div className="text-center py-16 bg-theme-surface-secondary rounded-lg">
-            <BookOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <BookOpen className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
             <p className="text-theme-text-muted text-lg mb-2">
               {searchTerm || filterType || filterCategory ? 'No courses match your filters' : 'No courses in your library yet'}
             </p>
@@ -556,7 +556,7 @@ const CourseLibraryPage: React.FC = () => {
             {filteredCourses.map((course) => (
               <div
                 key={course.id}
-                className="bg-theme-surface-secondary rounded-lg p-5 hover:bg-gray-750 transition-colors border border-theme-surface-border"
+                className="bg-theme-surface-secondary rounded-lg p-5 hover:bg-theme-surface-hover transition-colors border border-theme-surface-border"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">

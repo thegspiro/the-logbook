@@ -25,9 +25,9 @@ const getStatusColor = (status: RequirementProgressStatus) => {
     case 'in_progress':
       return 'text-blue-700 dark:text-blue-400 bg-blue-500/10';
     case 'waived':
-      return 'text-theme-text-muted bg-gray-500/10';
+      return 'text-theme-text-muted bg-theme-surface-secondary';
     default:
-      return 'text-theme-text-muted bg-gray-500/10';
+      return 'text-theme-text-muted bg-theme-surface-secondary';
   }
 };
 
@@ -69,7 +69,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
             <span className={`px-2 py-1 text-xs rounded ${
               enrollment.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
               enrollment.status === 'completed' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
-              'bg-gray-500/20 text-theme-text-muted'
+              'bg-theme-surface-secondary text-theme-text-muted'
             }`}>
               {enrollment.status}
             </span>
@@ -87,7 +87,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
           <span className="text-theme-text-muted">Overall Progress</span>
           <span className="text-theme-text-primary font-semibold">{Math.round(enrollment.progress_percentage)}%</span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-2">
+        <div className="w-full bg-theme-surface-hover rounded-full h-2">
           <div
             className={`h-2 rounded-full transition-all ${getProgressColor(enrollment.progress_percentage)}`}
             style={{ width: `${enrollment.progress_percentage}%` }}
@@ -198,7 +198,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
           <span className={`px-3 py-1 text-sm rounded ${
             enrollment.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
             enrollment.status === 'completed' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
-            'bg-gray-500/20 text-theme-text-muted'
+            'bg-theme-surface-secondary text-theme-text-muted'
           }`}>
             {enrollment.status}
           </span>
@@ -210,7 +210,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
             <span className="text-sm font-medium text-theme-text-secondary">Overall Progress</span>
             <span className="text-lg font-bold text-theme-text-primary">{Math.round(enrollment.progress_percentage)}%</span>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-3">
+          <div className="w-full bg-theme-surface-hover rounded-full h-3">
             <div
               className={`h-3 rounded-full transition-all ${
                 enrollment.progress_percentage >= 75 ? 'bg-green-500' :
@@ -320,7 +320,7 @@ const DetailedProgressView: React.FC<DetailedProgressViewProps> = ({ progress, o
                           </span>
                           <span className="text-theme-text-primary font-medium">{Math.round(rp.progress_percentage)}%</span>
                         </div>
-                        <div className="w-full bg-gray-600 rounded-full h-1.5">
+                        <div className="w-full bg-theme-surface-hover rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full ${
                               rp.progress_percentage >= 100 ? 'bg-green-500' :
@@ -435,7 +435,7 @@ const MemberProgressPage: React.FC = () => {
           </div>
         ) : enrollments.length === 0 ? (
           <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-            <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <GraduationCap className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
             <p className="text-theme-text-muted">No {filter !== 'all' && filter} programs found</p>
             <p className="text-theme-text-muted mt-2 text-sm">
               Contact your training officer to enroll in a program
@@ -454,9 +454,9 @@ const MemberProgressPage: React.FC = () => {
               ) : (
                 <div key={enrollment.id} className="bg-theme-surface-secondary rounded-lg p-6">
                   <div className="animate-pulse">
-                    <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
-                    <div className="h-4 bg-gray-700 rounded w-full mb-2"></div>
-                    <div className="h-4 bg-gray-700 rounded w-2/3"></div>
+                    <div className="h-6 bg-theme-surface-hover rounded w-1/3 mb-4"></div>
+                    <div className="h-4 bg-theme-surface-hover rounded w-full mb-2"></div>
+                    <div className="h-4 bg-theme-surface-hover rounded w-2/3"></div>
                   </div>
                 </div>
               );

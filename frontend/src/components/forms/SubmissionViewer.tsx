@@ -247,9 +247,9 @@ const SubmissionViewer = ({
                 className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-theme-surface-secondary transition-colors"
               >
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <ChevronDown className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
                 )}
 
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -262,11 +262,11 @@ const SubmissionViewer = ({
                     {sub.submitter_name || sub.submitted_by || 'Anonymous'}
                   </span>
                   {sub.submitter_email && (
-                    <span className="text-xs text-slate-500 truncate">({sub.submitter_email})</span>
+                    <span className="text-xs text-theme-text-muted truncate">({sub.submitter_email})</span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-shrink-0">
+                <div className="flex items-center gap-1.5 text-xs text-theme-text-muted flex-shrink-0">
                   <Clock className="w-3 h-3" />
                   {new Date(sub.submitted_at).toLocaleString()}
                 </div>
@@ -278,7 +278,7 @@ const SubmissionViewer = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {Object.entries(sub.data).map(([fieldId, value]) => (
                       <div key={fieldId} className="bg-theme-surface-secondary rounded-lg px-3 py-2">
-                        <p className="text-xs text-slate-500 font-medium mb-0.5">{getFieldLabel(fieldId)}</p>
+                        <p className="text-xs text-theme-text-muted font-medium mb-0.5">{getFieldLabel(fieldId)}</p>
                         <p className="text-sm text-theme-text-primary break-words">{formatValue(fieldId, value)}</p>
                       </div>
                     ))}
@@ -329,7 +329,7 @@ const SubmissionViewer = ({
           >
             Previous
           </button>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-theme-text-muted">
             Page {page + 1} of {Math.ceil(total / limit)}
           </span>
           <button

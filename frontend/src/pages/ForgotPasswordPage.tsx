@@ -35,7 +35,7 @@ export const ForgotPasswordPage: React.FC = () => {
 
   if (success) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-500/20 mb-4">
@@ -63,7 +63,7 @@ export const ForgotPasswordPage: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-extrabold text-theme-text-primary mb-2">
@@ -92,7 +92,7 @@ export const ForgotPasswordPage: React.FC = () => {
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-theme-text-primary mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -105,7 +105,7 @@ export const ForgotPasswordPage: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full pl-10 pr-3 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                  className="block w-full pl-10 pr-3 py-2 border border-theme-surface-border rounded-md bg-theme-surface-secondary text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

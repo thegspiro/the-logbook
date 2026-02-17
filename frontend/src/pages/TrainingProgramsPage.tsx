@@ -178,7 +178,7 @@ const TrainingProgramsPage: React.FC = () => {
               <div className="grid gap-4" id="tab-panel-programs" role="tabpanel">
                 {filteredPrograms.length === 0 ? (
                   <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                    <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+                    <GraduationCap className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
                     <p className="text-theme-text-muted">
                       {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
                     </p>
@@ -263,7 +263,7 @@ const TrainingProgramsPage: React.FC = () => {
                 <div className="grid gap-4">
                   {filteredRequirements.length === 0 ? (
                     <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                      <ListChecks className="w-16 h-16 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+                      <ListChecks className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
                       <p className="text-theme-text-muted">
                         {searchTerm ? 'No requirements found' : 'No requirements yet'}
                       </p>
@@ -284,7 +284,7 @@ const TrainingProgramsPage: React.FC = () => {
                               <span className={`px-2 py-1 text-xs rounded ${
                                 req.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
                                 req.source === 'state' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
-                                'bg-gray-500/20 text-theme-text-muted'
+                                'bg-theme-surface-secondary text-theme-text-muted'
                               }`}>
                                 {req.source}
                               </span>

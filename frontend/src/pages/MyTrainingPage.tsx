@@ -40,7 +40,7 @@ const getStatusColor = (status: string) => {
     case 'pending_review': return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
     case 'rejected': return 'bg-red-500/20 text-red-700 dark:text-red-400';
     case 'revision_requested': return 'bg-orange-500/20 text-orange-700 dark:text-orange-400';
-    default: return 'bg-gray-500/20 text-theme-text-muted';
+    default: return 'bg-theme-surface-secondary text-theme-text-muted';
   }
 };
 
@@ -138,16 +138,16 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
           <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">{group}</h4>
           <div className="space-y-2">
             {VISIBILITY_FIELDS.filter((f) => f.group === group).map((field) => (
-              <label key={field.key} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800/70 transition-colors">
+              <label key={field.key} className="flex items-center justify-between bg-theme-surface/50 rounded-lg p-3 cursor-pointer hover:bg-theme-surface/70 transition-colors">
                 <div>
                   <p className="text-sm font-medium text-theme-text-primary">{field.label}</p>
-                  <p className="text-xs text-slate-500">{field.description}</p>
+                  <p className="text-xs text-theme-text-muted">{field.description}</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={getCurrentValue(field.key)}
                   onChange={(e) => setDraft({ ...draft, [field.key]: e.target.checked })}
-                  className="w-5 h-5 rounded bg-slate-700 border-theme-input-border text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded bg-theme-surface-hover border-theme-input-border text-red-600 focus:ring-red-500"
                 />
               </label>
             ))}
@@ -335,11 +335,11 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Certifications" icon={Award}>
               <div className="space-y-2">
                 {data.certifications.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                  <div key={c.id} className="flex items-center justify-between bg-theme-surface/50 rounded-lg p-3">
                     <div>
                       <p className="text-sm font-medium text-theme-text-primary">{c.course_name}</p>
                       {c.certification_number && (
-                        <p className="text-xs text-slate-500">#{c.certification_number}</p>
+                        <p className="text-xs text-theme-text-muted">#{c.certification_number}</p>
                       )}
                     </div>
                     <div className="text-right">
@@ -358,7 +358,7 @@ const MyTrainingPage: React.FC = () => {
                           <span>Valid</span>
                         </span>
                       )}
-                      <p className="text-xs text-slate-500">{formatDate(c.expiration_date)}</p>
+                      <p className="text-xs text-theme-text-muted">{formatDate(c.expiration_date)}</p>
                     </div>
                   </div>
                 ))}
@@ -371,14 +371,14 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Pipeline Progress" icon={TrendingUp}>
               <div className="space-y-4">
                 {data.enrollments.map((e) => (
-                  <div key={e.id} className="bg-slate-800/50 rounded-lg p-4">
+                  <div key={e.id} className="bg-theme-surface/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-xs px-2 py-1 rounded ${getStatusColor(e.status)}`}>
                         {e.status.replace('_', ' ')}
                       </span>
                       <span className="text-sm text-theme-text-primary font-semibold">{Math.round(e.progress_percentage)}%</span>
                     </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                    <div className="w-full bg-theme-surface-hover rounded-full h-2 mb-2">
                       <div
                         className={`h-2 rounded-full transition-all ${
                           e.progress_percentage >= 75 ? 'bg-green-500' :
@@ -388,7 +388,7 @@ const MyTrainingPage: React.FC = () => {
                         style={{ width: `${e.progress_percentage}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-theme-text-muted">
                       <span>Enrolled: {formatDate(e.enrolled_at)}</span>
                       {e.target_completion_date && <span>Target: {formatDate(e.target_completion_date)}</span>}
                     </div>
@@ -441,7 +441,7 @@ const MyTrainingPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {data.training_records.map((r) => (
-                      <tr key={r.id} className="text-slate-200">
+                      <tr key={r.id} className="text-theme-text-primary">
                         <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date)}</td>
@@ -464,7 +464,7 @@ const MyTrainingPage: React.FC = () => {
             <Section title="Shift Completion Reports" icon={ClipboardList} defaultOpen={false}>
               <div className="space-y-3">
                 {data.shift_reports.map((sr) => (
-                  <div key={sr.id} className="bg-slate-800/50 rounded-lg p-4">
+                  <div key={sr.id} className="bg-theme-surface/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm font-medium text-theme-text-primary">{formatDate(sr.shift_date)}</p>
                       <div className="flex items-center space-x-3 text-xs text-theme-text-muted">
@@ -490,7 +490,7 @@ const MyTrainingPage: React.FC = () => {
                     {v?.show_skills_observed && sr.skills_observed && (sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {(sr.skills_observed as Array<{ skill_name?: string; demonstrated?: boolean }>).map((s, i) => (
-                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-slate-700 text-theme-text-muted'}`}>
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-hover text-theme-text-muted'}`}>
                             {s.skill_name}
                           </span>
                         ))}
@@ -518,7 +518,7 @@ const MyTrainingPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {data.submissions.map((s) => (
-                      <tr key={s.id} className="text-slate-200">
+                      <tr key={s.id} className="text-theme-text-primary">
                         <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{formatDate(s.completion_date)}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{s.hours_completed}</td>
@@ -527,7 +527,7 @@ const MyTrainingPage: React.FC = () => {
                             {s.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-xs text-slate-500">{formatDate(s.submitted_at)}</td>
+                        <td className="px-4 py-2 whitespace-nowrap text-xs text-theme-text-muted">{formatDate(s.submitted_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -539,7 +539,7 @@ const MyTrainingPage: React.FC = () => {
           {/* Empty State (only for detailed sections, stats always show above) */}
           {!data.training_records?.length && !data.enrollments?.length && !data.shift_reports?.length && !data.submissions?.length && !data.certifications?.length && (
             <div className="text-center py-8 bg-white/5 border border-white/10 rounded-lg">
-              <p className="text-slate-400 mb-4">
+              <p className="text-theme-text-muted mb-4">
                 No detailed training records yet. Submit external training to get started.
               </p>
               <button

@@ -586,7 +586,7 @@ const RoleSetup: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
@@ -666,7 +666,7 @@ const RoleSetup: React.FC = () => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCustomModal(true)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 Create Custom Role
@@ -677,7 +677,7 @@ const RoleSetup: React.FC = () => {
                 className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary'
-                    : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                    : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
                 }`}
               >
                 {isSaving ? 'Saving...' : 'Continue to Modules'}
@@ -719,7 +719,7 @@ const RoleSetup: React.FC = () => {
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
                               isSelected
                                 ? 'border-green-500 bg-green-500/10'
-                                : 'border-theme-input-border hover:border-slate-500'
+                                : 'border-theme-input-border hover:border-theme-input-border'
                             }`}
                             onClick={() => toggleRole(role)}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRole(role); } }}
@@ -731,7 +731,7 @@ const RoleSetup: React.FC = () => {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                  isSelected ? 'bg-green-600' : 'bg-slate-700'
+                                  isSelected ? 'bg-green-600' : 'bg-theme-surface-hover'
                                 }`}>
                                   <Icon className="w-5 h-5 text-theme-text-primary" aria-hidden="true" />
                                 </div>
@@ -842,7 +842,7 @@ const RoleSetup: React.FC = () => {
                                 return (
                                   <div
                                     key={catId}
-                                    className="flex items-center justify-between py-2 px-3 bg-slate-800/50 rounded"
+                                    className="flex items-center justify-between py-2 px-3 bg-theme-input-bg rounded"
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
@@ -853,7 +853,7 @@ const RoleSetup: React.FC = () => {
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.view
                                             ? 'bg-green-500/20 text-green-700 dark:text-green-400'
-                                            : 'bg-slate-700 text-slate-500'
+                                            : 'bg-theme-surface-hover text-theme-text-muted'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
                                         <Eye className="w-3 h-3" aria-hidden="true" />
@@ -866,7 +866,7 @@ const RoleSetup: React.FC = () => {
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.manage
                                             ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400'
-                                            : 'bg-slate-700 text-slate-500'
+                                            : 'bg-theme-surface-hover text-theme-text-muted'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
                                         <Edit3 className="w-3 h-3" aria-hidden="true" />
@@ -903,12 +903,12 @@ const RoleSetup: React.FC = () => {
           aria-labelledby="custom-role-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
         >
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
+          <div className="bg-theme-surface rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
             <h3 id="custom-role-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Role</h3>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="custom-role-name" className="block text-sm font-semibold text-slate-200 mb-2">
+                <label htmlFor="custom-role-name" className="block text-sm font-semibold text-theme-text-primary mb-2">
                   Role Name <span aria-hidden="true">*</span>
                 </label>
                 <input
@@ -919,12 +919,12 @@ const RoleSetup: React.FC = () => {
                   placeholder="e.g., Social Media Manager"
                   required
                   aria-required="true"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="custom-role-description" className="block text-sm font-semibold text-slate-200 mb-2">
+                <label htmlFor="custom-role-description" className="block text-sm font-semibold text-theme-text-primary mb-2">
                   Description
                 </label>
                 <input
@@ -933,7 +933,7 @@ const RoleSetup: React.FC = () => {
                   value={customRoleDescription}
                   onChange={(e) => setCustomRoleDescription(e.target.value)}
                   placeholder="Brief description of this role"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -941,7 +941,7 @@ const RoleSetup: React.FC = () => {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowCustomModal(false)}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -959,7 +959,7 @@ const RoleSetup: React.FC = () => {
       <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

@@ -59,7 +59,7 @@ const Welcome: React.FC = () => {
   // Show a brief loading state while we check onboarding status
   if (checking) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mb-4"></div>
         </div>
@@ -68,7 +68,7 @@ const Welcome: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
       <div className="max-w-3xl w-full text-center space-y-8">
         {/* Title */}
         <h1
@@ -101,16 +101,16 @@ const Welcome: React.FC = () => {
 
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-slate-200 border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               HIPAA Compliant
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-slate-200 border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               Section 508 Accessible
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-slate-200 border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               Zero Plain Text Passwords
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-slate-200 border border-theme-surface-border">
+            <span className="px-4 py-2 bg-theme-surface backdrop-blur-sm rounded-full text-theme-text-primary border border-theme-surface-border">
               Tamper-Proof Audit Logs
             </span>
           </div>

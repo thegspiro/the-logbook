@@ -73,7 +73,7 @@ const NavigationChoice: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
@@ -135,7 +135,7 @@ const NavigationChoice: React.FC = () => {
                   className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${
                     navigationLayout === 'top'
                       ? 'bg-red-600'
-                      : 'bg-slate-800 group-hover:bg-red-600/20'
+                      : 'bg-theme-surface group-hover:bg-red-600/20'
                   }`}
                 >
                   <LayoutDashboard
@@ -154,18 +154,18 @@ const NavigationChoice: React.FC = () => {
                 </p>
 
                 {/* Preview */}
-                <div className="bg-slate-900/80 rounded-lg p-4 border border-theme-surface-border">
+                <div className="bg-theme-input-bg rounded-lg p-4 border border-theme-surface-border">
                   <div className="space-y-2">
                     {/* Header bar */}
-                    <div className="bg-slate-800 rounded h-8 flex items-center px-2 space-x-1">
+                    <div className="bg-theme-surface rounded h-8 flex items-center px-2 space-x-1">
                       <div className="bg-red-500 rounded h-4 w-12"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-16"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-slate-700 rounded h-32"></div>
+                    <div className="bg-theme-surface-hover rounded h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Horizontal menu bar
@@ -226,7 +226,7 @@ const NavigationChoice: React.FC = () => {
                   className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${
                     navigationLayout === 'left'
                       ? 'bg-red-600'
-                      : 'bg-slate-800 group-hover:bg-red-600/20'
+                      : 'bg-theme-surface group-hover:bg-red-600/20'
                   }`}
                 >
                   <PanelLeft
@@ -245,18 +245,18 @@ const NavigationChoice: React.FC = () => {
                 </p>
 
                 {/* Preview */}
-                <div className="bg-slate-900/80 rounded-lg p-4 border border-theme-surface-border">
+                <div className="bg-theme-input-bg rounded-lg p-4 border border-theme-surface-border">
                   <div className="flex space-x-2">
                     {/* Sidebar */}
-                    <div className="bg-slate-800 rounded w-16 flex flex-col space-y-1 p-1">
+                    <div className="bg-theme-surface rounded w-16 flex flex-col space-y-1 p-1">
                       <div className="bg-red-500 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-hover rounded h-4 w-full"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-slate-700 rounded flex-1 h-32"></div>
+                    <div className="bg-theme-surface-hover rounded flex-1 h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Vertical sidebar menu
@@ -314,14 +314,14 @@ const NavigationChoice: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0">
+          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-from via-theme-bg-from to-transparent md:bg-none pb-4 md:pb-0">
             <button
               onClick={handleContinue}
               disabled={!navigationLayout || isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 navigationLayout && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -348,7 +348,7 @@ const NavigationChoice: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>

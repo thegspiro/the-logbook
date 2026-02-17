@@ -208,7 +208,7 @@ export const ReportsPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {members.map((m, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-primary">
                     <td className="px-4 py-2 whitespace-nowrap">
                       {String(m.first_name ?? m.name ?? '')} {String(m.last_name ?? '')}
                     </td>
@@ -257,7 +257,7 @@ export const ReportsPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-primary">
                     <td className="px-4 py-2 whitespace-nowrap">
                       {String(e.member_name ?? e.member ?? e.name ?? '-')}
                     </td>
@@ -314,7 +314,7 @@ export const ReportsPage: React.FC = () => {
                 {events.map((ev, i) => {
                   const rate = ev.attendance_rate ?? ev.rate;
                   return (
-                    <tr key={i} className="text-slate-200">
+                    <tr key={i} className="text-theme-text-primary">
                       <td className="px-4 py-2 whitespace-nowrap">
                         {String(ev.title ?? ev.name ?? ev.event ?? '-')}
                       </td>
@@ -378,12 +378,12 @@ export const ReportsPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-primary">
                     <td className="px-4 py-2 whitespace-nowrap">{String(e.member_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{String(e.program_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-slate-700 rounded-full h-2">
+                        <div className="w-24 bg-theme-input-bg rounded-full h-2">
                           <div
                             className="bg-red-500 h-2 rounded-full"
                             style={{ width: `${Number(e.progress_percentage ?? 0)}%` }}
@@ -465,7 +465,7 @@ export const ReportsPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-primary">
                     <td className="px-4 py-2 whitespace-nowrap">{String(e.member_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap capitalize">{String(e.rank ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{String(e.training_hours ?? 0)}</td>
@@ -556,7 +556,7 @@ export const ReportsPage: React.FC = () => {
         <div className="flex items-center space-x-2 mb-3">
           <CalendarIcon className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
           <span className="text-sm font-medium text-theme-text-secondary">Reporting Period</span>
-          <span className="text-xs text-slate-500">(applies to date-based reports)</span>
+          <span className="text-xs text-theme-text-muted">(applies to date-based reports)</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -587,9 +587,9 @@ export const ReportsPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="bg-slate-700 border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="bg-theme-input-bg border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
-            <span className="text-slate-500 text-sm">to</span>
+            <span className="text-theme-text-muted text-sm">to</span>
             <input
               type="date"
               value={endDate}
@@ -597,7 +597,7 @@ export const ReportsPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="bg-slate-700 border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="bg-theme-input-bg border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -607,11 +607,11 @@ export const ReportsPage: React.FC = () => {
       {error && !activeReport && (
         <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <AlertCircle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1">
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              <p className="text-sm text-red-300">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
+            <button onClick={() => setError(null)} className="text-red-700 hover:text-red-600">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -634,10 +634,10 @@ export const ReportsPage: React.FC = () => {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="w-12 h-12 bg-red-600/20 rounded-lg flex items-center justify-center">
-                  <Icon className="w-6 h-6 text-red-700 dark:text-red-500" aria-hidden="true" />
+                  <Icon className="w-6 h-6 text-red-700" aria-hidden="true" />
                 </div>
                 {!report.available && (
-                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 text-xs font-medium rounded">
+                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-700 text-xs font-medium rounded">
                     Coming Soon
                   </span>
                 )}
@@ -675,7 +675,7 @@ export const ReportsPage: React.FC = () => {
       {/* Empty State */}
       {filteredReports.length === 0 && (
         <div className="text-center py-12">
-          <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" aria-hidden="true" />
+          <FileText className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
           <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
             No reports found
           </h3>
@@ -688,9 +688,9 @@ export const ReportsPage: React.FC = () => {
       {/* Info Banner */}
       <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <AlertCircle className="w-5 h-5 text-blue-700 flex-shrink-0 mt-0.5" aria-hidden="true" />
           <div>
-            <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
+            <h4 className="text-sm font-medium text-blue-700 mb-1">
               Report Generation
             </h4>
             <p className="text-sm text-blue-200">
@@ -708,13 +708,13 @@ export const ReportsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black/60" onClick={closeModal} />
-            <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
+            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
               <div className="px-6 pt-5 pb-4">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-red-600/20 rounded-lg flex items-center justify-center">
                       {React.createElement(activeReport.icon, {
-                        className: 'w-5 h-5 text-red-700 dark:text-red-500',
+                        className: 'w-5 h-5 text-red-700',
                         'aria-hidden': true,
                       })}
                     </div>

@@ -304,7 +304,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, auto_sync_enabled: !prev.auto_sync_enabled }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    formData.auto_sync_enabled ? 'bg-red-600' : 'bg-gray-600'
+                    formData.auto_sync_enabled ? 'bg-red-600' : 'bg-theme-surface-hover'
                   }`}
                   role="switch"
                   aria-checked={formData.auto_sync_enabled}
@@ -710,7 +710,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, auto_sync_enabled: !prev.auto_sync_enabled }))}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  formData.auto_sync_enabled ? 'bg-red-600' : 'bg-gray-600'
+                  formData.auto_sync_enabled ? 'bg-red-600' : 'bg-theme-surface-hover'
                 }`}
                 role="switch"
                 aria-checked={formData.auto_sync_enabled}
@@ -808,7 +808,7 @@ const SyncLogsModal: React.FC<SyncLogsModalProps> = ({ isOpen, onClose, provider
       partial: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
     };
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status] || 'bg-gray-500/10 text-gray-700'}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}>
         {status.replace('_', ' ')}
       </span>
     );
@@ -847,7 +847,7 @@ const SyncLogsModal: React.FC<SyncLogsModalProps> = ({ isOpen, onClose, provider
             <div className="text-center text-theme-text-muted py-8" role="status">Loading sync logs...</div>
           ) : logs.length === 0 ? (
             <div className="text-center py-8">
-              <History className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+              <History className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <p className="text-theme-text-muted">No sync history yet. Run a sync to get started.</p>
             </div>
           ) : (
@@ -1321,11 +1321,11 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers }) => {
       pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
       imported: 'bg-green-500/10 text-green-700 dark:text-green-400',
       failed: 'bg-red-500/10 text-red-700 dark:text-red-400',
-      skipped: 'bg-gray-500/10 text-gray-700 dark:text-gray-400',
+      skipped: 'bg-theme-surface-secondary text-theme-text-primary',
       duplicate: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
     };
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status] || 'bg-gray-500/10 text-gray-700'}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}>
         {status}
       </span>
     );
@@ -1334,7 +1334,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers }) => {
   if (providers.length === 0) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center" role="tabpanel">
-        <Download className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+        <Download className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
         <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Providers Configured</h3>
         <p className="text-theme-text-muted">Add an external training provider first, then sync to populate the import queue.</p>
       </div>
@@ -1399,7 +1399,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers }) => {
         </div>
       ) : imports.length === 0 ? (
         <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center">
-          <Download className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+          <Download className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
           <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Import Records</h3>
           <p className="text-theme-text-muted">Run a sync on a provider to fetch training records for import.</p>
         </div>
@@ -1574,7 +1574,7 @@ const AllMappingsPanel: React.FC<AllMappingsPanelProps> = ({ providers }) => {
   if (providers.length === 0) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center" role="tabpanel">
-        <FolderTree className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+        <FolderTree className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
         <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Providers Configured</h3>
         <p className="text-theme-text-muted">Add an external training provider and sync to discover mappings.</p>
       </div>
@@ -1933,7 +1933,7 @@ const ExternalTrainingPage: React.FC = () => {
           <div className="grid gap-6 md:grid-cols-2" role="tabpanel">
             {providers.length === 0 ? (
               <div className="col-span-2 text-center py-12 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
-                <Link2 className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+                <Link2 className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Integrations Yet</h3>
                 <p className="text-theme-text-muted mb-4">
                   Connect an external training platform to start syncing records

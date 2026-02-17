@@ -89,7 +89,7 @@ const ErrorMonitoringPage: React.FC = () => {
       {/* Actions Bar */}
       <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-slate-200">Filter:</label>
+          <label className="text-sm font-medium text-theme-text-primary">Filter:</label>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -126,7 +126,7 @@ const ErrorMonitoringPage: React.FC = () => {
         {errors.length === 0 ? (
           <div className="p-8 text-center text-theme-text-muted">
             <svg
-              className="mx-auto h-12 w-12 text-slate-500 mb-4"
+              className="mx-auto h-12 w-12 text-theme-text-muted mb-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

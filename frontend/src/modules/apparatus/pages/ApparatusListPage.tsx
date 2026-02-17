@@ -101,7 +101,7 @@ export const ApparatusListPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg">
       {/* Header */}
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto">
@@ -190,7 +190,7 @@ export const ApparatusListPage: React.FC = () => {
                 placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
 
@@ -200,7 +200,7 @@ export const ApparatusListPage: React.FC = () => {
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
                 showFilters
                   ? 'bg-red-600 text-white'
-                  : 'bg-slate-800 text-theme-text-secondary hover:bg-slate-700'
+                  : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
               <Filter className="w-4 h-4" />
@@ -295,7 +295,7 @@ export const ApparatusListPage: React.FC = () => {
           </div>
         ) : apparatusList.length === 0 ? (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <Truck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+            <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Apparatus Found</h3>
             <p className="text-theme-text-secondary mb-6">
               {searchQuery || filterType || filterStatus
@@ -426,7 +426,7 @@ export const ApparatusListPage: React.FC = () => {
                               {!apparatus.isArchived && (
                                 <button
                                   onClick={() => navigate(`/apparatus/${apparatus.id}`)}
-                                  className="p-2 text-theme-text-muted hover:text-theme-text-secondary hover:bg-slate-500/10 rounded transition-colors"
+                                  className="p-2 text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded transition-colors"
                                   title="Archive"
                                 >
                                   <Archive className="w-4 h-4" />
@@ -452,7 +452,7 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="p-2 rounded-lg bg-slate-800 text-theme-text-secondary hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="p-2 rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
@@ -474,7 +474,7 @@ export const ApparatusListPage: React.FC = () => {
                         className={`w-10 h-10 rounded-lg transition-colors ${
                           currentPage === pageNum
                             ? 'bg-red-600 text-white'
-                            : 'bg-slate-800 text-theme-text-secondary hover:bg-slate-700'
+                            : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                         }`}
                       >
                         {pageNum}
@@ -484,7 +484,7 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg bg-slate-800 text-theme-text-secondary hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="p-2 rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>

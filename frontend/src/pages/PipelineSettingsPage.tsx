@@ -218,9 +218,9 @@ const PipelineSettingsPage: React.FC = () => {
 
   const getStepTypeIcon = (type: string) => {
     switch (type) {
-      case 'action': return <Zap className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
-      case 'note': return <MessageSquare className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />;
-      default: return <CheckSquare className="h-4 w-4 text-green-700 dark:text-green-400" />;
+      case 'action': return <Zap className="h-4 w-4 text-blue-700" />;
+      case 'note': return <MessageSquare className="h-4 w-4 text-yellow-700" />;
+      default: return <CheckSquare className="h-4 w-4 text-green-700" />;
     }
   };
 
@@ -246,7 +246,7 @@ const PipelineSettingsPage: React.FC = () => {
             <ArrowLeft className="h-4 w-4" /> Back to Pipeline Board
           </Link>
           <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-3">
-            <Settings className="h-7 w-7 text-red-700 dark:text-red-500" />
+            <Settings className="h-7 w-7 text-red-700" />
             Pipeline Settings
           </h1>
           <p className="text-theme-text-muted mt-1">
@@ -257,7 +257,7 @@ const PipelineSettingsPage: React.FC = () => {
           {templates.length === 0 && (
             <button
               onClick={handleSeedTemplates}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-theme-input-bg text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition-colors"
             >
               <Layers className="h-4 w-4" />
               Create Default Templates
@@ -275,14 +275,14 @@ const PipelineSettingsPage: React.FC = () => {
 
       {/* Success / Error messages */}
       {successMsg && (
-        <div className="bg-green-900/50 border border-green-700 text-green-700 dark:text-green-300 rounded-lg p-3 text-sm">
+        <div className="bg-green-900/50 border border-green-700 text-green-300 rounded-lg p-3 text-sm">
           {successMsg}
         </div>
       )}
       {error && (
-        <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-4 flex items-center justify-between">
+        <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-4 flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"><X className="h-4 w-4" /></button>
+          <button onClick={() => setError(null)} className="text-red-700 hover:text-red-600"><X className="h-4 w-4" /></button>
         </div>
       )}
 
@@ -301,7 +301,7 @@ const PipelineSettingsPage: React.FC = () => {
                     className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                       selectedPipeline?.id === p.id
                         ? 'bg-red-500/10 border-red-500/30'
-                        : 'bg-slate-800/50 border-theme-surface-border hover:border-theme-input-border'
+                        : 'bg-theme-input-bg/50 border-theme-surface-border hover:border-theme-input-border'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -316,7 +316,7 @@ const PipelineSettingsPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-theme-text-muted">
                       <span>{p.step_count || 0} steps</span>
-                      <span className="bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">template</span>
+                      <span className="bg-yellow-500/20 text-yellow-700 px-2 py-0.5 rounded-full">template</span>
                     </div>
                   </div>
                 ))}
@@ -328,10 +328,10 @@ const PipelineSettingsPage: React.FC = () => {
           <div>
             <h3 className="text-sm font-medium text-theme-text-muted uppercase tracking-wider mb-2">Your Pipelines</h3>
             {customPipelines.length === 0 ? (
-              <div className="text-center py-8 bg-slate-800/50 rounded-xl border border-theme-surface-border">
-                <FileText className="h-8 w-8 mx-auto text-slate-500 mb-2" />
+              <div className="text-center py-8 bg-theme-input-bg/50 rounded-xl border border-theme-surface-border">
+                <FileText className="h-8 w-8 mx-auto text-theme-text-muted mb-2" />
                 <p className="text-sm text-theme-text-muted">No custom pipelines yet</p>
-                <p className="text-xs text-slate-500 mt-1">Create one or duplicate a template</p>
+                <p className="text-xs text-theme-text-muted mt-1">Create one or duplicate a template</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -342,17 +342,17 @@ const PipelineSettingsPage: React.FC = () => {
                     className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                       selectedPipeline?.id === p.id
                         ? 'bg-red-500/10 border-red-500/30'
-                        : 'bg-slate-800/50 border-theme-surface-border hover:border-theme-input-border'
+                        : 'bg-theme-input-bg/50 border-theme-surface-border hover:border-theme-input-border'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {p.is_default && <Star className="h-4 w-4 text-yellow-700 dark:text-yellow-500" />}
+                        {p.is_default && <Star className="h-4 w-4 text-yellow-700" />}
                         <span className="font-medium text-theme-text-primary text-sm">{p.name}</span>
                       </div>
                       <button
                         onClick={e => { e.stopPropagation(); handleDeletePipeline(p.id); }}
-                        className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                        className="p-1 text-theme-text-muted hover:text-red-700 transition-colors"
                         title="Delete pipeline"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -362,7 +362,7 @@ const PipelineSettingsPage: React.FC = () => {
                       <span>{p.step_count || 0} steps</span>
                       <span>{p.prospect_count || 0} prospects</span>
                       {p.auto_transfer_on_approval && (
-                        <span className="bg-green-500/20 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">auto-transfer</span>
+                        <span className="bg-green-500/20 text-green-700 px-2 py-0.5 rounded-full">auto-transfer</span>
                       )}
                     </div>
                   </div>
@@ -375,14 +375,14 @@ const PipelineSettingsPage: React.FC = () => {
         {/* Pipeline Detail / Step Editor */}
         <div className="lg:col-span-2">
           {!selectedPipeline ? (
-            <div className="text-center py-16 bg-slate-800/50 rounded-xl border border-theme-surface-border">
-              <Settings className="h-12 w-12 mx-auto text-slate-500 mb-3" />
+            <div className="text-center py-16 bg-theme-input-bg/50 rounded-xl border border-theme-surface-border">
+              <Settings className="h-12 w-12 mx-auto text-theme-text-muted mb-3" />
               <p className="text-theme-text-muted">Select a pipeline to configure its steps</p>
             </div>
           ) : (
             <div className="space-y-6">
               {/* Pipeline Settings */}
-              <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+              <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
                 <h2 className="text-lg font-semibold text-theme-text-primary mb-4">{selectedPipeline.name}</h2>
                 {selectedPipeline.description && (
                   <p className="text-sm text-theme-text-muted mb-4">{selectedPipeline.description}</p>
@@ -394,7 +394,7 @@ const PipelineSettingsPage: React.FC = () => {
                       checked={selectedPipeline.is_default}
                       onChange={e => handleUpdatePipeline('is_default', e.target.checked)}
                       disabled={selectedPipeline.is_template}
-                      className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                      className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                     />
                     <span className="text-sm text-theme-text-secondary">Default pipeline for new prospects</span>
                   </label>
@@ -404,7 +404,7 @@ const PipelineSettingsPage: React.FC = () => {
                       checked={selectedPipeline.auto_transfer_on_approval}
                       onChange={e => handleUpdatePipeline('auto_transfer_on_approval', e.target.checked)}
                       disabled={selectedPipeline.is_template}
-                      className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                      className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                     />
                     <span className="text-sm text-theme-text-secondary">Auto-transfer to membership on final step completion</span>
                   </label>
@@ -412,7 +412,7 @@ const PipelineSettingsPage: React.FC = () => {
               </div>
 
               {/* Steps */}
-              <div className="bg-slate-800/50 rounded-xl border border-theme-surface-border p-6">
+              <div className="bg-theme-input-bg/50 rounded-xl border border-theme-surface-border p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-theme-text-primary">Pipeline Steps</h3>
                   {!selectedPipeline.is_template && (
@@ -437,7 +437,7 @@ const PipelineSettingsPage: React.FC = () => {
                       .map((step, idx) => (
                         <div
                           key={step.id}
-                          className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg border border-theme-input-border/50 group"
+                          className="flex items-center gap-3 p-3 bg-theme-input-bg/30 rounded-lg border border-theme-input-border/50 group"
                         >
                           {/* Reorder buttons */}
                           {!selectedPipeline.is_template && (
@@ -467,20 +467,20 @@ const PipelineSettingsPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-theme-text-primary text-sm">{step.name}</span>
                               {step.is_first_step && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">start</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700">start</span>
                               )}
                               {step.is_final_step && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-400">final</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700">final</span>
                               )}
                               {step.required && (
-                                <span className="text-xs text-red-700 dark:text-red-400">required</span>
+                                <span className="text-xs text-red-700">required</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                step.step_type === 'action' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
-                                step.step_type === 'note' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' :
-                                'bg-green-500/20 text-green-700 dark:text-green-400'
+                                step.step_type === 'action' ? 'bg-blue-500/20 text-blue-700' :
+                                step.step_type === 'note' ? 'bg-yellow-500/20 text-yellow-700' :
+                                'bg-green-500/20 text-green-700'
                               }`}>
                                 {step.step_type}
                               </span>
@@ -491,7 +491,7 @@ const PipelineSettingsPage: React.FC = () => {
                                 </span>
                               )}
                               {step.description && (
-                                <span className="text-xs text-slate-500 truncate">{step.description}</span>
+                                <span className="text-xs text-theme-text-muted truncate">{step.description}</span>
                               )}
                             </div>
                           </div>
@@ -501,7 +501,7 @@ const PipelineSettingsPage: React.FC = () => {
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => handleDeleteStep(step.id)}
-                                className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                                className="p-1.5 text-theme-text-muted hover:text-red-700 transition-colors"
                                 title="Remove step"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -521,7 +521,7 @@ const PipelineSettingsPage: React.FC = () => {
       {/* Create Pipeline Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-theme-surface-border w-full max-w-lg">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Create Pipeline</h2>
               <button onClick={() => setShowCreateModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -530,7 +530,7 @@ const PipelineSettingsPage: React.FC = () => {
             </div>
             <form onSubmit={handleCreatePipeline} className="p-6 space-y-4">
               {createError && (
-                <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-3 text-sm">{createError}</div>
+                <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-3 text-sm">{createError}</div>
               )}
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
@@ -540,7 +540,7 @@ const PipelineSettingsPage: React.FC = () => {
                   value={createFormData.name}
                   onChange={e => setCreateFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Standard Membership Pipeline"
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -549,7 +549,7 @@ const PipelineSettingsPage: React.FC = () => {
                   rows={3}
                   value={createFormData.description || ''}
                   onChange={e => setCreateFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="space-y-2">
@@ -558,7 +558,7 @@ const PipelineSettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={createFormData.is_default}
                     onChange={e => setCreateFormData(prev => ({ ...prev, is_default: e.target.checked }))}
-                    className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                   />
                   <span className="text-sm text-theme-text-secondary">Set as default pipeline</span>
                 </label>
@@ -567,7 +567,7 @@ const PipelineSettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={createFormData.auto_transfer_on_approval}
                     onChange={e => setCreateFormData(prev => ({ ...prev, auto_transfer_on_approval: e.target.checked }))}
-                    className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                   />
                   <span className="text-sm text-theme-text-secondary">Auto-transfer on final step completion</span>
                 </label>
@@ -576,7 +576,7 @@ const PipelineSettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
+                  className="px-4 py-2 bg-theme-input-bg text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition-colors"
                 >
                   Cancel
                 </button>
@@ -595,7 +595,7 @@ const PipelineSettingsPage: React.FC = () => {
       {/* Add Step Modal */}
       {showAddStepModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-theme-surface-border w-full max-w-lg">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Add Pipeline Step</h2>
               <button onClick={() => setShowAddStepModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -611,7 +611,7 @@ const PipelineSettingsPage: React.FC = () => {
                   value={stepFormData.name}
                   onChange={e => setStepFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Background Check Complete"
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -620,7 +620,7 @@ const PipelineSettingsPage: React.FC = () => {
                   rows={2}
                   value={stepFormData.description || ''}
                   onChange={e => setStepFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -634,7 +634,7 @@ const PipelineSettingsPage: React.FC = () => {
                       className={`p-3 rounded-lg border text-center transition-colors ${
                         stepFormData.step_type === type
                           ? 'border-red-500 bg-red-500/10 text-theme-text-primary'
-                          : 'border-theme-input-border bg-slate-700/50 text-theme-text-muted hover:border-slate-500'
+                          : 'border-theme-input-border bg-theme-input-bg/50 text-theme-text-muted hover:border-theme-input-border'
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1">
@@ -651,7 +651,7 @@ const PipelineSettingsPage: React.FC = () => {
                   <select
                     value={stepFormData.action_type || 'custom'}
                     onChange={e => setStepFormData(prev => ({ ...prev, action_type: e.target.value }))}
-                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   >
                     <option value="send_email">Send Email</option>
                     <option value="schedule_meeting">Schedule Meeting</option>
@@ -666,7 +666,7 @@ const PipelineSettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={stepFormData.required}
                     onChange={e => setStepFormData(prev => ({ ...prev, required: e.target.checked }))}
-                    className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                   />
                   <span className="text-sm text-theme-text-secondary">Required step</span>
                 </label>
@@ -675,7 +675,7 @@ const PipelineSettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={stepFormData.is_first_step}
                     onChange={e => setStepFormData(prev => ({ ...prev, is_first_step: e.target.checked }))}
-                    className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                   />
                   <span className="text-sm text-theme-text-secondary">Mark as first step (pipeline entry point)</span>
                 </label>
@@ -684,7 +684,7 @@ const PipelineSettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={stepFormData.is_final_step}
                     onChange={e => setStepFormData(prev => ({ ...prev, is_final_step: e.target.checked }))}
-                    className="rounded border-theme-input-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-input-border bg-theme-input-bg text-red-700 focus:ring-red-500"
                   />
                   <span className="text-sm text-theme-text-secondary">Mark as final step (approval / election)</span>
                 </label>
@@ -693,7 +693,7 @@ const PipelineSettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddStepModal(false)}
-                  className="px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
+                  className="px-4 py-2 bg-theme-input-bg text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition-colors"
                 >
                   Cancel
                 </button>

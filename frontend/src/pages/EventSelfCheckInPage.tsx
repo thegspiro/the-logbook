@@ -179,7 +179,7 @@ const EventSelfCheckInPage: React.FC = () => {
               <button
                 onClick={handleCheckOut}
                 disabled={checkingIn}
-                className="w-full px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="w-full px-8 py-4 bg-red-600 text-white text-lg font-semibold rounded-lg hover:bg-red-700 transition disabled:bg-theme-surface-hover disabled:cursor-not-allowed"
               >
                 {checkingIn ? 'Checking Out...' : 'Check Out of This Event'}
               </button>
@@ -363,7 +363,7 @@ const EventSelfCheckInPage: React.FC = () => {
             <button
               onClick={() => handleCheckIn()}
               disabled={checkingIn}
-              className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full px-8 py-4 bg-green-600 text-white text-lg font-semibold rounded-lg hover:bg-green-700 transition disabled:bg-theme-surface-hover disabled:cursor-not-allowed"
             >
               {checkingIn ? 'Checking In...' : 'Check In to This Event'}
             </button>

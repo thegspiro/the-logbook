@@ -157,7 +157,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, contactSettings
                         member.status === 'active'
                           ? 'bg-green-100 text-green-800'
                           : member.status === 'inactive'
-                          ? 'bg-gray-100 text-gray-800'
+                          ? 'bg-theme-surface-secondary text-theme-text-primary'
                           : member.status === 'suspended'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-yellow-100 text-yellow-800'

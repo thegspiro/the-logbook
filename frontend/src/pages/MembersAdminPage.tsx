@@ -271,7 +271,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-member'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-theme-surface text-theme-text-secondary border-white/30 hover:bg-theme-surface-secondary'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Member
@@ -282,7 +282,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-role'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-theme-surface text-theme-text-secondary border-white/30 hover:bg-theme-surface-secondary'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
             } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Role
@@ -337,7 +337,7 @@ export const MembersAdminPage: React.FC = () => {
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length === 0 ? (
-                        <span className="text-sm text-slate-500">No roles</span>
+                        <span className="text-sm text-theme-text-muted">No roles</span>
                       ) : (
                         user.roles.map((role) => (
                           <span
@@ -345,7 +345,7 @@ export const MembersAdminPage: React.FC = () => {
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
                                 ? 'bg-blue-100 text-blue-800'
-                                : 'bg-theme-surface text-slate-200'
+                                : 'bg-theme-surface text-theme-text-primary'
                             }`}
                           >
                             {role.name}
@@ -366,7 +366,7 @@ export const MembersAdminPage: React.FC = () => {
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === 'active'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          : 'bg-theme-surface-secondary text-theme-text-primary'
                       }`}
                     >
                       {user.status}
@@ -411,7 +411,7 @@ export const MembersAdminPage: React.FC = () => {
                       {role.description && (
                         <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
                       )}
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-theme-text-muted">
                         {role.permissions.length} permissions • {usersWithRole.length} members
                       </p>
                     </div>
@@ -425,7 +425,7 @@ export const MembersAdminPage: React.FC = () => {
                 </div>
                 <div className="px-6 py-4">
                   {usersWithRole.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic">No members assigned to this role</p>
+                    <p className="text-sm text-theme-text-muted italic">No members assigned to this role</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {usersWithRole.map((user) => (
@@ -450,7 +450,7 @@ export const MembersAdminPage: React.FC = () => {
                           </div>
                           <button
                             onClick={() => handleQuickRemoveUser(user.id, role)}
-                            className="ml-2 text-slate-500 hover:text-red-600"
+                            className="ml-2 text-theme-text-muted hover:text-red-600"
                             aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
                             ×
@@ -469,13 +469,13 @@ export const MembersAdminPage: React.FC = () => {
       {/* Role Assignment Modal (for View by Member) */}
       {editingRoles && selectedUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-roles-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="manage-roles-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Roles for {selectedUser.full_name || selectedUser.username}
@@ -527,7 +527,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-slate-800 border border-white/30 rounded-md hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -546,13 +546,13 @@ export const MembersAdminPage: React.FC = () => {
       {/* Member Assignment Modal (for View by Role) */}
       {editingMembers && selectedRole && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-members-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-theme-surface-border">
               <h3 id="manage-members-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Members for {selectedRole.name}
@@ -605,7 +605,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-slate-800 border border-white/30 rounded-md hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>

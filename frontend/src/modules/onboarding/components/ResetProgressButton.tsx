@@ -102,7 +102,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
           />
 
           {/* Modal Content */}
-          <div className="relative bg-slate-800 border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="relative bg-theme-surface border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
             {/* Close Button */}
             {!isResetting && (
               <button
@@ -162,7 +162,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
               <button
                 onClick={() => setShowModal(false)}
                 disabled={isResetting}
-                className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>

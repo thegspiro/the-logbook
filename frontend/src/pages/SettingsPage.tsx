@@ -192,7 +192,7 @@ export const SettingsPage: React.FC = () => {
                 type="button"
                 onClick={() => handleToggle('enabled')}
                 className={`${
-                  settings.enabled ? 'bg-blue-600' : 'bg-slate-600'
+                  settings.enabled ? 'bg-blue-600' : 'bg-theme-surface-hover'
                 } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                 role="switch"
                 aria-checked={settings.enabled}
@@ -218,7 +218,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => handleToggle('show_email')}
                     className={`${
-                      settings.show_email ? 'bg-blue-600' : 'bg-slate-600'
+                      settings.show_email ? 'bg-blue-600' : 'bg-theme-surface-hover'
                     } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                     role="switch"
                     aria-checked={settings.show_email}
@@ -241,7 +241,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => handleToggle('show_phone')}
                     className={`${
-                      settings.show_phone ? 'bg-blue-600' : 'bg-slate-600'
+                      settings.show_phone ? 'bg-blue-600' : 'bg-theme-surface-hover'
                     } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                     role="switch"
                     aria-checked={settings.show_phone}
@@ -264,7 +264,7 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => handleToggle('show_mobile')}
                     className={`${
-                      settings.show_mobile ? 'bg-blue-600' : 'bg-slate-600'
+                      settings.show_mobile ? 'bg-blue-600' : 'bg-theme-surface-hover'
                     } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                     role="switch"
                     aria-checked={settings.show_mobile}
@@ -286,7 +286,7 @@ export const SettingsPage: React.FC = () => {
               disabled={saving}
               className={`${
                 saving
-                  ? 'bg-gray-400 cursor-not-allowed'
+                  ? 'bg-theme-surface-hover cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
               } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >
@@ -324,7 +324,7 @@ export const SettingsPage: React.FC = () => {
                   setMembershipIdSettings((prev) => ({ ...prev, enabled: !prev.enabled }))
                 }
                 className={`${
-                  membershipIdSettings.enabled ? 'bg-blue-600' : 'bg-slate-600'
+                  membershipIdSettings.enabled ? 'bg-blue-600' : 'bg-theme-surface-hover'
                 } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                 role="switch"
                 aria-checked={membershipIdSettings.enabled}
@@ -423,7 +423,7 @@ export const SettingsPage: React.FC = () => {
               disabled={savingMembership}
               className={`${
                 savingMembership
-                  ? 'bg-gray-400 cursor-not-allowed'
+                  ? 'bg-theme-surface-hover cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
               } inline-flex justify-center rounded-md border border-transparent py-2 px-4 text-sm font-medium text-theme-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2`}
             >

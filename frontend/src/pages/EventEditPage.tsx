@@ -117,22 +117,22 @@ export const EventEditPage: React.FC = () => {
       <nav className="flex mb-6" aria-label="Breadcrumb">
         <ol className="flex items-center space-x-2 text-sm text-theme-text-muted">
           <li>
-            <Link to="/events" className="hover:text-slate-200">
+            <Link to="/events" className="hover:text-theme-text-primary">
               Events
             </Link>
           </li>
           <li>
-            <svg className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </li>
           <li>
-            <Link to={`/events/${eventId}`} className="hover:text-slate-200">
+            <Link to={`/events/${eventId}`} className="hover:text-theme-text-primary">
               {event.title}
             </Link>
           </li>
           <li>
-            <svg className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </li>

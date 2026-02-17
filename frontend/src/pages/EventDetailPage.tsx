@@ -357,7 +357,7 @@ export const EventDetailPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to="/events"
-          className="inline-flex items-center text-sm text-theme-text-muted hover:text-slate-200 mb-4"
+          className="inline-flex items-center text-sm text-theme-text-muted hover:text-theme-text-primary mb-4"
         >
           <svg className="mr-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -406,7 +406,7 @@ export const EventDetailPage: React.FC = () => {
                 <>
                   <button
                     onClick={() => navigate(`/events/${eventId}/edit`)}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -416,7 +416,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     onClick={handleDuplicateEvent}
                     disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary disabled:opacity-50"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary disabled:opacity-50"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -425,7 +425,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={openCheckInModal}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -434,7 +434,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={openRecordTimesModal}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-theme-surface hover:bg-theme-surface-secondary"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-primary bg-theme-surface hover:bg-theme-surface-secondary"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -490,18 +490,18 @@ export const EventDetailPage: React.FC = () => {
 
             {event.description && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-slate-200 mb-1">Description</h3>
+                <h3 className="text-sm font-medium text-theme-text-primary mb-1">Description</h3>
                 <p className="text-theme-text-secondary whitespace-pre-wrap">{event.description}</p>
               </div>
             )}
 
             <div className="space-y-3">
               <div className="flex items-start">
-                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-medium text-slate-200">Date & Time</p>
+                  <p className="text-sm font-medium text-theme-text-primary">Date & Time</p>
                   <p className="text-sm text-theme-text-secondary">
                     {formatDateTime(event.start_datetime)}
                   </p>
@@ -513,12 +513,12 @@ export const EventDetailPage: React.FC = () => {
 
               {(event.location_name || event.location) && (
                 <div className="flex items-start">
-                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Location</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Location</p>
                     <p className="text-sm text-theme-text-secondary">{event.location_name || event.location}</p>
                     {event.location_details && (
                       <p className="text-sm text-theme-text-muted mt-1">{event.location_details}</p>
@@ -612,28 +612,28 @@ export const EventDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 {event.custom_fields.course_name && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Course Name</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Course Name</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
                   </div>
                 )}
 
                 {event.custom_fields.course_code && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Course Code</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Course Code</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
                   </div>
                 )}
 
                 {event.custom_fields.credit_hours && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Credit Hours</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Credit Hours</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
                   </div>
                 )}
 
                 {event.custom_fields.training_type && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Training Type</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Training Type</p>
                     <p className="text-sm text-theme-text-primary capitalize">
                       {typeof event.custom_fields.training_type === 'string'
                         ? event.custom_fields.training_type.replace('_', ' ')
@@ -644,21 +644,21 @@ export const EventDetailPage: React.FC = () => {
 
                 {event.custom_fields.instructor && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Instructor</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Instructor</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
                   </div>
                 )}
 
                 {event.custom_fields.issuing_agency && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Issuing Agency</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Issuing Agency</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
                   </div>
                 )}
 
                 {event.custom_fields.expiration_months && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Certification Valid For</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Certification Valid For</p>
                     <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
                   </div>
                 )}
@@ -846,12 +846,12 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRSVP}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
 
                   {submitError && (
@@ -862,7 +862,7 @@ export const EventDetailPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <fieldset>
-                      <legend className="block text-sm font-medium text-slate-200 mb-2">
+                      <legend className="block text-sm font-medium text-theme-text-primary mb-2">
                         Your Response
                       </legend>
                       <div className="space-y-2">
@@ -876,7 +876,7 @@ export const EventDetailPage: React.FC = () => {
                               onChange={(e) => setRsvpStatus(e.target.value as RSVPStatus)}
                               className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border"
                             />
-                            <span className="ml-2 text-sm text-slate-200">
+                            <span className="ml-2 text-sm text-theme-text-primary">
                               {getRSVPStatusLabel(status as RSVPStatus)}
                             </span>
                           </label>
@@ -886,7 +886,7 @@ export const EventDetailPage: React.FC = () => {
 
                     {event.allow_guests && rsvpStatus === 'going' && (
                       <div>
-                        <label htmlFor="guest_count" className="block text-sm font-medium text-slate-200">
+                        <label htmlFor="guest_count" className="block text-sm font-medium text-theme-text-primary">
                           Number of Guests
                         </label>
                         <input
@@ -902,7 +902,7 @@ export const EventDetailPage: React.FC = () => {
                     )}
 
                     <div>
-                      <label htmlFor="notes" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="notes" className="block text-sm font-medium text-theme-text-primary">
                         Notes (optional)
                       </label>
                       <textarea
@@ -931,7 +931,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRSVPModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -953,12 +953,12 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleCancelEvent}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
                   <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -974,7 +974,7 @@ export const EventDetailPage: React.FC = () => {
                   )}
 
                   <div>
-                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-slate-200">
+                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-theme-text-primary">
                       Reason for Cancellation <span aria-hidden="true">*</span>
                     </label>
                     <textarea
@@ -1002,7 +1002,7 @@ export const EventDetailPage: React.FC = () => {
                         onChange={(e) => setSendCancelNotifications(e.target.checked)}
                         className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">
+                      <span className="ml-2 text-sm text-theme-text-primary">
                         Send cancellation notifications to all RSVPs
                       </span>
                     </label>
@@ -1025,7 +1025,7 @@ export const EventDetailPage: React.FC = () => {
                       setCancelReason('');
                       setSendCancelNotifications(false);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Go Back
                   </button>
@@ -1047,17 +1047,17 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
-              <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary">Check In Members</h3>
                   <button
                     type="button"
                     onClick={() => setShowCheckInModal(false)}
-                    className="text-slate-500 hover:text-theme-text-muted"
+                    className="text-theme-text-muted hover:text-theme-text-muted"
                     aria-label="Close dialog"
                   >
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1072,7 +1072,7 @@ export const EventDetailPage: React.FC = () => {
 
                 {/* Search */}
                 <div className="mb-4">
-                  <label htmlFor="member-search" className="block text-sm font-medium text-slate-200 mb-2">
+                  <label htmlFor="member-search" className="block text-sm font-medium text-theme-text-primary mb-2">
                     Search Members
                   </label>
                   <input
@@ -1171,7 +1171,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCheckInModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Done
                 </button>
@@ -1192,12 +1192,12 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRecordTimes}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
 
                   <p className="text-sm text-theme-text-secondary mb-4">
@@ -1212,7 +1212,7 @@ export const EventDetailPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-theme-text-primary">
                         Actual Start Time
                       </label>
                       <input
@@ -1236,7 +1236,7 @@ export const EventDetailPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-theme-text-primary">
                         Actual End Time
                       </label>
                       <input
@@ -1284,7 +1284,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRecordTimesModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -1306,17 +1306,17 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleUploadAttachment}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <h3 id="upload-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Upload Attachment</h3>
 
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="attachment-file" className="block text-sm font-medium text-slate-200 mb-1">
+                      <label htmlFor="attachment-file" className="block text-sm font-medium text-theme-text-primary mb-1">
                         File <span aria-hidden="true">*</span>
                       </label>
                       <input
@@ -1334,7 +1334,7 @@ export const EventDetailPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label htmlFor="attachment-description" className="block text-sm font-medium text-slate-200 mb-1">
+                      <label htmlFor="attachment-description" className="block text-sm font-medium text-theme-text-primary mb-1">
                         Description (optional)
                       </label>
                       <input
@@ -1371,7 +1371,7 @@ export const EventDetailPage: React.FC = () => {
                       setUploadFile(null);
                       setUploadDescription('');
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -1393,11 +1393,11 @@ export const EventDetailPage: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-theme-input-bg0 opacity-75"></div>
+              <div className="absolute inset-0 bg-black opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                     <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1429,7 +1429,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-slate-200 hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-primary hover:bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Go Back
                 </button>

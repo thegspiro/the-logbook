@@ -126,13 +126,13 @@ const MembershipPipelinePage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      active: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
-      approved: 'bg-green-500/20 text-green-700 dark:text-green-400',
-      rejected: 'bg-red-500/20 text-red-700 dark:text-red-400',
-      withdrawn: 'bg-gray-500/20 text-theme-text-muted',
-      transferred: 'bg-purple-500/20 text-purple-700 dark:text-purple-400',
+      active: 'bg-blue-500/20 text-blue-700',
+      approved: 'bg-green-500/20 text-green-700',
+      rejected: 'bg-red-500/20 text-red-700',
+      withdrawn: 'bg-theme-surface-secondary text-theme-text-muted',
+      transferred: 'bg-purple-500/20 text-purple-700',
     };
-    return colors[status] || 'bg-gray-500/20 text-theme-text-muted';
+    return colors[status] || 'bg-theme-surface-secondary text-theme-text-muted';
   };
 
   const filteredColumns = kanbanBoard?.columns?.map(col => ({
@@ -152,7 +152,7 @@ const MembershipPipelinePage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-3">
-            <ClipboardList className="h-7 w-7 text-red-700 dark:text-red-500" />
+            <ClipboardList className="h-7 w-7 text-red-700" />
             Membership Pipeline
           </h1>
           <p className="text-theme-text-muted mt-1">
@@ -163,7 +163,7 @@ const MembershipPipelinePage: React.FC = () => {
           {canManage && (
             <Link
               to="/membership-pipeline/settings"
-              className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-theme-input-bg text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition-colors"
             >
               <Settings className="h-4 w-4" />
               Pipeline Settings
@@ -188,7 +188,7 @@ const MembershipPipelinePage: React.FC = () => {
           <select
             value={selectedPipelineId || ''}
             onChange={e => setSelectedPipelineId(e.target.value)}
-            className="bg-slate-800 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="bg-theme-surface border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
           >
             {pipelines.map(p => (
               <option key={p.id} value={p.id}>
@@ -204,7 +204,7 @@ const MembershipPipelinePage: React.FC = () => {
             placeholder="Search prospects..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-800 border border-theme-input-border rounded-lg pl-10 pr-4 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full bg-theme-surface border border-theme-input-border rounded-lg pl-10 pr-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
         </div>
         <button
@@ -223,15 +223,15 @@ const MembershipPipelinePage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-4">
+        <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-4">
           {error}
         </div>
       )}
 
       {/* Empty state */}
       {!loading && pipelines.length === 0 && (
-        <div className="text-center py-16 bg-slate-800/50 rounded-xl border border-theme-surface-border">
-          <ClipboardList className="h-16 w-16 mx-auto text-slate-500 mb-4" />
+        <div className="text-center py-16 bg-theme-input-bg/50 rounded-xl border border-theme-surface-border">
+          <ClipboardList className="h-16 w-16 mx-auto text-theme-text-muted mb-4" />
           <h3 className="text-xl font-medium text-theme-text-primary mb-2">No Pipelines Configured</h3>
           <p className="text-theme-text-muted mb-6 max-w-md mx-auto">
             Set up a membership pipeline to start tracking prospective members through your application process.
@@ -261,7 +261,7 @@ const MembershipPipelinePage: React.FC = () => {
           {filteredColumns.map((column, idx) => (
             <div
               key={column.step?.id || 'unassigned'}
-              className="flex-shrink-0 w-80 bg-slate-800/50 rounded-xl border border-theme-surface-border"
+              className="flex-shrink-0 w-80 bg-theme-input-bg/50 rounded-xl border border-theme-surface-border"
             >
               {/* Column Header */}
               <div className="p-4 border-b border-theme-surface-border">
@@ -269,7 +269,7 @@ const MembershipPipelinePage: React.FC = () => {
                   <h3 className="font-semibold text-theme-text-primary text-sm truncate">
                     {column.step?.name || 'Unassigned'}
                   </h3>
-                  <span className="bg-slate-700 text-theme-text-secondary text-xs font-medium px-2 py-1 rounded-full">
+                  <span className="bg-theme-input-bg text-theme-text-secondary text-xs font-medium px-2 py-1 rounded-full">
                     {column.prospects.length}
                   </span>
                 </div>
@@ -277,18 +277,18 @@ const MembershipPipelinePage: React.FC = () => {
                   <div className="mt-1 flex items-center gap-1">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       column.step.step_type === 'action'
-                        ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                        ? 'bg-blue-500/20 text-blue-700'
                         : column.step.step_type === 'note'
-                        ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                        : 'bg-green-500/20 text-green-700 dark:text-green-400'
+                        ? 'bg-yellow-500/20 text-yellow-700'
+                        : 'bg-green-500/20 text-green-700'
                     }`}>
                       {column.step.step_type}
                     </span>
                     {column.step.is_first_step && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">start</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700">start</span>
                     )}
                     {column.step.is_final_step && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-400">final</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700">final</span>
                     )}
                   </div>
                 )}
@@ -297,7 +297,7 @@ const MembershipPipelinePage: React.FC = () => {
               {/* Prospect Cards */}
               <div className="p-2 space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto">
                 {column.prospects.length === 0 && (
-                  <div className="text-center py-8 text-slate-500 text-sm">
+                  <div className="text-center py-8 text-theme-text-muted text-sm">
                     No prospects at this step
                   </div>
                 )}
@@ -305,7 +305,7 @@ const MembershipPipelinePage: React.FC = () => {
                   <Link
                     key={prospect.id}
                     to={`/membership-pipeline/prospects/${prospect.id}`}
-                    className="block bg-slate-700/50 rounded-lg p-3 hover:bg-slate-700 transition-colors border border-theme-input-border/50 hover:border-slate-500"
+                    className="block bg-theme-input-bg/50 rounded-lg p-3 hover:bg-theme-input-bg transition-colors border border-theme-input-border/50 hover:border-theme-input-border"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="font-medium text-theme-text-primary text-sm">
@@ -340,7 +340,7 @@ const MembershipPipelinePage: React.FC = () => {
                           e.stopPropagation();
                           handleAdvanceProspect(prospect.id);
                         }}
-                        className="mt-2 flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                        className="mt-2 flex items-center gap-1 text-xs text-red-700 hover:text-red-600 transition-colors"
                       >
                         <ArrowRight className="h-3 w-3" />
                         Advance
@@ -357,7 +357,7 @@ const MembershipPipelinePage: React.FC = () => {
       {/* Add Prospect Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-theme-surface-border w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Add Prospective Member</h2>
               <button onClick={() => setShowAddModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
@@ -366,7 +366,7 @@ const MembershipPipelinePage: React.FC = () => {
             </div>
             <form onSubmit={handleAddProspect} className="p-6 space-y-4">
               {addError && (
-                <div className="bg-red-900/50 border border-red-700 text-red-700 dark:text-red-300 rounded-lg p-3 text-sm">
+                <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-3 text-sm">
                   {addError}
                 </div>
               )}
@@ -378,7 +378,7 @@ const MembershipPipelinePage: React.FC = () => {
                     required
                     value={addFormData.first_name}
                     onChange={e => setAddFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -388,7 +388,7 @@ const MembershipPipelinePage: React.FC = () => {
                     required
                     value={addFormData.last_name}
                     onChange={e => setAddFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                    className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -399,7 +399,7 @@ const MembershipPipelinePage: React.FC = () => {
                   required
                   value={addFormData.email}
                   onChange={e => setAddFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -408,7 +408,7 @@ const MembershipPipelinePage: React.FC = () => {
                   type="tel"
                   value={addFormData.phone || ''}
                   onChange={e => setAddFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -417,7 +417,7 @@ const MembershipPipelinePage: React.FC = () => {
                   rows={3}
                   value={addFormData.interest_reason || ''}
                   onChange={e => setAddFormData(prev => ({ ...prev, interest_reason: e.target.value }))}
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -427,14 +427,14 @@ const MembershipPipelinePage: React.FC = () => {
                   value={addFormData.referral_source || ''}
                   onChange={e => setAddFormData(prev => ({ ...prev, referral_source: e.target.value }))}
                   placeholder="e.g., Website, Community Event, Referral"
-                  className="w-full bg-slate-700 border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 bg-slate-700 text-theme-text-secondary rounded-lg hover:bg-slate-600 transition-colors"
+                  className="px-4 py-2 bg-theme-input-bg text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition-colors"
                 >
                   Cancel
                 </button>

@@ -184,9 +184,9 @@ export const MemberProfilePage: React.FC = () => {
       case 'failed':
         return 'bg-red-100 text-red-800';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-theme-surface-secondary text-theme-text-muted';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-theme-surface-secondary text-theme-text-primary';
     }
   };
 
@@ -325,16 +325,16 @@ export const MemberProfilePage: React.FC = () => {
 
   const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     active: { label: 'Active', color: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
-    inactive: { label: 'Inactive', color: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400' },
+    inactive: { label: 'Inactive', color: 'bg-theme-surface-secondary text-theme-text-primary' },
     suspended: { label: 'Suspended', color: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
     probationary: { label: 'Probationary', color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
     retired: { label: 'Retired', color: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400' },
     dropped_voluntary: { label: 'Dropped (Voluntary)', color: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400' },
     dropped_involuntary: { label: 'Dropped (Involuntary)', color: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
-    archived: { label: 'Archived', color: 'bg-gray-200 text-gray-600 dark:bg-gray-600/20 dark:text-gray-500' },
+    archived: { label: 'Archived', color: 'bg-theme-surface-secondary text-theme-text-muted' },
   };
 
-  const getStatusInfo = (status: string) => STATUS_LABELS[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+  const getStatusInfo = (status: string) => STATUS_LABELS[status] || { label: status, color: 'bg-theme-surface-secondary text-theme-text-primary' };
   const isDroppedStatus = (s: string) => s === 'dropped_voluntary' || s === 'dropped_involuntary';
 
   // Check if current user can edit this profile
@@ -384,7 +384,7 @@ export const MemberProfilePage: React.FC = () => {
       <div className="mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm text-theme-text-muted hover:text-slate-200 mb-4 flex items-center gap-1"
+          className="text-sm text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1"
         >
           &larr; Back
         </button>
@@ -414,7 +414,7 @@ export const MemberProfilePage: React.FC = () => {
                     <span
                       key={role.id}
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        role.is_system ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                        role.is_system ? 'bg-blue-100 text-blue-800' : 'bg-theme-surface-secondary text-theme-text-primary'
                       }`}
                     >
                       {role.name}
@@ -457,7 +457,7 @@ export const MemberProfilePage: React.FC = () => {
               ) : trainings.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-sm text-theme-text-muted">No training records found.</p>
-                  <p className="text-xs text-slate-500 mt-1">Training records will appear here as they are completed.</p>
+                  <p className="text-xs text-theme-text-muted mt-1">Training records will appear here as they are completed.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -465,7 +465,7 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.slice(0, 5).map((training) => (
                     <div
                       key={training.id}
-                      className="border border-theme-surface-border rounded-lg p-4 hover:border-slate-500 transition-colors"
+                      className="border border-theme-surface-border rounded-lg p-4 hover:border-theme-input-border transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -671,7 +671,7 @@ export const MemberProfilePage: React.FC = () => {
                         onChange={() => handleNotificationToggle('email')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">Email notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-primary">Email notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -680,7 +680,7 @@ export const MemberProfilePage: React.FC = () => {
                         onChange={() => handleNotificationToggle('sms')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">SMS notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-primary">SMS notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -689,7 +689,7 @@ export const MemberProfilePage: React.FC = () => {
                         onChange={() => handleNotificationToggle('push')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-input-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">Push notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-primary">Push notifications</span>
                     </label>
                   </div>
                 </div>
@@ -705,7 +705,7 @@ export const MemberProfilePage: React.FC = () => {
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving}
-                    className="flex-1 px-4 py-2 bg-slate-800 text-theme-text-secondary text-sm font-medium border border-white/30 rounded-md hover:bg-theme-surface-secondary disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-secondary disabled:opacity-50"
                   >
                     Cancel
                   </button>

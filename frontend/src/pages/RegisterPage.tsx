@@ -156,8 +156,8 @@ export const RegisterPage: React.FC = () => {
                 aria-invalid={formErrors.username ? 'true' : 'false'}
                 aria-describedby={formErrors.username ? 'username-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  formErrors.username ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  formErrors.username ? 'border-red-300' : 'border-theme-input-border'
+                } placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Choose a username"
                 value={formData.username}
                 onChange={handleChange}
@@ -181,8 +181,8 @@ export const RegisterPage: React.FC = () => {
                 aria-invalid={formErrors.email ? 'true' : 'false'}
                 aria-describedby={formErrors.email ? 'email-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  formErrors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  formErrors.email ? 'border-red-300' : 'border-theme-input-border'
+                } placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={handleChange}
@@ -208,8 +208,8 @@ export const RegisterPage: React.FC = () => {
                   aria-invalid={formErrors.firstName ? 'true' : 'false'}
                   aria-describedby={formErrors.firstName ? 'firstName-error' : undefined}
                   className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                    formErrors.firstName ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                    formErrors.firstName ? 'border-red-300' : 'border-theme-input-border'
+                  } placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                   placeholder="John"
                   value={formData.firstName}
                   onChange={handleChange}
@@ -233,8 +233,8 @@ export const RegisterPage: React.FC = () => {
                   aria-invalid={formErrors.lastName ? 'true' : 'false'}
                   aria-describedby={formErrors.lastName ? 'lastName-error' : undefined}
                   className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                    formErrors.lastName ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                    formErrors.lastName ? 'border-red-300' : 'border-theme-input-border'
+                  } placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                   placeholder="Doe"
                   value={formData.lastName}
                   onChange={handleChange}
@@ -254,7 +254,7 @@ export const RegisterPage: React.FC = () => {
                 id="badgeNumber"
                 name="badgeNumber"
                 type="text"
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-theme-input-border placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder="1234"
                 value={formData.badgeNumber}
                 onChange={handleChange}
@@ -275,8 +275,8 @@ export const RegisterPage: React.FC = () => {
                 aria-invalid={formErrors.password ? 'true' : 'false'}
                 aria-describedby="password-requirements password-strength"
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  formErrors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  formErrors.password ? 'border-red-300' : 'border-theme-input-border'
+                } placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Create a strong password"
                 value={formData.password}
                 onChange={handleChange}
@@ -336,8 +336,8 @@ export const RegisterPage: React.FC = () => {
                 aria-invalid={formErrors.confirmPassword ? 'true' : 'false'}
                 aria-describedby={formErrors.confirmPassword ? 'confirmPassword-error' : undefined}
                 className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
+                  formErrors.confirmPassword ? 'border-red-300' : 'border-theme-input-border'
+                } placeholder-theme-text-muted text-theme-text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
                 onChange={handleChange}
@@ -370,7 +370,7 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-theme-text-secondary">
               <Link
                 to="/login"
                 className="font-medium text-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-500"

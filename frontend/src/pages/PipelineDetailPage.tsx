@@ -98,7 +98,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-gray-500/20 text-theme-text-muted'}`}>
+    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
       {labels[type] || type}
     </span>
   );
@@ -329,12 +329,12 @@ const PipelineDetailPage: React.FC = () => {
               )}
               <div className="flex flex-wrap items-center gap-2">
                 {program.code && (
-                  <span className="px-2 py-0.5 bg-gray-700 text-theme-text-secondary text-xs rounded font-mono">{program.code}</span>
+                  <span className="px-2 py-0.5 bg-theme-surface-hover text-theme-text-secondary text-xs rounded font-mono">{program.code}</span>
                 )}
                 <StructureBadge type={program.structure_type} />
                 {program.target_position && <PositionBadge position={program.target_position} />}
                 {program.version > 1 && (
-                  <span className="px-2 py-0.5 bg-gray-700 text-theme-text-muted text-xs rounded">v{program.version}</span>
+                  <span className="px-2 py-0.5 bg-theme-surface-hover text-theme-text-muted text-xs rounded">v{program.version}</span>
                 )}
               </div>
             </div>
@@ -425,7 +425,7 @@ const PipelineDetailPage: React.FC = () => {
           <div className="space-y-4">
             {phases.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                <Layers className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <Layers className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
                 <p className="text-theme-text-muted">No phases defined for this pipeline</p>
               </div>
             ) : (
@@ -439,7 +439,7 @@ const PipelineDetailPage: React.FC = () => {
                     <div key={phase.id} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
                       {/* Phase header */}
                       <div
-                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-750"
+                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-theme-surface-hover"
                         onClick={() => togglePhase(phase.id)}
                       >
                         <div className="flex items-center space-x-3">
@@ -538,7 +538,7 @@ const PipelineDetailPage: React.FC = () => {
           <div>
             {enrollments.length === 0 ? (
               <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
-                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <Users className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" />
                 <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
                 <p className="text-theme-text-muted text-sm mb-4">
                   Use the Enroll button to add members to this pipeline
@@ -561,7 +561,7 @@ const PipelineDetailPage: React.FC = () => {
                         <span>{enrollment.progress_percentage}% complete</span>
                       </div>
                     </div>
-                    <div className="w-32 bg-gray-700 rounded-full h-2">
+                    <div className="w-32 bg-theme-surface-hover rounded-full h-2">
                       <div
                         className="bg-red-500 h-2 rounded-full transition-all"
                         style={{ width: `${enrollment.progress_percentage}%` }}

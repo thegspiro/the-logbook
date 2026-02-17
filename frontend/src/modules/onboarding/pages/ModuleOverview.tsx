@@ -87,8 +87,8 @@ const ModuleOverview: React.FC = () => {
     switch (priority) {
       case 'essential': return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/30';
       case 'recommended': return 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/30';
-      case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
-      default: return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
+      case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-theme-input-border/30';
+      default: return 'text-theme-text-muted bg-slate-500/10 border-theme-input-border/30';
     }
   };
 
@@ -96,7 +96,7 @@ const ModuleOverview: React.FC = () => {
     switch (status) {
       case 'enabled': return <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400" />;
       case 'skipped': return <Clock4 className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />;
-      case 'ignored': return <XCircle className="w-4 h-4 text-slate-500" />;
+      case 'ignored': return <XCircle className="w-4 h-4 text-theme-text-muted" />;
       default: return null;
     }
   };
@@ -111,7 +111,7 @@ const ModuleOverview: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg via-red-900 to-theme-bg flex flex-col">
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
           {logoPreview ? (
@@ -169,7 +169,7 @@ const ModuleOverview: React.FC = () => {
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary'
-                  : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                  : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
               }`}
             >
               {isSaving ? 'Saving...' : 'Continue to Admin Setup'}
@@ -305,9 +305,9 @@ const ModuleOverview: React.FC = () => {
           {/* Optional Modules */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-slate-500/30"></div>
+              <div className="flex-1 h-px bg-theme-surface-border"></div>
               <h2 className="px-4 text-lg font-bold text-theme-text-muted">OPTIONAL MODULES</h2>
-              <div className="flex-1 h-px bg-slate-500/30"></div>
+              <div className="flex-1 h-px bg-theme-surface-border"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
               Advanced features you can enable when needed - completely optional
@@ -319,11 +319,11 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="bg-theme-surface-secondary backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-slate-400/50 transition-all"
+                    className="bg-theme-surface-secondary backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-theme-input-border/50 transition-all"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
-                        <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-theme-surface-hover rounded-lg flex items-center justify-center">
                           <Icon className="w-5 h-5 text-theme-text-secondary" />
                         </div>
                         {status && getStatusIcon(status)}
@@ -334,7 +334,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
+                        className="w-full px-3 py-2 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
                       >
                         Enable
                       </button>
@@ -362,7 +362,7 @@ const ModuleOverview: React.FC = () => {
       <footer className="bg-theme-input-bg backdrop-blur-sm border-t border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

@@ -31,7 +31,7 @@ export const AccessLogsTab: React.FC = () => {
     if (statusCode >= 200 && statusCode < 300) return 'text-green-600';
     if (statusCode >= 400 && statusCode < 500) return 'text-yellow-600';
     if (statusCode >= 500) return 'text-red-600';
-    return 'text-gray-600';
+    return 'text-theme-text-secondary';
   };
 
   const getMethodColor = (method: string) => {
@@ -41,7 +41,7 @@ export const AccessLogsTab: React.FC = () => {
       case 'PUT': return 'bg-yellow-100 text-yellow-800';
       case 'PATCH': return 'bg-orange-100 text-orange-800';
       case 'DELETE': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      default: return 'bg-theme-surface-secondary text-theme-text-primary';
     }
   };
 

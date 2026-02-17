@@ -19,10 +19,10 @@ interface ApplicantCardProps {
 const STATUS_COLORS: Record<ApplicantStatus, string> = {
   active: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
   on_hold: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
-  withdrawn: 'bg-slate-500/20 text-theme-text-muted',
+  withdrawn: 'bg-theme-surface-hover text-theme-text-muted',
   converted: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
   rejected: 'bg-red-500/20 text-red-700 dark:text-red-400',
-  inactive: 'bg-slate-500/20 text-slate-500',
+  inactive: 'bg-theme-surface-hover text-theme-text-muted',
 };
 
 const ALERT_LEVEL_STYLES: Record<InactivityAlertLevel, { border: string; icon: string } | null> = {
@@ -46,7 +46,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, applicant)}
       onClick={() => onClick(applicant)}
-      className={`bg-slate-700/80 border rounded-lg p-3.5 cursor-pointer hover:border-theme-surface-border hover:bg-slate-700 transition-all ${
+      className={`bg-theme-surface-hover border rounded-lg p-3.5 cursor-pointer hover:border-theme-surface-border hover:bg-theme-surface-hover transition-all ${
         isDragging ? 'opacity-50 ring-2 ring-red-500' : ''
       } ${alertStyle ? alertStyle.border : 'border-theme-surface-border'}`}
     >
@@ -100,14 +100,14 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-white/5">
-        <div className="flex items-center gap-1 text-xs text-slate-500">
+        <div className="flex items-center gap-1 text-xs text-theme-text-muted">
           <Clock className="w-3 h-3" />
           <span>
             {applicant.days_in_stage}d in stage
           </span>
         </div>
         {applicant.target_role_name && (
-          <div className="flex items-center gap-1 text-xs text-slate-500">
+          <div className="flex items-center gap-1 text-xs text-theme-text-muted">
             <ArrowRight className="w-3 h-3" />
             <span className="truncate max-w-[80px]">{applicant.target_role_name}</span>
           </div>

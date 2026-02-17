@@ -283,7 +283,7 @@ const StepPhases: React.FC<{
 
     {phases.length === 0 ? (
       <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
-        <Layers className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+        <Layers className="w-12 h-12 text-theme-text-secondary mx-auto mb-3" />
         <p className="text-theme-text-muted mb-2">No phases defined yet</p>
         <p className="text-theme-text-muted text-sm mb-4">Add phases to structure your training pipeline</p>
         <button
@@ -392,7 +392,7 @@ const StepRequirements: React.FC<{
 
     {phases.length === 0 ? (
       <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
-        <ListChecks className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+        <ListChecks className="w-12 h-12 text-theme-text-secondary mx-auto mb-3" />
         <p className="text-theme-text-muted">Add phases first before defining requirements.</p>
       </div>
     ) : (
@@ -561,7 +561,7 @@ const StepMilestones: React.FC<{
 
     {phases.length === 0 ? (
       <div className="text-center py-12 bg-theme-surface-secondary rounded-lg border border-dashed border-theme-surface-border">
-        <Flag className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+        <Flag className="w-12 h-12 text-theme-text-secondary mx-auto mb-3" />
         <p className="text-theme-text-muted">Add phases first before defining milestones.</p>
       </div>
     ) : (
@@ -990,7 +990,7 @@ const CreatePipelinePage: React.FC = () => {
             return (
               <React.Fragment key={step.key}>
                 {i > 0 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${isComplete ? 'bg-red-500' : 'bg-gray-600'}`} />
+                  <div className={`flex-1 h-0.5 mx-2 ${isComplete ? 'bg-red-500' : 'bg-theme-surface-hover'}`} />
                 )}
                 <button
                   onClick={() => { if (i <= stepIndex || canGoNext()) setCurrentStep(step.key); }}

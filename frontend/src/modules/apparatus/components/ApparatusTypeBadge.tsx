@@ -61,13 +61,13 @@ const getCategoryColors = (category: ApparatusCategory) => {
       return {
         background: 'bg-slate-500/10',
         text: 'text-theme-text-muted',
-        border: 'border-slate-500/30',
+        border: 'border-theme-input-border/30',
       };
     default:
       return {
         background: 'bg-slate-500/10',
         text: 'text-theme-text-muted',
-        border: 'border-slate-500/30',
+        border: 'border-theme-input-border/30',
       };
   }
 };

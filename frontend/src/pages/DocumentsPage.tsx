@@ -257,7 +257,7 @@ const DocumentsPage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-theme-text-primary rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-hover hover:bg-theme-input-bg text-theme-text-primary rounded-lg transition-colors"
               >
                 <Folder className="w-4 h-4" aria-hidden="true" />
                 <span>New Folder</span>
@@ -320,7 +320,7 @@ const DocumentsPage: React.FC = () => {
                 placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -372,7 +372,7 @@ const DocumentsPage: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <h3 className="text-theme-text-primary font-semibold truncate">{folder.name}</h3>
                         <p className="text-theme-text-muted text-sm mt-1">{folder.description || 'No description'}</p>
-                        <p className="text-slate-500 text-xs mt-2">{folder.document_count} documents</p>
+                        <p className="text-theme-text-muted text-xs mt-2">{folder.document_count} documents</p>
                       </div>
                     </div>
                   </button>
@@ -380,7 +380,7 @@ const DocumentsPage: React.FC = () => {
               </div>
             ) : (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border text-center">
-                <FolderOpen className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                <FolderOpen className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
                 <p className="text-theme-text-secondary">No folders yet. Create a folder to get started.</p>
               </div>
             )}
@@ -411,12 +411,12 @@ const DocumentsPage: React.FC = () => {
                             <p className="text-theme-text-muted text-sm mt-1 line-clamp-2">{doc.description}</p>
                           )}
                           <div className="flex items-center space-x-3 mt-2">
-                            <span className="text-slate-500 text-xs">{formatFileSize(doc.file_size)}</span>
+                            <span className="text-theme-text-muted text-xs">{formatFileSize(doc.file_size)}</span>
                             {doc.file_type && (
-                              <span className="text-slate-500 text-xs uppercase">{doc.file_type}</span>
+                              <span className="text-theme-text-muted text-xs uppercase">{doc.file_type}</span>
                             )}
                           </div>
-                          <p className="text-slate-500 text-xs mt-1">
+                          <p className="text-theme-text-muted text-xs mt-1">
                             {doc.uploader_name ? `Uploaded by ${doc.uploader_name}` : ''}{' '}
                             {new Date(doc.created_at).toLocaleDateString()}
                           </p>
@@ -460,7 +460,7 @@ const DocumentsPage: React.FC = () => {
                               <div>
                                 <p className="text-theme-text-primary text-sm font-medium truncate max-w-xs">{doc.name}</p>
                                 {doc.description && (
-                                  <p className="text-slate-500 text-xs truncate max-w-xs">{doc.description}</p>
+                                  <p className="text-theme-text-muted text-xs truncate max-w-xs">{doc.description}</p>
                                 )}
                               </div>
                             </div>
@@ -489,7 +489,7 @@ const DocumentsPage: React.FC = () => {
               )
             ) : (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Documents in This Folder</h3>
                 <p className="text-theme-text-secondary mb-6">
                   Upload documents to this folder to get started.
@@ -511,7 +511,7 @@ const DocumentsPage: React.FC = () => {
         {/* Empty State - No folder selected and no folders exist */}
         {!selectedFolder && folders.length === 0 && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+            <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Documents Yet</h3>
             <p className="text-theme-text-secondary mb-6">
               Start building your document library by uploading SOPs, policies, and department files.
@@ -533,7 +533,7 @@ const DocumentsPage: React.FC = () => {
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowUploadModal(false)} />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-medium text-theme-text-primary">Upload Document</h3>
@@ -606,7 +606,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowUploadModal(false)}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                   >
                     Cancel
                   </button>
@@ -639,7 +639,7 @@ const DocumentsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateFolder(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="create-folder-title" className="text-lg font-medium text-theme-text-primary">Create Folder</h3>
@@ -675,7 +675,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowCreateFolder(false)}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                   >
                     Cancel
                   </button>
@@ -702,7 +702,7 @@ const DocumentsPage: React.FC = () => {
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setDeleteConfirm(null)} />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-sm w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex items-start space-x-3">
                     <div className="bg-red-500/10 rounded-full p-2">
@@ -719,7 +719,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="bg-theme-input-bg px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setDeleteConfirm(null)}
-                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-input-bg transition-colors"
                   >
                     Cancel
                   </button>

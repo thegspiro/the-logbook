@@ -177,9 +177,9 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
       {/* Stage List */}
       <div className="space-y-2">
         {stages.length === 0 ? (
-          <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-dashed border-theme-surface-border">
+          <div className="text-center py-12 bg-theme-input-bg rounded-lg border border-dashed border-theme-surface-border">
             <p className="text-theme-text-muted mb-2">No stages configured yet.</p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-theme-text-muted">
               Add stages to define the prospective member journey.
             </p>
           </div>
@@ -200,19 +200,19 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 onDragEnd={handleDragEnd}
                 className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
                   isDragging
-                    ? 'opacity-50 border-red-500/50 bg-slate-800'
+                    ? 'opacity-50 border-red-500/50 bg-theme-surface'
                     : isDragOver
-                    ? 'border-red-500 bg-slate-700/50'
-                    : 'border-theme-surface-border bg-slate-800/50 hover:border-theme-surface-border'
+                    ? 'border-red-500 bg-theme-surface-hover'
+                    : 'border-theme-surface-border bg-theme-input-bg hover:border-theme-surface-border'
                 }`}
               >
                 {/* Drag Handle */}
-                <div className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-theme-text-secondary">
+                <div className="cursor-grab active:cursor-grabbing text-theme-text-muted hover:text-theme-text-secondary">
                   <GripVertical className="w-5 h-5" />
                 </div>
 
                 {/* Stage Number */}
-                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-theme-text-secondary flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-bold text-theme-text-secondary flex-shrink-0">
                   {index + 1}
                 </div>
 

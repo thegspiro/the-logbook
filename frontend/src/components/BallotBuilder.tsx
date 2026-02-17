@@ -235,7 +235,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
           <p className="text-xs text-theme-text-muted mb-3">{selectedTemplate.description}</p>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-slate-200">
+              <label className="block text-sm font-medium text-theme-text-primary">
                 {selectedTemplate.type === 'membership_approval'
                   ? 'Member Name'
                   : selectedTemplate.type === 'officer_election'
@@ -273,7 +273,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedTemplate(null)}
-                className="px-3 py-2 text-sm border border-white/30 rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
               >
                 Back
               </button>
@@ -293,10 +293,10 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
       {/* Custom Item Form */}
       {showCustomForm && (
         <div className="mb-6 p-4 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
-          <h4 className="text-sm font-semibold text-slate-200 mb-3">Add Custom Ballot Item</h4>
+          <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Add Custom Ballot Item</h4>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-slate-200">Title *</label>
+              <label className="block text-sm font-medium text-theme-text-primary">Title *</label>
               <input
                 type="text"
                 value={customForm.title || ''}
@@ -307,7 +307,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-200">Description</label>
+              <label className="block text-sm font-medium text-theme-text-primary">Description</label>
               <textarea
                 value={customForm.description || ''}
                 onChange={(e) => setCustomForm((prev) => ({ ...prev, description: e.target.value }))}
@@ -319,7 +319,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-slate-200">Item Type</label>
+                <label className="block text-sm font-medium text-theme-text-primary">Item Type</label>
                 <select
                   value={customForm.type}
                   onChange={(e) => setCustomForm((prev) => ({ ...prev, type: e.target.value }))}
@@ -332,7 +332,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-200">Vote Type</label>
+                <label className="block text-sm font-medium text-theme-text-primary">Vote Type</label>
                 <select
                   value={customForm.vote_type}
                   onChange={(e) => setCustomForm((prev) => ({ ...prev, vote_type: e.target.value }))}
@@ -345,7 +345,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-200">Who Can Vote</label>
+              <label className="block text-sm font-medium text-theme-text-primary">Who Can Vote</label>
               <select
                 value={customForm.eligible_voter_types?.join(',') || 'all'}
                 onChange={(e) =>
@@ -374,7 +374,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 }
                 className="rounded border-theme-input-border text-blue-600"
               />
-              <label htmlFor="require_attendance" className="text-sm text-slate-200">
+              <label htmlFor="require_attendance" className="text-sm text-theme-text-primary">
                 Require meeting attendance to vote
               </label>
             </div>
@@ -383,7 +383,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               <button
                 type="button"
                 onClick={() => setShowCustomForm(false)}
-                className="px-3 py-2 text-sm border border-white/30 rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
               >
                 Cancel
               </button>
@@ -420,7 +420,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-500 w-6">
+                    <span className="text-sm font-medium text-theme-text-muted w-6">
                       {index + 1}.
                     </span>
                     <span className="font-medium text-theme-text-primary">{item.title}</span>
@@ -452,7 +452,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => handleMoveItem(index, 'up')}
                       disabled={index === 0 || saving}
-                      className="p-1 text-slate-500 hover:text-theme-text-secondary disabled:opacity-30"
+                      className="p-1 text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30"
                       title="Move up"
                     >
                       &#9650;
@@ -461,7 +461,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       type="button"
                       onClick={() => handleMoveItem(index, 'down')}
                       disabled={index === ballotItems.length - 1 || saving}
-                      className="p-1 text-slate-500 hover:text-theme-text-secondary disabled:opacity-30"
+                      className="p-1 text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30"
                       title="Move down"
                     >
                       &#9660;

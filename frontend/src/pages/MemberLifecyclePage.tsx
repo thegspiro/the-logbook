@@ -82,7 +82,7 @@ const ArchivedMembersPanel: React.FC = () => {
   if (members.length === 0) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center">
-        <Archive className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+        <Archive className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
         <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Archived Members</h3>
         <p className="text-theme-text-muted">
           Members that have been dropped and archived will appear here.
@@ -209,7 +209,7 @@ const OverdueReturnsPanel: React.FC = () => {
 
       {members.length === 0 ? (
         <div className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border p-8 text-center">
-          <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" aria-hidden="true" />
+          <Package className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
           <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Overdue Returns</h3>
           <p className="text-theme-text-muted">
             All dropped members have returned their assigned property on time.

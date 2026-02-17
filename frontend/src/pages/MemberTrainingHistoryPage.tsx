@@ -154,9 +154,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       case 'failed':
         return 'bg-red-100 text-red-800';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-theme-surface-secondary text-theme-text-secondary';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-theme-surface-secondary text-theme-text-primary';
     }
   };
 
@@ -246,7 +246,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-            <p className="text-sm text-red-700 dark:text-red-400">{error || 'Failed to load training history'}</p>
+            <p className="text-sm text-red-700">{error || 'Failed to load training history'}</p>
           </div>
         </div>
       </div>
@@ -306,7 +306,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 placeholder="Search courses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -355,7 +355,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     setSearchQuery('');
                     setFilterStatus('all');
                   }}
-                  className="mt-2 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="mt-2 text-sm text-blue-700 hover:text-blue-600"
                 >
                   Clear filters
                 </button>
@@ -396,7 +396,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                             <div className="text-theme-text-muted text-sm">{training.course_code}</div>
                           )}
                           {training.certification_number && (
-                            <div className="text-slate-500 text-xs mt-1">
+                            <div className="text-theme-text-muted text-xs mt-1">
                               Cert #: {training.certification_number}
                             </div>
                           )}
@@ -415,9 +415,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                         <span
                           className={
                             isExpired(training)
-                              ? 'text-red-700 dark:text-red-400'
+                              ? 'text-red-700'
                               : isExpiringSoon(training)
-                              ? 'text-yellow-700 dark:text-yellow-400'
+                              ? 'text-yellow-700'
                               : 'text-theme-text-secondary'
                           }
                         >
@@ -637,11 +637,11 @@ interface StatCardProps {
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, color }) => {
   const colorClasses = {
-    green: 'text-green-700 dark:text-green-400',
-    blue: 'text-blue-700 dark:text-blue-400',
-    yellow: 'text-yellow-700 dark:text-yellow-400',
-    orange: 'text-orange-700 dark:text-orange-400',
-    red: 'text-red-700 dark:text-red-400',
+    green: 'text-green-700',
+    blue: 'text-blue-700',
+    yellow: 'text-yellow-700',
+    orange: 'text-orange-700',
+    red: 'text-red-700',
   };
 
   return (

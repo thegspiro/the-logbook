@@ -183,7 +183,7 @@ const TrainingRequirementsPage: React.FC = () => {
           <div className="flex items-center space-x-3">
             <button
               onClick={fetchData}
-              className="p-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+              className="p-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
               aria-label="Refresh requirements"
             >
               <RefreshCcw className="w-5 h-5" aria-hidden="true" />
@@ -219,7 +219,7 @@ const TrainingRequirementsPage: React.FC = () => {
                   placeholder="Search requirements..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -247,7 +247,7 @@ const TrainingRequirementsPage: React.FC = () => {
         <div className="space-y-4">
           {filteredRequirements.length === 0 ? (
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-              <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" aria-hidden="true" />
+              <FileText className="w-16 h-16 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-theme-text-primary text-xl font-semibold mb-2">No Requirements Found</h3>
               <p className="text-theme-text-muted mb-6">
                 {searchTerm ? 'Try adjusting your search or filters' : 'Get started by creating your first training requirement'}
@@ -383,12 +383,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 requirement.due_date_type === 'rolling' ? 'bg-purple-600' :
                 requirement.due_date_type === 'calendar_period' ? 'bg-blue-600' :
                 requirement.due_date_type === 'certification_period' ? 'bg-orange-600' :
-                'bg-gray-600'
+                'bg-theme-surface-hover'
               } text-theme-text-primary`}>
                 {getDueDateTypeLabel(requirement.due_date_type)}
               </span>
               {!requirement.active && (
-                <span className="text-xs font-semibold px-2 py-1 rounded bg-gray-600 text-theme-text-primary">
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-theme-surface-hover text-theme-text-primary">
                   Inactive
                 </span>
               )}
@@ -442,7 +442,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               className={`p-2 rounded-lg transition-colors ${
                 requirement.active
                   ? 'bg-green-600/20 text-green-700 dark:text-green-400 hover:bg-green-600/30'
-                  : 'bg-gray-600/20 text-theme-text-muted hover:bg-gray-600/30'
+                  : 'bg-theme-surface-hover/20 text-theme-text-muted hover:bg-theme-surface-hover/30'
               }`}
               aria-label={requirement.active ? 'Deactivate requirement' : 'Activate requirement'}
             >
@@ -471,7 +471,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             </button>
             <button
               onClick={onToggleExpand}
-              className="p-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+              className="p-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
               aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
             >
               {isExpanded ? <ChevronUp className="w-5 h-5" aria-hidden="true" /> : <ChevronDown className="w-5 h-5" aria-hidden="true" />}
@@ -628,14 +628,14 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
       aria-labelledby="requirement-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-slate-900 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h3 id="requirement-modal-title" className="text-theme-text-primary text-xl font-bold">
             {requirement ? 'Edit Requirement' : 'Create Requirement'}
           </h3>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-theme-text-muted"
+            className="p-2 hover:bg-theme-surface-hover rounded-lg transition-colors text-theme-text-muted"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -656,7 +656,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="e.g., Annual Training Hours"
                 required
                 aria-required="true"
@@ -669,7 +669,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 id="req-description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 placeholder="Describe the requirement..."
                 rows={3}
               />
@@ -683,7 +683,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 id="req-requirement-type"
                 value={formData.requirement_type}
                 onChange={(e) => setFormData({ ...formData, requirement_type: e.target.value as RequirementType })}
-                className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 required
                 aria-required="true"
               >
@@ -704,7 +704,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   id="req-training-type"
                   value={formData.training_type}
                   onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="">Any Type</option>
                   <option value="certification">Certification</option>
@@ -723,7 +723,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.required_hours || ''}
                   onChange={(e) => setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="e.g., 36"
                   min="0"
                   step="0.5"
@@ -754,7 +754,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-colors ${
                       formData.due_date_type === option.value
                         ? 'border-red-500 bg-red-500/20 text-theme-text-primary'
-                        : 'border-theme-input-border bg-slate-800 text-theme-text-secondary hover:border-slate-500'
+                        : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
                     }`}
                   >
                     <div className="font-medium text-sm">{option.label}</div>
@@ -775,7 +775,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.rolling_period_months}
                   onChange={(e) => setFormData({ ...formData, rolling_period_months: Number(e.target.value) })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   min="1"
                   max="120"
                 />
@@ -794,7 +794,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     id="req-period-start-month"
                     value={formData.period_start_month}
                     onChange={(e) => setFormData({ ...formData, period_start_month: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
                       <option key={idx} value={idx + 1}>{month}</option>
@@ -808,7 +808,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     type="number"
                     value={formData.period_start_day}
                     onChange={(e) => setFormData({ ...formData, period_start_day: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     min="1"
                     max="31"
                   />
@@ -825,7 +825,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="date"
                   value={formData.due_date}
                   onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             )}
@@ -837,7 +837,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   id="req-frequency"
                   value={formData.frequency}
                   onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   <option value="annual">Annual</option>
                   <option value="biannual">Biannual (Every 2 Years)</option>
@@ -854,7 +854,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="number"
                   value={formData.year || ''}
                   onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                   placeholder="e.g., 2026"
                   min="2020"
                   max="2100"
@@ -882,7 +882,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     className={`px-3 py-2 rounded-lg border transition-colors flex items-center space-x-2 ${
                       formData.category_ids.includes(category.id)
                         ? 'border-red-500 bg-red-500/20 text-theme-text-primary'
-                        : 'border-theme-input-border bg-slate-800 text-theme-text-secondary hover:border-slate-500'
+                        : 'border-theme-input-border bg-theme-input-bg text-theme-text-secondary hover:border-theme-input-border'
                     }`}
                   >
                     {category.color && (
@@ -912,7 +912,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="checkbox"
                   checked={formData.applies_to_all}
                   onChange={(e) => setFormData({ ...formData, applies_to_all: e.target.checked })}
-                  className="w-5 h-5 rounded border-theme-input-border bg-slate-800 text-red-700 dark:text-red-500 focus:ring-red-500"
+                  className="w-5 h-5 rounded border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-red-500"
                 />
                 <span className="text-theme-text-secondary">Applies to all members</span>
               </label>
@@ -929,7 +929,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="w-full px-4 py-2 bg-slate-800 border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -940,7 +940,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+              className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -1015,7 +1015,7 @@ const TemplateModal: React.FC<{
       aria-labelledby="template-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-slate-900 rounded-lg max-w-4xl w-full p-6 max-h-[80vh] overflow-y-auto">
+      <div className="bg-theme-surface rounded-lg max-w-4xl w-full p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">Select a Template</h3>
@@ -1025,7 +1025,7 @@ const TemplateModal: React.FC<{
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-theme-text-muted"
+            className="p-2 hover:bg-theme-surface-hover rounded-lg transition-colors text-theme-text-muted"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -1059,7 +1059,7 @@ const TemplateModal: React.FC<{
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+            className="px-4 py-2 bg-theme-surface-hover hover:bg-theme-surface-secondary text-theme-text-primary rounded-lg transition-colors"
           >
             Close
           </button>

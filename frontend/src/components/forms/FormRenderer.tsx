@@ -241,7 +241,7 @@ const FormRenderer = ({
   // Loading state
   if (loading) {
     return (
-      <div className={`${isDark ? 'bg-theme-surface-secondary' : 'bg-gray-50'} rounded-lg p-8 text-center`}>
+      <div className={`${isDark ? 'bg-theme-surface-secondary' : 'bg-theme-surface-secondary'} rounded-lg p-8 text-center`}>
         <RefreshCw className={`w-6 h-6 animate-spin mx-auto mb-2 ${isDark ? 'text-pink-700 dark:text-pink-400' : 'text-blue-700 dark:text-blue-500'}`} />
         <p className={`text-sm ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>Loading form...</p>
       </div>
@@ -253,8 +253,8 @@ const FormRenderer = ({
     return (
       <div className={`${isDark ? 'bg-theme-surface-secondary border border-theme-surface-border' : 'bg-green-50 border border-green-200'} rounded-lg p-8 text-center`}>
         <CheckCircle className={`w-10 h-10 mx-auto mb-3 ${isDark ? 'text-green-700 dark:text-green-400' : 'text-green-700 dark:text-green-500'}`} />
-        <h3 className={`text-lg font-semibold mb-1 ${isDark ? 'text-theme-text-primary' : 'text-gray-800'}`}>Submitted Successfully</h3>
-        <p className={`text-sm ${isDark ? 'text-theme-text-muted' : 'text-gray-600'}`}>Your response has been recorded.</p>
+        <h3 className={`text-lg font-semibold mb-1 ${isDark ? 'text-theme-text-primary' : 'text-theme-text-primary'}`}>Submitted Successfully</h3>
+        <p className={`text-sm ${isDark ? 'text-theme-text-muted' : 'text-theme-text-secondary'}`}>Your response has been recorded.</p>
         {allowResubmit && (
           <button
             onClick={handleReset}
@@ -272,7 +272,7 @@ const FormRenderer = ({
   // No fields
   if (fields.length === 0) {
     return (
-      <div className={`${isDark ? 'bg-theme-surface-secondary border border-theme-surface-border' : 'bg-gray-50 border border-gray-200'} rounded-lg p-8 text-center`}>
+      <div className={`${isDark ? 'bg-theme-surface-secondary border border-theme-surface-border' : 'bg-theme-surface-secondary border border-theme-surface-border'} rounded-lg p-8 text-center`}>
         <p className={`text-sm ${isDark ? 'text-theme-text-muted' : 'text-theme-text-muted'}`}>
           This form has no fields yet. Use the Form Builder to add fields.
         </p>
@@ -288,8 +288,8 @@ const FormRenderer = ({
       {/* Header */}
       {(formTitle || formDesc) && (
         <div className={`mb-${compact ? '4' : '6'}`}>
-          {formTitle && <h3 className={`text-lg font-semibold ${isDark ? 'text-theme-text-primary' : 'text-gray-800'}`}>{formTitle}</h3>}
-          {formDesc && <p className={`text-sm mt-1 ${isDark ? 'text-theme-text-muted' : 'text-gray-600'}`}>{formDesc}</p>}
+          {formTitle && <h3 className={`text-lg font-semibold ${isDark ? 'text-theme-text-primary' : 'text-theme-text-primary'}`}>{formTitle}</h3>}
+          {formDesc && <p className={`text-sm mt-1 ${isDark ? 'text-theme-text-muted' : 'text-theme-text-secondary'}`}>{formDesc}</p>}
         </div>
       )}
 
@@ -320,7 +320,7 @@ const FormRenderer = ({
 
       {/* Actions */}
       {!readOnly && (
-        <div className={`flex items-center gap-3 mt-${compact ? '4' : '6'} pt-${compact ? '3' : '4'} ${isDark ? 'border-t border-theme-surface-border' : 'border-t border-gray-200'}`}>
+        <div className={`flex items-center gap-3 mt-${compact ? '4' : '6'} pt-${compact ? '3' : '4'} ${isDark ? 'border-t border-theme-surface-border' : 'border-t border-theme-surface-border'}`}>
           <button
             type="submit"
             disabled={submitting}
@@ -347,7 +347,7 @@ const FormRenderer = ({
               type="button"
               onClick={onCancel}
               className={`px-5 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                isDark ? 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                isDark ? 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover' : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-secondary'
               }`}
             >
               Cancel

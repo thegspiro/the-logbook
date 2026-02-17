@@ -199,7 +199,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       aria-labelledby="stage-config-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-slate-800 border border-theme-surface-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <h2 id="stage-config-modal-title" className="text-xl font-bold text-theme-text-primary">
@@ -229,7 +229,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               placeholder="e.g., Application Review"
               required
               aria-required="true"
-              className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
             />
             {errors.name && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.name}</p>}
           </div>
@@ -245,7 +245,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe what happens at this stage..."
               rows={2}
-              className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+              className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
             />
           </div>
 
@@ -265,7 +265,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     className={`flex flex-col items-start p-4 rounded-lg border transition-all text-left ${
                       selected
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-theme-surface-border bg-slate-700/50 hover:border-theme-surface-border'
+                        : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -299,7 +299,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     setConfig({ ...config, form_id: e.target.value } as FormStageConfig)
                   }
                   placeholder="Enter form ID or select from Forms module"
-                  className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 {errors.form_id && (
                   <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.form_id}</p>
@@ -326,7 +326,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         }}
                         placeholder="e.g., Photo ID, Background Check"
                         aria-label={`Document type ${idx + 1}`}
-                        className="flex-1 bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="flex-1 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       {docConfig.required_document_types.length > 1 && (
                         <button
@@ -364,7 +364,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...docConfig, allow_multiple: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Allow multiple files per document type
                 </label>
@@ -382,7 +382,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...electionConfig, voting_method: e.target.value as ElectionStageConfig['voting_method'] })
                     }
-                    className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     <option value="simple_majority">Simple Majority</option>
                     <option value="approval">Approval Voting</option>
@@ -397,7 +397,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...electionConfig, victory_condition: e.target.value as ElectionStageConfig['victory_condition'] })
                     }
-                    className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
                     <option value="most_votes">Most Votes</option>
                     <option value="majority">Majority (&gt;50%)</option>
@@ -418,7 +418,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                       onChange={(e) =>
                         setConfig({ ...electionConfig, victory_percentage: Number(e.target.value) })
                       }
-                      className="w-32 bg-slate-700 border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-4 py-2 text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                     <span className="ml-2 text-theme-text-muted text-sm">%</span>
                   </div>
@@ -430,7 +430,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...electionConfig, anonymous_voting: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Anonymous voting
                 </label>
@@ -440,7 +440,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   <h4 className="text-sm font-medium text-theme-text-secondary mb-2">
                     Election Package Contents
                   </h4>
-                  <p className="text-xs text-slate-500 mb-3">
+                  <p className="text-xs text-theme-text-muted mb-3">
                     Choose what applicant information is included in the election package for voters and the secretary.
                   </p>
                   {(() => {
@@ -459,7 +459,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_email}
                             onChange={(e) => updateField('include_email', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include email address
                         </label>
@@ -468,7 +468,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_phone}
                             onChange={(e) => updateField('include_phone', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include phone number
                         </label>
@@ -477,7 +477,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_address}
                             onChange={(e) => updateField('include_address', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include address
                         </label>
@@ -486,7 +486,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_date_of_birth}
                             onChange={(e) => updateField('include_date_of_birth', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include date of birth
                         </label>
@@ -495,7 +495,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_documents}
                             onChange={(e) => updateField('include_documents', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include uploaded documents
                         </label>
@@ -504,7 +504,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             type="checkbox"
                             checked={fields.include_stage_history}
                             onChange={(e) => updateField('include_stage_history', e.target.checked)}
-                            className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                            className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                           />
                           Include stage completion history
                         </label>
@@ -518,7 +518,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                             value={fields.custom_note_prompt ?? ''}
                             onChange={(e) => updateField('custom_note_prompt', e.target.value)}
                             placeholder="e.g., Please describe the applicant's qualifications..."
-                            className="w-full bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                           />
                         </div>
                       </div>
@@ -538,11 +538,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({ ...approvalConfig, require_notes: e.target.checked })
                     }
-                    className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                    className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
                   />
                   Require approval notes
                 </label>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-theme-text-muted">
                   Approver roles can be configured in the organization settings.
                   Any user with the <code className="text-theme-text-muted">prospective_members.manage</code> permission can approve.
                 </p>
@@ -556,7 +556,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               <Clock className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
               <h3 className="text-sm font-medium text-theme-text-secondary">Inactivity Timeout Override</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-3">
+            <p className="text-xs text-theme-text-muted mb-3">
               Override the pipeline's default inactivity timeout for this stage.
               Useful for stages that naturally take longer (e.g., background checks, scheduling votes).
             </p>
@@ -565,7 +565,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 type="checkbox"
                 checked={hasTimeoutOverride}
                 onChange={(e) => setHasTimeoutOverride(e.target.checked)}
-                className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+                className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
               />
               Use a custom timeout for this stage
             </label>
@@ -578,7 +578,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   value={timeoutOverrideDays}
                   onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
                   aria-label="Timeout override days"
-                  className="w-24 bg-slate-700 border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 <span className="text-sm text-theme-text-muted">days before marked inactive</span>
               </div>
@@ -591,7 +591,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
               type="checkbox"
               checked={isRequired}
               onChange={(e) => setIsRequired(e.target.checked)}
-              className="rounded border-theme-surface-border bg-slate-700 text-red-700 dark:text-red-500 focus:ring-red-500"
+              className="rounded border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-red-500"
             />
             This stage is required (cannot be skipped)
           </label>

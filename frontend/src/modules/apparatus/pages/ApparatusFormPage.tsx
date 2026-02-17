@@ -245,7 +245,7 @@ export const ApparatusFormPage: React.FC = () => {
 
   if (storeLoading && isEditing) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
@@ -255,7 +255,7 @@ export const ApparatusFormPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to">
       {/* Header */}
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-5xl mx-auto">
@@ -806,7 +806,7 @@ export const ApparatusFormPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/apparatus')}
-              className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-theme-text-primary rounded-lg transition-colors"
+              className="px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
             >
               Cancel
             </button>

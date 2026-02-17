@@ -292,7 +292,7 @@ const FormBuilder = ({
       {/* Empty state */}
       {sortedFields.length === 0 && (
         <div className="bg-theme-surface-secondary border border-dashed border-theme-surface-border rounded-lg p-8 text-center">
-          <Plus className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+          <Plus className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
           <p className="text-theme-text-muted text-sm">No fields yet. Click "Add Field" to start building your form.</p>
         </div>
       )}
@@ -306,7 +306,7 @@ const FormBuilder = ({
               className="group bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-3 flex items-center gap-3 hover:border-theme-surface-border transition-colors"
             >
               {/* Drag handle */}
-              <div className="text-slate-600 flex-shrink-0 cursor-grab">
+              <div className="text-theme-text-muted flex-shrink-0 cursor-grab">
                 <GripVertical className="w-4 h-4" />
               </div>
 
@@ -326,7 +326,7 @@ const FormBuilder = ({
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-surface text-theme-text-muted">{field.width}</span>
                   )}
                 </div>
-                <span className="text-xs text-slate-500">{field.field_type}</span>
+                <span className="text-xs text-theme-text-muted">{field.field_type}</span>
               </div>
 
               {/* Actions */}
@@ -335,7 +335,7 @@ const FormBuilder = ({
                   type="button"
                   onClick={() => handleReorder(field.id, 'up')}
                   disabled={idx === 0}
-                  className="p-1 text-slate-500 hover:text-theme-text-primary disabled:opacity-30"
+                  className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
                   title="Move up"
                 >
                   <ChevronUp className="w-4 h-4" />
@@ -344,7 +344,7 @@ const FormBuilder = ({
                   type="button"
                   onClick={() => handleReorder(field.id, 'down')}
                   disabled={idx === sortedFields.length - 1}
-                  className="p-1 text-slate-500 hover:text-theme-text-primary disabled:opacity-30"
+                  className="p-1 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30"
                   title="Move down"
                 >
                   <ChevronDown className="w-4 h-4" />
@@ -352,7 +352,7 @@ const FormBuilder = ({
                 <button
                   type="button"
                   onClick={() => handleEditField(field)}
-                  className="p-1 text-slate-500 hover:text-cyan-700 dark:hover:text-cyan-400"
+                  className="p-1 text-theme-text-muted hover:text-cyan-700 dark:hover:text-cyan-400"
                   title="Edit field"
                 >
                   <Pencil className="w-4 h-4" />
@@ -360,7 +360,7 @@ const FormBuilder = ({
                 <button
                   type="button"
                   onClick={() => handleDeleteField(field.id)}
-                  className="p-1 text-slate-500 hover:text-red-700 dark:hover:text-red-400"
+                  className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400"
                   title="Delete field"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -374,7 +374,7 @@ const FormBuilder = ({
       {/* Preview mode */}
       {sortedFields.length > 0 && previewMode && (
         <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-6">
-          <p className="text-xs text-slate-500 uppercase tracking-wide mb-4">Preview</p>
+          <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-4">Preview</p>
           <div className="space-y-4">
             {sortedFields.map((field) => {
               if (field.field_type === 'section_header') {
@@ -391,8 +391,8 @@ const FormBuilder = ({
                     {field.label}
                     {field.required && <span className="text-red-700 dark:text-red-400 ml-1">*</span>}
                   </label>
-                  {field.help_text && <p className="text-xs text-slate-500 mb-1">{field.help_text}</p>}
-                  <div className="px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-slate-500 text-sm">
+                  {field.help_text && <p className="text-xs text-theme-text-muted mb-1">{field.help_text}</p>}
+                  <div className="px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-muted text-sm">
                     {field.placeholder || field.field_type}
                   </div>
                 </div>

@@ -35,10 +35,10 @@ interface PipelineTableProps {
 const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' },
   on_hold: { label: 'On Hold', className: 'bg-amber-500/20 text-amber-700 dark:text-amber-400' },
-  withdrawn: { label: 'Withdrawn', className: 'bg-slate-500/20 text-theme-text-muted' },
+  withdrawn: { label: 'Withdrawn', className: 'bg-theme-surface-hover text-theme-text-muted' },
   converted: { label: 'Converted', className: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' },
   rejected: { label: 'Rejected', className: 'bg-red-500/20 text-red-700 dark:text-red-400' },
-  inactive: { label: 'Inactive', className: 'bg-slate-500/20 text-slate-500' },
+  inactive: { label: 'Inactive', className: 'bg-theme-surface-hover text-theme-text-muted' },
 };
 
 export const PipelineTable: React.FC<PipelineTableProps> = ({
@@ -135,7 +135,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
-        <div className="mb-3 flex items-center gap-3 p-3 bg-slate-800 border border-theme-surface-border rounded-lg">
+        <div className="mb-3 flex items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
           <span className="text-sm text-theme-text-secondary">
             {selected.size} selected
           </span>
@@ -192,7 +192,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       )}
 
       {/* Table */}
-      <div className="bg-slate-800/50 border border-theme-surface-border rounded-lg overflow-hidden">
+      <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -334,7 +334,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="absolute right-0 top-full mt-1 w-40 bg-slate-700 border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
+                          <div className="absolute right-0 top-full mt-1 w-40 bg-theme-surface-hover border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);

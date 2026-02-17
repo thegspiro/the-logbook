@@ -245,7 +245,7 @@ const AdminUserCreation: React.FC = () => {
     passwordStrength.passedChecks === 5;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
       {/* Header with Logo */}
       <header className="bg-theme-input-bg backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center">
@@ -354,7 +354,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.firstName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.firstName && touched.firstName
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-surface-border focus:ring-red-600'
@@ -386,7 +386,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.lastName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.lastName && touched.lastName
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-surface-border focus:ring-red-600'
@@ -410,7 +410,7 @@ const AdminUserCreation: React.FC = () => {
                   htmlFor="badgeNumber"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Badge Number <span className="text-slate-500">(Optional)</span>
+                  Badge Number <span className="text-theme-text-muted">(Optional)</span>
                 </label>
                 <input
                   type="text"
@@ -418,7 +418,7 @@ const AdminUserCreation: React.FC = () => {
                   name="badgeNumber"
                   value={formData.badgeNumber}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
                   placeholder="e.g., FF-1234"
                 />
               </div>
@@ -445,7 +445,7 @@ const AdminUserCreation: React.FC = () => {
                   value={formData.username}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                     errors.username && touched.username
                       ? 'border-red-500 focus:ring-red-500/50'
                       : 'border-theme-surface-border focus:ring-red-600'
@@ -478,7 +478,7 @@ const AdminUserCreation: React.FC = () => {
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                     errors.email && touched.email
                       ? 'border-red-500 focus:ring-red-500/50'
                       : 'border-theme-surface-border focus:ring-red-600'
@@ -512,7 +512,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.password && touched.password
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-surface-border focus:ring-red-600'
@@ -548,7 +548,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.length ? (
                         <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -564,7 +564,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.uppercase ? (
                         <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -580,7 +580,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.lowercase ? (
                         <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -596,7 +596,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.number ? (
                         <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -612,7 +612,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.special ? (
                         <CheckCircle className="w-4 h-4 text-green-700 dark:text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -643,7 +643,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.confirmPassword && touched.confirmPassword
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-surface-border focus:ring-red-600'
@@ -697,7 +697,7 @@ const AdminUserCreation: React.FC = () => {
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                   isFormValid && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-theme-text-primary shadow-lg hover:shadow-xl transform hover:scale-105'
-                    : 'bg-slate-700 text-theme-text-muted cursor-not-allowed'
+                    : 'bg-theme-surface-hover text-theme-text-muted cursor-not-allowed'
                 }`}
                 aria-label="Create IT administrator account and access dashboard"
               >
@@ -715,7 +715,7 @@ const AdminUserCreation: React.FC = () => {
                   <span>Setup Progress</span>
                   <span>Step 10 of 10</span>
                 </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
+                <div className="w-full bg-theme-surface rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
                     style={{ width: '100%' }}
@@ -739,7 +739,7 @@ const AdminUserCreation: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>
