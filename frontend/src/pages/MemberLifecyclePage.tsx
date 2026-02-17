@@ -30,6 +30,7 @@ import type {
   MembershipTier,
   MembershipTierBenefits,
   MembershipTierConfig,
+  PropertyReturnReport,
 } from '../types/user';
 
 type TabView = 'archived' | 'overdue' | 'tiers';
@@ -152,7 +153,7 @@ const OverdueReturnsPanel: React.FC = () => {
   const [members, setMembers] = useState<OverdueMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [reportPreview, setReportPreview] = useState<Record<string, unknown> | null>(null);
+  const [reportPreview, setReportPreview] = useState<PropertyReturnReport | null>(null);
   const [loadingReport, setLoadingReport] = useState<string | null>(null);
 
   useEffect(() => {
@@ -302,7 +303,7 @@ const OverdueReturnsPanel: React.FC = () => {
             <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border max-h-[80vh] flex flex-col">
               <div className="px-6 pt-5 pb-3 border-b border-theme-surface-border flex justify-between items-center flex-shrink-0">
                 <h3 id="report-preview-title" className="text-lg font-medium text-theme-text-primary">
-                  Property Return Report - {String(reportPreview.member_name || '')}
+                  Property Return Report - {reportPreview.member_name}
                 </h3>
                 <button
                   onClick={() => setReportPreview(null)}
@@ -316,21 +317,21 @@ const OverdueReturnsPanel: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
                   <div>
                     <span className="text-theme-text-muted">Items: </span>
-                    <span className="text-theme-text-primary font-medium">{String(reportPreview.item_count ?? 0)}</span>
+                    <span className="text-theme-text-primary font-medium">{reportPreview.item_count}</span>
                   </div>
                   <div>
                     <span className="text-theme-text-muted">Total Value: </span>
-                    <span className="text-theme-text-primary font-medium">${Number(reportPreview.total_value ?? 0).toFixed(2)}</span>
+                    <span className="text-theme-text-primary font-medium">${reportPreview.total_value.toFixed(2)}</span>
                   </div>
                 </div>
                 {reportPreview.html ? (
                   <div
                     className="prose prose-sm max-w-none text-theme-text-primary dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: String(reportPreview.html) }}
+                    dangerouslySetInnerHTML={{ __html: reportPreview.html }}
                   />
-                ) : Array.isArray(reportPreview.items) && reportPreview.items.length > 0 ? (
+                ) : reportPreview.items.length > 0 ? (
                   <div className="space-y-2">
-                    {(reportPreview.items as unknown[]).map((item: unknown, i: number) => (
+                    {reportPreview.items.map((item: unknown, i: number) => (
                       <div key={i} className="bg-theme-surface-secondary rounded p-3 text-sm text-theme-text-primary">
                         {typeof item === 'object' && item !== null
                           ? (item as Record<string, string>).name || JSON.stringify(item)

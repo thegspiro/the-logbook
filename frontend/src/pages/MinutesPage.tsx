@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import {
   ClipboardList,
   FileSearch,
@@ -14,10 +15,14 @@ import {
   Loader2,
   CheckSquare,
   Archive,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { meetingsService } from '../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../services/api';
+import { getErrorMessage } from '../utils/errorHandling';
 
 type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
 
@@ -53,6 +58,11 @@ const MinutesPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Waivers state
+  const [expandedWaivers, setExpandedWaivers] = useState<string | null>(null);
+  const [waivers, setWaivers] = useState<Record<string, Array<Record<string, unknown>>>>({});
+  const [loadingWaivers, setLoadingWaivers] = useState<string | null>(null);
 
   const [minutesForm, setMinutesForm] = useState({
     title: '',
@@ -148,6 +158,25 @@ const MinutesPage: React.FC = () => {
 
   const getMeetingTypeInfo = (type: string) => {
     return MEETING_TYPES.find(t => t.value === type) || MEETING_TYPES[MEETING_TYPES.length - 1];
+  };
+
+  const handleToggleWaivers = async (meetingId: string) => {
+    if (expandedWaivers === meetingId) {
+      setExpandedWaivers(null);
+      return;
+    }
+    setExpandedWaivers(meetingId);
+    if (waivers[meetingId]) return; // Already loaded
+    setLoadingWaivers(meetingId);
+    try {
+      const data = await meetingsService.getAttendanceWaivers(meetingId);
+      setWaivers((prev) => ({ ...prev, [meetingId]: data }));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load waivers'));
+      setExpandedWaivers(null);
+    } finally {
+      setLoadingWaivers(null);
+    }
   };
 
   // -------------------------------------------------------
@@ -314,6 +343,21 @@ const MinutesPage: React.FC = () => {
                       <span>{meeting.action_item_count} action item{meeting.action_item_count !== 1 ? 's' : ''}</span>
                       {meeting.creator_name && <span>Created by {meeting.creator_name}</span>}
                     </div>
+                    {/* Waivers Toggle */}
+                    {canManage && (
+                      <button
+                        onClick={() => handleToggleWaivers(meeting.id)}
+                        className="flex items-center gap-1.5 mt-3 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Attendance Waivers</span>
+                        {expandedWaivers === meeting.id ? (
+                          <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
                   </div>
                   {canManage && (
                     <button
@@ -330,6 +374,49 @@ const MinutesPage: React.FC = () => {
                     </button>
                   )}
                 </div>
+
+                {/* Waivers Section */}
+                {expandedWaivers === meeting.id && (
+                  <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                    <h4 className="text-sm font-medium text-theme-text-primary mb-3 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                      Attendance Waivers
+                    </h4>
+                    {loadingWaivers === meeting.id ? (
+                      <div className="flex items-center gap-2 py-3 text-theme-text-muted text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                        Loading waivers...
+                      </div>
+                    ) : waivers[meeting.id]?.length === 0 ? (
+                      <p className="text-sm text-theme-text-muted py-2">No attendance waivers for this meeting.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {waivers[meeting.id]?.map((waiver, wIdx) => (
+                          <div key={wIdx} className="bg-theme-surface rounded-lg p-3 border border-theme-surface-border text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-theme-text-primary font-medium">
+                                {String(waiver.user_name || waiver.user_id || 'Unknown')}
+                              </span>
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                Waived
+                              </span>
+                            </div>
+                            {waiver.reason ? (
+                              <p className="text-xs text-theme-text-muted mt-1">
+                                Reason: {String(waiver.reason)}
+                              </p>
+                            ) : null}
+                            {waiver.granted_by_name ? (
+                              <p className="text-xs text-theme-text-muted mt-0.5">
+                                Granted by: {String(waiver.granted_by_name)}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -76,9 +76,11 @@ const DocumentsPage = lazy(() => import('./pages/DocumentsPage'));
 
 // Inventory Module
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+const InventoryCheckoutsPage = lazy(() => import('./pages/InventoryCheckoutsPage'));
 
 // Scheduling Module
 const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
+const ShiftAttendancePage = lazy(() => import('./pages/ShiftAttendancePage'));
 
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
@@ -98,6 +100,9 @@ const PublicFormPage = lazy(() => import('./pages/PublicFormPage'));
 
 // Integrations Module
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'));
+
+// Training Approval (Public)
+const TrainingApprovalPage = lazy(() => import('./pages/TrainingApprovalPage'));
 
 // Membership Pipeline — superseded by prospective-members module routes
 
@@ -183,9 +188,11 @@ function App() {
 
               {/* Inventory Module */}
               <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/inventory/checkouts" element={<InventoryCheckoutsPage />} />
 
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />
+              <Route path="/scheduling/shifts/:shiftId/attendance" element={<ShiftAttendancePage />} />
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
@@ -223,6 +230,9 @@ function App() {
 
             {/* Public Ballot Voting Page (token-based, no auth required) */}
             <Route path="/ballot" element={<BallotVotingPage />} />
+
+            {/* Public Training Approval Page (token-based, no auth required) */}
+            <Route path="/training/approve/:token" element={<TrainingApprovalPage />} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />
