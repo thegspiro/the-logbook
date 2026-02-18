@@ -78,6 +78,9 @@ const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage'));
 // Locations (lightweight alternative when Facilities module is off)
 const LocationsPage = lazy(() => import('./pages/LocationsPage'));
 
+// Public Location Kiosk Display (no auth required — for tablets in rooms)
+const LocationKioskPage = lazy(() => import('./pages/LocationKioskPage'));
+
 // Apparatus Basic (lightweight alternative when Apparatus module is off)
 const ApparatusBasicPage = lazy(() => import('./pages/ApparatusBasicPage'));
 
@@ -247,6 +250,9 @@ function App() {
 
             {/* Public Ballot Voting Page (token-based, no auth required) */}
             <Route path="/ballot" element={<BallotVotingPage />} />
+
+            {/* Public Location Kiosk Display (no auth required — for tablets in rooms) */}
+            <Route path="/display/:code" element={<LocationKioskPage />} />
 
             {/* Login Page */}
             <Route path="/login" element={<LoginPage />} />

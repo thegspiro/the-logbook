@@ -65,6 +65,7 @@ async def list_locations(
             capacity=loc.capacity,
             is_active=loc.is_active,
             facility_id=UUID(loc.facility_id) if loc.facility_id else None,
+            display_code=loc.display_code,
         )
         for loc in locations
     ]

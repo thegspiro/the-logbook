@@ -13,7 +13,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, Plus, Search, Building2, DoorOpen, Pencil, Trash2,
   Loader2, X, Save, ChevronDown, ChevronUp, QrCode, Users,
-  Building, HelpCircle,
+  Building, HelpCircle, Monitor, Copy, Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { locationsService, organizationService } from '../services/api';
@@ -677,6 +677,64 @@ function LocationSetupWizard({
   );
 }
 
+/**
+ * Room card with kiosk display URL
+ */
+function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Location) => void; onDelete: (r: Location) => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const kioskUrl = room.display_code ? `${window.location.origin}/display/${room.display_code}` : null;
+
+  const handleCopyKioskUrl = async () => {
+    if (!kioskUrl) return;
+    try {
+      await navigator.clipboard.writeText(kioskUrl);
+      setCopied(true);
+      toast.success('Kiosk URL copied');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
+
+  return (
+    <div className="flex flex-col p-3 bg-theme-surface border border-theme-surface-border rounded-lg group">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <DoorOpen className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-theme-text-primary truncate">
+              {room.name}{room.room_number ? ` #${room.room_number}` : ''}
+            </p>
+            <p className="text-xs text-theme-text-muted">
+              {[room.floor ? `Floor ${room.floor}` : null, room.capacity ? `Cap: ${room.capacity}` : null].filter(Boolean).join(' · ') || 'No details'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onEdit(room)} className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onDelete(room)} className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+      {kioskUrl && (
+        <button
+          onClick={handleCopyKioskUrl}
+          className="mt-2 flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-blue-500 transition-colors"
+          title="Copy kiosk display URL for this room"
+        >
+          {copied ? <Check className="w-3 h-3 text-green-500" /> : <Monitor className="w-3 h-3" />}
+          <span className="font-mono truncate">/display/{room.display_code}</span>
+          {!copied && <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1068,27 +1126,7 @@ export default function LocationsPage() {
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         {stationRooms.map(room => (
-                          <div key={room.id} className="flex items-center justify-between p-3 bg-theme-surface border border-theme-surface-border rounded-lg group">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <DoorOpen className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-theme-text-primary truncate">
-                                  {room.name}{room.room_number ? ` #${room.room_number}` : ''}
-                                </p>
-                                <p className="text-xs text-theme-text-muted">
-                                  {[room.floor ? `Floor ${room.floor}` : null, room.capacity ? `Cap: ${room.capacity}` : null].filter(Boolean).join(' · ') || 'No details'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => openEditRoom(room)} className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => handleDeleteRoom(room)} className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
+                          <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={handleDeleteRoom} />
                         ))}
                       </div>
                     )}
@@ -1104,24 +1142,7 @@ export default function LocationsPage() {
               <h3 className="text-lg font-semibold text-theme-text-primary mb-3">Other Locations</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(rooms.get('__other__') || []).map(room => (
-                  <div key={room.id} className="flex items-center justify-between p-3 bg-theme-surface-hover/50 border border-theme-surface-border rounded-lg group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <MapPin className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-theme-text-primary truncate">{room.name}</p>
-                        <p className="text-xs text-theme-text-muted">
-                          {[room.room_number ? `#${room.room_number}` : null, room.capacity ? `Cap: ${room.capacity}` : null].filter(Boolean).join(' · ') || 'Standalone location'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEditRoom(room)} className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDeleteRoom(room)} className="p-1 text-theme-text-muted hover:text-red-500 rounded transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                  <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={handleDeleteRoom} />
                   </div>
                 ))}
               </div>

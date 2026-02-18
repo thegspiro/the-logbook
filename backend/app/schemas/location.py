@@ -54,6 +54,7 @@ class LocationResponse(LocationBase):
     """Schema for location response"""
     id: UUID
     organization_id: UUID
+    display_code: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -75,6 +76,7 @@ class LocationListItem(BaseModel):
     capacity: Optional[int] = None
     is_active: bool
     facility_id: Optional[UUID] = None
+    display_code: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

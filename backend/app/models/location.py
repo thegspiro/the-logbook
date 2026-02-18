@@ -17,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, generate_display_code
 
 from app.core.database import Base
 
@@ -55,6 +55,10 @@ class Location(Base):
 
     # Status
     is_active = Column(Boolean, nullable=False, default=True)  # Can be used for events
+
+    # Public display code — short, non-guessable code for kiosk/tablet URLs.
+    # Allows tablets to display QR codes at `/display/{code}` without authentication.
+    display_code = Column(String(12), nullable=True, unique=True, index=True)
 
     # Facility link — when the Facilities module is enabled, this location can
     # optionally reference a Facility record for deep building management data.
