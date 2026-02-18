@@ -690,7 +690,7 @@ export const ReportsPage: React.FC = () => {
           <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
             No reports found
           </h3>
-          <p className="text-slate-400">
+          <p className="text-theme-text-muted">
             Try selecting a different category or check back later for new reports
           </p>
         </div>
@@ -719,7 +719,7 @@ export const ReportsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black/60" onClick={closeModal} />
-            <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full border border-white/20">
+            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
               <div className="px-6 pt-5 pb-4">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center space-x-3">
@@ -730,7 +730,7 @@ export const ReportsPage: React.FC = () => {
                       })}
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                      <h3 className="text-lg font-medium text-theme-text-primary">{activeReport.title}</h3>
                       {activeReport.usesDateRange && (!!reportData?.period_start || !!reportData?.period_end) && (
                         <p className="text-xs text-theme-text-muted mt-0.5">
                           {reportData.period_start ? toStr(reportData.period_start) : 'Start'} — {reportData.period_end ? toStr(reportData.period_end) : 'End'}
@@ -741,7 +741,7 @@ export const ReportsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="text-slate-400 hover:text-white"
+                    className="text-theme-text-muted hover:text-theme-text-primary"
                   >
                     <X className="w-5 h-5" />
                   </button>

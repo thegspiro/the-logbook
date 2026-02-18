@@ -323,8 +323,8 @@ const ModuleOverview: React.FC = () => {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
-                        <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center">
-                          <Icon className="w-5 h-5 text-slate-300" />
+                        <div className="w-10 h-10 bg-theme-surface rounded-lg flex items-center justify-center">
+                          <Icon className="w-5 h-5 text-theme-text-secondary" />
                         </div>
                         {status && getStatusIcon(status)}
                       </div>
@@ -334,7 +334,7 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors"
+                        className="w-full px-3 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
                       >
                         Enable
                       </button>
@@ -362,7 +362,7 @@ const ModuleOverview: React.FC = () => {
       <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
     </div>
