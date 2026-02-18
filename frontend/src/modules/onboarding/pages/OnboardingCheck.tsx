@@ -517,7 +517,7 @@ const OnboardingCheck: React.FC = () => {
             {requiredConnected === requiredServices.length && (
               <button
                 onClick={handleSkip}
-                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all duration-300"
+                className="flex-1 px-6 py-3 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary font-semibold rounded-lg transition-all duration-300"
               >
                 Continue Anyway
               </button>
@@ -630,7 +630,7 @@ const OnboardingCheck: React.FC = () => {
 
                     {/* Migration progress bar */}
                     {startupInfo.migrations && startupInfo.migrations.total > 0 && (
-                      <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="mt-3 p-3 bg-theme-surface-secondary rounded-lg border border-theme-surface-border">
                         <div className="flex items-center justify-between text-xs text-theme-text-muted mb-2">
                           <span className="font-medium">Database Migrations</span>
                           <span className="text-orange-400 font-semibold">
@@ -648,7 +648,7 @@ const OnboardingCheck: React.FC = () => {
                             </p>
                           </div>
                         )}
-                        <div className="w-full bg-slate-700 rounded-full h-2.5 mb-2">
+                        <div className="w-full bg-theme-surface rounded-full h-2.5 mb-2">
                           <div
                             className="bg-gradient-to-r from-orange-500 to-yellow-500 h-2.5 rounded-full transition-all duration-300"
                             style={{ width: `${(startupInfo.migrations.completed / startupInfo.migrations.total) * 100}%` }}
@@ -684,7 +684,7 @@ const OnboardingCheck: React.FC = () => {
                     <h4 className="text-blue-300 font-semibold text-sm mb-1">
                       {educationalTips[currentTipIndex].title}
                     </h4>
-                    <p className="text-slate-300 text-xs">
+                    <p className="text-theme-text-secondary text-xs">
                       {educationalTips[currentTipIndex].content}
                     </p>
                   </div>
