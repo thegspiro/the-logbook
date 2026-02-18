@@ -5,7 +5,7 @@
  * and stage-specific actions.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   X,
   Mail,
@@ -31,6 +31,7 @@ import {
   EyeOff,
   Eye,
   Archive,
+  Activity,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
@@ -40,6 +41,7 @@ import type {
 } from '../types';
 import { isSafeUrl, getInitials } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 
@@ -96,6 +98,9 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const [pkgNotes, setPkgNotes] = useState('');
   const [pkgStatement, setPkgStatement] = useState('');
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
+  const [activityLog, setActivityLog] = useState<Array<{ id: string; action: string; details: Record<string, unknown>; performer_name: string; created_at: string }>>([]);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
 
   const isOnElectionStage = applicant?.current_stage_type === 'election_vote' && applicant?.status === 'active';
 
@@ -124,6 +129,33 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       setPkgStatement('');
     }
   }, [currentElectionPackage?.id]);
+
+  const fetchActivityLog = useCallback(async () => {
+    if (!applicant) return;
+    setIsLoadingActivity(true);
+    try {
+      const data = await applicantService.getActivity(applicant.id, 50);
+      setActivityLog(data);
+    } catch {
+      // Silently fail - activity log is non-critical
+      setActivityLog([]);
+    } finally {
+      setIsLoadingActivity(false);
+    }
+  }, [applicant?.id]);
+
+  // Load activity log when toggled open
+  useEffect(() => {
+    if (showActivityLog && applicant && activityLog.length === 0) {
+      fetchActivityLog();
+    }
+  }, [showActivityLog, applicant?.id, fetchActivityLog]);
+
+  // Reset activity log when applicant changes
+  useEffect(() => {
+    setActivityLog([]);
+    setShowActivityLog(false);
+  }, [applicant?.id]);
 
   if (!isOpen) return null;
 
@@ -670,6 +702,48 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <p className="text-sm text-theme-text-secondary">{applicant.notes}</p>
                 </div>
               )}
+
+              {/* Activity Log */}
+              <div className="p-4 border-b border-theme-surface-border">
+                <button
+                  onClick={() => setShowActivityLog(!showActivityLog)}
+                  className="flex items-center gap-2 w-full text-left"
+                >
+                  <Activity className="w-3.5 h-3.5 text-theme-text-muted" />
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    Activity Log
+                  </h3>
+                  <span className="text-xs text-theme-text-muted ml-auto">
+                    {showActivityLog ? '▾' : '▸'}
+                  </span>
+                </button>
+                {showActivityLog && (
+                  <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                    {isLoadingActivity ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+                      </div>
+                    ) : activityLog.length === 0 ? (
+                      <p className="text-xs text-theme-text-muted py-2">No activity recorded yet.</p>
+                    ) : (
+                      activityLog.map((entry) => (
+                        <div key={entry.id} className="flex items-start gap-2 text-xs">
+                          <div className="w-1.5 h-1.5 rounded-full bg-theme-text-muted mt-1.5 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-theme-text-secondary font-medium">{entry.action}</span>
+                            {entry.performer_name && (
+                              <span className="text-theme-text-muted"> by {entry.performer_name}</span>
+                            )}
+                            <div className="text-theme-text-muted">
+                              {formatDateTime(entry.created_at, tz)}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Metadata */}
               <div className="p-4">
