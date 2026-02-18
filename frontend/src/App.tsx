@@ -90,6 +90,9 @@ const BallotVotingPage = lazy(() => import('./pages/BallotVotingPage'));
 const MinutesPage = lazy(() => import('./pages/MinutesPage'));
 const MinutesDetailPage = lazy(() => import('./pages/MinutesDetailPage'));
 
+// Action Items (unified cross-module)
+const ActionItemsPage = lazy(() => import('./pages/ActionItemsPage'));
+
 // Notifications Module
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 
@@ -210,6 +213,9 @@ function App() {
               {/* Minutes Module */}
               <Route path="/minutes" element={<MinutesPage />} />
               <Route path="/minutes/:minutesId" element={<MinutesDetailPage />} />
+
+              {/* Action Items (unified) */}
+              <Route path="/action-items" element={<ActionItemsPage />} />
 
               {/* Notifications Module */}
               <Route path="/notifications" element={<NotificationsPage />} />

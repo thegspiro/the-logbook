@@ -752,6 +752,18 @@ export const trainingService = {
     });
     return response.data;
   },
+
+  async getComplianceMatrix(): Promise<ComplianceMatrix> {
+    const response = await api.get<ComplianceMatrix>('/training/compliance-matrix');
+    return response.data;
+  },
+
+  async getExpiringCertificationsDetailed(days: number = 90): Promise<ExpiringCertification[]> {
+    const response = await api.get<ExpiringCertification[]>('/training/expiring-certifications', {
+      params: { days },
+    });
+    return response.data;
+  },
 };
 
 // ==================== External Training Integration Service ====================
@@ -2376,6 +2388,11 @@ export const meetingsService = {
     const response = await api.get(`/meetings/${meetingId}/attendance-waivers`);
     return response.data;
   },
+
+  async createFromEvent(eventId: string): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>(`/meetings/from-event/${eventId}`);
+    return response.data;
+  },
 };
 
 // Minutes Detail Service — uses the /minutes-records API
@@ -2435,6 +2452,11 @@ export const minutesService = {
 
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
     await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
+  },
+
+  async createFromMeeting(meetingId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/from-meeting/${meetingId}`);
+    return response.data;
   },
 };
 
@@ -2853,12 +2875,81 @@ export interface DashboardStats {
   pending_tasks_count: number;
 }
 
+export interface AdminSummary {
+  active_members: number;
+  inactive_members: number;
+  total_members: number;
+  training_completion_pct: number;
+  upcoming_events_count: number;
+  overdue_action_items: number;
+  open_action_items: number;
+  recent_training_hours: number;
+}
+
+export interface ActionItemSummary {
+  id: string;
+  source: string;
+  source_id: string;
+  description: string;
+  assignee_id?: string;
+  assignee_name?: string;
+  due_date?: string;
+  status: string;
+  priority?: string;
+  created_at: string;
+}
+
+export interface CommunityEngagement {
+  total_public_events: number;
+  total_member_attendees: number;
+  total_external_attendees: number;
+  upcoming_public_events: number;
+}
+
+export interface ComplianceMatrixMember {
+  user_id: string;
+  member_name: string;
+  requirements: Array<{
+    requirement_id: string;
+    requirement_name: string;
+    status: string;
+    completion_date?: string;
+    expiry_date?: string;
+  }>;
+  completion_pct: number;
+}
+
+export interface ComplianceMatrix {
+  members: ComplianceMatrixMember[];
+  requirements: Array<{ id: string; name: string; recurrence_months?: number }>;
+  generated_at: string;
+}
+
+export interface ExpiringCertification {
+  user_id: string;
+  member_name: string;
+  requirement_id: string;
+  requirement_name: string;
+  expiry_date: string;
+  days_until_expiry: number;
+  status: string;
+}
+
 export const dashboardService = {
-  /**
-   * Get dashboard statistics
-   */
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
+    return response.data;
+  },
+  async getAdminSummary(): Promise<AdminSummary> {
+    const response = await api.get<AdminSummary>('/dashboard/admin-summary');
+    return response.data;
+  },
+  async getActionItems(params?: { status_filter?: string; assigned_to_me?: boolean }): Promise<ActionItemSummary[]> {
+    const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
+    return response.data;
+  },
+  async getCommunityEngagement(): Promise<CommunityEngagement> {
+    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
     return response.data;
   },
 };
@@ -3922,5 +4013,115 @@ export const scheduledTasksService = {
   async runTask(taskId: string): Promise<Record<string, unknown>> {
     const response = await api.post('/scheduled/run-task', null, { params: { task: taskId } });
     return response.data;
+  },
+};
+
+// ============================================
+// Department Messages Service
+// ============================================
+
+export interface DepartmentMessageRecord {
+  id: string;
+  organization_id: string;
+  title: string;
+  body: string;
+  priority: 'normal' | 'important' | 'urgent';
+  target_type: 'all' | 'roles' | 'statuses' | 'members';
+  target_roles?: string[];
+  target_statuses?: string[];
+  target_member_ids?: string[];
+  is_pinned: boolean;
+  is_active: boolean;
+  requires_acknowledgment: boolean;
+  posted_by?: string;
+  expires_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InboxMessage {
+  id: string;
+  title: string;
+  body: string;
+  priority: 'normal' | 'important' | 'urgent';
+  target_type: string;
+  is_pinned: boolean;
+  requires_acknowledgment: boolean;
+  posted_by?: string;
+  author_name?: string;
+  created_at?: string;
+  expires_at?: string;
+  is_read: boolean;
+  read_at?: string;
+  is_acknowledged: boolean;
+  acknowledged_at?: string;
+}
+
+export interface MessageStats {
+  message_id: string;
+  total_reads: number;
+  total_acknowledged: number;
+}
+
+export interface RoleOption {
+  name: string;
+  slug: string;
+}
+
+export const messagesService = {
+  // Admin CRUD
+  async getMessages(params?: { include_inactive?: boolean; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
+    const response = await api.get('/messages', { params });
+    return response.data;
+  },
+  async createMessage(data: {
+    title: string;
+    body: string;
+    priority?: string;
+    target_type?: string;
+    target_roles?: string[];
+    target_statuses?: string[];
+    target_member_ids?: string[];
+    is_pinned?: boolean;
+    requires_acknowledgment?: boolean;
+    expires_at?: string;
+  }): Promise<DepartmentMessageRecord> {
+    const response = await api.post<DepartmentMessageRecord>('/messages', data);
+    return response.data;
+  },
+  async getMessage(messageId: string): Promise<DepartmentMessageRecord> {
+    const response = await api.get<DepartmentMessageRecord>(`/messages/${messageId}`);
+    return response.data;
+  },
+  async updateMessage(messageId: string, data: Record<string, unknown>): Promise<DepartmentMessageRecord> {
+    const response = await api.patch<DepartmentMessageRecord>(`/messages/${messageId}`, data);
+    return response.data;
+  },
+  async deleteMessage(messageId: string): Promise<void> {
+    await api.delete(`/messages/${messageId}`);
+  },
+  async getAvailableRoles(): Promise<RoleOption[]> {
+    const response = await api.get<RoleOption[]>('/messages/roles');
+    return response.data;
+  },
+  async getMessageStats(messageId: string): Promise<MessageStats> {
+    const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
+    return response.data;
+  },
+
+  // Member inbox
+  async getInbox(params?: { include_read?: boolean; skip?: number; limit?: number }): Promise<InboxMessage[]> {
+    const response = await api.get<InboxMessage[]>('/messages/inbox', { params });
+    return response.data;
+  },
+  async getUnreadCount(): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/messages/inbox/unread-count');
+    return response.data;
+  },
+  async markAsRead(messageId: string): Promise<void> {
+    await api.post(`/messages/${messageId}/read`);
+  },
+  async acknowledge(messageId: string): Promise<void> {
+    await api.post(`/messages/${messageId}/acknowledge`);
   },
 };

@@ -871,3 +871,57 @@ async def set_meeting_quorum_config(
         "quorum_threshold": quorum_threshold,
         **quorum_result,
     }
+
+
+# ============================================
+# Cross-module Bridges
+# ============================================
+
+@router.post("/from-meeting/{meeting_id}", status_code=201)
+async def create_minutes_from_meeting(
+    meeting_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Create meeting minutes pre-populated from a Meeting record.
+    Copies title, date, attendees, type, and location, then initializes
+    default template sections based on the meeting type.
+
+    **Requires permission: minutes.manage**
+    """
+    service = MinuteService(db)
+    minutes = await service.create_from_meeting(
+        meeting_id=meeting_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+    if not minutes:
+        raise HTTPException(
+            status_code=404,
+            detail="Meeting not found",
+        )
+
+    await log_audit_event(
+        db=db,
+        organization_id=str(current_user.organization_id),
+        event_type="minutes_created_from_meeting",
+        event_category="minutes",
+        severity="info",
+        event_data={
+            "minutes_id": minutes.id,
+            "meeting_id": str(meeting_id),
+            "title": minutes.title,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "id": minutes.id,
+        "title": minutes.title,
+        "meeting_date": minutes.meeting_date.isoformat() if minutes.meeting_date else None,
+        "meeting_id": minutes.meeting_id,
+        "status": minutes.status.value if hasattr(minutes.status, 'value') else str(minutes.status),
+        "message": "Minutes created from meeting record with attendees and sections pre-populated",
+    }

@@ -73,12 +73,14 @@ class IntegrationTarget(str, enum.Enum):
     """Target module for form integrations"""
     MEMBERSHIP = "membership"
     INVENTORY = "inventory"
+    EVENTS = "events"
 
 
 class IntegrationType(str, enum.Enum):
     """Type of integration action"""
     MEMBERSHIP_INTEREST = "membership_interest"
     EQUIPMENT_ASSIGNMENT = "equipment_assignment"
+    EVENT_REGISTRATION = "event_registration"
 
 
 class Form(Base):

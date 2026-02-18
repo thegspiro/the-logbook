@@ -254,6 +254,9 @@ class MeetingMinutes(Base):
     # Link to event (optional — minutes can be linked to a business_meeting event)
     event_id = Column(String(36), ForeignKey("events.id"), nullable=True)
 
+    # Link to meeting record (optional — pre-fills date, attendees, agenda from Meeting)
+    meeting_id = Column(String(36), ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True)
+
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -262,6 +265,7 @@ class MeetingMinutes(Base):
     # Relationships
     template = relationship("MinutesTemplate", foreign_keys=[template_id])
     event = relationship("Event", foreign_keys=[event_id])
+    meeting = relationship("Meeting", foreign_keys=[meeting_id])
     motions = relationship("Motion", back_populates="minutes", cascade="all, delete-orphan", order_by="Motion.order")
     action_items = relationship("ActionItem", back_populates="minutes", cascade="all, delete-orphan", order_by="ActionItem.created_at")
 

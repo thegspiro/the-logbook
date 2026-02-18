@@ -76,6 +76,10 @@ from app.models.notification import (
     NotificationTrigger,
     NotificationCategory,
     NotificationChannel,
+    DepartmentMessage,
+    DepartmentMessageRead,
+    MessagePriority,
+    MessageTargetType,
 )
 
 from app.models.integration import (
@@ -138,6 +142,7 @@ from app.models.election import (
 from app.models.event import (
     Event,
     EventRSVP,
+    EventExternalAttendee,
     EventType,
     RSVPStatus,
     CheckInWindowType,
@@ -282,6 +287,11 @@ __all__ = [
     "NotificationTrigger",
     "NotificationCategory",
     "NotificationChannel",
+    # Department message models
+    "DepartmentMessage",
+    "DepartmentMessageRead",
+    "MessagePriority",
+    "MessageTargetType",
     # Integration models
     "Integration",
     # Analytics models
@@ -331,6 +341,7 @@ __all__ = [
     # Event models
     "Event",
     "EventRSVP",
+    "EventExternalAttendee",
     "EventType",
     "RSVPStatus",
     "CheckInWindowType",

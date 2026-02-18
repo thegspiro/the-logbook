@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { eventService } from '../services/api';
+import { eventService, meetingsService } from '../services/api';
 import type { Event, RSVP, RSVPStatus, EventStats } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -369,6 +369,25 @@ export const EventDetailPage: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                     Monitoring
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const meeting = await meetingsService.createFromEvent(eventId!);
+                        toast.success('Meeting created from event');
+                        navigate(`/minutes`);
+                      } catch (err) {
+                        const axiosErr = err as AxiosError<{ detail?: string }>;
+                        toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');
+                      }
+                    }}
+                    disabled={submitting}
+                    className="inline-flex items-center px-4 py-2 border border-cyan-300 rounded-md shadow-sm text-sm font-medium text-cyan-400 bg-theme-surface hover:bg-cyan-500/20 disabled:opacity-50"
+                  >
+                    <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Create Meeting
                   </button>
                   <button
                     onClick={() => setShowCancelModal(true)}

@@ -169,6 +169,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       subItems: [
         { label: 'Elections', path: '/elections', icon: Vote },
         { label: 'Minutes', path: '/minutes', icon: ClipboardList },
+        { label: 'Action Items', path: '/action-items', icon: AlertTriangle },
       ],
     },
     { label: 'Notifications', path: '/notifications', icon: Bell },

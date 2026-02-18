@@ -11,9 +11,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TrainingSessionCreate, TrainingType, TrainingCourse } from '../types/training';
+import type { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
+import { userService, schedulingService } from '../services/api';
 
 /**
  * Create Training Session Page
@@ -29,6 +31,10 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [availableCourses] = useState<TrainingCourse[]>([]);
+  const [members, setMembers] = useState<User[]>([]);
+  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string }>>([]);
+  const [instructorId, setInstructorId] = useState('');
+  const [apparatusId, setApparatusId] = useState('');
 
   // Form data
   const [formData, setFormData] = useState<TrainingSessionCreate>({
@@ -61,8 +67,12 @@ const CreateTrainingSessionPage: React.FC = () => {
   });
 
   useEffect(() => {
-    // Load available courses from API
+    // Load available courses, members, and apparatus from API
     // trainingService.getCourses().then(setAvailableCourses);
+    userService.getUsers().then(setMembers).catch(() => {});
+    schedulingService.getBasicApparatus({ is_active: true }).then((data) => {
+      setApparatusList(data.map((a: Record<string, unknown>) => ({ id: a.id as string, name: (a.name || a.unit_number || 'Unknown') as string })));
+    }).catch(() => {});
   }, []);
 
   const updateField = (field: keyof TrainingSessionCreate, value: any) => {
@@ -435,15 +445,43 @@ const CreateTrainingSessionPage: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      Instructor
+                      Lead Instructor
                     </label>
-                    <input
-                      type="text"
-                      value={formData.instructor}
-                      onChange={(e) => updateField('instructor', e.target.value)}
-                      placeholder="Instructor name"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
+                    <select
+                      value={instructorId}
+                      onChange={(e) => {
+                        setInstructorId(e.target.value);
+                        const member = members.find(m => m.id === e.target.value);
+                        updateField('instructor', member ? `${member.first_name} ${member.last_name}` : '');
+                      }}
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <option value="">Select instructor...</option>
+                      {members.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.first_name} {m.last_name}{m.rank ? ` (${m.rank})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      Apparatus
+                    </label>
+                    <select
+                      value={apparatusId}
+                      onChange={(e) => setApparatusId(e.target.value)}
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <option value="">No apparatus</option>
+                      {apparatusList.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-theme-text-muted mt-1">
+                      Apparatus used during this training session
+                    </p>
                   </div>
                 </>
               )}

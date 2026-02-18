@@ -251,6 +251,9 @@ class TrainingRecord(Base):
     instructor = Column(String(255))
     location = Column(String(255))
 
+    # Cross-module link: which apparatus was used for this training
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
+
     # Additional Information
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references
@@ -393,7 +396,12 @@ class TrainingSession(Base):
     course_code = Column(String(50))
     training_type = Column(Enum(TrainingType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     credit_hours = Column(Float, nullable=False)
-    instructor = Column(String(255))
+    instructor = Column(String(255))  # Legacy free-text instructor name
+
+    # Cross-module links for richer tracking
+    instructor_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    co_instructors = Column(JSON, nullable=True)  # List of user IDs for additional instructors
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
 
     # Certification Details
     issues_certification = Column(Boolean, default=False)
@@ -836,6 +844,11 @@ class SkillCheckoff(Base):
     # Evaluation Details
     evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     status = Column(String(20), nullable=False)  # pending, passed, failed
+
+    # Training context — links checkoff to the session and apparatus used
+    session_id = Column(String(36), ForeignKey("training_sessions.id", ondelete="SET NULL"), nullable=True, index=True)
+    apparatus_id = Column(String(36), nullable=True, index=True)  # FK to apparatus table (added conditionally)
+    conditions = Column(JSON, nullable=True)  # Environmental context: {"time_of_day", "weather", "road_conditions", etc.}
 
     # Results
     evaluation_results = Column(JSON)  # Detailed results for each criterion

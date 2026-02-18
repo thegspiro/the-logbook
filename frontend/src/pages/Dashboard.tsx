@@ -12,6 +12,12 @@ import {
   BookOpen,
   Briefcase,
   Shield,
+  Users,
+  ClipboardList,
+  Activity,
+  Megaphone,
+  Pin,
+  Eye,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -19,12 +25,16 @@ import {
   trainingModuleConfigService,
   schedulingService,
   notificationsService,
+  messagesService,
 } from '../services/api';
+import type { InboxMessage } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
+import { useAuthStore } from '../stores/authStore';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { NotificationLogRecord, ShiftRecord } from '../services/api';
+import axios from 'axios';
 
 /**
  * Main Dashboard Component
@@ -32,10 +42,27 @@ import type { NotificationLogRecord, ShiftRecord } from '../services/api';
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
+interface AdminSummaryData {
+  active_members: number;
+  inactive_members: number;
+  total_members: number;
+  training_completion_pct: number;
+  upcoming_events_count: number;
+  overdue_action_items: number;
+  open_action_items: number;
+  recent_training_hours: number;
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState('Fire Department');
+
+  // Admin summary (only loaded for users with settings.manage)
+  const isAdmin = checkPermission('settings.manage');
+  const [adminSummary, setAdminSummary] = useState<AdminSummaryData | null>(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
@@ -49,6 +76,11 @@ const Dashboard: React.FC = () => {
   // Hours
   const [hours, setHours] = useState({ training: 0, standby: 0, administrative: 0 });
   const [loadingHours, setLoadingHours] = useState(true);
+
+  // Department Messages
+  const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [deptMsgUnread, setDeptMsgUnread] = useState(0);
 
   // Training
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
@@ -72,9 +104,22 @@ const Dashboard: React.FC = () => {
 
     loadNotifications();
     loadUpcomingShifts();
+    loadDeptMessages();
+    if (isAdmin) loadAdminSummary();
     loadHours();
     loadTrainingProgress();
   }, []);
+
+  const loadAdminSummary = async () => {
+    try {
+      const response = await axios.get('/api/v1/dashboard/admin-summary');
+      setAdminSummary(response.data);
+    } catch {
+      // Admin summary is non-critical
+    } finally {
+      setLoadingAdmin(false);
+    }
+  };
 
   const loadNotifications = async () => {
     try {
@@ -85,6 +130,39 @@ const Dashboard: React.FC = () => {
       // Notifications are non-critical
     } finally {
       setLoadingNotifications(false);
+    }
+  };
+
+  const loadDeptMessages = async () => {
+    try {
+      const data = await messagesService.getInbox({ limit: 10 });
+      setDeptMessages(data);
+      setDeptMsgUnread(data.filter(m => !m.is_read).length);
+    } catch {
+      // Messages are non-critical
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const markMessageRead = async (msgId: string) => {
+    try {
+      await messagesService.markAsRead(msgId);
+      setDeptMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_read: true } : m));
+      setDeptMsgUnread(prev => Math.max(0, prev - 1));
+    } catch {
+      toast.error('Failed to mark message as read');
+    }
+  };
+
+  const acknowledgeMessage = async (msgId: string) => {
+    try {
+      await messagesService.acknowledge(msgId);
+      setDeptMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_read: true, is_acknowledged: true } : m));
+      setDeptMsgUnread(prev => Math.max(0, prev - 1));
+      toast.success('Message acknowledged');
+    } catch {
+      toast.error('Failed to acknowledge message');
     }
   };
 
@@ -178,6 +256,86 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
 
+        {/* Admin Department Summary (visible to Chiefs and admins) */}
+        {isAdmin && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-red-500" />
+              Department Overview
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" role="region" aria-label="Department overview">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Active Members</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.active_members ?? 0}</p>
+                    )}
+                  </div>
+                  <Users className="w-8 h-8 text-blue-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.total_members ?? 0} total</p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Training Compliance</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.training_completion_pct ?? 0}%</p>
+                    )}
+                  </div>
+                  <GraduationCap className="w-8 h-8 text-green-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.recent_training_hours ?? 0} hrs last 30 days</p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Upcoming Events</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.upcoming_events_count ?? 0}</p>
+                    )}
+                  </div>
+                  <Calendar className="w-8 h-8 text-purple-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/dashboard')}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Action Items</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.open_action_items ?? 0}</p>
+                    )}
+                  </div>
+                  {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
+                    <AlertTriangle className="w-8 h-8 text-red-400" />
+                  ) : (
+                    <ClipboardList className="w-8 h-8 text-yellow-400" />
+                  )}
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">
+                  {(adminSummary?.overdue_action_items ?? 0) > 0
+                    ? `${adminSummary?.overdue_action_items} overdue`
+                    : 'All on track'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Hours Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" role="region" aria-label="Hours summary">
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
@@ -240,6 +398,90 @@ const Dashboard: React.FC = () => {
             <p className="text-theme-text-muted text-xs mt-2">Admin hours</p>
           </div>
         </div>
+
+        {/* Department Messages — always visible, prominent */}
+        {!loadingMessages && deptMessages.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+                <Megaphone className="w-5 h-5 text-amber-400" />
+                <span>Department Messages</span>
+                {deptMsgUnread > 0 && (
+                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">{deptMsgUnread} new</span>
+                )}
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {deptMessages.map(msg => {
+                const priorityStyles = {
+                  urgent: 'border-red-500/40 bg-red-500/10',
+                  important: 'border-amber-500/30 bg-amber-500/10',
+                  normal: 'border-theme-surface-border bg-theme-surface',
+                };
+                const priorityBadge = {
+                  urgent: 'bg-red-500 text-white',
+                  important: 'bg-amber-500 text-white',
+                  normal: '',
+                };
+                return (
+                  <div
+                    key={msg.id}
+                    className={`rounded-lg border p-4 transition-colors ${priorityStyles[msg.priority]} ${
+                      !msg.is_read ? 'ring-1 ring-amber-400/30' : ''
+                    }`}
+                    onClick={() => !msg.is_read && markMessageRead(msg.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {msg.is_pinned && <Pin className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+                          <h4 className="text-theme-text-primary font-semibold text-sm truncate">{msg.title}</h4>
+                          {msg.priority !== 'normal' && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${priorityBadge[msg.priority]}`}>
+                              {msg.priority}
+                            </span>
+                          )}
+                          {!msg.is_read && (
+                            <span className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">{msg.body}</p>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-theme-text-muted">
+                          {msg.author_name && <span>From: {msg.author_name}</span>}
+                          {msg.created_at && <span>{formatDate(msg.created_at, tz)}</span>}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        {!msg.is_read && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); markMessageRead(msg.id); }}
+                            className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
+                            title="Mark as read"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {msg.requires_acknowledgment && !msg.is_acknowledged && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); acknowledgeMessage(msg.id); }}
+                            className="text-xs px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
+                          >
+                            Acknowledge
+                          </button>
+                        )}
+                        {msg.is_acknowledged && (
+                          <span className="text-xs text-green-400 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Acknowledged
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Notifications */}

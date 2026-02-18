@@ -12,12 +12,14 @@ import { useSearchParams } from 'react-router-dom';
 
 const EventCreatePage = lazy(() => import('./EventCreatePage').then(m => ({ default: m.EventCreatePage })));
 const AnalyticsDashboardPage = lazy(() => import('./AnalyticsDashboardPage'));
+const CommunityEngagementTab = lazy(() => import('./CommunityEngagementTab'));
 
-type AdminTab = 'create' | 'analytics';
+type AdminTab = 'create' | 'analytics' | 'community';
 
 const tabs: { id: AdminTab; label: string }[] = [
   { id: 'create', label: 'Create Event' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'community', label: 'Community Engagement' },
 ];
 
 const TabLoading = () => (
@@ -77,6 +79,7 @@ export const EventsAdminHub: React.FC = () => {
       <Suspense fallback={<TabLoading />}>
         {activeTab === 'create' && <EventCreatePage />}
         {activeTab === 'analytics' && <AnalyticsDashboardPage />}
+        {activeTab === 'community' && <CommunityEngagementTab />}
       </Suspense>
     </div>
   );

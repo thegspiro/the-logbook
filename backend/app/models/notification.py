@@ -2,7 +2,7 @@
 Notification Database Models
 
 SQLAlchemy models for notification management including rules,
-logs, and preferences.
+logs, preferences, and department messages.
 """
 
 from sqlalchemy import (
@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -140,3 +141,98 @@ class NotificationLog(Base):
 
     def __repr__(self):
         return f"<NotificationLog(subject={self.subject}, channel={self.channel})>"
+
+
+# ============================================
+# Department Messages (Internal Messaging)
+# ============================================
+
+
+class MessagePriority(str, enum.Enum):
+    """Priority level for department messages"""
+    NORMAL = "normal"
+    IMPORTANT = "important"
+    URGENT = "urgent"
+
+
+class MessageTargetType(str, enum.Enum):
+    """How the message is targeted"""
+    ALL = "all"                    # Entire department
+    ROLES = "roles"                # Specific roles (e.g., "Probationary Members")
+    STATUSES = "statuses"          # Specific member statuses
+    MEMBERS = "members"            # Specific individual members
+
+
+class DepartmentMessage(Base):
+    """
+    Department Message model
+
+    Represents an internal message/announcement sent by leadership
+    to department members. Messages can target all members, specific
+    roles, statuses, or individual members. They appear on the
+    dashboard and remain visible until dismissed or expired.
+    """
+
+    __tablename__ = "department_messages"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Content
+    title = Column(String(500), nullable=False)
+    body = Column(Text, nullable=False)
+    priority = Column(Enum(MessagePriority, values_callable=lambda x: [e.value for e in x]), default=MessagePriority.NORMAL, nullable=False)
+
+    # Targeting
+    target_type = Column(Enum(MessageTargetType, values_callable=lambda x: [e.value for e in x]), default=MessageTargetType.ALL, nullable=False)
+    target_roles = Column(JSON, nullable=True)       # Array of role names when target_type == 'roles'
+    target_statuses = Column(JSON, nullable=True)     # Array of status values when target_type == 'statuses'
+    target_member_ids = Column(JSON, nullable=True)   # Array of user IDs when target_type == 'members'
+
+    # Display
+    is_pinned = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    requires_acknowledgment = Column(Boolean, default=False)
+
+    # Lifecycle
+    posted_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    author = relationship("User", foreign_keys=[posted_by])
+    reads = relationship("DepartmentMessageRead", back_populates="message", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_dept_msg_org", "organization_id"),
+        Index("idx_dept_msg_org_active", "organization_id", "is_active"),
+        Index("idx_dept_msg_org_pinned", "organization_id", "is_pinned"),
+    )
+
+    def __repr__(self):
+        return f"<DepartmentMessage(title={self.title}, priority={self.priority})>"
+
+
+class DepartmentMessageRead(Base):
+    """
+    Tracks which users have read/acknowledged a department message.
+    """
+
+    __tablename__ = "department_message_reads"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    message_id = Column(String(36), ForeignKey("department_messages.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    read_at = Column(DateTime(timezone=True), server_default=func.now())
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    message = relationship("DepartmentMessage", back_populates="reads")
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_dept_msg_read_user"),
+        Index("idx_dept_msg_read_msg", "message_id"),
+        Index("idx_dept_msg_read_user", "user_id"),
+    )

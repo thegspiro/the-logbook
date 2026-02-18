@@ -71,6 +71,10 @@ class Meeting(Base):
     end_time = Column(Time)
     location = Column(String(255))
 
+    # Cross-module links
+    event_id = Column(String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
+    location_id = Column(String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Meeting Details
     called_by = Column(String(255))
     status = Column(Enum(MeetingStatus, values_callable=lambda x: [e.value for e in x]), default=MeetingStatus.DRAFT, nullable=False)
@@ -94,6 +98,8 @@ class Meeting(Base):
     action_items = relationship("MeetingActionItem", back_populates="meeting", cascade="all, delete-orphan")
     creator = relationship("User", foreign_keys=[created_by])
     approver = relationship("User", foreign_keys=[approved_by])
+    event = relationship("Event", foreign_keys=[event_id])
+    location_obj = relationship("Location", foreign_keys=[location_id])
 
     __table_args__ = (
         Index("idx_meetings_org_date", "organization_id", "meeting_date"),

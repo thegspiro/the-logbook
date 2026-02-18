@@ -40,6 +40,7 @@ class ReportsService:
             "event_attendance": self._generate_event_attendance,
             "training_progress": self._generate_training_progress,
             "annual_training": self._generate_annual_training,
+            "department_overview": self._generate_department_overview,
         }
 
         generator = generators.get(report_type)
@@ -178,6 +179,49 @@ class ReportsService:
         entries = list(member_stats.values())
         completion_rate = (completed_count / len(records) * 100) if records else 0
 
+        # ── Per-course breakdown (TC3) ──
+        course_stats: Dict[str, Dict[str, Any]] = {}
+        for record in records:
+            cid = str(record.course_id) if record.course_id else "unknown"
+            if cid not in course_stats:
+                course_stats[cid] = {
+                    "course_id": cid,
+                    "course_name": record.course_name or cid,
+                    "total": 0, "completed": 0, "total_hours": 0,
+                }
+            course_stats[cid]["total"] += 1
+            status_val2 = record.status.value if hasattr(record.status, 'value') else str(record.status)
+            if status_val2 == "completed":
+                course_stats[cid]["completed"] += 1
+            if record.hours_completed:
+                course_stats[cid]["total_hours"] += float(record.hours_completed)
+        course_breakdown = list(course_stats.values())
+
+        # ── Per-requirement completion (TC3) ──
+        req_result = await self.db.execute(
+            select(TrainingRequirement).where(
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.is_active == True,  # noqa: E712
+            )
+        )
+        requirements = req_result.scalars().all()
+        requirement_breakdown = []
+        for req in requirements:
+            prog_result = await self.db.execute(
+                select(func.count(RequirementProgress.id)).where(
+                    RequirementProgress.requirement_id == req.id,
+                    RequirementProgress.status == RequirementProgressStatus.COMPLETED,
+                )
+            )
+            completed_for_req = prog_result.scalar() or 0
+            requirement_breakdown.append({
+                "requirement_id": str(req.id),
+                "requirement_name": req.name,
+                "total_members": len(users),
+                "completed": completed_for_req,
+                "completion_pct": round(completed_for_req / len(users) * 100, 1) if users else 0,
+            })
+
         return {
             "report_type": "training_summary",
             "generated_at": datetime.now().isoformat(),
@@ -187,6 +231,8 @@ class ReportsService:
             "total_records": len(records),
             "completion_rate": round(completion_rate, 1),
             "entries": entries,
+            "course_breakdown": course_breakdown,
+            "requirement_breakdown": requirement_breakdown,
         }
 
     # ============================================
@@ -518,6 +564,14 @@ class ReportsService:
                     "available": True,
                 },
                 {
+                    "id": "department_overview",
+                    "title": "Department Overview",
+                    "description": "Cross-module department health report: member counts, training rates, event attendance, and action item status.",
+                    "category": "compliance",
+                    "available": True,
+                    "usesDateRange": True,
+                },
+                {
                     "id": "compliance_status",
                     "title": "Compliance Status",
                     "description": "Organization-wide compliance tracking against requirements and certifications.",
@@ -525,4 +579,134 @@ class ReportsService:
                     "available": False,
                 },
             ]
+        }
+
+    # ============================================
+    # Department Overview Report (C3)
+    # ============================================
+
+    async def _generate_department_overview(
+        self, organization_id: UUID,
+        start_date: Optional[date] = None, end_date: Optional[date] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Cross-module department overview report.
+        Aggregates key metrics from members, training, events, and action items.
+        """
+        from datetime import timedelta
+        from app.models.meeting import MeetingActionItem, ActionItemStatus
+        from app.models.minute import ActionItem as MinutesActionItem, MinutesActionItemStatus
+
+        org_id = str(organization_id)
+        period_start = start_date or (datetime.utcnow() - timedelta(days=365)).date()
+        period_end = end_date or datetime.utcnow().date()
+
+        # ── Members ──
+        total_result = await self.db.execute(
+            select(func.count(User.id)).where(
+                User.organization_id == org_id, User.deleted_at.is_(None),
+            )
+        )
+        total_members = total_result.scalar() or 0
+
+        active_result = await self.db.execute(
+            select(func.count(User.id)).where(
+                User.organization_id == org_id,
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
+            )
+        )
+        active_members = active_result.scalar() or 0
+
+        # ── Training ──
+        training_total = await self.db.execute(
+            select(func.count(TrainingRecord.id)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.completion_date >= period_start,
+                TrainingRecord.completion_date <= period_end,
+            )
+        )
+        training_completed = await self.db.execute(
+            select(func.count(TrainingRecord.id)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date >= period_start,
+                TrainingRecord.completion_date <= period_end,
+            )
+        )
+        t_total = training_total.scalar() or 0
+        t_completed = training_completed.scalar() or 0
+        training_rate = round((t_completed / t_total * 100) if t_total > 0 else 0, 1)
+
+        hours_result = await self.db.execute(
+            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0)).where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                TrainingRecord.completion_date >= period_start,
+                TrainingRecord.completion_date <= period_end,
+            )
+        )
+        total_training_hours = float(hours_result.scalar() or 0)
+
+        # ── Events ──
+        events_result = await self.db.execute(
+            select(func.count(Event.id)).where(
+                Event.organization_id == org_id,
+                Event.start_datetime >= datetime.combine(period_start, datetime.min.time()),
+                Event.start_datetime <= datetime.combine(period_end, datetime.max.time()),
+                Event.is_cancelled == False,  # noqa: E712
+            )
+        )
+        total_events = events_result.scalar() or 0
+
+        checkins_result = await self.db.execute(
+            select(func.count(EventRSVP.id)).where(
+                EventRSVP.organization_id == org_id,
+                EventRSVP.checked_in == True,  # noqa: E712
+            )
+        )
+        total_checkins = checkins_result.scalar() or 0
+
+        # ── Action Items ──
+        open_meeting_items = await self.db.execute(
+            select(func.count(MeetingActionItem.id)).where(
+                MeetingActionItem.organization_id == org_id,
+                MeetingActionItem.status.in_([ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]),
+            )
+        )
+        open_minutes_items = await self.db.execute(
+            select(func.count(MinutesActionItem.id)).where(
+                MinutesActionItem.status.in_([
+                    MinutesActionItemStatus.PENDING.value,
+                    MinutesActionItemStatus.IN_PROGRESS.value,
+                ]),
+            )
+        )
+
+        return {
+            "report_type": "department_overview",
+            "generated_at": datetime.now().isoformat(),
+            "period_start": str(period_start),
+            "period_end": str(period_end),
+            "members": {
+                "total": total_members,
+                "active": active_members,
+                "inactive": total_members - active_members,
+            },
+            "training": {
+                "total_records": t_total,
+                "completed": t_completed,
+                "completion_rate": training_rate,
+                "total_hours": total_training_hours,
+                "avg_hours_per_member": round(total_training_hours / active_members, 1) if active_members > 0 else 0,
+            },
+            "events": {
+                "total_events": total_events,
+                "total_checkins": total_checkins,
+            },
+            "action_items": {
+                "open_from_meetings": open_meeting_items.scalar() or 0,
+                "open_from_minutes": open_minutes_items.scalar() or 0,
+            },
         }

@@ -19,7 +19,8 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
-import { meetingsService } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { meetingsService, minutesService } from '../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 
@@ -37,6 +38,7 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
 ];
 
 const MinutesPage: React.FC = () => {
+  const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('meetings.manage');
 
@@ -359,18 +361,35 @@ const MinutesPage: React.FC = () => {
                     )}
                   </div>
                   {canManage && (
-                    <button
-                      onClick={() => handleDeleteMeeting(meeting.id)}
-                      disabled={deletingId === meeting.id}
-                      className="ml-4 p-2 text-theme-text-muted hover:text-red-700  hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
-                      title="Delete meeting"
-                    >
-                      {deletingId === meeting.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1 ml-4">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const minutes = await minutesService.createFromMeeting(meeting.id);
+                            toast.success('Minutes created from meeting');
+                            navigate(`/minutes/${minutes.id}`);
+                          } catch {
+                            toast.error('Failed to create minutes from meeting');
+                          }
+                        }}
+                        className="p-2 text-theme-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
+                        title="Create minutes from this meeting"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMeeting(meeting.id)}
+                        disabled={deletingId === meeting.id}
+                        className="p-2 text-theme-text-muted hover:text-red-700 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        title="Delete meeting"
+                      >
+                        {deletingId === meeting.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
 

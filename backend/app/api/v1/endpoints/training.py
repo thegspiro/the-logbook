@@ -889,3 +889,200 @@ async def enroll_member_in_program(
         "program_name": program.name,
         "status": "active",
     }
+
+
+# ============================================
+# Compliance Matrix
+# ============================================
+
+from app.models.user import UserStatus
+from pydantic import BaseModel
+
+
+class RequirementStatusItem(BaseModel):
+    requirement_id: str
+    requirement_name: str
+    status: str  # "completed", "in_progress", "expired", "not_started"
+    completion_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+
+
+class MemberComplianceRow(BaseModel):
+    user_id: str
+    member_name: str
+    requirements: List[RequirementStatusItem]
+    completion_pct: float
+
+
+@router.get("/compliance-matrix")
+async def get_compliance_matrix(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Training compliance matrix: for each active member, shows status
+    of each training requirement (completed, expired, in_progress, not_started).
+    """
+    org_id = current_user.organization_id
+
+    # Get all active members
+    members_result = await db.execute(
+        select(User)
+        .where(
+            User.organization_id == org_id,
+            User.status == UserStatus.ACTIVE,
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.last_name, User.first_name)
+    )
+    members = members_result.scalars().all()
+
+    # Get all requirements for this org
+    reqs_result = await db.execute(
+        select(TrainingRequirement)
+        .where(TrainingRequirement.organization_id == org_id)
+        .order_by(TrainingRequirement.name)
+    )
+    requirements = reqs_result.scalars().all()
+
+    if not requirements:
+        return {"members": [], "requirements": []}
+
+    # Get all training records for these members
+    records_result = await db.execute(
+        select(TrainingRecord)
+        .where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id.in_([m.id for m in members]),
+        )
+    )
+    all_records = records_result.scalars().all()
+
+    # Build lookup: {user_id: {course_id: [records]}}
+    records_by_user = {}
+    for r in all_records:
+        records_by_user.setdefault(r.user_id, []).append(r)
+
+    today = date.today()
+    matrix = []
+
+    for member in members:
+        member_records = records_by_user.get(member.id, [])
+        req_statuses = []
+        completed_count = 0
+
+        for req in requirements:
+            # Find matching records for this requirement
+            matching = [
+                r for r in member_records
+                if r.course_id == req.course_id or (
+                    r.course_name and req.name and
+                    r.course_name.lower() == req.name.lower()
+                )
+            ]
+
+            if matching:
+                # Get most recent completed record
+                completed_records = [
+                    r for r in matching
+                    if r.status == TrainingStatus.COMPLETED
+                ]
+                if completed_records:
+                    latest = max(completed_records, key=lambda r: r.completion_date or date.min)
+                    if latest.expiration_date and latest.expiration_date < today:
+                        req_status = "expired"
+                    else:
+                        req_status = "completed"
+                        completed_count += 1
+                else:
+                    in_progress = [r for r in matching if r.status == TrainingStatus.IN_PROGRESS]
+                    req_status = "in_progress" if in_progress else "not_started"
+            else:
+                req_status = "not_started"
+
+            latest_record = max(matching, key=lambda r: r.completion_date or date.min) if matching else None
+            req_statuses.append(RequirementStatusItem(
+                requirement_id=req.id,
+                requirement_name=req.name,
+                status=req_status,
+                completion_date=latest_record.completion_date.isoformat() if latest_record and latest_record.completion_date else None,
+                expiry_date=latest_record.expiration_date.isoformat() if latest_record and latest_record.expiration_date else None,
+            ))
+
+        pct = (completed_count / len(requirements) * 100) if requirements else 0
+        member_name = f"{member.last_name}, {member.first_name}" if member.last_name else member.first_name or member.username
+        matrix.append(MemberComplianceRow(
+            user_id=member.id,
+            member_name=member_name,
+            requirements=req_statuses,
+            completion_pct=round(pct, 1),
+        ))
+
+    return {
+        "members": [m.model_dump() for m in matrix],
+        "requirements": [
+            {"id": r.id, "name": r.name}
+            for r in requirements
+        ],
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+
+# ============================================
+# Expiring Certifications
+# ============================================
+
+@router.get("/expiring-certifications")
+async def get_expiring_certifications(
+    days: int = Query(90, ge=1, le=365, description="Number of days to look ahead"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Returns training records with certifications expiring within the specified window.
+    Used by Training Coordinators and Driver Trainers to proactively manage renewals.
+    """
+    org_id = current_user.organization_id
+    cutoff_date = date.today() + __import__("datetime").timedelta(days=days)
+
+    result = await db.execute(
+        select(TrainingRecord)
+        .where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+            TrainingRecord.expiration_date.isnot(None),
+            TrainingRecord.expiration_date <= cutoff_date,
+            TrainingRecord.expiration_date >= date.today(),
+        )
+        .order_by(TrainingRecord.expiration_date.asc())
+    )
+    records = result.scalars().all()
+
+    # Enrich with member names
+    user_ids = list(set(r.user_id for r in records))
+    users_result = await db.execute(
+        select(User).where(User.id.in_(user_ids))
+    )
+    users_map = {u.id: u for u in users_result.scalars().all()}
+
+    return {
+        "expiring_certifications": [
+            {
+                "record_id": r.id,
+                "user_id": r.user_id,
+                "member_name": (
+                    f"{users_map[r.user_id].last_name}, {users_map[r.user_id].first_name}"
+                    if r.user_id in users_map and users_map[r.user_id].last_name
+                    else users_map[r.user_id].username if r.user_id in users_map
+                    else "Unknown"
+                ),
+                "course_name": r.course_name,
+                "certification_number": r.certification_number,
+                "expiration_date": r.expiration_date.isoformat() if r.expiration_date else None,
+                "days_until_expiry": (r.expiration_date - date.today()).days if r.expiration_date else None,
+            }
+            for r in records
+        ],
+        "total": len(records),
+        "lookup_days": days,
+    }
