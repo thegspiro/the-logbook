@@ -612,19 +612,19 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               <p className={`text-sm font-medium ${isComplete ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
                                 {entry.stage_name}
                               </p>
-                              <p className="text-xs text-slate-500 mt-0.5">
+                              <p className="text-xs text-theme-text-muted mt-0.5">
                                 Entered {formatDateTime(entry.entered_at, tz)}
                                 {entry.completed_at && (
                                   <> &middot; Completed {formatDateTime(entry.completed_at, tz)}</>
                                 )}
                               </p>
                               {entry.completed_by_name && (
-                                <p className="text-xs text-slate-500 mt-0.5">
+                                <p className="text-xs text-theme-text-muted mt-0.5">
                                   By {entry.completed_by_name}
                                 </p>
                               )}
                               {entry.notes && (
-                                <p className="text-xs text-slate-400 mt-1 bg-slate-800/50 rounded px-2 py-1">
+                                <p className="text-xs text-theme-text-muted mt-1 bg-theme-surface-secondary rounded px-2 py-1">
                                   {entry.notes}
                                 </p>
                               )}
@@ -663,11 +663,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
               {/* Notes */}
               {applicant.notes && (
-                <div className="p-4 border-b border-white/10">
-                  <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                <div className="p-4 border-b border-theme-surface-border">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
                     Notes
                   </h3>
-                  <p className="text-sm text-slate-300">{applicant.notes}</p>
+                  <p className="text-sm text-theme-text-secondary">{applicant.notes}</p>
                 </div>
               )}
 

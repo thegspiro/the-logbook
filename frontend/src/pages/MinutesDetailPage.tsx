@@ -1008,8 +1008,8 @@ export const MinutesDetailPage: React.FC = () => {
                         {item.priority}
                       </span>
                     </div>
-                    <p className="text-sm text-white">{item.description}</p>
-                    <div className="mt-2 text-xs text-slate-400 space-x-4">
+                    <p className="text-sm text-theme-text-primary">{item.description}</p>
+                    <div className="mt-2 text-xs text-theme-text-muted space-x-4">
                       {item.assignee_name && <span>Assigned to: {item.assignee_name}</span>}
                       {item.due_date && (
                         <span>
@@ -1057,18 +1057,18 @@ export const MinutesDetailPage: React.FC = () => {
           aria-labelledby="link-event-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkEventModal(false); }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full">
-            <div className="px-6 py-4 border-b border-white/20 flex justify-between items-center">
-              <h3 id="link-event-title" className="text-lg font-medium text-white">Link to Meeting Event</h3>
-              <button onClick={() => setShowLinkEventModal(false)} className="text-slate-400 hover:text-slate-200" aria-label="Close dialog">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full">
+            <div className="px-6 py-4 border-b border-theme-surface-border flex justify-between items-center">
+              <h3 id="link-event-title" className="text-lg font-medium text-theme-text-primary">Link to Meeting Event</h3>
+              <button onClick={() => setShowLinkEventModal(false)} className="text-theme-text-muted hover:text-theme-text-secondary" aria-label="Close dialog">
                 <span aria-hidden="true">&times;</span>
               </button>
             </div>
             <div className="px-6 py-4 max-h-96 overflow-y-auto">
               {loadingEvents ? (
-                <p className="text-sm text-slate-400">Loading events...</p>
+                <p className="text-sm text-theme-text-muted">Loading events...</p>
               ) : availableEvents.length === 0 ? (
-                <p className="text-sm text-slate-400">No business meeting events found.</p>
+                <p className="text-sm text-theme-text-muted">No business meeting events found.</p>
               ) : (
                 <div className="space-y-2">
                   {availableEvents.map(ev => (

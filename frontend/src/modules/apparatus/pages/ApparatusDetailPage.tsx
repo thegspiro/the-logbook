@@ -689,14 +689,14 @@ export const ApparatusDetailPage: React.FC = () => {
                 {equipment.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-slate-900/50 rounded-lg p-4 border border-white/10"
+                    className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-white font-medium">{item.name}</p>
-                      <span className="text-slate-400 text-sm">Qty: {item.quantity}</span>
+                      <p className="text-theme-text-primary font-medium">{item.name}</p>
+                      <span className="text-theme-text-muted text-sm">Qty: {item.quantity}</span>
                     </div>
                     {item.locationOnApparatus && (
-                      <p className="text-slate-400 text-sm flex items-center gap-1">
+                      <p className="text-theme-text-muted text-sm flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         {item.locationOnApparatus}
                       </p>
@@ -725,14 +725,14 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Documents Tab */}
         {activeTab === 'documents' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white font-bold flex items-center gap-2">
+              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <FileText className="w-5 h-5" />
                 Documents & Photos
               </h2>
               <div className="flex gap-2">
-                <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm flex items-center gap-2">
+                <button className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors text-sm flex items-center gap-2">
                   <Camera className="w-4 h-4" />
                   Add Photo
                 </button>
@@ -742,7 +742,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 </button>
               </div>
             </div>
-            <p className="text-slate-400 text-center py-8">
+            <p className="text-theme-text-muted text-center py-8">
               Document management will be available in the full implementation.
             </p>
           </div>

@@ -292,20 +292,20 @@ export const ProspectDetailPage: React.FC = () => {
       {/* Tab Content */}
       {activeTab === 'progress' && (
         <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Pipeline Steps</h2>
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Pipeline Steps</h2>
           <div className="space-y-1">
             {sortedProgress.map((progress, _idx) => (
               <div
                 key={progress.id}
                 className={`flex items-start gap-4 p-4 rounded-lg transition-colors ${
-                  progress.status === 'in_progress' ? 'bg-blue-500/10 border border-blue-500/20' : 'hover:bg-slate-700/50'
+                  progress.status === 'in_progress' ? 'bg-blue-500/10 border border-blue-500/20' : 'hover:bg-theme-surface-hover'
                 }`}
               >
                 <div className="mt-0.5">{getStepIcon(progress)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-medium text-white">{progress.step?.name || 'Unknown Step'}</span>
+                      <span className="font-medium text-theme-text-primary">{progress.step?.name || 'Unknown Step'}</span>
                       {progress.step?.step_type && (
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                           progress.step.step_type === 'action'
@@ -322,7 +322,7 @@ export const ProspectDetailPage: React.FC = () => {
                       )}
                     </div>
                     {progress.completed_at && (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-theme-text-muted">
                         {formatDate(progress.completed_at, tz)}
                       </span>
                     )}
