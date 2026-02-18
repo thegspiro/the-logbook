@@ -402,6 +402,22 @@ The dashboard endpoint serves member-level data (notifications, shifts, training
 
 ---
 
+## Completed Architectural Improvements (2026-02-18)
+
+The following cross-cutting improvements have been implemented:
+
+### Unified Location Architecture
+- **Problem**: Two parallel location systems (`locations` vs `facilities`) with no cross-reference. Training used free-text location strings with no validation. Events referenced `locations.id` but training didn't.
+- **Solution**: Made `locations` the universal "place picker" table. Added `facility_id` FK on Location so it bridges to Facility when the module is enabled. Added `location_id` FK on TrainingRecord. Training session creation now uses a location dropdown (matching EventForm's pattern) with "Other Location" fallback.
+- **Files changed**: `location.py` model, `training.py` model, `location.py` schema, `locations.py` API, `CreateTrainingSessionPage.tsx`, `api.ts`, `types/training.ts`
+
+### Public Kiosk Display System
+- **Problem**: No way to leave a tablet in a room showing auto-updating QR codes for event check-in.
+- **Solution**: Each location gets a unique, non-guessable `display_code`. Public endpoint at `/api/public/v1/display/{code}` returns current events. Frontend kiosk page at `/display/:code` auto-polls every 30 seconds, cycles through overlapping events, shows idle state when no events active. No authentication required — security boundary is on the scanning member's device.
+- **Files created**: `LocationKioskPage.tsx`, `display.py` (public API), migration for `display_code`
+
+---
+
 ## Summary of All 15 Improvements
 
 | # | Role | Improvement | Type |

@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-18 (includes Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-18 (includes unified location architecture with facility bridge and training location dropdown; public kiosk display system for tablets with auto-refreshing QR codes; plus Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -24,10 +24,11 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 12. [Documents Module Issues](#documents-module-issues)
 13. [Events Module Issues](#events-module-issues)
 14. [Facilities Module](#facilities-module)
-15. [Theme & Display Issues](#theme--display-issues)
-16. [Dashboard Issues](#dashboard-issues)
-17. [TypeScript Build Issues](#typescript-build-issues)
-18. [Error Message Reference](#error-message-reference)
+15. [Locations & Kiosk Display](#locations--kiosk-display)
+16. [Theme & Display Issues](#theme--display-issues)
+17. [Dashboard Issues](#dashboard-issues)
+18. [TypeScript Build Issues](#typescript-build-issues)
+19. [Error Message Reference](#error-message-reference)
 19. [Error Handling Patterns](#error-handling-patterns)
 20. [Getting Help](#getting-help)
 
@@ -2971,6 +2972,109 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 2. **RSVP limit reached**: The event may have reached its maximum RSVP capacity. Admins can use RSVP override to bypass limits.
 
 3. **Missing `events.view` permission**: Users need at least view permission to RSVP.
+
+---
+
+## Locations & Kiosk Display
+
+### Overview
+
+The Locations system serves as the universal "place picker" across all modules (Events, Training, Meetings). Each location gets a unique display code for public kiosk/tablet URLs. When the Facilities module is enabled, locations can optionally link to Facility records via `facility_id` for deep building management data.
+
+**API Endpoints**: `/api/v1/locations/` (authenticated), `/api/public/v1/display/{code}` (public)
+**Permissions**: `locations.create`, `locations.edit`, `locations.delete`, `locations.manage`
+
+### Setting Up a Tablet Kiosk Display
+
+1. **Create locations** via the Locations page or the Setup Wizard (Settings > Locations).
+2. **Find the display code** — each room card shows its kiosk URL (e.g., `/display/x7k9m2p3`). Click it to copy.
+3. **Bookmark on the tablet** — open the URL in the tablet's browser and add to home screen. No login required.
+4. **Create events at that location** — when events are scheduled in that room, the QR code appears automatically within the check-in window (1 hour before start until event end).
+
+### Common Issues
+
+#### Kiosk Display Shows "Display Not Found"
+
+**Causes**:
+1. The display code in the URL is incorrect
+2. The location has been deactivated (`is_active = false`)
+3. Migration `20260218_0900` has not been applied (display codes not backfilled)
+
+**Solutions**:
+- Verify the display code on the Locations page — check the room card for the correct URL
+- Re-activate the location if it was deactivated
+- Run migrations: `docker exec the-logbook-backend-1 alembic upgrade head`
+
+---
+
+#### Kiosk Display Shows "No Active Events" When Event Is Scheduled
+
+**Causes**:
+1. The event is not assigned to this location (different `location_id` or uses free-text location)
+2. The event's check-in window hasn't opened yet (opens 1 hour before start)
+3. The event has been cancelled
+4. The event has ended (or was ended early by an admin)
+
+**Solutions**:
+- Verify the event's location is set to this room (not "Other Location" free-text)
+- Wait until 1 hour before the event start time
+- Check that the event is not cancelled in the Events list
+
+---
+
+#### Kiosk Display Shows "Unable to Connect"
+
+**Causes**:
+1. Tablet has lost Wi-Fi connectivity
+2. Backend server is down or unreachable
+
+**Solutions**:
+- Check the tablet's Wi-Fi connection
+- The display auto-retries every 30 seconds — it will reconnect when connectivity is restored
+- The red pulsing Wi-Fi icon in the header indicates a connection problem
+
+---
+
+#### Training Sessions Don't Show QR Codes on Kiosk
+
+**Causes**:
+1. Training session was created with "Other Location" (free-text) instead of selecting from the dropdown
+2. Training session location doesn't match the kiosk room
+
+**Solutions**:
+- When creating a training session, select the room from the location dropdown instead of typing manually
+- Edit the training event and update its location to the correct room
+
+---
+
+#### Display Code Missing for Existing Locations
+
+**Causes**:
+1. Location was created before migration `20260218_0900`
+2. Migration didn't run successfully
+
+**Solutions**:
+```bash
+# Run the migration to backfill display codes
+docker exec the-logbook-backend-1 alembic upgrade head
+
+# Verify display codes exist
+docker exec the-logbook-db-1 mysql -u root -p the_logbook \
+  -e "SELECT name, display_code FROM locations;"
+```
+
+---
+
+#### Locations Don't Appear in Training Session Dropdown
+
+**Causes**:
+1. No active locations exist (all deactivated)
+2. Locations haven't been set up yet
+
+**Solutions**:
+- Set up locations via the Setup Wizard (Settings > Locations)
+- Ensure locations are active (`is_active = true`)
+- The dropdown falls back to free-text input when no locations are available
 
 ---
 
