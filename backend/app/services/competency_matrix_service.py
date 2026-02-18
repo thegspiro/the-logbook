@@ -11,6 +11,7 @@ skills/certifications, color-coded by status:
 Gives training officers an at-a-glance department readiness picture.
 """
 
+import calendar
 from datetime import date, timedelta
 from typing import List, Dict, Optional
 from uuid import UUID
@@ -184,6 +185,35 @@ class CompetencyMatrixService:
             },
         }
 
+    @staticmethod
+    def _get_date_window(req, today: date):
+        """Return (start_date, end_date) for a requirement's frequency window."""
+        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+        current_year = today.year
+
+        if freq == "one_time":
+            return None, None
+        elif freq == "biannual":
+            base_year = req.year if req.year else current_year
+            return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+        elif freq == "quarterly":
+            quarter_month = ((today.month - 1) // 3) * 3 + 1
+            start_date = date(current_year, quarter_month, 1)
+            end_month = quarter_month + 2
+            end_year = current_year
+            if end_month > 12:
+                end_month -= 12
+                end_year += 1
+            end_day = calendar.monthrange(end_year, end_month)[1]
+            return start_date, date(end_year, end_month, end_day)
+        elif freq == "monthly":
+            start_date = date(current_year, today.month, 1)
+            end_day = calendar.monthrange(current_year, today.month)[1]
+            return start_date, date(current_year, today.month, end_day)
+        else:
+            yr = req.year if req.year else current_year
+            return date(yr, 1, 1), date(yr, 12, 31)
+
     def _evaluate_requirement_status(
         self,
         requirement: TrainingRequirement,
@@ -191,37 +221,133 @@ class CompetencyMatrixService:
         today: date,
         expiring_threshold: date,
     ) -> Dict:
-        """Evaluate a single requirement for a single member."""
+        """Evaluate a single requirement for a single member using type-aware matching."""
+        req_type = requirement.requirement_type.value if hasattr(requirement.requirement_type, 'value') else str(requirement.requirement_type)
+        start_date, end_date = self._get_date_window(requirement, today)
+        not_started = {"status": "not_started", "expiration_date": None, "completion_date": None, "details": None}
 
-        # For certification requirements, look for matching records
-        if requirement.requirement_type == RequirementType.CERTIFICATION:
+        # Filter completed records within the date window
+        completed = [r for r in user_records if r.status == TrainingStatus.COMPLETED]
+        if start_date and end_date:
+            windowed = [
+                r for r in completed
+                if r.completion_date and start_date <= r.completion_date <= end_date
+            ]
+        else:
+            windowed = completed
+
+        # ---- HOURS requirements: sum hours by training_type within date window ----
+        if req_type == "hours":
+            type_matched = windowed
+            if requirement.training_type:
+                type_matched = [r for r in windowed if r.training_type == requirement.training_type]
+
+            total_hours = sum(r.hours_completed or 0 for r in type_matched)
+            required = requirement.required_hours or 0
+
+            most_recent = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
+            if not most_recent:
+                return not_started
+
+            comp_date = most_recent.completion_date
+            exp_date = most_recent.expiration_date
+            details = f"{total_hours:.1f}/{required:.1f} hrs"
+
+            if required > 0 and total_hours >= required:
+                status = "current"
+            elif total_hours > 0:
+                status = "expiring_soon"  # partial progress shown as yellow
+            else:
+                return not_started
+
+            # Check expiration on most recent record
+            if exp_date and exp_date < today:
+                status = "expired"
+            elif exp_date and exp_date <= expiring_threshold and status == "current":
+                status = "expiring_soon"
+
+            return {
+                "status": status,
+                "expiration_date": exp_date.isoformat() if exp_date else None,
+                "completion_date": comp_date.isoformat() if comp_date else None,
+                "details": details,
+            }
+
+        # ---- COURSES requirements: check required course IDs ----
+        if req_type == "courses":
+            course_ids = requirement.required_courses or []
+            if not course_ids:
+                return not_started
+            completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
+            matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
+            most_recent = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
+
+            if matched_count >= len(course_ids):
+                status = "current"
+            elif matched_count > 0:
+                status = "expiring_soon"
+            else:
+                return not_started
+
+            comp_date = most_recent.completion_date if most_recent else None
+            exp_date = most_recent.expiration_date if most_recent else None
+            details = f"{matched_count}/{len(course_ids)} courses"
+            return {
+                "status": status,
+                "expiration_date": exp_date.isoformat() if exp_date else None,
+                "completion_date": comp_date.isoformat() if comp_date else None,
+                "details": details,
+            }
+
+        # ---- CERTIFICATION requirements ----
+        if req_type == "certification":
             matching = [
-                r for r in user_records
-                if r.course_name and requirement.name
-                and (
-                    requirement.name.lower() in r.course_name.lower()
+                r for r in completed
+                if (
+                    (requirement.training_type and r.training_type == requirement.training_type)
+                    or (r.course_name and requirement.name
+                        and requirement.name.lower() in r.course_name.lower())
                     or (r.certification_number and requirement.registry_code
-                        and requirement.registry_code.lower() in r.course_name.lower())
+                        and requirement.registry_code.lower() in r.certification_number.lower())
                 )
             ]
-        elif requirement.requirement_type == RequirementType.COURSES:
-            course_ids = requirement.required_courses or []
-            matching = [r for r in user_records if str(r.course_id) in course_ids]
-        else:
-            # For hours, shifts, calls — match by training type or category
+            if not matching:
+                return not_started
+
+            most_recent = max(matching, key=lambda r: r.completion_date or date.min)
+            exp_date = most_recent.expiration_date
+            comp_date = most_recent.completion_date
+            details = None
+            if most_recent.certification_number:
+                details = f"#{most_recent.certification_number}"
+                if most_recent.issuing_agency:
+                    details += f" ({most_recent.issuing_agency})"
+
+            if exp_date:
+                if exp_date < today:
+                    return {"status": "expired", "expiration_date": exp_date.isoformat(),
+                            "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+                elif exp_date <= expiring_threshold:
+                    return {"status": "expiring_soon", "expiration_date": exp_date.isoformat(),
+                            "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+
+            return {"status": "current", "expiration_date": exp_date.isoformat() if exp_date else None,
+                    "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
+
+        # ---- Fallback: shifts, calls, skills_evaluation, checklist, knowledge_test ----
+        matching = []
+        if requirement.training_type:
+            matching = [r for r in windowed if r.training_type == requirement.training_type]
+        if not matching and requirement.name:
             matching = [
-                r for r in user_records
-                if (requirement.training_type and r.training_type == requirement.training_type)
-                or (r.course_name and requirement.name
-                    and requirement.name.lower() in r.course_name.lower())
+                r for r in windowed
+                if r.course_name and requirement.name.lower() in r.course_name.lower()
             ]
 
         if not matching:
-            return {"status": "not_started", "expiration_date": None, "completion_date": None, "details": None}
+            return not_started
 
-        # Get most recent
         most_recent = max(matching, key=lambda r: r.completion_date or date.min)
-
         exp_date = most_recent.expiration_date
         comp_date = most_recent.completion_date
         details = None
@@ -232,23 +358,11 @@ class CompetencyMatrixService:
 
         if exp_date:
             if exp_date < today:
-                return {
-                    "status": "expired",
-                    "expiration_date": exp_date.isoformat(),
-                    "completion_date": comp_date.isoformat() if comp_date else None,
-                    "details": details,
-                }
+                return {"status": "expired", "expiration_date": exp_date.isoformat(),
+                        "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
             elif exp_date <= expiring_threshold:
-                return {
-                    "status": "expiring_soon",
-                    "expiration_date": exp_date.isoformat(),
-                    "completion_date": comp_date.isoformat() if comp_date else None,
-                    "details": details,
-                }
+                return {"status": "expiring_soon", "expiration_date": exp_date.isoformat(),
+                        "completion_date": comp_date.isoformat() if comp_date else None, "details": details}
 
-        return {
-            "status": "current",
-            "expiration_date": exp_date.isoformat() if exp_date else None,
-            "completion_date": comp_date.isoformat() if comp_date else None,
-            "details": details,
-        }
+        return {"status": "current", "expiration_date": exp_date.isoformat() if exp_date else None,
+                "completion_date": comp_date.isoformat() if comp_date else None, "details": details}

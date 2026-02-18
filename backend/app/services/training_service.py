@@ -4,6 +4,7 @@ Training Service
 Business logic for training management including courses, records, requirements, and reporting.
 """
 
+import calendar
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime, date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -264,13 +265,34 @@ class TrainingService:
 
         # Determine date range based on frequency
         today = date.today()
-        if requirement.frequency == "annual":
-            start_date = date(requirement.year, 1, 1) if requirement.year else date(today.year, 1, 1)
-            end_date = date(requirement.year, 12, 31) if requirement.year else date(today.year, 12, 31)
+        freq = requirement.frequency.value if hasattr(requirement.frequency, 'value') else str(requirement.frequency)
+        current_year = today.year
+
+        if freq == "one_time":
+            start_date = None
+            end_date = None
+        elif freq == "biannual":
+            base_year = requirement.year if requirement.year else current_year
+            start_date = date(base_year - 1, 1, 1)
+            end_date = date(base_year, 12, 31)
+        elif freq == "quarterly":
+            quarter_month = ((today.month - 1) // 3) * 3 + 1
+            start_date = date(current_year, quarter_month, 1)
+            end_month = quarter_month + 2
+            end_year = current_year
+            if end_month > 12:
+                end_month -= 12
+                end_year += 1
+            end_day = calendar.monthrange(end_year, end_month)[1]
+            end_date = date(end_year, end_month, end_day)
+        elif freq == "monthly":
+            start_date = date(current_year, today.month, 1)
+            end_day = calendar.monthrange(current_year, today.month)[1]
+            end_date = date(current_year, today.month, end_day)
         else:
-            # For other frequencies, use requirement dates or default to current year
-            start_date = requirement.start_date or date(today.year, 1, 1)
-            end_date = requirement.due_date or today
+            # Annual (default)
+            start_date = date(requirement.year, 1, 1) if requirement.year else date(current_year, 1, 1)
+            end_date = date(requirement.year, 12, 31) if requirement.year else date(current_year, 12, 31)
 
         # Get completed hours in the date range
         query = (
@@ -278,9 +300,12 @@ class TrainingService:
             .where(TrainingRecord.user_id == str(user_id))
             .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            .where(TrainingRecord.completion_date >= start_date)
-            .where(TrainingRecord.completion_date <= end_date)
         )
+        if start_date and end_date:
+            query = query.where(
+                TrainingRecord.completion_date >= start_date,
+                TrainingRecord.completion_date <= end_date,
+            )
 
         # Filter by training type if specified
         if requirement.training_type:

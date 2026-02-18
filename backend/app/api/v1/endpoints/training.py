@@ -11,6 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 from datetime import date, datetime
+import calendar
 
 from app.core.database import get_db
 from app.core.audit import log_audit_event
@@ -20,6 +21,8 @@ from app.models.training import (
     TrainingRequirement,
     TrainingCategory,
     TrainingStatus,
+    RequirementType,
+    RequirementFrequency,
 )
 from app.models.user import User
 from app.schemas.training import (
@@ -914,6 +917,191 @@ class MemberComplianceRow(BaseModel):
     completion_pct: float
 
 
+def _get_requirement_date_window(req, today: date):
+    """Return (start_date, end_date) for evaluating a requirement's compliance window."""
+    freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+    current_year = today.year
+
+    if freq == "one_time":
+        return None, None
+    elif freq == "biannual":
+        base_year = req.year if req.year else current_year
+        return date(base_year - 1, 1, 1), date(base_year, 12, 31)
+    elif freq == "quarterly":
+        quarter_month = ((today.month - 1) // 3) * 3 + 1
+        start_date = date(current_year, quarter_month, 1)
+        end_month = quarter_month + 2
+        end_year = current_year
+        if end_month > 12:
+            end_month -= 12
+            end_year += 1
+        end_day = calendar.monthrange(end_year, end_month)[1]
+        return start_date, date(end_year, end_month, end_day)
+    elif freq == "monthly":
+        start_date = date(current_year, today.month, 1)
+        end_day = calendar.monthrange(current_year, today.month)[1]
+        return start_date, date(current_year, today.month, end_day)
+    else:
+        # Annual (default)
+        yr = req.year if req.year else current_year
+        return date(yr, 1, 1), date(yr, 12, 31)
+
+
+def _evaluate_member_requirement(req, member_records, today: date):
+    """
+    Evaluate a single member's status for a single requirement.
+
+    Returns (status, latest_completion_date, latest_expiry_date).
+
+    Matching strategy depends on requirement_type:
+    - HOURS:          Sum hours of completed records matching training_type within date window
+    - COURSES:        Check if required course IDs are all completed
+    - CERTIFICATION:  Check for matching certification records (by name or training_type)
+    - SHIFTS/CALLS:   Count matching records within date window
+    - Others:         Match by training_type or name
+    """
+    req_type = req.requirement_type.value if hasattr(req.requirement_type, 'value') else str(req.requirement_type)
+    start_date, end_date = _get_requirement_date_window(req, today)
+
+    # Filter completed records within the date window
+    completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
+    if start_date and end_date:
+        windowed = [
+            r for r in completed
+            if r.completion_date and start_date <= r.completion_date <= end_date
+        ]
+    else:
+        windowed = completed
+
+    # ---- HOURS requirements: sum hours by training_type ----
+    if req_type == "hours":
+        type_matched = windowed
+        if req.training_type:
+            type_matched = [r for r in windowed if r.training_type == req.training_type]
+        # Also include records whose categories match this requirement's category_ids
+        if req.category_ids and not req.training_type:
+            type_matched = windowed  # All completed records count if no specific type
+
+        total_hours = sum(r.hours_completed or 0 for r in type_matched)
+        required = req.required_hours or 0
+
+        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
+        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
+        latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
+
+        if required > 0 and total_hours >= required:
+            return "completed", latest_comp, latest_exp
+        elif total_hours > 0:
+            return "in_progress", latest_comp, latest_exp
+        else:
+            return "not_started", None, None
+
+    # ---- COURSES requirements: check required course IDs ----
+    if req_type == "courses":
+        course_ids = req.required_courses or []
+        if not course_ids:
+            return "not_started", None, None
+
+        completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
+        matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
+
+        latest = max(windowed, key=lambda r: r.completion_date or date.min) if windowed else None
+        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
+        latest_exp = latest.expiration_date.isoformat() if latest and latest.expiration_date else None
+
+        if matched_count >= len(course_ids):
+            return "completed", latest_comp, latest_exp
+        elif matched_count > 0:
+            return "in_progress", latest_comp, latest_exp
+        else:
+            return "not_started", None, None
+
+    # ---- CERTIFICATION requirements: match by name, training_type, or cert number ----
+    if req_type == "certification":
+        matching = [
+            r for r in completed
+            if (
+                (req.training_type and r.training_type == req.training_type)
+                or (r.course_name and req.name and req.name.lower() in r.course_name.lower())
+                or (r.certification_number and req.registry_code
+                    and req.registry_code.lower() in r.certification_number.lower())
+            )
+        ]
+        if matching:
+            latest = max(matching, key=lambda r: r.completion_date or date.min)
+            latest_comp = latest.completion_date.isoformat() if latest.completion_date else None
+            latest_exp = latest.expiration_date.isoformat() if latest.expiration_date else None
+            if latest.expiration_date and latest.expiration_date < today:
+                return "expired", latest_comp, latest_exp
+            return "completed", latest_comp, latest_exp
+        return "not_started", None, None
+
+    # ---- SHIFTS requirements ----
+    if req_type == "shifts":
+        type_matched = windowed
+        if req.training_type:
+            type_matched = [r for r in windowed if r.training_type == req.training_type]
+        count = len(type_matched)
+        required = req.required_shifts or 0
+
+        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
+        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
+        latest_exp = None
+
+        if required > 0 and count >= required:
+            return "completed", latest_comp, latest_exp
+        elif count > 0:
+            return "in_progress", latest_comp, latest_exp
+        return "not_started", None, None
+
+    # ---- CALLS requirements ----
+    if req_type == "calls":
+        type_matched = windowed
+        if req.training_type:
+            type_matched = [r for r in windowed if r.training_type == req.training_type]
+        count = len(type_matched)
+        required = req.required_calls or 0
+
+        latest = max(type_matched, key=lambda r: r.completion_date or date.min) if type_matched else None
+        latest_comp = latest.completion_date.isoformat() if latest and latest.completion_date else None
+        latest_exp = None
+
+        if required > 0 and count >= required:
+            return "completed", latest_comp, latest_exp
+        elif count > 0:
+            return "in_progress", latest_comp, latest_exp
+        return "not_started", None, None
+
+    # ---- Fallback (skills_evaluation, checklist, knowledge_test, etc.) ----
+    matching = []
+    if req.training_type:
+        matching = [r for r in windowed if r.training_type == req.training_type]
+    if not matching and req.name:
+        matching = [
+            r for r in windowed
+            if r.course_name and req.name.lower() in r.course_name.lower()
+        ]
+
+    if matching:
+        latest = max(matching, key=lambda r: r.completion_date or date.min)
+        latest_comp = latest.completion_date.isoformat() if latest.completion_date else None
+        latest_exp = latest.expiration_date.isoformat() if latest.expiration_date else None
+        if latest.expiration_date and latest.expiration_date < today:
+            return "expired", latest_comp, latest_exp
+        return "completed", latest_comp, latest_exp
+    else:
+        # Check for in-progress records
+        in_progress = [r for r in member_records if r.status == TrainingStatus.IN_PROGRESS]
+        ip_matching = []
+        if req.training_type:
+            ip_matching = [r for r in in_progress if r.training_type == req.training_type]
+        if not ip_matching and req.name:
+            ip_matching = [r for r in in_progress if r.course_name and req.name.lower() in r.course_name.lower()]
+        if ip_matching:
+            return "in_progress", None, None
+    return "not_started", None, None
+
+
 @router.get("/compliance-matrix")
 async def get_compliance_matrix(
     db: AsyncSession = Depends(get_db),
@@ -921,7 +1109,9 @@ async def get_compliance_matrix(
 ):
     """
     Training compliance matrix: for each active member, shows status
-    of each training requirement (completed, expired, in_progress, not_started).
+    of each active training requirement (completed, expired, in_progress, not_started).
+    Uses requirement-type-aware matching (hours, courses, certifications, etc.)
+    with frequency-based date windows.
     """
     org_id = current_user.organization_id
 
@@ -937,16 +1127,19 @@ async def get_compliance_matrix(
     )
     members = members_result.scalars().all()
 
-    # Get all requirements for this org
+    # Get active requirements only
     reqs_result = await db.execute(
         select(TrainingRequirement)
-        .where(TrainingRequirement.organization_id == org_id)
+        .where(
+            TrainingRequirement.organization_id == org_id,
+            TrainingRequirement.active == True,  # noqa: E712
+        )
         .order_by(TrainingRequirement.name)
     )
     requirements = reqs_result.scalars().all()
 
     if not requirements:
-        return {"members": [], "requirements": []}
+        return {"members": [], "requirements": [], "generated_at": datetime.utcnow().isoformat()}
 
     # Get all training records for these members
     records_result = await db.execute(
@@ -958,7 +1151,7 @@ async def get_compliance_matrix(
     )
     all_records = records_result.scalars().all()
 
-    # Build lookup: {user_id: {course_id: [records]}}
+    # Build lookup: user_id -> [records]
     records_by_user = {}
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
@@ -972,41 +1165,19 @@ async def get_compliance_matrix(
         completed_count = 0
 
         for req in requirements:
-            # Find matching records for this requirement
-            matching = [
-                r for r in member_records
-                if r.course_id == req.course_id or (
-                    r.course_name and req.name and
-                    r.course_name.lower() == req.name.lower()
-                )
-            ]
+            req_status, comp_date, exp_date = _evaluate_member_requirement(
+                req, member_records, today
+            )
 
-            if matching:
-                # Get most recent completed record
-                completed_records = [
-                    r for r in matching
-                    if r.status == TrainingStatus.COMPLETED
-                ]
-                if completed_records:
-                    latest = max(completed_records, key=lambda r: r.completion_date or date.min)
-                    if latest.expiration_date and latest.expiration_date < today:
-                        req_status = "expired"
-                    else:
-                        req_status = "completed"
-                        completed_count += 1
-                else:
-                    in_progress = [r for r in matching if r.status == TrainingStatus.IN_PROGRESS]
-                    req_status = "in_progress" if in_progress else "not_started"
-            else:
-                req_status = "not_started"
+            if req_status == "completed":
+                completed_count += 1
 
-            latest_record = max(matching, key=lambda r: r.completion_date or date.min) if matching else None
             req_statuses.append(RequirementStatusItem(
                 requirement_id=req.id,
                 requirement_name=req.name,
                 status=req_status,
-                completion_date=latest_record.completion_date.isoformat() if latest_record and latest_record.completion_date else None,
-                expiry_date=latest_record.expiration_date.isoformat() if latest_record and latest_record.expiration_date else None,
+                completion_date=comp_date,
+                expiry_date=exp_date,
             ))
 
         pct = (completed_count / len(requirements) * 100) if requirements else 0
