@@ -661,7 +661,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {inactiveApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-white/5 hover:bg-theme-surface-secondary transition-colors"
+                      className="border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors"
                     >
                       <td className="p-3">
                         <input
@@ -752,7 +752,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Purge Note */}
           {inactiveApplicants.length > 0 && (
-            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-white/5 rounded-lg">
+            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
               <Info className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-text-muted">
                 Inactive applications are excluded from pipeline statistics.
@@ -798,7 +798,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {withdrawnApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-white/5 hover:bg-theme-surface-secondary transition-colors"
+                      className="border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors"
                     >
                       <td className="p-3">
                         <div
@@ -884,7 +884,7 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Info Note */}
           {withdrawnApplicants.length > 0 && (
-            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-white/5 rounded-lg">
+            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
               <Info className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0 mt-0.5" />
               <p className="text-xs text-theme-text-muted">
                 Withdrawn applications are from prospective members who voluntarily left the pipeline process.

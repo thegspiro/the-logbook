@@ -16,6 +16,7 @@ from app.models.training import (
     ShiftTemplate, ShiftPattern, ShiftAssignment,
     ShiftSwapRequest, ShiftTimeOff,
     AssignmentStatus, SwapRequestStatus, TimeOffStatus, PatternType,
+    BasicApparatus,
 )
 from app.models.user import User
 
@@ -29,6 +30,39 @@ class SchedulingService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ============================================
+    # Apparatus Enrichment
+    # ============================================
+
+    async def _get_apparatus_map(
+        self, organization_id: UUID, apparatus_ids: List[str]
+    ) -> Dict[str, Any]:
+        """Load BasicApparatus rows for a set of IDs, returning a dict keyed by id."""
+        if not apparatus_ids:
+            return {}
+        result = await self.db.execute(
+            select(BasicApparatus)
+            .where(BasicApparatus.organization_id == str(organization_id))
+            .where(BasicApparatus.id.in_(apparatus_ids))
+        )
+        return {str(a.id): a for a in result.scalars().all()}
+
+    def _enrich_shift_dict(
+        self, shift_dict: Dict[str, Any], apparatus_map: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Add apparatus_name, apparatus_unit_number, apparatus_positions to a shift dict."""
+        aid = shift_dict.get("apparatus_id")
+        if aid and aid in apparatus_map:
+            a = apparatus_map[aid]
+            shift_dict["apparatus_name"] = a.name
+            shift_dict["apparatus_unit_number"] = a.unit_number
+            shift_dict["apparatus_positions"] = a.positions or []
+        else:
+            shift_dict["apparatus_name"] = None
+            shift_dict["apparatus_unit_number"] = None
+            shift_dict["apparatus_positions"] = None
+        return shift_dict
 
     # ============================================
     # Shift Management

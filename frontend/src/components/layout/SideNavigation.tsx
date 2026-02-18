@@ -281,7 +281,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               </div>
             )}
             <div className="ml-3 min-w-0 flex-1">
-              <span className="text-white text-lg font-semibold break-words leading-tight">{departmentName}</span>
+              <span className="text-theme-text-primary text-lg font-semibold break-words leading-tight">{departmentName}</span>
             </div>
           </a>
           <button
@@ -319,7 +319,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       >
         <div className="flex flex-col h-full">
           {/* Logo Section */}
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-theme-surface-border">
             {collapsed ? (
               <>
                 <div className="flex items-center justify-center">
@@ -364,10 +364,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     </div>
                   )}
                   <div className="ml-3 min-w-0">
-                    <span className="text-white text-sm font-semibold block break-words leading-tight">
+                    <span className="text-theme-text-primary text-sm font-semibold block break-words leading-tight">
                       {departmentName}
                     </span>
-                    <p className="text-slate-300 text-xs">Dashboard</p>
+                    <p className="text-theme-text-muted text-xs">Dashboard</p>
                   </div>
                 </a>
                 <button

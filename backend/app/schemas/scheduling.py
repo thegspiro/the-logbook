@@ -48,6 +48,9 @@ class ShiftResponse(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    apparatus_unit_number: Optional[str] = None
+    apparatus_positions: Optional[List[str]] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None

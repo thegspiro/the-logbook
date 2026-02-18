@@ -331,7 +331,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               <div className="mx-4 mt-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-medium text-amber-300">Application Inactive</span>
+                  <span className="text-sm font-medium text-amber-600 dark:text-amber-300">Application Inactive</span>
                 </div>
                 <p className="text-xs text-theme-text-muted">
                   This application was marked inactive due to no activity
@@ -459,14 +459,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         <span className="text-xs text-theme-text-muted">Status</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           currentElectionPackage.status === 'draft'
-                            ? 'bg-slate-600/50 text-slate-300'
+                            ? 'bg-slate-500/20 text-theme-text-muted'
                             : currentElectionPackage.status === 'ready'
-                              ? 'bg-emerald-500/20 text-emerald-300'
+                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
                               : currentElectionPackage.status === 'added_to_ballot'
-                                ? 'bg-purple-500/20 text-purple-300'
+                                ? 'bg-purple-500/20 text-purple-600 dark:text-purple-300'
                                 : currentElectionPackage.status === 'elected'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-red-500/20 text-red-300'
+                                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
+                                  : 'bg-red-500/20 text-red-600 dark:text-red-300'
                         }`}>
                           {currentElectionPackage.status.replace(/_/g, ' ')}
                         </span>
@@ -559,7 +559,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       {/* Ready state info */}
                       {currentElectionPackage.status === 'ready' && (
                         <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
-                          <p className="text-xs text-emerald-300">
+                          <p className="text-xs text-emerald-600 dark:text-emerald-300">
                             This package is ready for the secretary to add to a ballot.
                             {currentElectionPackage.submitted_at && (
                               <> Submitted {formatDateTime(currentElectionPackage.submitted_at, tz)}.</>
@@ -586,10 +586,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         }`}>
                           <p className={`text-xs ${
                             currentElectionPackage.status === 'elected'
-                              ? 'text-emerald-300'
+                              ? 'text-emerald-600 dark:text-emerald-300'
                               : currentElectionPackage.status === 'not_elected'
-                                ? 'text-red-300'
-                                : 'text-purple-300'
+                                ? 'text-red-600 dark:text-red-300'
+                                : 'text-purple-600 dark:text-purple-300'
                           }`}>
                             {currentElectionPackage.status === 'added_to_ballot' &&
                               'This applicant has been added to a ballot and is awaiting election results.'}
@@ -632,7 +632,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               ) : isCurrent ? (
                                 <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 flex-shrink-0" />
                               ) : (
-                                <Circle className="w-5 h-5 text-slate-600 flex-shrink-0" />
+                                <Circle className="w-5 h-5 text-slate-400 dark:text-slate-600 flex-shrink-0" />
                               )}
                               {idx < applicant.stage_history.length - 1 && (
                                 <div className="w-px h-full min-h-[24px] bg-theme-surface-border my-1" />
@@ -812,7 +812,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 {/* Reject confirmation */}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-300 mb-2">
+                    <p className="text-sm text-red-600 dark:text-red-300 mb-2">
                       Are you sure you want to reject this applicant? This action cannot be easily undone.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
@@ -926,7 +926,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 )}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-300 mb-2">
+                    <p className="text-sm text-red-600 dark:text-red-300 mb-2">
                       Are you sure you want to reject this applicant? This action cannot be easily undone.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
@@ -1042,7 +1042,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 )}
                 {showRejectConfirm && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-300 mb-2">
+                    <p className="text-sm text-red-600 dark:text-red-300 mb-2">
                       Are you sure you want to reject this applicant?
                     </p>
                     <div className="flex items-center gap-2 justify-end">
