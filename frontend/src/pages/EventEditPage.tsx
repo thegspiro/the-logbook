@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Calendar, ArrowLeft } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { EventCreate, Event } from '../types/event';
@@ -67,7 +68,7 @@ export const EventEditPage: React.FC = () => {
 
   if (error && !event) {
     return (
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
@@ -112,56 +113,42 @@ export const EventEditPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Breadcrumb */}
-      <nav className="flex mb-6" aria-label="Breadcrumb">
-        <ol className="flex items-center space-x-2 text-sm text-theme-text-muted">
-          <li>
-            <Link to="/events" className="hover:text-theme-text-primary">
-              Events
-            </Link>
-          </li>
-          <li>
-            <svg className="h-4 w-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </li>
-          <li>
-            <Link to={`/events/${eventId}`} className="hover:text-theme-text-primary">
-              {event.title}
-            </Link>
-          </li>
-          <li>
-            <svg className="h-4 w-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </li>
-          <li className="text-theme-text-primary font-medium">Edit</li>
-        </ol>
-      </nav>
-
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-theme-text-primary">Edit Event</h1>
-        <p className="mt-1 text-sm text-theme-text-secondary">
-          Update the details for &ldquo;{event.title}&rdquo;.
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <Link
+            to={`/events/${eventId}`}
+            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Event
+          </Link>
+          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
+            <Calendar className="w-8 h-8 text-red-700" />
+            <span>Edit Event</span>
+          </h1>
+          <p className="text-theme-text-muted mt-1">
+            Update the details for &ldquo;{event.title}&rdquo;.
+          </p>
         </div>
-      )}
 
-      <EventForm
-        initialData={initialData}
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        submitLabel="Save Changes"
-        isSubmitting={isSubmitting}
-      />
-    </div>
+        {error && (
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        {/* Form Card */}
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border">
+          <EventForm
+            initialData={initialData}
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            submitLabel="Save Changes"
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      </main>
     </div>
   );
 };

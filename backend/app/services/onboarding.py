@@ -556,7 +556,11 @@ class OnboardingService:
         enabled_modules: List[str]
     ) -> Dict[str, bool]:
         """
-        Configure which modules are enabled
+        Configure which modules are enabled.
+
+        Writes to **both** OnboardingStatus.enabled_modules (for onboarding
+        state tracking) and Organization.settings.modules (the canonical
+        source of truth used by the rest of the application).
 
         Args:
             enabled_modules: List of module names to enable
@@ -599,6 +603,25 @@ class OnboardingService:
         if status:
             status.enabled_modules = final_modules
             await self._mark_step_completed(status, 9, "modules")  # Step 9 in new flow
+
+        # ── Also persist to Organization.settings.modules (canonical store) ──
+        # Configurable module keys that the Settings page manages
+        configurable_keys = [
+            "training", "inventory", "scheduling", "elections", "minutes",
+            "reports", "notifications", "mobile", "forms", "integrations",
+            "facilities",
+        ]
+        modules_dict = {k: k in final_modules for k in configurable_keys}
+
+        result = await self.db.execute(select(Organization).limit(1))
+        org = result.scalar_one_or_none()
+        if org:
+            settings_dict = dict(org.settings or {})
+            settings_dict["modules"] = modules_dict
+            org.settings = settings_dict
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(org, "settings")
+            await self.db.flush()
 
         return {module: module in final_modules for module in available_modules}
 

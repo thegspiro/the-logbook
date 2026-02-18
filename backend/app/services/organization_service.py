@@ -35,20 +35,23 @@ class OrganizationService:
         )
         return result.scalar_one_or_none()
 
-    async def _resolve_module_settings(self, settings_dict: Dict[str, Any]) -> ModuleSettings:
+    async def _resolve_module_settings(
+        self,
+        settings_dict: Dict[str, Any],
+        org: Optional["Organization"] = None,
+    ) -> ModuleSettings:
         """
-        Build ModuleSettings from org settings, falling back to onboarding
-        status if org.settings.modules is empty or missing.
+        Build ModuleSettings from org.settings.modules — the single
+        canonical source of truth for module enablement.
 
-        During onboarding, enabled modules are saved to OnboardingStatus.enabled_modules
-        (a list of module ID strings). The Settings page reads from org.settings.modules
-        (a dict of module_key -> bool). If the dict was never populated (common after
-        initial onboarding), we fall back to the onboarding list so modules that the
-        user enabled during setup actually show as enabled.
+        For backward-compatibility with installations that completed
+        onboarding before modules were written to org.settings, we
+        perform a one-time migration from OnboardingStatus.enabled_modules
+        and persist the result so subsequent reads are fast and consistent.
         """
         modules = settings_dict.get("modules", {})
 
-        # If modules dict has any True values, use it directly
+        # Happy path: org.settings.modules already populated
         if modules and any(v is True for v in modules.values()):
             return ModuleSettings(
                 training=modules.get("training", False),
@@ -64,13 +67,13 @@ class OrganizationService:
                 facilities=modules.get("facilities", False),
             )
 
-        # Fallback: check onboarding status for enabled modules list
+        # ── One-time migration from legacy OnboardingStatus ──
         onboarding_result = await self.db.execute(select(OnboardingStatus).limit(1))
         onboarding = onboarding_result.scalar_one_or_none()
 
         if onboarding and onboarding.enabled_modules:
             enabled_list = onboarding.enabled_modules
-            return ModuleSettings(
+            migrated = ModuleSettings(
                 training="training" in enabled_list,
                 inventory="inventory" in enabled_list,
                 scheduling="scheduling" in enabled_list,
@@ -84,7 +87,30 @@ class OrganizationService:
                 facilities="facilities" in enabled_list,
             )
 
-        # No data anywhere - return all False
+            # Persist to org.settings.modules so we never need the
+            # fallback again — single source of truth going forward.
+            if org is not None:
+                new_settings = dict(settings_dict)
+                new_settings["modules"] = {
+                    "training": migrated.training,
+                    "inventory": migrated.inventory,
+                    "scheduling": migrated.scheduling,
+                    "elections": migrated.elections,
+                    "minutes": migrated.minutes,
+                    "reports": migrated.reports,
+                    "notifications": migrated.notifications,
+                    "mobile": migrated.mobile,
+                    "forms": migrated.forms,
+                    "integrations": migrated.integrations,
+                    "facilities": migrated.facilities,
+                }
+                org.settings = new_settings
+                flag_modified(org, "settings")
+                await self.db.flush()
+
+            return migrated
+
+        # No data anywhere — return all False
         return ModuleSettings()
 
     async def get_organization_settings(
@@ -126,8 +152,8 @@ class OrganizationService:
             use_tls=email_service.get("use_tls", True),
         )
 
-        # Parse module settings (with onboarding fallback)
-        module_settings = await self._resolve_module_settings(settings_dict)
+        # Parse module settings (auto-migrates from onboarding if needed)
+        module_settings = await self._resolve_module_settings(settings_dict, org=org)
 
         # Parse membership ID settings
         membership_id = settings_dict.get("membership_id", {})
@@ -205,7 +231,7 @@ class OrganizationService:
             )
 
         settings_dict = org.settings or {}
-        module_settings = await self._resolve_module_settings(settings_dict)
+        module_settings = await self._resolve_module_settings(settings_dict, org=org)
 
         return EnabledModulesResponse(
             enabled_modules=module_settings.get_enabled_modules(),
@@ -231,29 +257,27 @@ class OrganizationService:
         if not org:
             raise ValueError("Organization not found")
 
-        # Get current settings
+        # Get current settings — _resolve_module_settings will auto-migrate
+        # from onboarding data if org.settings.modules is empty.
         current_settings = org.settings or {}
-        current_modules = current_settings.get("modules", {})
+        resolved = await self._resolve_module_settings(current_settings, org=org)
+        # Re-read settings after potential migration flush
+        current_settings = org.settings or {}
+        current_modules = current_settings.get("modules", {
+            "training": resolved.training,
+            "inventory": resolved.inventory,
+            "scheduling": resolved.scheduling,
+            "elections": resolved.elections,
+            "minutes": resolved.minutes,
+            "reports": resolved.reports,
+            "notifications": resolved.notifications,
+            "mobile": resolved.mobile,
+            "forms": resolved.forms,
+            "integrations": resolved.integrations,
+            "facilities": resolved.facilities,
+        })
 
-        # If modules dict is empty, seed it from the resolved settings
-        # (which includes onboarding fallback) so we don't lose existing state
-        if not current_modules or not any(v is True for v in current_modules.values()):
-            resolved = await self._resolve_module_settings(current_settings)
-            current_modules = {
-                "training": resolved.training,
-                "inventory": resolved.inventory,
-                "scheduling": resolved.scheduling,
-                "elections": resolved.elections,
-                "minutes": resolved.minutes,
-                "reports": resolved.reports,
-                "notifications": resolved.notifications,
-                "mobile": resolved.mobile,
-                "forms": resolved.forms,
-                "integrations": resolved.integrations,
-                "facilities": resolved.facilities,
-            }
-
-        # Update with new module settings
+        # Merge the incoming toggles
         updated_modules = {**current_modules, **module_updates}
         current_settings["modules"] = updated_modules
 
