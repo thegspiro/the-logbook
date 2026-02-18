@@ -31,6 +31,7 @@ import {
   Plug,
   Send,
   MapPin,
+  Rocket,
 } from 'lucide-react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -177,6 +178,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     // ── Administration section (only shown to users with admin perms) ──
     ...(hasAnyAdminPermission ? [
       { label: 'Administration', path: '#', icon: Shield, isSectionLabel: true } as NavItem,
+      { label: 'Department Setup', path: '/setup', icon: Rocket, permission: 'settings.manage' } as NavItem,
       {
         label: 'Members',
         path: '#',

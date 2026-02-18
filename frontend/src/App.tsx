@@ -108,6 +108,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ defa
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })));
 const RoleManagementPage = lazy(() => import('./pages/RoleManagementPage').then(m => ({ default: m.RoleManagementPage })));
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
+const DepartmentSetupPage = lazy(() => import('./pages/DepartmentSetupPage'));
 
 /**
  * Main Application Component
@@ -235,6 +236,7 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/account" element={<UserSettingsPage />} />
               <Route path="/settings/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RoleManagementPage /></ProtectedRoute>} />
+              <Route path="/setup" element={<ProtectedRoute requiredPermission="settings.manage"><DepartmentSetupPage /></ProtectedRoute>} />
 
               {/* Reports */}
               <Route path="/reports" element={<ReportsPage />} />
