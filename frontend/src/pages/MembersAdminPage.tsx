@@ -687,7 +687,7 @@ export const MembersAdminPage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingProfile(false);
@@ -695,7 +695,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -720,15 +720,15 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="manage-roles-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="manage-roles-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="manage-roles-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Roles for {selectedUser.full_name || selectedUser.username}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-theme-text-muted mb-4">
                 Select the roles to assign to this member
               </p>
 
@@ -736,17 +736,17 @@ export const MembersAdminPage: React.FC = () => {
                 {roles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedRoleIds.includes(role.id)}
                       onChange={() => handleToggleRole(role.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                     />
                     <div className="ml-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white">
+                        <span className="text-sm font-medium text-theme-text-primary">
                           {role.name}
                         </span>
                         {role.is_system && (
@@ -756,7 +756,7 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                       {role.description && (
-                        <p className="text-xs text-slate-400 mt-1">{role.description}</p>
+                        <p className="text-xs text-theme-text-muted mt-1">{role.description}</p>
                       )}
                     </div>
                   </label>
@@ -764,7 +764,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingRoles(false);
@@ -772,7 +772,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>

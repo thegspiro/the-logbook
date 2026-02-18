@@ -434,7 +434,7 @@ const PipelineDetailPage: React.FC = () => {
                     <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border">
                       {/* Phase header */}
                       <div
-                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-750"
+                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-theme-surface-hover"
                         onClick={() => togglePhase(phase.id)}
                       >
                         <div className="flex items-center space-x-3">

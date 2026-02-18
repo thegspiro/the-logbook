@@ -582,8 +582,8 @@ export const MinutesDetailPage: React.FC = () => {
 
         {/* Attendees */}
         {minutes.attendees && minutes.attendees.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <h3 className="text-sm font-medium text-slate-200 mb-2">Attendees ({minutes.attendees.length})</h3>
+          <div className="mt-4 pt-4 border-t border-theme-surface-border">
+            <h3 className="text-sm font-medium text-theme-text-secondary mb-2">Attendees ({minutes.attendees.length})</h3>
             <div className="flex flex-wrap gap-2">
               {minutes.attendees.map((a, i) => (
                 <span
@@ -601,7 +601,7 @@ export const MinutesDetailPage: React.FC = () => {
       {/* Dynamic Content Sections */}
       <div className="space-y-4 mb-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-white">Meeting Sections</h2>
+          <h2 className="text-lg font-semibold text-theme-text-primary">Meeting Sections</h2>
           {canManage && isEditable && (
             <button
               onClick={() => setShowAddSection(!showAddSection)}
@@ -615,9 +615,9 @@ export const MinutesDetailPage: React.FC = () => {
 
         {/* Add Section Form */}
         {showAddSection && (
-          <div className="bg-white/5 border border-white/20 rounded-lg p-4 flex items-end gap-3" role="form" aria-label="Add new section">
+          <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 flex items-end gap-3" role="form" aria-label="Add new section">
             <div className="flex-1">
-              <label htmlFor="new-section-title" className="block text-sm font-medium text-slate-200 mb-1">Section Title</label>
+              <label htmlFor="new-section-title" className="block text-sm font-medium text-theme-text-secondary mb-1">Section Title</label>
               <input
                 id="new-section-title"
                 type="text"
@@ -644,8 +644,8 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.sections.length === 0 ? (
-          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-8 text-center">
-            <p className="text-slate-400">No sections defined for these minutes.</p>
+          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-8 text-center">
+            <p className="text-theme-text-muted">No sections defined for these minutes.</p>
             {canManage && isEditable && (
               <button
                 onClick={() => setShowAddSection(true)}
@@ -662,7 +662,7 @@ export const MinutesDetailPage: React.FC = () => {
               const isEditing = editingSection === section.key;
 
               return (
-                <div key={section.key} className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+                <div key={section.key} className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center gap-2">
                       {canManage && isEditable && (
@@ -670,7 +670,7 @@ export const MinutesDetailPage: React.FC = () => {
                           <button
                             onClick={() => handleReorderSection(idx, 'up')}
                             disabled={idx === 0 || saving}
-                            className="text-slate-500 hover:text-slate-300 disabled:opacity-30 p-0.5"
+                            className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
                             aria-label={`Move ${section.title} up`}
                           >
                             <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />

@@ -403,28 +403,28 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
                 {/* Target Role */}
                 {applicant.target_role_name && (
-                  <div className="mt-3 flex items-center gap-2 text-sm text-slate-400">
+                  <div className="mt-3 flex items-center gap-2 text-sm text-theme-text-muted">
                     <User className="w-4 h-4" />
-                    Target role: <span className="text-slate-300">{applicant.target_role_name}</span>
+                    Target role: <span className="text-theme-text-secondary">{applicant.target_role_name}</span>
                   </div>
                 )}
               </div>
 
               {/* Election Package Section */}
               {isOnElectionStage && (
-                <div className="p-4 border-b border-white/10">
-                  <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+                <div className="p-4 border-b border-theme-surface-border">
+                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                     Election Package
                   </h3>
                   {isLoadingElectionPackage ? (
                     <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                      <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
                     </div>
                   ) : currentElectionPackage ? (
                     <div className="space-y-3">
                       {/* Package status badge */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-400">Status</span>
+                        <span className="text-xs text-theme-text-muted">Status</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           currentElectionPackage.status === 'draft'
                             ? 'bg-slate-600/50 text-slate-300'
@@ -441,10 +441,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       </div>
 
                       {/* Applicant snapshot info */}
-                      <div className="bg-slate-800/70 rounded-lg p-3 text-xs space-y-1">
+                      <div className="bg-theme-surface rounded-lg p-3 text-xs space-y-1">
                         <div className="flex justify-between">
-                          <span className="text-slate-500">Name</span>
-                          <span className="text-slate-300">{currentElectionPackage.applicant_name}</span>
+                          <span className="text-theme-text-muted">Name</span>
+                          <span className="text-theme-text-secondary">{currentElectionPackage.applicant_name}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-500">Membership Type</span>

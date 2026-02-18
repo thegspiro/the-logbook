@@ -107,7 +107,7 @@ export const SettingsPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400">Loading settings...</div>
+            <div className="text-theme-text-muted">Loading settings...</div>
           </div>
         </div>
       </div>
@@ -118,8 +118,8 @@ export const SettingsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white">Organization Settings</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Organization Settings</h2>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Manage contact information visibility and membership ID settings.
           </p>
         </div>
@@ -173,11 +173,11 @@ export const SettingsPage: React.FC = () => {
         )}
 
         {/* Contact Information Visibility */}
-        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-white mb-4">
+        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
             Contact Information Visibility
           </h3>
-          <p className="text-sm text-slate-400 mb-6">
+          <p className="text-sm text-theme-text-muted mb-6">
             Control whether contact information is displayed on the member list page.
             When enabled, a privacy notice will be shown to remind users that this information
             is for department purposes only.
@@ -185,12 +185,12 @@ export const SettingsPage: React.FC = () => {
 
           <div className="space-y-4">
             {/* Master Toggle */}
-            <div className="flex items-center justify-between py-4 border-b border-white/20">
+            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
               <div>
-                <label htmlFor="enabled" className="text-sm font-medium text-white">
+                <label htmlFor="enabled" className="text-sm font-medium text-theme-text-primary">
                   Show Contact Information
                 </label>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-theme-text-muted">
                   Enable display of contact information for all members
                 </p>
               </div>
@@ -216,7 +216,7 @@ export const SettingsPage: React.FC = () => {
               <div className="pl-4 space-y-4">
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_email" className="text-sm font-medium text-white">
+                    <label htmlFor="show_email" className="text-sm font-medium text-theme-text-primary">
                       Show Email Addresses
                     </label>
                   </div>
@@ -239,7 +239,7 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_phone" className="text-sm font-medium text-white">
+                    <label htmlFor="show_phone" className="text-sm font-medium text-theme-text-primary">
                       Show Phone Numbers
                     </label>
                   </div>
@@ -262,7 +262,7 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label htmlFor="show_mobile" className="text-sm font-medium text-white">
+                    <label htmlFor="show_mobile" className="text-sm font-medium text-theme-text-primary">
                       Show Mobile Numbers
                     </label>
                   </div>
@@ -302,11 +302,11 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         {/* Membership ID Number */}
-        <div className="mt-6 bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-white mb-4">
+        <div className="mt-6 bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-theme-text-primary mb-4">
             Membership ID Number
           </h3>
-          <p className="text-sm text-slate-400 mb-6">
+          <p className="text-sm text-theme-text-muted mb-6">
             Configure membership ID numbers for your organization. When enabled,
             each member can be assigned a unique ID number displayed on their profile.
           </p>

@@ -323,7 +323,7 @@ const DocumentsPage: React.FC = () => {
                 placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -361,7 +361,7 @@ const DocumentsPage: React.FC = () => {
         {/* Folder Browser */}
         {!selectedFolder && (
           <div className="mb-8">
-            <h2 className="text-white text-lg font-semibold mb-4">Folders</h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold mb-4">Folders</h2>
             {folders.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {folders.map((folder) => (
@@ -373,7 +373,7 @@ const DocumentsPage: React.FC = () => {
                     <div className="flex items-start space-x-3">
                       <FolderOpen className={`w-8 h-8 ${folder.color || 'text-amber-400'} group-hover:scale-110 transition-transform`} />
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-white font-semibold truncate">{folder.name}</h3>
+                        <h3 className="text-theme-text-primary font-semibold truncate">{folder.name}</h3>
                         <p className="text-theme-text-muted text-sm mt-1">{folder.description || 'No description'}</p>
                         <p className="text-theme-text-muted text-xs mt-2">{folder.document_count} documents</p>
                       </div>
@@ -409,7 +409,7 @@ const DocumentsPage: React.FC = () => {
                       <div className="flex items-start space-x-3">
                         <File className="w-8 h-8 text-amber-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-semibold truncate">{doc.name}</h3>
+                          <h3 className="text-theme-text-primary font-semibold truncate">{doc.name}</h3>
                           {doc.description && (
                             <p className="text-theme-text-muted text-sm mt-1 line-clamp-2">{doc.description}</p>
                           )}
@@ -461,7 +461,7 @@ const DocumentsPage: React.FC = () => {
                             <div className="flex items-center space-x-2">
                               <File className="w-4 h-4 text-amber-400 flex-shrink-0" />
                               <div>
-                                <p className="text-white text-sm font-medium truncate max-w-xs">{doc.name}</p>
+                                <p className="text-theme-text-primary text-sm font-medium truncate max-w-xs">{doc.name}</p>
                                 {doc.description && (
                                   <p className="text-theme-text-muted text-xs truncate max-w-xs">{doc.description}</p>
                                 )}
@@ -493,7 +493,7 @@ const DocumentsPage: React.FC = () => {
             ) : (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
                 <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-                <h3 className="text-white text-xl font-bold mb-2">No Documents in This Folder</h3>
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Documents in This Folder</h3>
                 <p className="text-theme-text-secondary mb-6">
                   Upload documents to this folder to get started.
                 </p>
@@ -515,7 +515,7 @@ const DocumentsPage: React.FC = () => {
         {!selectedFolder && folders.length === 0 && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
             <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-            <h3 className="text-white text-xl font-bold mb-2">No Documents Yet</h3>
+            <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Documents Yet</h3>
             <p className="text-theme-text-secondary mb-6">
               Start building your document library by uploading SOPs, policies, and department files.
             </p>

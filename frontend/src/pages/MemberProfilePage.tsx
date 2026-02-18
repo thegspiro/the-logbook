@@ -573,27 +573,27 @@ export const MemberProfilePage: React.FC = () => {
                         type="checkbox"
                         checked={editForm.notification_preferences?.email}
                         onChange={() => handleNotificationToggle('email')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">Email notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-secondary">Email notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={editForm.notification_preferences?.sms}
                         onChange={() => handleNotificationToggle('sms')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">SMS notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-secondary">SMS notifications</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={editForm.notification_preferences?.push}
                         onChange={() => handleNotificationToggle('push')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">Push notifications</span>
+                      <span className="ml-2 text-sm text-theme-text-secondary">Push notifications</span>
                     </label>
                   </div>
                 </div>
@@ -609,7 +609,7 @@ export const MemberProfilePage: React.FC = () => {
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving}
-                    className="flex-1 px-4 py-2 bg-slate-800 text-slate-300 text-sm font-medium border border-white/30 rounded-md hover:bg-white/5 disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -626,7 +626,7 @@ export const MemberProfilePage: React.FC = () => {
 
           {/* Employment Info */}
           <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Employment</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Employment</h2>
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-theme-text-muted uppercase font-medium">Status</p>
@@ -643,24 +643,24 @@ export const MemberProfilePage: React.FC = () => {
 
           {/* Quick Stats */}
           <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Quick Stats</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Quick Stats</h2>
             <div className="space-y-3">
               {trainingEnabled && (
                 <>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-300">Active Training</span>
+                    <span className="text-sm text-theme-text-secondary">Active Training</span>
                     <span className="text-sm font-semibold text-white">
                       {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-300">Expiring Soon</span>
+                    <span className="text-sm text-theme-text-secondary">Expiring Soon</span>
                     <span className="text-sm font-semibold text-yellow-400">
                       {trainings.filter((t) => isExpiringSoon(t)).length}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-300">Total Hours</span>
+                    <span className="text-sm text-theme-text-secondary">Total Hours</span>
                     <span className="text-sm font-semibold text-white">
                       {trainings.reduce((sum, t) => sum + (t.hours_completed || 0), 0)} hrs
                     </span>
@@ -669,7 +669,7 @@ export const MemberProfilePage: React.FC = () => {
               )}
               {inventoryModuleEnabled && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-300">Assigned Equipment</span>
+                  <span className="text-sm text-theme-text-secondary">Assigned Equipment</span>
                   <span className="text-sm font-semibold text-white">
                     {inventoryItems.length}
                   </span>

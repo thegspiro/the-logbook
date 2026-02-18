@@ -439,33 +439,33 @@ export const ApparatusDetailPage: React.FC = () => {
               </div>
 
               {/* Important Dates */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                <h2 className="text-white font-bold mb-4 flex items-center gap-2">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <Calendar className="w-5 h-5" />
                   Important Dates
                 </h2>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-sm">Registration</span>
-                    <span className="text-white text-sm">
+                    <span className="text-theme-text-muted text-sm">Registration</span>
+                    <span className="text-theme-text-primary text-sm">
                       {formatDate(currentApparatus.registrationExpiration, tz)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-sm">Inspection</span>
-                    <span className="text-white text-sm">
+                    <span className="text-theme-text-muted text-sm">Inspection</span>
+                    <span className="text-theme-text-primary text-sm">
                       {formatDate(currentApparatus.inspectionExpiration, tz)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-sm">Insurance</span>
-                    <span className="text-white text-sm">
+                    <span className="text-theme-text-muted text-sm">Insurance</span>
+                    <span className="text-theme-text-primary text-sm">
                       {formatDate(currentApparatus.insuranceExpiration, tz)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-sm">Warranty</span>
-                    <span className="text-white text-sm">
+                    <span className="text-theme-text-muted text-sm">Warranty</span>
+                    <span className="text-theme-text-primary text-sm">
                       {formatDate(currentApparatus.warrantyExpiration, tz)}
                     </span>
                   </div>
@@ -474,8 +474,8 @@ export const ApparatusDetailPage: React.FC = () => {
 
               {/* NFPA Compliance */}
               {currentApparatus.nfpaTrackingEnabled && (
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                  <h2 className="text-white font-bold mb-4 flex items-center gap-2">
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                  <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                     <Shield className="w-5 h-5" />
                     NFPA Compliance
                   </h2>
@@ -485,9 +485,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
               {/* Notes */}
               {currentApparatus.notes && (
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                  <h2 className="text-white font-bold mb-4">Notes</h2>
-                  <p className="text-slate-300 text-sm whitespace-pre-wrap">
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                  <h2 className="text-theme-text-primary font-bold mb-4">Notes</h2>
+                  <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">
                     {currentApparatus.notes}
                   </p>
                 </div>
@@ -498,9 +498,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Maintenance Tab */}
         {activeTab === 'maintenance' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white font-bold flex items-center gap-2">
+              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Wrench className="w-5 h-5" />
                 Maintenance Records
               </h2>

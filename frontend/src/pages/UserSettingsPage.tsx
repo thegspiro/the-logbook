@@ -624,23 +624,23 @@ export const UserSettingsPage: React.FC = () => {
                       className={`relative flex flex-col items-center p-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-red-500 ${
                         isSelected
                           ? 'border-red-500 bg-red-50 dark:bg-red-500/10'
-                          : 'border-slate-200 dark:border-white/20 bg-slate-50 dark:bg-white/5 hover:border-slate-300 dark:hover:border-white/30'
+                          : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
                       }`}
                       aria-pressed={isSelected}
                     >
                       <Icon className={`w-8 h-8 mb-2 ${
                         isSelected
                           ? 'text-red-600 dark:text-red-400'
-                          : 'text-slate-500 dark:text-slate-400'
+                          : 'text-theme-text-muted'
                       }`} aria-hidden="true" />
                       <span className={`text-sm font-medium ${
                         isSelected
                           ? 'text-red-700 dark:text-red-300'
-                          : 'text-slate-700 dark:text-slate-200'
+                          : 'text-theme-text-secondary'
                       }`}>
                         {option.label}
                       </span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-center">
+                      <span className="text-xs text-theme-text-muted mt-1 text-center">
                         {option.description}
                       </span>
                       {isSelected && (
@@ -660,8 +660,8 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'notifications' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Notification Preferences</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Notification Preferences</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Manage how and when you receive notifications
               </p>
             </div>
