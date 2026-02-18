@@ -3,10 +3,10 @@
  *
  * Used by FormBuilder to add or edit fields. Supports all 16 field types
  * with type-specific configuration panels (options for select/radio/checkbox,
- * min/max for number, validation patterns, etc.).
+ * min/max for number, validation patterns, etc.) and conditional visibility.
  */
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, GitBranch } from 'lucide-react';
 import type { FormFieldCreate, FormFieldOption } from '../../services/api';
 
 const FIELD_TYPES = [
@@ -34,7 +34,24 @@ const WIDTH_OPTIONS = [
   { value: 'third', label: 'One Third' },
 ];
 
+const CONDITION_OPERATORS = [
+  { value: '', label: 'Always show (no condition)' },
+  { value: 'equals', label: 'Equals' },
+  { value: 'not_equals', label: 'Does not equal' },
+  { value: 'contains', label: 'Contains' },
+  { value: 'not_empty', label: 'Is answered (not empty)' },
+  { value: 'is_empty', label: 'Is not answered (empty)' },
+];
+
 const NEEDS_OPTIONS = ['select', 'multiselect', 'checkbox', 'radio'];
+
+/** Represents another field in the form that can be referenced as a condition source. */
+export interface SiblingField {
+  id: string;
+  label: string;
+  field_type: string;
+  options?: FormFieldOption[];
+}
 
 export interface FieldEditorProps {
   /** Existing field data (edit mode) or null (add mode) */
@@ -45,9 +62,16 @@ export interface FieldEditorProps {
   onClose: () => void;
   /** Next sort_order for new fields */
   nextSortOrder?: number;
+  /** Other fields in the form (for conditional logic targets) */
+  siblingFields?: SiblingField[];
+  /** ID of the field being edited (to exclude from condition targets) */
+  editingFieldId?: string;
 }
 
-const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorProps) => {
+const inputClass =
+  'w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500';
+
+const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields = [], editingFieldId }: FieldEditorProps) => {
   const isEditing = !!field;
 
   const [fieldType, setFieldType] = useState(field?.field_type || 'text');
@@ -62,6 +86,11 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
   const [width, setWidth] = useState(field?.width || 'full');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Conditional visibility state
+  const [conditionFieldId, setConditionFieldId] = useState(field?.condition_field_id || '');
+  const [conditionOperator, setConditionOperator] = useState(field?.condition_operator || '');
+  const [conditionValue, setConditionValue] = useState(field?.condition_value || '');
+
   // Reset form when field prop changes
   useEffect(() => {
     if (field) {
@@ -75,6 +104,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
       setMaxLength(field.max_length || undefined);
       setOptions(field.options || [{ value: '', label: '' }]);
       setWidth(field.width || 'full');
+      setConditionFieldId(field.condition_field_id || '');
+      setConditionOperator(field.condition_operator || '');
+      setConditionValue(field.condition_value || '');
     }
   }, [field]);
 
@@ -82,6 +114,13 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
   const isSectionHeader = fieldType === 'section_header';
   const isNumeric = fieldType === 'number';
   const isTextLike = ['text', 'textarea', 'email', 'phone'].includes(fieldType);
+
+  // Available sibling fields for condition (exclude self)
+  const conditionTargets = siblingFields.filter(
+    (f) => f.id !== editingFieldId && f.field_type !== 'section_header'
+  );
+  const selectedConditionField = conditionTargets.find((f) => f.id === conditionFieldId);
+  const conditionNeedsValue = ['equals', 'not_equals', 'contains'].includes(conditionOperator);
 
   const addOption = () => {
     setOptions([...options, { value: '', label: '' }]);
@@ -149,6 +188,15 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
       if (helpText.trim()) fieldData.help_text = helpText.trim();
     }
 
+    // Conditional visibility
+    if (conditionFieldId && conditionOperator) {
+      fieldData.condition_field_id = conditionFieldId;
+      fieldData.condition_operator = conditionOperator;
+      if (conditionNeedsValue) {
+        fieldData.condition_value = conditionValue;
+      }
+    }
+
     onSave(fieldData);
   };
 
@@ -211,9 +259,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
               placeholder={isSectionHeader ? 'e.g., Equipment Details' : 'e.g., Full Name'}
               required
               aria-required="true"
-              className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500 ${
-                errors.label ? 'border-red-500/50' : 'border-theme-surface-border'
-              }`}
+              className={`${inputClass} ${errors.label ? 'border-red-500/50' : ''}`}
             />
             {errors.label && <p className="text-xs text-red-700 dark:text-red-400 mt-1">{errors.label}</p>}
           </div>
@@ -229,7 +275,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
               value={helpText}
               onChange={(e) => setHelpText(e.target.value)}
               placeholder="Additional instructions for this field"
-              className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+              className={inputClass}
             />
           </div>
 
@@ -245,7 +291,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                   value={placeholder}
                   onChange={(e) => setPlaceholder(e.target.value)}
                   placeholder="Placeholder text..."
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className={inputClass}
                 />
               </div>
 
@@ -258,7 +304,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                   value={defaultValue}
                   onChange={(e) => setDefaultValue(e.target.value)}
                   placeholder="Pre-filled value"
-                  className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className={inputClass}
                 />
               </div>
 
@@ -390,6 +436,93 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
                 </div>
               )}
             </>
+          )}
+
+          {/* ── Conditional Visibility ── */}
+          {conditionTargets.length > 0 && (
+            <div className="border-t border-theme-surface-border pt-5">
+              <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary mb-3">
+                <GitBranch className="w-4 h-4" aria-hidden="true" />
+                Conditional Visibility
+              </label>
+              <p className="text-xs text-theme-text-muted mb-3">
+                Only show this field when another question has a specific answer.
+              </p>
+
+              {/* Condition Field */}
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="condition-field" className="block text-xs font-medium text-theme-text-muted mb-1">Show when this field...</label>
+                  <select
+                    id="condition-field"
+                    value={conditionFieldId}
+                    onChange={(e) => {
+                      setConditionFieldId(e.target.value);
+                      if (!e.target.value) {
+                        setConditionOperator('');
+                        setConditionValue('');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  >
+                    <option value="">No condition (always show)</option>
+                    {conditionTargets.map((f) => (
+                      <option key={f.id} value={f.id}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {conditionFieldId && (
+                  <div>
+                    <label htmlFor="condition-operator" className="block text-xs font-medium text-theme-text-muted mb-1">...meets this condition</label>
+                    <select
+                      id="condition-operator"
+                      value={conditionOperator}
+                      onChange={(e) => {
+                        setConditionOperator(e.target.value);
+                        if (!['equals', 'not_equals', 'contains'].includes(e.target.value)) {
+                          setConditionValue('');
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    >
+                      {CONDITION_OPERATORS.map((op) => (
+                        <option key={op.value} value={op.value}>{op.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {conditionFieldId && conditionNeedsValue && (
+                  <div>
+                    <label htmlFor="condition-value" className="block text-xs font-medium text-theme-text-muted mb-1">Value</label>
+                    {/* If the parent field has options, show a dropdown; otherwise free text */}
+                    {selectedConditionField?.options && selectedConditionField.options.length > 0 ? (
+                      <select
+                        id="condition-value"
+                        value={conditionValue}
+                        onChange={(e) => setConditionValue(e.target.value)}
+                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      >
+                        <option value="">Select a value...</option>
+                        {selectedConditionField.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id="condition-value"
+                        type="text"
+                        value={conditionValue}
+                        onChange={(e) => setConditionValue(e.target.value)}
+                        placeholder="e.g., yes"
+                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

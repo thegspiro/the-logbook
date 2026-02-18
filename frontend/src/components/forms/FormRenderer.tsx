@@ -139,11 +139,37 @@ const FormRenderer = ({
     });
   }, []);
 
+  /** Evaluate whether a field's visibility condition is satisfied. */
+  const isFieldVisible = useCallback(
+    (field: FieldDefinition): boolean => {
+      if (!field.condition_field_id || !field.condition_operator) return true;
+      const parentValue = (formData[field.condition_field_id] || '').trim();
+
+      switch (field.condition_operator) {
+        case 'equals':
+          return parentValue === (field.condition_value || '');
+        case 'not_equals':
+          return parentValue !== (field.condition_value || '');
+        case 'contains':
+          return parentValue.toLowerCase().includes((field.condition_value || '').toLowerCase());
+        case 'not_empty':
+          return parentValue.length > 0;
+        case 'is_empty':
+          return parentValue.length === 0;
+        default:
+          return true;
+      }
+    },
+    [formData],
+  );
+
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
 
     for (const field of fields) {
       if (field.field_type === 'section_header') continue;
+      // Skip validation for fields hidden by conditions
+      if (!isFieldVisible(field)) continue;
       const val = formData[field.id]?.trim() || '';
 
       if (field.required && !val) {
@@ -305,17 +331,21 @@ const FormRenderer = ({
       <div className={`space-y-${compact ? '3' : '5'}`}>
         {fields
           .sort((a, b) => a.sort_order - b.sort_order)
-          .map((field) => (
-            <FieldRenderer
-              key={field.id}
-              field={field}
-              value={formData[field.id] || ''}
-              onChange={handleFieldChange}
-              theme={theme}
-              disabled={readOnly}
-              error={fieldErrors[field.id]}
-            />
-          ))}
+          .map((field) => {
+            const visible = isFieldVisible(field);
+            if (!visible) return null;
+            return (
+              <FieldRenderer
+                key={field.id}
+                field={field}
+                value={formData[field.id] || ''}
+                onChange={handleFieldChange}
+                theme={theme}
+                disabled={readOnly}
+                error={fieldErrors[field.id]}
+              />
+            );
+          })}
       </div>
 
       {/* Actions */}

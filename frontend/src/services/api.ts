@@ -1884,6 +1884,9 @@ export interface FormField {
   max_value?: number;
   validation_pattern?: string;
   options?: FormFieldOption[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order: number;
   width: string;
   created_at: string;
@@ -1900,6 +1903,9 @@ export interface FormFieldCreate {
   min_length?: number;
   max_length?: number;
   options?: FormFieldOption[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order?: number;
   width?: string;
 }
@@ -2043,6 +2049,9 @@ export interface PublicFormField {
   min_value?: number;
   max_value?: number;
   options?: FormFieldOption[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order: number;
   width: string;
 }

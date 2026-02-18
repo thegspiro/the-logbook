@@ -164,6 +164,12 @@ class FormField(Base):
     # Options (for select, multiselect, radio, checkbox)
     options = Column(JSON)  # List of {value, label} objects
 
+    # Conditional visibility
+    # When set, this field is only shown if the referenced field's value matches.
+    condition_field_id = Column(String(36), nullable=True)   # ID of the controlling field
+    condition_operator = Column(String(20), nullable=True)    # "equals", "not_equals", "contains", "not_empty", "is_empty"
+    condition_value = Column(String(500), nullable=True)      # Value to compare against
+
     # Layout
     sort_order = Column(Integer, default=0, nullable=False)
     width = Column(String(20), default="full")  # "full", "half", "third"
