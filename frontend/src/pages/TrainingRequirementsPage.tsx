@@ -628,7 +628,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
       aria-labelledby="requirement-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h3 id="requirement-modal-title" className="text-theme-text-primary text-xl font-bold">
             {requirement ? 'Edit Requirement' : 'Create Requirement'}
@@ -1015,7 +1015,7 @@ const TemplateModal: React.FC<{
       aria-labelledby="template-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface rounded-lg max-w-4xl w-full p-6 max-h-[80vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-4xl w-full p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">Select a Template</h3>

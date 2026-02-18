@@ -417,7 +417,7 @@ export const BallotVotingPage: React.FC = () => {
           aria-labelledby="confirm-ballot-title"
           onKeyDown={(e) => { if (e.key === 'Escape' && !submitting) setShowConfirmation(false); }}
         >
-          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-theme-surface-border bg-theme-surface-secondary">
               <h3 id="confirm-ballot-title" className="text-lg font-bold text-theme-text-primary">Confirm Your Ballot</h3>
               <p className="text-sm text-theme-text-muted mt-1">

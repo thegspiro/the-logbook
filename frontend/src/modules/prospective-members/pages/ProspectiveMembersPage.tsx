@@ -898,7 +898,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -963,7 +963,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Add Applicant Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">Add Applicant</h2>
               <button

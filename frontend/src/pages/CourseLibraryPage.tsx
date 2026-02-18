@@ -160,7 +160,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <h2 className="text-xl font-bold text-theme-text-primary">
             {isEdit ? 'Edit Course' : 'Add New Course'}

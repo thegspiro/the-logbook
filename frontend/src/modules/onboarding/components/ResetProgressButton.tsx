@@ -102,7 +102,7 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
           />
 
           {/* Modal Content */}
-          <div className="relative bg-theme-surface border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="relative bg-theme-surface-modal border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
             {/* Close Button */}
             {!isResetting && (
               <button

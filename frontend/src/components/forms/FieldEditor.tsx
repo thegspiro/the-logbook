@@ -164,9 +164,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0 }: FieldEditorP
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
-      <div className="relative bg-theme-surface border border-theme-surface-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="relative bg-theme-surface-modal border border-theme-surface-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 bg-theme-surface border-b border-theme-surface-border px-6 py-4 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-theme-surface-modal border-b border-theme-surface-border px-6 py-4 flex items-center justify-between z-10">
           <h3 id="field-editor-title" className="text-lg font-semibold text-theme-text-primary">
             {isEditing ? 'Edit Field' : 'Add Field'}
           </h3>

@@ -512,10 +512,10 @@ export const ProspectDetailPage: React.FC = () => {
       {/* Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-semibold text-theme-text-primary">Transfer to Membership</h2>
-              <button onClick={() => setShowTransferModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+          <div className="bg-theme-surface-modal rounded-xl border border-theme-surface-border w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-white">Transfer to Membership</h2>
+              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>

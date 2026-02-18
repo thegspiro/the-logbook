@@ -92,7 +92,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       aria-labelledby="conversion-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isConverting) onClose(); }}
     >
-      <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-lg w-full">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <div className="flex items-center gap-3">

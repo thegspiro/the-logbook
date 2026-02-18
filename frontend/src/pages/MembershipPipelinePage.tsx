@@ -352,7 +352,7 @@ const MembershipPipelinePage: React.FC = () => {
       {/* Add Prospect Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal rounded-xl border border-theme-surface-border w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-semibold text-theme-text-primary">Add Prospective Member</h2>
               <button onClick={() => setShowAddModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">

@@ -944,7 +944,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="create-form-title" className="text-lg font-medium text-theme-text-primary">Create New Form</h3>
@@ -1035,7 +1035,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowShareModal(false)} aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="share-form-title" className="text-lg font-medium text-theme-text-primary flex items-center space-x-2">
@@ -1211,7 +1211,7 @@ const FormsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowIntegrationModal(false)} aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="integration-modal-title" className="text-lg font-medium text-theme-text-primary flex items-center space-x-2">

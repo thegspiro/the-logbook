@@ -505,7 +505,7 @@ const InventoryPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddItem(false)} aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border">
                 <form onSubmit={handleCreateItem}>
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
@@ -680,7 +680,7 @@ const InventoryPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <form onSubmit={handleCreateCategory}>
                   <div className="px-6 pt-5 pb-4">
                     <div className="flex justify-between items-center mb-4">
