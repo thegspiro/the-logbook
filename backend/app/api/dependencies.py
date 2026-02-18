@@ -197,5 +197,5 @@ def require_secretary():
     """Require user to have secretary permissions"""
     return require_permission(
         "settings.manage_contact_visibility",
-        "organization.edit_settings"
+        "organization.update_settings"
     )

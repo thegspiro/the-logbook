@@ -31,12 +31,12 @@ router = APIRouter()
 @router.get("", response_model=List[EmailTemplateResponse])
 async def list_email_templates(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_email_templates", "organization.edit_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
 ):
     """
     List all email templates for the current user's organization.
 
-    Requires: settings.manage_email_templates or organization.edit_settings permission.
+    Requires: settings.manage or organization.update_settings permission.
     """
     service = EmailTemplateService(db)
 
@@ -55,7 +55,7 @@ async def list_email_templates(
 async def get_email_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_email_templates", "organization.edit_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
 ):
     """Get a specific email template by ID"""
     from sqlalchemy import select
@@ -83,7 +83,7 @@ async def update_email_template(
     template_id: str,
     update_data: EmailTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_email_templates", "organization.edit_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
 ):
     """
     Update an email template's content, subject, CSS, or settings.
@@ -111,7 +111,7 @@ async def preview_email_template(
     template_id: str,
     preview_data: EmailTemplatePreviewRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_email_templates", "organization.edit_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
 ):
     """
     Preview a rendered email template with sample data.
@@ -161,7 +161,7 @@ async def upload_attachment(
     template_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_email_templates", "organization.edit_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
 ):
     """
     Upload a file attachment for an email template.
@@ -256,7 +256,7 @@ async def delete_attachment(
     template_id: str,
     attachment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_email_templates", "organization.edit_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "organization.update_settings")),
 ):
     """Delete an attachment from an email template"""
     from sqlalchemy import select
