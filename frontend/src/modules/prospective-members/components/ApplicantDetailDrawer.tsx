@@ -713,13 +713,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 {/* Withdraw confirmation */}
                 {showWithdrawConfirm && (
                   <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
-                    <p className="text-sm text-slate-300 mb-2">
+                    <p className="text-sm text-theme-text-secondary mb-2">
                       Withdraw this application? The applicant will be archived and removed from the active pipeline.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -744,7 +744,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -774,7 +774,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowWithdrawConfirm(true)}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 border border-white/10 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
                     title="Withdraw application"
                   >
                     <Archive className="w-3.5 h-3.5" />
@@ -829,13 +829,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 )}
                 {showWithdrawConfirm && (
                   <div className="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
-                    <p className="text-sm text-slate-300 mb-2">
+                    <p className="text-sm text-theme-text-secondary mb-2">
                       Withdraw this application? The applicant will be archived and removed from the active pipeline.
                     </p>
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -858,7 +858,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>
@@ -885,7 +885,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <button
                     onClick={() => setShowWithdrawConfirm(true)}
                     disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 border border-white/10 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
                     title="Withdraw application"
                   >
                     <Archive className="w-3.5 h-3.5" />
@@ -974,7 +974,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-300 hover:text-white transition-colors"
+                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
                       >
                         Cancel
                       </button>

@@ -140,7 +140,7 @@ export const ApparatusDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
         </div>
       </div>
@@ -198,7 +198,7 @@ export const ApparatusDetailPage: React.FC = () => {
                   <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                   {status && <StatusBadge status={status} />}
                   {currentApparatus.isArchived && (
-                    <span className="px-2 py-1 bg-slate-500/20 text-theme-text-muted text-xs rounded border border-slate-500/30">
+                    <span className="px-2 py-1 bg-slate-500/20 text-theme-text-muted text-xs rounded border border-theme-surface-border">
                       ARCHIVED
                     </span>
                   )}
@@ -513,7 +513,7 @@ export const ApparatusDetailPage: React.FC = () => {
             </div>
             {loadingTab ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
               </div>
             ) : maintenanceRecords.length === 0 ? (
               <p className="text-theme-text-muted text-center py-8">No maintenance records found.</p>
@@ -576,7 +576,7 @@ export const ApparatusDetailPage: React.FC = () => {
             </div>
             {loadingTab ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
               </div>
             ) : fuelLogs.length === 0 ? (
               <p className="text-theme-text-muted text-center py-8">No fuel logs found.</p>
@@ -628,7 +628,7 @@ export const ApparatusDetailPage: React.FC = () => {
             </div>
             {loadingTab ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
               </div>
             ) : operators.length === 0 ? (
               <p className="text-theme-text-muted text-center py-8">No operators assigned.</p>
@@ -680,7 +680,7 @@ export const ApparatusDetailPage: React.FC = () => {
             </div>
             {loadingTab ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
               </div>
             ) : equipment.length === 0 ? (
               <p className="text-theme-text-muted text-center py-8">No equipment assigned.</p>

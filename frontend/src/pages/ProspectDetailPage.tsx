@@ -384,32 +384,32 @@ export const ProspectDetailPage: React.FC = () => {
       {activeTab === 'info' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Contact Information</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Contact Information</h2>
             <dl className="space-y-3">
               <div className="flex items-center gap-3">
-                <Mail className="h-4 w-4 text-slate-400" />
-                <dt className="text-sm text-slate-400 w-20">Email</dt>
-                <dd className="text-sm text-white">{prospect.email}</dd>
+                <Mail className="h-4 w-4 text-theme-text-muted" />
+                <dt className="text-sm text-theme-text-muted w-20">Email</dt>
+                <dd className="text-sm text-theme-text-primary">{prospect.email}</dd>
               </div>
               {prospect.phone && (
                 <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                  <dt className="text-sm text-slate-400 w-20">Phone</dt>
-                  <dd className="text-sm text-white">{prospect.phone}</dd>
+                  <Phone className="h-4 w-4 text-theme-text-muted" />
+                  <dt className="text-sm text-theme-text-muted w-20">Phone</dt>
+                  <dd className="text-sm text-theme-text-primary">{prospect.phone}</dd>
                 </div>
               )}
               {prospect.mobile && (
                 <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                  <dt className="text-sm text-slate-400 w-20">Mobile</dt>
-                  <dd className="text-sm text-white">{prospect.mobile}</dd>
+                  <Phone className="h-4 w-4 text-theme-text-muted" />
+                  <dt className="text-sm text-theme-text-muted w-20">Mobile</dt>
+                  <dd className="text-sm text-theme-text-primary">{prospect.mobile}</dd>
                 </div>
               )}
               {prospect.date_of_birth && (
                 <div className="flex items-center gap-3">
-                  <Calendar className="h-4 w-4 text-slate-400" />
-                  <dt className="text-sm text-slate-400 w-20">DOB</dt>
-                  <dd className="text-sm text-white">{formatDate(prospect.date_of_birth, tz)}</dd>
+                  <Calendar className="h-4 w-4 text-theme-text-muted" />
+                  <dt className="text-sm text-theme-text-muted w-20">DOB</dt>
+                  <dd className="text-sm text-theme-text-primary">{formatDate(prospect.date_of_birth, tz)}</dd>
                 </div>
               )}
             </dl>

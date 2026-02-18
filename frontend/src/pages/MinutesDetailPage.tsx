@@ -1131,7 +1131,7 @@ export const MinutesDetailPage: React.FC = () => {
               <div className="mt-4 flex justify-end gap-3">
                 <button
                   onClick={() => { setShowRejectModal(false); setRejectReason(''); }}
-                  className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
+                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
                 >
                   Cancel
                 </button>
