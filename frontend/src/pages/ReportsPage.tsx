@@ -203,13 +203,13 @@ export const ReportsPage: React.FC = () => {
 
     return (
       <>
-        <p className="text-sm text-slate-300 mb-4">
-          Total members: <span className="font-semibold text-white">{totalCount}</span>
+        <p className="text-sm text-theme-text-secondary mb-4">
+          Total members: <span className="font-semibold text-theme-text-primary">{totalCount}</span>
         </p>
         {members.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Name</th>
                   <th className="px-4 py-2">Email</th>
@@ -217,9 +217,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Role</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {members.map((m, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">
                       {toStr(m.first_name ?? m.name ?? '')} {toStr(m.last_name ?? '')}
                     </td>
@@ -233,7 +233,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {members.length === 0 && (
-          <p className="text-slate-400 text-sm">No member records found.</p>
+          <p className="text-theme-text-muted text-sm">No member records found.</p>
         )}
       </>
     );
@@ -246,9 +246,9 @@ export const ReportsPage: React.FC = () => {
     return (
       <>
         {completionRate !== undefined && (
-          <p className="text-sm text-slate-300 mb-4">
+          <p className="text-sm text-theme-text-secondary mb-4">
             Overall completion rate:{' '}
-            <span className="font-semibold text-white">
+            <span className="font-semibold text-theme-text-primary">
               {typeof completionRate === 'number'
                 ? `${Math.round(completionRate * (completionRate <= 1 ? 100 : 1))}%`
                 : toStr(completionRate)}
@@ -258,7 +258,7 @@ export const ReportsPage: React.FC = () => {
         {entries.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Member</th>
                   <th className="px-4 py-2">Course / Requirement</th>
@@ -266,9 +266,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Hours</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">
                       {toStr(e.member_name ?? e.member ?? e.name ?? '-')}
                     </td>
@@ -288,7 +288,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {entries.length === 0 && (
-          <p className="text-slate-400 text-sm">No training entries found.</p>
+          <p className="text-theme-text-muted text-sm">No training entries found.</p>
         )}
       </>
     );
@@ -301,9 +301,9 @@ export const ReportsPage: React.FC = () => {
     return (
       <>
         {overallRate !== undefined && (
-          <p className="text-sm text-slate-300 mb-4">
+          <p className="text-sm text-theme-text-secondary mb-4">
             Overall attendance rate:{' '}
-            <span className="font-semibold text-white">
+            <span className="font-semibold text-theme-text-primary">
               {typeof overallRate === 'number'
                 ? `${Math.round(overallRate * (overallRate <= 1 ? 100 : 1))}%`
                 : toStr(overallRate)}
@@ -313,7 +313,7 @@ export const ReportsPage: React.FC = () => {
         {events.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Event</th>
                   <th className="px-4 py-2">Date</th>
@@ -321,11 +321,11 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Attendance Rate</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {events.map((ev, i) => {
                   const rate = ev.attendance_rate ?? ev.rate;
                   return (
-                    <tr key={i} className="text-slate-200">
+                    <tr key={i} className="text-theme-text-secondary">
                       <td className="px-4 py-2 whitespace-nowrap">
                         {toStr(ev.title ?? ev.name ?? ev.event ?? '-')}
                       </td>
@@ -350,7 +350,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {events.length === 0 && (
-          <p className="text-slate-400 text-sm">No event attendance records found.</p>
+          <p className="text-theme-text-muted text-sm">No event attendance records found.</p>
         )}
       </>
     );
@@ -366,19 +366,19 @@ export const ReportsPage: React.FC = () => {
         <div className="flex flex-wrap gap-4 mb-4">
           {avgProgress !== undefined && (
             <p className="text-sm text-slate-300">
-              Average progress: <span className="font-semibold text-white">{toStr(avgProgress)}%</span>
+              Average progress: <span className="font-semibold text-theme-text-primary">{toStr(avgProgress)}%</span>
             </p>
           )}
           {Object.entries(statusSummary).map(([status, count]) => (
-            <span key={status} className="text-xs px-2 py-1 bg-white/10 rounded text-slate-300">
-              {status}: <span className="font-semibold text-white">{count}</span>
+            <span key={status} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+              {status}: <span className="font-semibold text-theme-text-primary">{count}</span>
             </span>
           ))}
         </div>
         {entries.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Member</th>
                   <th className="px-4 py-2">Program</th>
@@ -387,9 +387,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.program_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
@@ -414,7 +414,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {entries.length === 0 && (
-          <p className="text-slate-400 text-sm">No pipeline enrollments found.</p>
+          <p className="text-theme-text-muted text-sm">No pipeline enrollments found.</p>
         )}
       </>
     );
@@ -451,8 +451,8 @@ export const ReportsPage: React.FC = () => {
             <p className="text-xs text-slate-400 mb-1">By Training Type:</p>
             <div className="flex flex-wrap gap-2">
               {Object.entries(byType).map(([type, count]) => (
-                <span key={type} className="text-xs px-2 py-1 bg-white/10 rounded text-slate-300">
-                  {type.replace(/_/g, ' ')}: <span className="font-semibold text-white">{count}</span>
+                <span key={type} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+                  {type.replace(/_/g, ' ')}: <span className="font-semibold text-theme-text-primary">{count}</span>
                 </span>
               ))}
             </div>
@@ -462,7 +462,7 @@ export const ReportsPage: React.FC = () => {
         {entries.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Member</th>
                   <th className="px-4 py-2">Rank</th>
@@ -474,9 +474,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Rating</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.rank ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.training_hours ?? 0)}</td>
@@ -492,7 +492,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {entries.length === 0 && (
-          <p className="text-slate-400 text-sm">No training data found for this period.</p>
+          <p className="text-theme-text-muted text-sm">No training data found for this period.</p>
         )}
       </>
     );
@@ -654,10 +654,10 @@ export const ReportsPage: React.FC = () => {
                 )}
               </div>
 
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 {report.title}
               </h3>
-              <p className="text-sm text-slate-300 mb-4">{report.description}</p>
+              <p className="text-sm text-theme-text-secondary mb-4">{report.description}</p>
 
               {report.available && (
                 <button
@@ -687,7 +687,7 @@ export const ReportsPage: React.FC = () => {
       {filteredReports.length === 0 && (
         <div className="text-center py-12">
           <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" aria-hidden="true" />
-          <h3 className="text-xl font-semibold text-white mb-2">
+          <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
             No reports found
           </h3>
           <p className="text-slate-400">

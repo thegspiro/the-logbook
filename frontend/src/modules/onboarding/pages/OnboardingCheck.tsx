@@ -431,7 +431,7 @@ const OnboardingCheck: React.FC = () => {
       case 'checking':
       default:
         return (
-          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-theme-text-primary border-t-transparent"></span>
         );
     }
   };
@@ -495,7 +495,7 @@ const OnboardingCheck: React.FC = () => {
               <div key={service.name} className="flex items-center justify-between py-2 border-b border-theme-nav-border last:border-0">
                 <div className="flex items-center gap-2">
                   <span className="text-theme-text-secondary">{service.name}</span>
-                  {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
+                  {service.optional && <span className="text-xs text-theme-text-muted">(optional)</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   {service.message && (
@@ -535,7 +535,7 @@ const OnboardingCheck: React.FC = () => {
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-500 mb-4"></div>
           <p className="text-theme-text-primary text-xl mb-2">Initializing The Logbook</p>
           <p className="text-theme-text-muted text-sm">{statusMessage}</p>
-          <p className="text-slate-500 text-xs mt-2">Time elapsed: {formatTime(elapsedTime)}</p>
+          <p className="text-theme-text-muted text-xs mt-2">Time elapsed: {formatTime(elapsedTime)}</p>
         </div>
 
         {/* Service Status Cards */}
@@ -553,7 +553,7 @@ const OnboardingCheck: React.FC = () => {
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="text-theme-text-primary">{service.name}</span>
-                  {service.optional && <span className="text-xs text-slate-500">(optional)</span>}
+                  {service.optional && <span className="text-xs text-theme-text-muted">(optional)</span>}
                 </div>
                 {service.message && (
                   <span className={`text-xs ${getStatusColor(service.status)}`}>
@@ -642,7 +642,7 @@ const OnboardingCheck: React.FC = () => {
                             <p className="font-medium text-orange-400">
                               Creating {startupInfo.migrations.total} database tables...
                             </p>
-                            <p className="text-slate-500">
+                            <p className="text-theme-text-muted">
                               Setting up tables for users, organizations, training records, events, elections, inventory, and audit logs.
                               This process runs in the background and may take 1-2 minutes.
                             </p>
@@ -662,7 +662,7 @@ const OnboardingCheck: React.FC = () => {
                           </p>
                           {getEstimatedTimeRemaining() && (
                             <p className="text-theme-text-muted text-xs">
-                              <span className="text-slate-500">Est. remaining:</span> {getEstimatedTimeRemaining()}
+                              <span className="text-theme-text-muted">Est. remaining:</span> {getEstimatedTimeRemaining()}
                             </p>
                           )}
                         </div>
@@ -716,11 +716,11 @@ const OnboardingCheck: React.FC = () => {
                 <span className="text-theme-text-muted">
                   Attempt {retryCount}/{MAX_RETRIES}
                 </span>
-                <span className="text-slate-500">
+                <span className="text-theme-text-muted">
                   Auto-retrying...
                 </span>
               </div>
-              <p className="text-slate-500 text-xs mt-2">
+              <p className="text-theme-text-muted text-xs mt-2">
                 Services are starting up. Checking every 60 seconds. First deployment can take 25-30 minutes.
               </p>
             </div>
@@ -803,7 +803,7 @@ const OnboardingCheck: React.FC = () => {
 
         {/* Help text */}
         <div className="mt-4 text-center">
-          <p className="text-slate-500 text-xs">
+          <p className="text-theme-text-muted text-xs">
             If services don't connect, check your Docker logs with: <code className="text-slate-400">docker compose logs</code>
           </p>
         </div>
