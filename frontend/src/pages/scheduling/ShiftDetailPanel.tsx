@@ -378,11 +378,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         <p className="text-sm font-medium text-theme-text-primary capitalize">
                           {String(call.incident_type || 'Unknown')}
                         </p>
-                        {call.incident_number && (
+                        {Boolean(call.incident_number) && (
                           <span className="text-xs text-theme-text-muted">#{String(call.incident_number)}</span>
                         )}
                       </div>
-                      {call.dispatched_at && (
+                      {Boolean(call.dispatched_at) && (
                         <p className="text-xs text-theme-text-muted mt-1">
                           Dispatched: {new Date(String(call.dispatched_at)).toLocaleTimeString()}
                         </p>

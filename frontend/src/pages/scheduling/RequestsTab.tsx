@@ -65,7 +65,7 @@ export const RequestsTab: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const params = statusFilter ? { status: statusFilter } : {};
+      const params: Record<string, string> | undefined = statusFilter ? { status: statusFilter } : undefined;
       const [swaps, timeOff] = await Promise.all([
         schedulingService.getSwapRequests(params),
         schedulingService.getTimeOffRequests(params),
