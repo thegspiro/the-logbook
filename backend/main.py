@@ -8,7 +8,9 @@ connects to the database, and configures routes.
 
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from loguru import logger
@@ -969,6 +971,74 @@ app.add_middleware(
 
 # Compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+# ============================================
+# Global Exception Handler
+# ============================================
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Catch unhandled backend exceptions and log them to the error_logs table
+    so they appear on the Error Monitoring page.
+    """
+    # Build error details
+    error_type = type(exc).__name__
+    error_message = str(exc)
+    tb = traceback.format_exc()
+
+    # Try to extract user/org context from the JWT token
+    user_id = None
+    org_id = None
+    try:
+        from app.core.security import decode_token
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1]
+            payload = decode_token(token)
+            user_id = payload.get("sub")
+            org_id = payload.get("org_id")
+    except Exception:
+        pass  # Token extraction is best-effort
+
+    # Persist to error_logs table
+    if org_id:
+        try:
+            from app.core.database import database_manager
+            from app.models.error_log import ErrorLog
+            async for session in database_manager.get_session():
+                error_log = ErrorLog(
+                    organization_id=org_id,
+                    error_type=f"BACKEND_{error_type.upper()}",
+                    error_message=error_message,
+                    user_message=f"An internal server error occurred: {error_type}",
+                    troubleshooting_steps=[
+                        "This error has been automatically logged",
+                        "Check the Error Monitoring page for details",
+                        "Contact your system administrator if the issue persists",
+                    ],
+                    context={
+                        "method": request.method,
+                        "path": str(request.url.path),
+                        "query": str(request.url.query),
+                        "traceback": tb,
+                        "source": "backend",
+                    },
+                    user_id=user_id,
+                )
+                session.add(error_log)
+                await session.commit()
+                break
+        except Exception as log_exc:
+            logger.error(f"Failed to persist error log: {log_exc}")
+
+    logger.exception(f"Unhandled {error_type} on {request.method} {request.url.path}: {error_message}")
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 # ============================================

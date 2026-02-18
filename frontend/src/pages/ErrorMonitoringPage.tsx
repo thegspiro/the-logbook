@@ -177,7 +177,11 @@ const ErrorMonitoringPage: React.FC = () => {
                       {formatDateTime(error.timestamp, tz)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        error.errorType.startsWith('BACKEND_')
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
                         {error.errorType}
                       </span>
                     </td>
@@ -185,15 +189,23 @@ const ErrorMonitoringPage: React.FC = () => {
                       {error.userMessage}
                     </td>
                     <td className="px-6 py-4 text-sm text-theme-text-secondary">
-                      {error.context.eventId && (
-                        <Link
-                          to={`/events/${error.context.eventId}`}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          Event
-                        </Link>
+                      {error.context.source === 'backend' ? (
+                        <span className="font-mono text-xs">
+                          {error.context.method} {error.context.path}
+                        </span>
+                      ) : (
+                        <>
+                          {error.context.eventId && (
+                            <Link
+                              to={`/events/${error.context.eventId}`}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              Event
+                            </Link>
+                          )}
+                          {error.context.userId && ` | User: ${error.context.userId.substring(0, 8)}`}
+                        </>
                       )}
-                      {error.context.userId && ` | User: ${error.context.userId.substring(0, 8)}`}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-muted font-mono">
                       {error.id.split('-')[0]}
