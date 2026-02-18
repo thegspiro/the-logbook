@@ -433,30 +433,30 @@ export const ProspectDetailPage: React.FC = () => {
             <dl className="space-y-3">
               {prospect.interest_reason && (
                 <div>
-                  <dt className="text-sm text-slate-400 mb-1">Interest / Reason</dt>
-                  <dd className="text-sm text-white bg-slate-700/50 rounded-lg p-3">{prospect.interest_reason}</dd>
+                  <dt className="text-sm text-theme-text-muted mb-1">Interest / Reason</dt>
+                  <dd className="text-sm text-theme-text-primary bg-theme-surface-secondary rounded-lg p-3">{prospect.interest_reason}</dd>
                 </div>
               )}
               {prospect.referral_source && (
                 <div>
-                  <dt className="text-sm text-slate-400">Referral Source</dt>
-                  <dd className="text-sm text-white">{prospect.referral_source}</dd>
+                  <dt className="text-sm text-theme-text-muted">Referral Source</dt>
+                  <dd className="text-sm text-theme-text-primary">{prospect.referral_source}</dd>
                 </div>
               )}
               {prospect.notes && (
                 <div>
-                  <dt className="text-sm text-slate-400 mb-1">Notes</dt>
-                  <dd className="text-sm text-white bg-slate-700/50 rounded-lg p-3">{prospect.notes}</dd>
+                  <dt className="text-sm text-theme-text-muted mb-1">Notes</dt>
+                  <dd className="text-sm text-theme-text-primary bg-theme-surface-secondary rounded-lg p-3">{prospect.notes}</dd>
                 </div>
               )}
             </dl>
           </div>
           <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Dates</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Dates</h2>
             <dl className="space-y-3">
               <div className="flex justify-between">
-                <dt className="text-sm text-slate-400">Added</dt>
-                <dd className="text-sm text-white">{formatDateTime(prospect.created_at, tz)}</dd>
+                <dt className="text-sm text-theme-text-muted">Added</dt>
+                <dd className="text-sm text-theme-text-primary">{formatDateTime(prospect.created_at, tz)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-sm text-slate-400">Last Updated</dt>

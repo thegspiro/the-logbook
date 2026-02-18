@@ -156,9 +156,9 @@ const ModuleSelection: React.FC = () => {
         key={module.id}
         className={`bg-theme-surface backdrop-blur-sm rounded-lg border-2 transition-all duration-300 ${
           isSelected
-            ? 'border-white/40 shadow-lg'
+            ? 'border-theme-surface-border shadow-lg ring-2 ring-white/40'
             : module.canDisable
-            ? 'border-theme-surface-border hover:border-white/20'
+            ? 'border-theme-surface-border hover:border-theme-surface-hover'
             : 'border-theme-surface-border'
         }`}
       >
@@ -172,7 +172,7 @@ const ModuleSelection: React.FC = () => {
               {isSelected ? (
                 <CheckCircle className="w-6 h-6 text-green-400" />
               ) : module.canDisable ? (
-                <Circle className="w-6 h-6 text-slate-400" />
+                <Circle className="w-6 h-6 text-theme-text-muted" />
               ) : (
                 <CheckCircle className="w-6 h-6 text-blue-400" />
               )}
@@ -362,7 +362,7 @@ const ModuleSelection: React.FC = () => {
               disabled={isSaving}
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 isSaving
-                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  ? 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                   : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
               }`}
             >
