@@ -224,13 +224,13 @@ const ModuleOverview: React.FC = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
-                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-secondary rounded-lg text-sm transition-colors"
+                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg text-sm transition-colors"
                         >
                           Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
-                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-muted rounded-lg text-sm transition-colors"
+                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted rounded-lg text-sm transition-colors"
                         >
                           Disable
                         </button>
@@ -284,13 +284,13 @@ const ModuleOverview: React.FC = () => {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
-                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-secondary rounded-lg text-sm transition-colors"
+                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg text-sm transition-colors"
                         >
                           Skip For Now
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
-                          className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-theme-text-muted rounded-lg text-sm transition-colors"
+                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted rounded-lg text-sm transition-colors"
                         >
                           Ignore
                         </button>
@@ -340,7 +340,7 @@ const ModuleOverview: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleModuleAction(module.id, 'ignore')}
-                        className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 text-theme-text-muted rounded-lg text-xs transition-colors"
+                        className="w-full px-3 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted rounded-lg text-xs transition-colors"
                       >
                         Skip
                       </button>

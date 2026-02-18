@@ -123,7 +123,7 @@ const AnalyticsDashboardPage: React.FC = () => {
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Error Breakdown</h2>
           {Object.keys(metrics.errorBreakdown).length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
+            <div className="text-center py-8 text-theme-text-muted">
               <svg
                 className="mx-auto h-12 w-12 text-green-400 mb-2"
                 fill="none"
@@ -145,7 +145,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                 .sort(([, a], [, b]) => b - a)
                 .map(([errorType, count]) => (
                   <div key={errorType} className="flex justify-between items-center">
-                    <span className="text-sm text-slate-200 truncate flex-1">{errorType}</span>
+                    <span className="text-sm text-theme-text-secondary truncate flex-1">{errorType}</span>
                     <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold ml-2">
                       {count}
                     </span>
@@ -171,7 +171,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                   style={{ height: `${heightPercent}%` }}
                   title={`${hour}:00 - ${count} events`}
                 ></div>
-                <div className="text-xs text-slate-400 mt-1">{hour}</div>
+                <div className="text-xs text-theme-text-muted mt-1">{hour}</div>
               </div>
             );
           })}
@@ -197,7 +197,7 @@ const AnalyticsDashboardPage: React.FC = () => {
                       style={{ height: `${heightPercent}px` }}
                       title={`${formatTime(time, tz)} - ${count} check-ins`}
                     ></div>
-                    <div className="text-xs text-slate-400 mt-1 whitespace-nowrap">
+                    <div className="text-xs text-theme-text-muted mt-1 whitespace-nowrap">
                       {formatTime(time, tz)}
                     </div>
                   </div>
