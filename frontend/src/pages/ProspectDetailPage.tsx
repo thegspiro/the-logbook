@@ -328,11 +328,11 @@ export const ProspectDetailPage: React.FC = () => {
                     )}
                   </div>
                   {progress.step?.description && (
-                    <p className="text-sm text-slate-400 mt-1">{progress.step.description}</p>
+                    <p className="text-sm text-theme-text-muted mt-1">{progress.step.description}</p>
                   )}
                   {progress.notes && (
-                    <div className="mt-2 bg-slate-700/50 rounded-lg p-2 text-sm text-gray-300">
-                      <MessageSquare className="h-3 w-3 inline mr-1 text-slate-400" />
+                    <div className="mt-2 bg-theme-surface-secondary rounded-lg p-2 text-sm text-theme-text-secondary">
+                      <MessageSquare className="h-3 w-3 inline mr-1 text-theme-text-muted" />
                       {progress.notes}
                     </div>
                   )}
@@ -347,7 +347,7 @@ export const ProspectDetailPage: React.FC = () => {
                             value={stepNotes}
                             onChange={e => setStepNotes(e.target.value)}
                             rows={2}
-                            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                           />
                           <div className="flex gap-2">
                             <button
@@ -358,7 +358,7 @@ export const ProspectDetailPage: React.FC = () => {
                             </button>
                             <button
                               onClick={() => { setCompletingStepId(null); setStepNotes(''); }}
-                              className="px-3 py-1.5 bg-slate-700 text-gray-300 rounded-lg text-xs hover:bg-slate-600 transition-colors"
+                              className="px-3 py-1.5 bg-theme-surface text-theme-text-secondary rounded-lg text-xs hover:bg-theme-surface-hover transition-colors"
                             >
                               Cancel
                             </button>

@@ -673,10 +673,10 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
               {/* Metadata */}
               <div className="p-4">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
                   Details
                 </h3>
-                <div className="text-xs text-slate-500 space-y-1">
+                <div className="text-xs text-theme-text-muted space-y-1">
                   <p>Applied: {formatDate(applicant.created_at, tz)}</p>
                   <p>Last updated: {formatDate(applicant.updated_at, tz)}</p>
                   <p>Last activity: {formatDate(applicant.last_activity_at, tz)}</p>
@@ -695,17 +695,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Footer Actions */}
             {applicant.status === 'active' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {/* Notes input */}
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for this action..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
@@ -814,16 +814,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* On Hold Actions */}
             {applicant.status === 'on_hold' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for this action..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
@@ -913,16 +913,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Withdrawn Actions */}
             {applicant.status === 'withdrawn' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for reactivation..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}
@@ -953,16 +953,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Inactive Actions */}
             {applicant.status === 'inactive' && (
-              <div className="border-t border-white/10 p-4 space-y-3">
+              <div className="border-t border-theme-surface-border p-4 space-y-3">
                 {showNotesInput && (
                   <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-slate-400 mt-2.5" />
+                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
                     <textarea
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Add notes for reactivation..."
                       rows={2}
-                      className="flex-1 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                     />
                   </div>
                 )}

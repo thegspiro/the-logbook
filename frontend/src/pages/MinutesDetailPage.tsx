@@ -1076,11 +1076,11 @@ export const MinutesDetailPage: React.FC = () => {
                       key={ev.id}
                       onClick={() => handleLinkEvent(ev.id)}
                       className={`w-full text-left p-3 border rounded-lg hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-colors ${
-                        minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-white/20'
+                        minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-theme-surface-border'
                       }`}
                     >
-                      <div className="text-sm font-medium text-white">{ev.title}</div>
-                      <div className="text-xs text-slate-400 mt-1">
+                      <div className="text-sm font-medium text-theme-text-primary">{ev.title}</div>
+                      <div className="text-xs text-theme-text-muted mt-1">
                         {formatDateTime(ev.start_datetime, tz)}
                         {ev.location && ` \u00b7 ${ev.location}`}
                       </div>
@@ -1089,10 +1089,10 @@ export const MinutesDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="px-6 py-3 bg-slate-900/50 flex justify-end rounded-b-lg">
+            <div className="px-6 py-3 bg-theme-surface-secondary flex justify-end rounded-b-lg">
               <button
                 onClick={() => setShowLinkEventModal(false)}
-                className="px-4 py-2 border border-white/30 rounded-md text-slate-300 hover:bg-white/5"
+                className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
               >
                 Cancel
               </button>
@@ -1110,13 +1110,13 @@ export const MinutesDetailPage: React.FC = () => {
           aria-labelledby="reject-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setShowRejectModal(false); setRejectReason(''); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="reject-title" className="text-lg font-medium text-white">Reject Minutes</h3>
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="reject-title" className="text-lg font-medium text-theme-text-primary">Reject Minutes</h3>
             </div>
             <div className="px-6 py-4">
-              <label htmlFor="reject-reason" className="block text-sm font-medium text-slate-200 mb-1">
-                Reason for Rejection <span aria-hidden="true">*</span> <span className="text-xs text-slate-400">(min 10 characters)</span>
+              <label htmlFor="reject-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                Reason for Rejection <span aria-hidden="true">*</span> <span className="text-xs text-theme-text-muted">(min 10 characters)</span>
               </label>
               <textarea
                 id="reject-reason"
