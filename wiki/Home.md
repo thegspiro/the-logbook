@@ -62,7 +62,8 @@ docker-compose up -d
 - **[Training Programs](Module-Training)** - Training & certification tracking
 - **[Elections & Voting](Module-Elections)** - Election management system
 - **[Event Management](Module-Events)** - QR code check-in system
-- **[Scheduling](Module-Scheduling)** - Shift management
+- **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates & reports
+- **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Compliance](Module-Compliance)** - Compliance tracking
 
 ### 🔐 Security
@@ -116,7 +117,19 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
-### February 2026 - Events Module, TypeScript Quality & Backend Fixes
+### February 2026 - Scheduling Module, Events Module, TypeScript Quality & Backend Fixes
+- **Scheduling Module enhanced**: 6-tab hub (Schedule, My Shifts, Open Shifts, Requests, Templates, Reports)
+- Member self-service shift signup with position selection (officer, driver, firefighter, EMS, etc.)
+- My Shifts tab with confirm/decline assignments, swap requests, and time-off requests
+- Open Shifts tab for browsing and signing up for upcoming shifts
+- Requests management with combined swap and time-off views, admin approve/deny workflow
+- Shift detail slide-out panel showing crew roster, open positions, and calls/incidents
+- Apparatus connection: shifts can now be linked to vehicles from the apparatus dropdown
+- Lightweight Apparatus Basic page for departments without the full Apparatus module (mirrors Locations vs Facilities pattern)
+- Basic Apparatus CRUD with crew positions per vehicle type (engine, ladder, rescue, ambulance, etc.)
+- New backend endpoints: shift signup/withdraw, open shifts, basic apparatus CRUD
+- New database migration for `basic_apparatus` table
+- Side navigation updated with apparatus module toggle (full vs lightweight)
 - Events module enhanced: recurring events, templates, duplication, attachments, booking prevention, RSVP overrides
 - Dedicated EventCreatePage and EventEditPage with reusable EventForm component
 - All TypeScript build errors resolved across entire frontend codebase

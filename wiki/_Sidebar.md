@@ -30,6 +30,7 @@
 - [Elections](Module-Elections)
 - [Events](Module-Events)
 - [Scheduling](Module-Scheduling)
+- [Apparatus](Module-Apparatus)
 - [Compliance](Module-Compliance)
 
 ### 🔐 Security

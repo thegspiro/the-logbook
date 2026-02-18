@@ -15,7 +15,8 @@ This guide covers common issues and their solutions for The Logbook deployment.
 9. [Security Issues](#security-issues)
 10. [Accessibility Issues](#accessibility-issues)
 11. [Events Module Issues](#events-module-issues)
-12. [TypeScript Quality Issues](#typescript-quality-issues)
+12. [Scheduling Module Issues](#scheduling-module-issues)
+13. [TypeScript Quality Issues](#typescript-quality-issues)
 
 ---
 
@@ -1143,6 +1144,159 @@ Recurrence patterns may be misconfigured or end dates may be in the past.
 1. Verify recurrence settings: frequency, interval, end date
 2. Check that the recurrence end date is in the future
 3. Refresh the calendar view (recurrence expansion happens on-demand)
+
+---
+
+## Scheduling Module Issues
+
+### Problem: Shift signup returns 404
+
+**Error:** `POST /api/v1/scheduling/shifts/{id}/signup` returns 404
+
+### Root Cause
+The shift ID is invalid, the shift doesn't exist, or the scheduling endpoints aren't registered.
+
+### Solution
+
+**1. Verify the shift exists:**
+```bash
+curl http://YOUR-IP:7881/api/v1/scheduling/shifts
+```
+
+**2. Ensure the backend is up to date with the latest scheduling endpoints:**
+```bash
+docker compose restart backend
+docker compose logs backend | grep "scheduling"
+```
+
+**3. Check the shift hasn't already passed** — only upcoming shifts allow signup.
+
+---
+
+### Problem: "Position already filled" when signing up for a shift
+
+**Error:** `400 Bad Request` with message about position availability
+
+### Root Cause
+Another member has already signed up for the same position on that shift, or you're already assigned to this shift.
+
+### Solution
+
+1. Choose a different position from the position selector dropdown
+2. Check the shift detail panel to see which positions are still open
+3. If you need to change positions, withdraw first then sign up again
+
+---
+
+### Problem: Apparatus not showing in shift creation dropdown
+
+### Root Cause
+No basic apparatus have been created, or the Apparatus Basic page hasn't been set up.
+
+### Solution
+
+**1. If your department has the Apparatus module enabled:**
+Apparatus are managed through the full Apparatus module at `/apparatus`.
+
+**2. If the Apparatus module is disabled (lightweight mode):**
+Navigate to `/apparatus-basic` and create your vehicles:
+- Add unit numbers, names, and types (engine, ladder, rescue, ambulance, etc.)
+- Define crew positions for each vehicle
+- These will appear in the shift creation dropdown
+
+**3. Verify basic apparatus exist via API:**
+```bash
+curl http://YOUR-IP:7881/api/v1/scheduling/apparatus
+```
+
+---
+
+### Problem: Shift templates or patterns not generating shifts
+
+**Error:** "Generate Shifts" button produces 0 shifts or returns an error
+
+### Root Cause
+The date range may be invalid, the pattern configuration may be incomplete, or the template referenced by the pattern doesn't exist.
+
+### Solution
+
+**1. Verify the pattern has a valid template linked:**
+- Go to Scheduling > Templates tab
+- Ensure at least one template exists
+- Check the pattern references a valid template ID
+
+**2. Ensure the date range is valid:**
+- Start date must be before end date
+- Dates should be in the future
+- Range shouldn't exceed reasonable limits (e.g., 365 days)
+
+**3. For platoon patterns, verify rotation settings:**
+- `days_on` and `days_off` must both be set
+- `rotation_days` should equal `days_on + days_off`
+
+---
+
+### Problem: Swap or time-off request stuck in "pending"
+
+### Root Cause
+No admin has reviewed the request. Swap and time-off requests require approval from a user with `scheduling.manage` permission.
+
+### Solution
+
+**1. Check who has scheduling management permissions:**
+- Navigate to Settings > Roles
+- Verify the `scheduling.manage` permission is assigned to appropriate roles
+
+**2. Admins can review requests from:**
+- The Scheduling page > Requests tab
+- Filter by "Pending" status
+- Click the review button to approve or deny
+
+**3. Users can cancel their own pending requests** by clicking the cancel button.
+
+---
+
+### Problem: Basic Apparatus page shows "No apparatus yet" but data exists
+
+### Root Cause
+You may be on the wrong page. The Basic Apparatus page (`/apparatus-basic`) is only for departments without the full Apparatus module. If Apparatus is enabled, use `/apparatus` instead.
+
+### Solution
+
+**1. Check which page you should be using:**
+- If the Apparatus module is **enabled** in Settings > Modules: use `/apparatus`
+- If the Apparatus module is **disabled**: use `/apparatus-basic`
+
+**2. The side navigation automatically shows the correct link:**
+- "Apparatus" links to the full module when enabled
+- "Apparatus" links to the lightweight page when disabled
+
+---
+
+### Problem: Database migration fails for basic_apparatus table
+
+**Error:** `Table 'basic_apparatus' already exists` or migration version mismatch
+
+### Root Cause
+The migration `20260218_0200` may have partially run, or there's a version conflict.
+
+### Solution
+
+**1. Check current migration version:**
+```bash
+docker compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD intranet_db -e "SELECT * FROM alembic_version;"
+```
+
+**2. If the table already exists but migration wasn't tracked:**
+```bash
+docker compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD intranet_db -e "UPDATE alembic_version SET version_num='20260218_0200';"
+docker compose restart backend
+```
+
+**3. If the table doesn't exist, run migration manually:**
+```bash
+docker compose exec backend alembic upgrade head
+```
 
 ---
 
