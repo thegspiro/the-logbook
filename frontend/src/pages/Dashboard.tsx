@@ -644,6 +644,42 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Quick Access: Meeting Minutes */}
+        {checkPermission('meetings.manage') && (
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
+                <ClipboardList className="w-5 h-5 text-cyan-500" />
+                <span>Meeting Minutes</span>
+              </h3>
+              <button
+                onClick={() => navigate('/minutes')}
+                className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center space-x-1"
+              >
+                <span>View All</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-theme-text-muted mt-2">
+              Record, review, and publish meeting minutes. Track motions, votes, and action items.
+            </p>
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={() => navigate('/minutes')}
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors"
+              >
+                Record Minutes
+              </button>
+              <button
+                onClick={() => navigate('/minutes')}
+                className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors"
+              >
+                Review Pending
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Training Progress */}
         {!loadingTraining && enrollments.length > 0 && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
@@ -757,18 +793,6 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="bg-theme-surface-secondary backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-theme-text-secondary text-sm">
-            &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
-          </p>
-          <p className="text-center text-theme-text-muted text-xs mt-1">
-            Powered by The Logbook
-          </p>
-        </div>
-      </footer>
     </div>
   );
 };

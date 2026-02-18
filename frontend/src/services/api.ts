@@ -395,6 +395,11 @@ export const organizationService = {
     const response = await api.get<SetupChecklistResponse>('/organization/setup-checklist');
     return response.data;
   },
+
+  async updateSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch('/organization/settings', updates);
+    return response.data;
+  },
 };
 
 export interface SetupChecklistItem {

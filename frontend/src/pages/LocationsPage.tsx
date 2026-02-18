@@ -13,9 +13,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, Plus, Search, Building2, DoorOpen, Pencil, Trash2,
   Loader2, X, Save, ChevronDown, ChevronUp, QrCode, Users,
+  Building, HelpCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { locationsService } from '../services/api';
+import { locationsService, organizationService } from '../services/api';
 import type { Location, LocationCreate } from '../services/api';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
@@ -64,11 +65,17 @@ const ROOM_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 };
 
+type StationMode = 'single_station' | 'multi_station' | null;
+
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set());
+
+  // Station mode (single vs multi-station department)
+  const [stationMode, setStationMode] = useState<StationMode>(null);
+  const [stationModeLoading, setStationModeLoading] = useState(true);
 
   // Station modal state
   const [showStationModal, setShowStationModal] = useState(false);
@@ -82,6 +89,32 @@ export default function LocationsPage() {
   const [roomParentStation, setRoomParentStation] = useState<string>('');
   const [roomForm, setRoomForm] = useState({ name: '', room_number: '', floor: '', capacity: '', description: '' });
   const [isSavingRoom, setIsSavingRoom] = useState(false);
+
+  // Load station mode from org settings
+  useEffect(() => {
+    const loadStationMode = async () => {
+      try {
+        const settings = await organizationService.getSettings();
+        const mode = (settings as Record<string, unknown>).station_mode as StationMode;
+        setStationMode(mode || null);
+      } catch {
+        // If we can't load settings, proceed without mode set
+      } finally {
+        setStationModeLoading(false);
+      }
+    };
+    loadStationMode();
+  }, []);
+
+  const handleSetStationMode = async (mode: 'single_station' | 'multi_station') => {
+    try {
+      await organizationService.updateSettings({ station_mode: mode });
+      setStationMode(mode);
+      toast.success(mode === 'single_station' ? 'Single-station mode set' : 'Multi-station mode set');
+    } catch {
+      toast.error('Failed to save setting');
+    }
+  };
 
   const loadLocations = useCallback(async () => {
     setIsLoading(true);
@@ -242,28 +275,101 @@ export default function LocationsPage() {
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
+  const isSingleStation = stationMode === 'single_station';
+
+  // For single-station mode, show a simplified header
   return (
     <div className="space-y-6">
+      {/* Station Mode Setup Question (shown when not yet configured) */}
+      {!stationModeLoading && stationMode === null && (
+        <div className="bg-theme-surface border-2 border-blue-500/30 rounded-xl p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <HelpCircle className="w-6 h-6 text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-bold text-theme-text-primary mb-2">How is your department organized?</h2>
+              <p className="text-sm text-theme-text-secondary mb-4">
+                This helps us simplify the experience. Single-station departments won't be asked to choose a station when adding members or scheduling events.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  onClick={() => handleSetStationMode('single_station')}
+                  className="flex flex-col items-center p-5 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all group"
+                >
+                  <Building className="w-8 h-8 text-theme-text-muted group-hover:text-red-500 mb-3 transition-colors" />
+                  <span className="text-sm font-semibold text-theme-text-primary mb-1">Single Station</span>
+                  <span className="text-xs text-theme-text-muted text-center">
+                    We operate from one location. No need to select a station for each member.
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleSetStationMode('multi_station')}
+                  className="flex flex-col items-center p-5 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all group"
+                >
+                  <Building2 className="w-8 h-8 text-theme-text-muted group-hover:text-red-500 mb-3 transition-colors" />
+                  <span className="text-sm font-semibold text-theme-text-primary mb-1">Multiple Stations</span>
+                  <span className="text-xs text-theme-text-muted text-center">
+                    We have multiple stations or locations. Members are assigned to specific stations.
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Station Mode Badge (shown when configured, allows changing) */}
+      {!stationModeLoading && stationMode !== null && (
+        <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+          {isSingleStation ? (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-full">
+              <Building className="w-3.5 h-3.5" /> Single-Station Department
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-full">
+              <Building2 className="w-3.5 h-3.5" /> Multi-Station Agency
+            </span>
+          )}
+          <button
+            onClick={() => handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station')}
+            className="text-theme-text-muted hover:text-theme-text-secondary underline"
+          >
+            Change
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">Locations & Rooms</h1>
+          <h1 className="text-3xl font-bold text-theme-text-primary">
+            {isSingleStation ? 'Location & Rooms' : 'Locations & Rooms'}
+          </h1>
           <p className="text-theme-text-secondary mt-1">
-            Manage station addresses and room names for events, forms, and QR check-in
+            {isSingleStation
+              ? 'Manage your station address and rooms for events, forms, and QR check-in'
+              : 'Manage station addresses and room names for events, forms, and QR check-in'}
           </p>
         </div>
-        <button onClick={openCreateStation}
-          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Station
-        </button>
+        {(!isSingleStation || stations.length === 0) && (
+          <button onClick={openCreateStation}
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
+          </button>
+        )}
       </div>
 
       {/* Info Banner */}
       <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
         <QrCode className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-theme-text-secondary">
-          <p>Locations added here are available for event scheduling, meeting room selection, training sessions, and QR code check-in. Add your stations with their addresses and list each room for use across the platform.</p>
+          {isSingleStation ? (
+            <p>Set up your station address and rooms. These are used for event scheduling, meeting rooms, training sessions, and QR code check-in. Since you operate from a single location, members will be automatically associated with this station.</p>
+          ) : (
+            <p>Locations added here are available for event scheduling, meeting room selection, training sessions, and QR code check-in. Add your stations with their addresses and list each room for use across the platform.</p>
+          )}
         </div>
       </div>
 

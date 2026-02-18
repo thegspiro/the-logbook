@@ -29,7 +29,7 @@ import {
 import { trainingModuleConfigService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
-import type { MyTrainingSummary, TrainingModuleConfig as TMConfig } from '../types/training';
+import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
 
 // ==================== Helpers ====================
 
@@ -326,6 +326,105 @@ const MyTrainingPage: React.FC = () => {
           </div>
 
 
+
+          {/* Outstanding Requirements */}
+          {data.requirements_detail && data.requirements_detail.length > 0 && (
+            <Section title="Training Requirements" icon={ClipboardList}>
+              <div className="space-y-3">
+                {/* Outstanding (not met) first, then met */}
+                {[...data.requirements_detail]
+                  .sort((a: RequirementDetail, b: RequirementDetail) => {
+                    // Outstanding first, then by days until due (soonest first)
+                    if (a.is_met !== b.is_met) return a.is_met ? 1 : -1;
+                    if (a.days_until_due != null && b.days_until_due != null) return a.days_until_due - b.days_until_due;
+                    return 0;
+                  })
+                  .map((req: RequirementDetail) => {
+                    const isOverdue = req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
+                    const isDueSoon = req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
+
+                    return (
+                      <div
+                        key={req.id}
+                        className={`bg-theme-surface rounded-lg p-4 border ${
+                          isOverdue ? 'border-red-500/40' :
+                          isDueSoon ? 'border-yellow-500/30' :
+                          req.is_met ? 'border-green-500/20' :
+                          'border-theme-surface-border'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            {req.is_met ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+                            ) : isOverdue ? (
+                              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                            ) : (
+                              <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-theme-text-primary">{req.name}</p>
+                              {req.description && (
+                                <p className="text-xs text-theme-text-muted mt-0.5">{req.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-4">
+                            <span className={`text-sm font-bold ${
+                              req.is_met ? 'text-green-400' :
+                              isOverdue ? 'text-red-400' :
+                              'text-theme-text-primary'
+                            }`}>
+                              {req.completed_hours}/{req.required_hours} hrs
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              req.is_met ? 'bg-green-500' :
+                              isOverdue ? 'bg-red-500' :
+                              req.progress_percentage >= 50 ? 'bg-blue-500' :
+                              'bg-yellow-500'
+                            }`}
+                            style={{ width: `${Math.min(req.progress_percentage, 100)}%` }}
+                          />
+                        </div>
+
+                        {/* Waiver adjustment notice */}
+                        {req.waived_months != null && req.waived_months > 0 && (
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1 mb-2">
+                            <p className="text-xs text-blue-300">
+                              Adjusted for {req.waived_months} waived month{req.waived_months > 1 ? 's' : ''} of leave
+                              {req.original_required_hours != null && req.original_required_hours !== req.required_hours && (
+                                <> (originally {req.original_required_hours} hrs, adjusted to {req.required_hours} hrs for {req.active_months} active month{req.active_months !== 1 ? 's' : ''})</>
+                              )}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs text-theme-text-muted">
+                          <span className="capitalize">{req.frequency.replace('_', ' ')}{req.training_type ? ` (${req.training_type.replace('_', ' ')})` : ''}</span>
+                          <div className="flex items-center space-x-2">
+                            {req.is_met ? (
+                              <span className="text-green-400">Complete</span>
+                            ) : isOverdue ? (
+                              <span className="text-red-400 font-medium">Overdue by {Math.abs(req.days_until_due!)} days</span>
+                            ) : req.days_until_due != null ? (
+                              <span className={isDueSoon ? 'text-yellow-400' : ''}>
+                                Due: {formatDate(req.due_date, tz)} ({req.days_until_due} days)
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </Section>
+          )}
 
           {/* Certifications */}
           {v?.show_certification_status && data.certifications && data.certifications.length > 0 && (
