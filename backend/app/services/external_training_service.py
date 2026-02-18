@@ -26,6 +26,7 @@ from app.models.training import (
     TrainingCategory,
 )
 from app.models.user import User
+from app.core.security import decrypt_data
 
 
 logger = logging.getLogger(__name__)
@@ -200,6 +201,16 @@ class ExternalTrainingSyncService:
         else:
             return False, f"Unexpected response: {response.status_code}"
 
+    def _decrypt_field(self, value: Optional[str]) -> Optional[str]:
+        """Decrypt an encrypted credential field, returning None if empty."""
+        if not value:
+            return None
+        try:
+            return decrypt_data(value)
+        except Exception:
+            # If decryption fails, the value may be stored in plaintext (pre-encryption migration)
+            return value
+
     def _get_auth_headers(self, provider: ExternalTrainingProvider) -> Dict[str, str]:
         """Get authentication headers based on provider type and auth type"""
         headers = {
@@ -207,25 +218,29 @@ class ExternalTrainingSyncService:
             "Content-Type": "application/json",
         }
 
+        # Decrypt credentials for use in headers
+        api_key = self._decrypt_field(provider.api_key)
+        api_secret = self._decrypt_field(provider.api_secret)
+
         # Vector Solutions / TargetSolutions uses a custom AccessToken header
         if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
-            if provider.api_key:
-                headers["AccessToken"] = provider.api_key
+            if api_key:
+                headers["AccessToken"] = api_key
         elif provider.auth_type == "api_key":
-            if provider.api_key:
-                headers["X-API-Key"] = provider.api_key
-                headers["Authorization"] = f"Bearer {provider.api_key}"
+            if api_key:
+                headers["X-API-Key"] = api_key
+                headers["Authorization"] = f"Bearer {api_key}"
         elif provider.auth_type == "basic":
             import base64
-            if provider.api_key and provider.api_secret:
+            if api_key and api_secret:
                 credentials = base64.b64encode(
-                    f"{provider.api_key}:{provider.api_secret}".encode()
+                    f"{api_key}:{api_secret}".encode()
                 ).decode()
                 headers["Authorization"] = f"Basic {credentials}"
         elif provider.auth_type == "oauth2":
             # OAuth2 would require token refresh logic
-            if provider.api_key:  # Using api_key to store access token
-                headers["Authorization"] = f"Bearer {provider.api_key}"
+            if api_key:  # Using api_key to store access token
+                headers["Authorization"] = f"Bearer {api_key}"
 
         # Add any custom headers from config
         if provider.config and "headers" in provider.config:

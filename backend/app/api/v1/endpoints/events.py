@@ -1271,11 +1271,20 @@ async def download_event_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     file_path = attachment["file_path"]
-    if not os.path.exists(file_path):
+
+    # Security: Validate file_path is within the expected upload directory
+    # to prevent path traversal attacks if database data is compromised
+    resolved_path = os.path.realpath(file_path)
+    allowed_base = os.path.realpath(ATTACHMENT_UPLOAD_DIR)
+    if not resolved_path.startswith(allowed_base + os.sep) and resolved_path != allowed_base:
+        logger.warning(f"Path traversal attempt blocked: {file_path} resolved to {resolved_path}")
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not os.path.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
 
     return FileResponse(
-        path=file_path,
+        path=resolved_path,
         filename=attachment.get("file_name", "download"),
         media_type=attachment.get("file_type", "application/octet-stream"),
     )

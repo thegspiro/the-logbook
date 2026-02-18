@@ -13,6 +13,7 @@ from uuid import UUID
 import os
 import uuid as uuid_lib
 import logging
+import magic
 
 from app.core.database import get_db
 from app.models.user import User
@@ -36,6 +37,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 UPLOAD_DIR = "/app/uploads/documents"
+
+# Allowed MIME types for document uploads (validated via magic bytes, not HTTP headers)
+ALLOWED_DOCUMENT_MIME_TYPES = {
+    # Documents
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+    # Images
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    # Archives
+    "application/zip",
+    "application/x-zip-compressed",
+}
 
 
 # ============================================
@@ -189,6 +212,19 @@ async def upload_document(
             detail="File too large. Maximum size is 50MB."
         )
 
+    # Validate MIME type using magic bytes (not the HTTP Content-Type header)
+    detected_mime = magic.from_buffer(content[:2048], mime=True)
+    if detected_mime not in ALLOWED_DOCUMENT_MIME_TYPES:
+        logger.warning(
+            f"Document upload rejected: detected MIME type '{detected_mime}' "
+            f"(claimed: '{file.content_type}') for file '{file.filename}'"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Detected type: {detected_mime}. "
+                   "Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images, ZIP."
+        )
+
     # Create upload directory
     org_dir = os.path.join(UPLOAD_DIR, str(current_user.organization_id))
     os.makedirs(org_dir, exist_ok=True)
@@ -210,7 +246,7 @@ async def upload_document(
         "file_name": file.filename or unique_name,
         "file_path": file_path,
         "file_size": len(content),
-        "file_type": file.content_type,
+        "file_type": detected_mime,
         "tags": tags,
     }
 

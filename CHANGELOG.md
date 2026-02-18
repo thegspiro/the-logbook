@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security Hardening (2026-02-18)
+
+#### Path Traversal Fix in Event Attachments (Critical)
+- **Fixed path traversal vulnerability** in `GET /api/v1/events/{id}/attachments/{id}/download`: file paths from the database are now resolved with `os.path.realpath()` and validated against the expected `ATTACHMENT_UPLOAD_DIR` before serving via `FileResponse` — prevents arbitrary file access if database data is ever compromised
+
+#### External Training Provider Credential Encryption (High)
+- **API keys and secrets now encrypted at rest** using AES-256 (Fernet) for external training providers (Vector Solutions, Target Solutions, Lexipol, etc.)
+- Credentials are encrypted on create (`POST /api/v1/external-training/providers`) and update (`PATCH /api/v1/external-training/providers/{id}`) before storage
+- Credentials are decrypted transparently when building API request headers in `ExternalTrainingSyncService`
+- Backward-compatible: if decryption fails (pre-existing plaintext values), the service falls back to using the raw value
+
+#### Document Upload MIME Validation (High)
+- **Added magic-byte MIME type validation** for document uploads (`POST /api/v1/documents/upload`) using `python-magic` to detect the true file type from content bytes, rather than trusting the HTTP `Content-Type` header
+- Allowed types: PDF, Word, Excel, PowerPoint, text, CSV, images (JPEG/PNG/GIF/WebP), and ZIP archives
+- The stored `file_type` in the database now reflects the detected MIME type instead of the client-supplied header
+
+#### MinIO Default Credentials Removed (Medium)
+- **Removed insecure default credentials** for MinIO in `docker-compose.yml` — `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` now require explicit configuration via `.env` (will error on startup if not set)
+
 ### Added - Location Kiosk Display for Tablets (2026-02-18)
 
 #### Public Kiosk Display System

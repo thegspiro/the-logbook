@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-18 (includes unified location architecture with facility bridge and training location dropdown; public kiosk display system for tablets with auto-refreshing QR codes; plus Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-18 (includes security hardening — path traversal fix in event attachment downloads, AES-256 encryption for external training provider credentials, magic-byte MIME validation for document uploads, removal of insecure MinIO defaults; unified location architecture with facility bridge and training location dropdown; public kiosk display system for tablets with auto-refreshing QR codes; plus Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -1017,6 +1017,57 @@ All form submissions are automatically sanitized with DOMPurify to strip HTML/sc
 #### Password Requirements
 
 Login passwords must be at least **8 characters** (schema validation). New passwords during registration or reset must meet the full strength requirements (12+ characters, mixed case, numbers, special characters).
+
+#### Event Attachment Download: "Access denied"
+
+**Message**: `"Access denied"` (HTTP 403)
+
+**Cause**: The stored file path for the attachment resolved outside the allowed upload directory. This is a security safeguard against path traversal attacks.
+
+**Solutions**:
+- This error indicates data integrity issue — the `file_path` in the event's attachments JSON does not point to a file within `/app/uploads/event-attachments/`
+- Re-upload the attachment through the normal upload flow
+- If this occurs on previously uploaded files, check that the `ATTACHMENT_UPLOAD_DIR` path has not changed between deployments
+
+#### External Training Provider: Credentials Not Working After Update
+
+**Symptoms**: External training provider sync fails with authentication errors after upgrading to the latest version
+
+**Cause**: Provider API credentials (api_key, api_secret, client_secret) are now encrypted at rest using AES-256. Pre-existing plaintext credentials in the database should be handled transparently (the service falls back to plaintext if decryption fails), but if issues persist:
+
+**Solutions**:
+1. Re-save the provider credentials through the UI or API — this will encrypt them with the current key
+2. Verify `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables have not changed since the credentials were last saved
+3. Test the connection: `POST /api/v1/external-training/providers/{id}/test`
+
+#### Document Upload: "File type not allowed"
+
+**Message**: `"File type not allowed. Detected type: <mime-type>."`
+
+**Cause**: Document uploads are now validated using magic-byte detection (inspecting actual file content) rather than trusting the HTTP `Content-Type` header. The detected MIME type is not in the allowed list.
+
+**Allowed types**: PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), text, CSV, images (JPEG, PNG, GIF, WebP), ZIP archives.
+
+**Solutions**:
+- Verify the file is a genuinely supported format (not just renamed with a supported extension)
+- If the file is a valid format but being rejected, the file may be corrupted — try re-exporting or re-saving it
+- For uncommon but legitimate file types, contact your administrator to request the type be added to the allowlist
+
+#### MinIO: Container Fails to Start
+
+**Message**: `MINIO_ROOT_USER must be set in .env` or `MINIO_ROOT_PASSWORD must be set in .env`
+
+**Cause**: MinIO credentials are no longer provided as insecure defaults in docker-compose.yml. They must be explicitly set in your `.env` file.
+
+**Solutions**:
+```bash
+# Add to your .env file:
+MINIO_ROOT_USER=your_minio_admin_user
+MINIO_ROOT_PASSWORD=your_secure_minio_password
+
+# Generate a secure password:
+openssl rand -hex 24
+```
 
 ---
 
