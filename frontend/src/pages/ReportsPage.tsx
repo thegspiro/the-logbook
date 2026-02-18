@@ -750,10 +750,10 @@ export const ReportsPage: React.FC = () => {
                 {renderReportContent()}
               </div>
 
-              <div className="px-6 py-4 border-t border-white/10 flex justify-end">
+              <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   Close
                 </button>
