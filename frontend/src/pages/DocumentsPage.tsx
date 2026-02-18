@@ -539,7 +539,7 @@ const DocumentsPage: React.FC = () => {
               <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Upload Document</h3>
+                    <h3 className="text-lg font-medium text-theme-text-primary">Upload Document</h3>
                     <button onClick={() => setShowUploadModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
                       <X className="w-5 h-5" />
                     </button>
@@ -548,7 +548,7 @@ const DocumentsPage: React.FC = () => {
                   <div className="space-y-4">
                     <div className="border-2 border-dashed border-theme-surface-border rounded-lg p-8 text-center hover:border-amber-500/50 transition-colors">
                       <Upload className="w-10 h-10 text-theme-text-muted mx-auto mb-3" />
-                      <p className="text-white font-medium mb-1">Drag and drop your file here</p>
+                      <p className="text-theme-text-primary font-medium mb-1">Drag and drop your file here</p>
                       <p className="text-theme-text-muted text-sm mb-3">or click to browse</p>
                       <input
                         type="file"
@@ -574,7 +574,7 @@ const DocumentsPage: React.FC = () => {
                         type="text"
                         value={uploadForm.name}
                         onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
                         placeholder="Optional - defaults to file name"
                       />
                     </div>
@@ -586,7 +586,7 @@ const DocumentsPage: React.FC = () => {
                         rows={2}
                         value={uploadForm.description}
                         onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
                         placeholder="Optional description"
                       />
                     </div>
@@ -597,7 +597,7 @@ const DocumentsPage: React.FC = () => {
                         id="upload-folder"
                         value={uploadForm.folder}
                         onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
                       >
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>{f.name}</option>
@@ -645,7 +645,7 @@ const DocumentsPage: React.FC = () => {
               <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 id="create-folder-title" className="text-lg font-medium text-white">Create Folder</h3>
+                    <h3 id="create-folder-title" className="text-lg font-medium text-theme-text-primary">Create Folder</h3>
                     <button onClick={() => setShowCreateFolder(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
@@ -659,7 +659,7 @@ const DocumentsPage: React.FC = () => {
                         required
                         value={folderForm.name}
                         onChange={(e) => setFolderForm({ ...folderForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
                         placeholder="e.g., Safety Bulletins"
                       />
                     </div>
@@ -670,7 +670,7 @@ const DocumentsPage: React.FC = () => {
                         rows={2}
                         value={folderForm.description}
                         onChange={(e) => setFolderForm({ ...folderForm, description: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                   </div>
@@ -712,7 +712,7 @@ const DocumentsPage: React.FC = () => {
                       <AlertCircle className="w-6 h-6 text-red-400" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium text-white">Delete Document</h3>
+                      <h3 className="text-lg font-medium text-theme-text-primary">Delete Document</h3>
                       <p className="text-theme-text-muted text-sm mt-1">
                         Are you sure you want to delete this document? This action cannot be undone.
                       </p>

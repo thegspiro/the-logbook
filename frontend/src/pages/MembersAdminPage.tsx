@@ -797,15 +797,15 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="manage-members-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="manage-members-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="manage-members-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Members for {selectedRole.name}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-theme-text-muted mb-4">
                 Select the members to assign to this role
               </p>
 
@@ -813,25 +813,25 @@ export const MembersAdminPage: React.FC = () => {
                 {users.map((user) => (
                   <label
                     key={user.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedUserIds.includes(user.id)}
                       onChange={() => handleToggleUser(user.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                     />
                     <div className="ml-3 flex items-center gap-2">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-xs text-slate-400 font-medium">
+                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                        <span className="text-xs text-theme-text-muted font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-theme-text-primary">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-theme-text-muted">
                           @{user.username}
                           {user.badge_number && ` • Badge #${user.badge_number}`}
                         </div>
@@ -842,7 +842,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingMembers(false);
@@ -850,7 +850,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>

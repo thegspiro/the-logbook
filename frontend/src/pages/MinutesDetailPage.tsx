@@ -678,14 +678,14 @@ export const MinutesDetailPage: React.FC = () => {
                           <button
                             onClick={() => handleReorderSection(idx, 'down')}
                             disabled={idx === minutes.sections.length - 1 || saving}
-                            className="text-slate-500 hover:text-slate-300 disabled:opacity-30 p-0.5"
+                            className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
                             aria-label={`Move ${section.title} down`}
                           >
                             <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       )}
-                      <h3 className="text-md font-semibold text-white">{section.title}</h3>
+                      <h3 className="text-md font-semibold text-theme-text-primary">{section.title}</h3>
                     </div>
                     <div className="flex items-center gap-2">
                       {canManage && isEditable && !isEditing && (
@@ -699,7 +699,7 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleDeleteSection(section.key)}
-                            className="text-slate-500 hover:text-red-400 p-1"
+                            className="text-theme-text-muted hover:text-red-400 p-1"
                             aria-label={`Delete ${section.title} section`}
                           >
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -737,9 +737,9 @@ export const MinutesDetailPage: React.FC = () => {
                       </div>
                     </div>
                   ) : section.content ? (
-                    <div className="text-sm text-slate-200 whitespace-pre-wrap">{section.content}</div>
+                    <div className="text-sm text-theme-text-secondary whitespace-pre-wrap">{section.content}</div>
                   ) : (
-                    <p className="text-sm text-slate-500 italic">
+                    <p className="text-sm text-theme-text-muted italic">
                       No content yet.{' '}
                       {canManage && isEditable && (
                         <button
@@ -758,9 +758,9 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
 
       {/* Motions */}
-      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Motions ({minutes.motions.length})</h3>
+          <h3 className="text-lg font-semibold text-theme-text-primary">Motions ({minutes.motions.length})</h3>
           {canManage && isEditable && (
             <button
               onClick={() => setShowMotionForm(!showMotionForm)}
@@ -772,7 +772,7 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showMotionForm && (
-          <div className="border border-white/20 rounded-lg p-4 mb-4 bg-white/5 space-y-3" role="form" aria-label="Add motion">
+          <div className="border border-theme-surface-border rounded-lg p-4 mb-4 bg-theme-surface-secondary space-y-3" role="form" aria-label="Add motion">
             <label htmlFor="motion-text" className="sr-only">Motion text</label>
             <textarea
               id="motion-text"
@@ -876,21 +876,21 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.motions.length === 0 ? (
-          <p className="text-sm text-slate-400">No motions recorded.</p>
+          <p className="text-sm text-theme-text-muted">No motions recorded.</p>
         ) : (
           <div className="space-y-3">
             {minutes.motions.map((motion, i) => (
-              <div key={motion.id} className="border border-white/20 rounded-lg p-4">
+              <div key={motion.id} className="border border-theme-surface-border rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-slate-500 font-mono">#{i + 1}</span>
+                      <span className="text-xs text-theme-text-muted font-mono">#{i + 1}</span>
                       <span className={`text-xs px-2 py-0.5 rounded font-medium ${MOTION_STATUS_BADGES[motion.status]}`}>
                         {motion.status}
                       </span>
                     </div>
-                    <p className="text-sm text-white">{motion.motion_text}</p>
-                    <div className="mt-2 text-xs text-slate-400 space-x-4">
+                    <p className="text-sm text-theme-text-primary">{motion.motion_text}</p>
+                    <div className="mt-2 text-xs text-theme-text-muted space-x-4">
                       {motion.moved_by && <span>Moved by: {motion.moved_by}</span>}
                       {motion.seconded_by && <span>Seconded by: {motion.seconded_by}</span>}
                       {motion.votes_for !== null && motion.votes_for !== undefined && (

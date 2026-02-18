@@ -144,7 +144,7 @@ export const ProspectDetailPage: React.FC = () => {
   };
 
   const getStepIcon = (progress?: StepProgress) => {
-    if (!progress) return <Circle className="h-5 w-5 text-slate-500" />;
+    if (!progress) return <Circle className="h-5 w-5 text-theme-text-muted" />;
     switch (progress.status) {
       case 'completed':
         return <CheckCircle2 className="h-5 w-5 text-green-500" />;
@@ -153,7 +153,7 @@ export const ProspectDetailPage: React.FC = () => {
       case 'skipped':
         return <SkipForward className="h-5 w-5 text-yellow-500" />;
       default:
-        return <Circle className="h-5 w-5 text-slate-500" />;
+        return <Circle className="h-5 w-5 text-theme-text-muted" />;
     }
   };
 
@@ -183,7 +183,7 @@ export const ProspectDetailPage: React.FC = () => {
   if (error || !prospect) {
     return (
       <div className="space-y-4">
-        <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white">
+        <Link to="/membership-pipeline" className="flex items-center gap-2 text-theme-text-muted hover:text-theme-text-primary">
           <ArrowLeft className="h-4 w-4" /> Back to Pipeline
         </Link>
         <div className="bg-red-900/50 border border-red-700 text-red-300 rounded-lg p-4">
@@ -202,19 +202,19 @@ export const ProspectDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen space-y-6">
       {/* Back link */}
-      <Link to="/membership-pipeline" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+      <Link to="/membership-pipeline" className="flex items-center gap-2 text-theme-text-muted hover:text-theme-text-primary transition-colors">
         <ArrowLeft className="h-4 w-4" /> Back to Pipeline
       </Link>
 
       {/* Header */}
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+      <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 bg-slate-700 rounded-full flex items-center justify-center text-2xl font-bold text-white">
+            <div className="h-16 w-16 bg-theme-surface rounded-full flex items-center justify-center text-2xl font-bold text-theme-text-primary">
               {prospect.first_name[0]}{prospect.last_name[0]}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">
+              <h1 className="text-2xl font-bold text-theme-text-primary">
                 {prospect.first_name} {prospect.last_name}
               </h1>
               <div className="flex items-center gap-3 mt-1">
@@ -291,7 +291,7 @@ export const ProspectDetailPage: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'progress' && (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+        <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Pipeline Steps</h2>
           <div className="space-y-1">
             {sortedProgress.map((progress, _idx) => (
@@ -383,7 +383,7 @@ export const ProspectDetailPage: React.FC = () => {
 
       {activeTab === 'info' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Contact Information</h2>
             <dl className="space-y-3">
               <div className="flex items-center gap-3">
@@ -414,7 +414,7 @@ export const ProspectDetailPage: React.FC = () => {
               )}
             </dl>
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Address</h2>
             {prospect.address_street ? (
               <div className="flex items-start gap-3">
@@ -428,7 +428,7 @@ export const ProspectDetailPage: React.FC = () => {
               <p className="text-sm text-slate-400">No address provided</p>
             )}
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Application Details</h2>
             <dl className="space-y-3">
               {prospect.interest_reason && (
@@ -451,7 +451,7 @@ export const ProspectDetailPage: React.FC = () => {
               )}
             </dl>
           </div>
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Dates</h2>
             <dl className="space-y-3">
               <div className="flex justify-between">
@@ -474,7 +474,7 @@ export const ProspectDetailPage: React.FC = () => {
       )}
 
       {activeTab === 'activity' && (
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
+        <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Activity Log</h2>
           {activityLog.length === 0 ? (
             <p className="text-slate-400 text-sm">No activity recorded yet.</p>

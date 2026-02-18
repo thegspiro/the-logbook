@@ -313,12 +313,12 @@ export const SettingsPage: React.FC = () => {
 
           <div className="space-y-4">
             {/* Enable Toggle */}
-            <div className="flex items-center justify-between py-4 border-b border-white/20">
+            <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
               <div>
-                <label className="text-sm font-medium text-white">
+                <label className="text-sm font-medium text-theme-text-primary">
                   Enable Membership ID Numbers
                 </label>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-theme-text-muted">
                   Display membership ID numbers on member profiles and lists
                 </p>
               </div>
@@ -344,10 +344,10 @@ export const SettingsPage: React.FC = () => {
                 {/* Auto-Generate Toggle */}
                 <div className="flex items-center justify-between py-3">
                   <div>
-                    <label className="text-sm font-medium text-white">
+                    <label className="text-sm font-medium text-theme-text-primary">
                       Auto-Generate IDs
                     </label>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-theme-text-muted">
                       Automatically assign the next sequential ID to new members
                     </p>
                   </div>
@@ -370,10 +370,10 @@ export const SettingsPage: React.FC = () => {
 
                 {/* Prefix */}
                 <div className="py-3">
-                  <label className="block text-sm font-medium text-white mb-1">
+                  <label className="block text-sm font-medium text-theme-text-primary mb-1">
                     ID Prefix
                   </label>
-                  <p className="text-sm text-slate-400 mb-2">
+                  <p className="text-sm text-theme-text-muted mb-2">
                     Optional prefix prepended to each ID (e.g. &quot;FD-&quot; produces FD-001)
                   </p>
                   <input
@@ -382,17 +382,17 @@ export const SettingsPage: React.FC = () => {
                     value={membershipId.prefix}
                     onChange={(e) => setMembershipId((prev) => ({ ...prev, prefix: e.target.value }))}
                     placeholder="e.g. FD-"
-                    className="w-40 rounded-md bg-slate-700 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-40 rounded-md bg-theme-surface border border-theme-surface-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
                 {/* Next Number */}
                 {membershipId.auto_generate && (
                   <div className="py-3">
-                    <label className="block text-sm font-medium text-white mb-1">
+                    <label className="block text-sm font-medium text-theme-text-primary mb-1">
                       Next ID Number
                     </label>
-                    <p className="text-sm text-slate-400 mb-2">
+                    <p className="text-sm text-theme-text-muted mb-2">
                       The next number to assign when a new member is added
                     </p>
                     <input
@@ -400,7 +400,7 @@ export const SettingsPage: React.FC = () => {
                       min={1}
                       value={membershipId.next_number}
                       onChange={(e) => setMembershipId((prev) => ({ ...prev, next_number: Math.max(1, parseInt(e.target.value) || 1) }))}
-                      className="w-40 rounded-md bg-slate-700 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-40 rounded-md bg-theme-surface border border-theme-surface-border text-theme-text-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 )}

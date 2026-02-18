@@ -668,12 +668,12 @@ export const UserSettingsPage: React.FC = () => {
 
             <div className="space-y-4">
               {/* Email Notifications Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="emailNotifications" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label htmlFor="emailNotifications" className="text-sm font-medium text-theme-text-primary">
                     Email Notifications
                   </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Receive email notifications for important updates
                   </p>
                 </div>
@@ -681,8 +681,8 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setEmailNotifications(!emailNotifications)}
                   className={`${
-                    emailNotifications ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    emailNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={emailNotifications}
                 >
@@ -695,12 +695,12 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               {/* Event Reminders Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="eventReminders" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label htmlFor="eventReminders" className="text-sm font-medium text-theme-text-primary">
                     Event Reminders
                   </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Get reminders before scheduled events
                   </p>
                 </div>
@@ -708,8 +708,8 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setEventReminders(!eventReminders)}
                   className={`${
-                    eventReminders ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    eventReminders ? 'bg-red-600' : 'bg-theme-surface-border'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={eventReminders}
                 >
@@ -722,12 +722,12 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               {/* Training Reminders Toggle */}
-              <div className="flex items-center justify-between py-4 border-b border-slate-200 dark:border-white/10">
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
                 <div>
-                  <label htmlFor="trainingReminders" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label htmlFor="trainingReminders" className="text-sm font-medium text-theme-text-primary">
                     Training Reminders
                   </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Notifications for training deadlines and requirements
                   </p>
                 </div>
@@ -735,8 +735,8 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setTrainingReminders(!trainingReminders)}
                   className={`${
-                    trainingReminders ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    trainingReminders ? 'bg-red-600' : 'bg-theme-surface-border'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={trainingReminders}
                 >
@@ -751,10 +751,10 @@ export const UserSettingsPage: React.FC = () => {
               {/* Announcement Notifications Toggle */}
               <div className="flex items-center justify-between py-4">
                 <div>
-                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-theme-text-primary">
                     Announcement Notifications
                   </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     Stay updated with department announcements
                   </p>
                 </div>
@@ -762,8 +762,8 @@ export const UserSettingsPage: React.FC = () => {
                   type="button"
                   onClick={() => setAnnouncementNotifications(!announcementNotifications)}
                   className={`${
-                    announcementNotifications ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-600'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900`}
+                    announcementNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-theme-bg`}
                   role="switch"
                   aria-checked={announcementNotifications}
                 >

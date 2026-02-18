@@ -447,18 +447,18 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           <span className="text-theme-text-secondary">{currentElectionPackage.applicant_name}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-500">Membership Type</span>
-                          <span className="text-slate-300 capitalize">{currentElectionPackage.target_membership_type}</span>
+                          <span className="text-theme-text-muted">Membership Type</span>
+                          <span className="text-theme-text-secondary capitalize">{currentElectionPackage.target_membership_type}</span>
                         </div>
                         {currentElectionPackage.target_role_name && (
                           <div className="flex justify-between">
-                            <span className="text-slate-500">Target Role</span>
-                            <span className="text-slate-300">{currentElectionPackage.target_role_name}</span>
+                            <span className="text-theme-text-muted">Target Role</span>
+                            <span className="text-theme-text-secondary">{currentElectionPackage.target_role_name}</span>
                           </div>
                         )}
                         {currentElectionPackage.documents && currentElectionPackage.documents.length > 0 && (
                           <div className="pt-1">
-                            <span className="text-slate-500">Documents:</span>
+                            <span className="text-theme-text-muted">Documents:</span>
                             <div className="mt-1 space-y-0.5">
                               {currentElectionPackage.documents.map((doc, i) => (
                                 <div key={i} className="flex items-center gap-1 text-blue-400">
@@ -481,7 +481,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       {currentElectionPackage.status === 'draft' && (
                         <>
                           <div>
-                            <label className="block text-xs text-slate-400 mb-1">
+                            <label className="block text-xs text-theme-text-muted mb-1">
                               Coordinator Notes
                             </label>
                             <textarea
@@ -489,11 +489,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               onChange={(e) => setPkgNotes(e.target.value)}
                               placeholder="Internal notes about this applicant..."
                               rows={2}
-                              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-slate-400 mb-1">
+                            <label className="block text-xs text-theme-text-muted mb-1">
                               Supporting Statement
                             </label>
                             <textarea
@@ -501,13 +501,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                               onChange={(e) => setPkgStatement(e.target.value)}
                               placeholder="Statement shown to voters on the ballot..."
                               rows={2}
-                              className="w-full bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                             />
                           </div>
                           <div className="flex items-center gap-2 justify-end">
                             <button
                               onClick={handleSavePackage}
-                              className="px-3 py-1.5 text-xs text-slate-300 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                              className="px-3 py-1.5 text-xs text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
                             >
                               Save Draft
                             </button>
@@ -534,7 +534,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                             )}
                           </p>
                           {currentElectionPackage.coordinator_notes && (
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className="text-xs text-theme-text-muted mt-1">
                               Notes: {currentElectionPackage.coordinator_notes}
                             </p>
                           )}
@@ -570,7 +570,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-theme-text-muted">
                       No election package has been created yet. It will be auto-generated when the applicant reaches this stage.
                     </p>
                   )}

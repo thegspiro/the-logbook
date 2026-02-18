@@ -632,7 +632,7 @@ const RoleSetup: React.FC = () => {
                 <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
-                  <p className="text-slate-300 text-sm">
+                  <p className="text-theme-text-secondary text-sm">
                     Each role has <strong className="text-green-400">View</strong> (see content) and{' '}
                     <strong className="text-orange-400">Manage</strong> (create/edit/delete) permissions per module.
                     Click on a selected role to customize its permissions.
@@ -646,7 +646,7 @@ const RoleSetup: React.FC = () => {
                 <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-green-400 font-semibold mb-1">Don't Worry - You Can Change These Later</p>
-                  <p className="text-slate-300 text-sm">
+                  <p className="text-theme-text-secondary text-sm">
                     Roles and permissions can be updated anytime in <strong>Settings → Roles & Permissions</strong>.
                     You can add new roles, modify permissions, or remove roles as your organization's needs evolve.
                   </p>
@@ -666,7 +666,7 @@ const RoleSetup: React.FC = () => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCustomModal(true)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 Create Custom Role
@@ -677,7 +677,7 @@ const RoleSetup: React.FC = () => {
                 className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
-                    : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
                 {isSaving ? 'Saving...' : 'Continue to Modules'}
@@ -691,19 +691,19 @@ const RoleSetup: React.FC = () => {
               <h2 className="text-theme-text-primary font-bold text-lg mb-4">Available Role Templates</h2>
 
               {Object.entries(roleTemplates).map(([categoryId, category]) => (
-                <div key={categoryId} className="bg-white/5 rounded-lg border border-theme-surface-border overflow-hidden">
+                <div key={categoryId} className="bg-theme-surface-secondary rounded-lg border border-theme-surface-border overflow-hidden">
                   <button
                     onClick={() => toggleCategory(categoryId)}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-theme-surface-hover transition-colors"
                   >
                     <div>
                       <h3 className="text-theme-text-primary font-semibold">{category.name}</h3>
                       <p className="text-theme-text-muted text-sm">{category.description}</p>
                     </div>
                     {expandedCategories.includes(categoryId) ? (
-                      <ChevronDown className="w-5 h-5 text-slate-400" aria-hidden="true" />
+                      <ChevronDown className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-slate-400" aria-hidden="true" />
+                      <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                     )}
                   </button>
 
@@ -719,7 +719,7 @@ const RoleSetup: React.FC = () => {
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
                               isSelected
                                 ? 'border-green-500 bg-green-500/10'
-                                : 'border-slate-600 hover:border-slate-500'
+                                : 'border-theme-surface-border hover:border-theme-surface-hover'
                             }`}
                             onClick={() => toggleRole(role)}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRole(role); } }}
@@ -731,7 +731,7 @@ const RoleSetup: React.FC = () => {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                  isSelected ? 'bg-green-600' : 'bg-slate-700'
+                                  isSelected ? 'bg-green-600' : 'bg-theme-surface'
                                 }`}>
                                   <Icon className="w-5 h-5 text-white" aria-hidden="true" />
                                 </div>
@@ -813,7 +813,7 @@ const RoleSetup: React.FC = () => {
                                   e.stopPropagation();
                                   toggleRole(role);
                                 }}
-                                className="p-1 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400 transition-colors"
+                                className="p-1 hover:bg-red-500/20 rounded text-theme-text-muted hover:text-red-400 transition-colors"
                                 aria-label={`Remove ${role.name} role`}
                               >
                                 <X className="w-4 h-4" aria-hidden="true" />
@@ -822,7 +822,7 @@ const RoleSetup: React.FC = () => {
                             {isEditing ? (
                               <ChevronDown className="w-5 h-5 text-orange-400" aria-hidden="true" />
                             ) : (
-                              <ChevronRight className="w-5 h-5 text-slate-400" aria-hidden="true" />
+                              <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                             )}
                           </div>
                         </div>
@@ -853,7 +853,7 @@ const RoleSetup: React.FC = () => {
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.view
                                             ? 'bg-green-500/20 text-green-400'
-                                            : 'bg-slate-700 text-slate-500'
+                                            : 'bg-theme-surface text-theme-text-muted'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
                                         <Eye className="w-3 h-3" aria-hidden="true" />
@@ -866,7 +866,7 @@ const RoleSetup: React.FC = () => {
                                         className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                           perms.manage
                                             ? 'bg-orange-500/20 text-orange-400'
-                                            : 'bg-slate-700 text-slate-500'
+                                            : 'bg-theme-surface text-theme-text-muted'
                                         } ${isAdmin ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
                                         <Edit3 className="w-3 h-3" aria-hidden="true" />
@@ -903,7 +903,7 @@ const RoleSetup: React.FC = () => {
           aria-labelledby="custom-role-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
         >
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
+          <div className="bg-theme-surface rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
             <h3 id="custom-role-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Role</h3>
 
             <div className="space-y-4">
@@ -941,7 +941,7 @@ const RoleSetup: React.FC = () => {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowCustomModal(false)}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -959,7 +959,7 @@ const RoleSetup: React.FC = () => {
       <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

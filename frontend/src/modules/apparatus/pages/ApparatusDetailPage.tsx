@@ -516,20 +516,20 @@ export const ApparatusDetailPage: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
               </div>
             ) : maintenanceRecords.length === 0 ? (
-              <p className="text-slate-400 text-center py-8">No maintenance records found.</p>
+              <p className="text-theme-text-muted text-center py-8">No maintenance records found.</p>
             ) : (
               <div className="space-y-3">
                 {maintenanceRecords.map((record) => (
                   <div
                     key={record.id}
-                    className="bg-slate-900/50 rounded-lg p-4 border border-white/10"
+                    className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-white font-medium">
+                        <p className="text-theme-text-primary font-medium">
                           {record.maintenanceType?.name || 'Maintenance'}
                         </p>
-                        <p className="text-slate-400 text-sm">
+                        <p className="text-theme-text-muted text-sm">
                           {record.isCompleted
                             ? `Completed ${formatDate(record.completedDate, tz)}`
                             : `Due ${formatDate(record.dueDate, tz)}`}
@@ -537,7 +537,7 @@ export const ApparatusDetailPage: React.FC = () => {
                       </div>
                       <div className="text-right">
                         {record.cost && (
-                          <p className="text-white">{formatCurrency(record.cost)}</p>
+                          <p className="text-theme-text-primary">{formatCurrency(record.cost)}</p>
                         )}
                         <span
                           className={`px-2 py-1 text-xs rounded ${
@@ -561,9 +561,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Fuel Logs Tab */}
         {activeTab === 'fuel' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white font-bold flex items-center gap-2">
+              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Fuel className="w-5 h-5" />
                 Fuel Logs
               </h2>
@@ -579,27 +579,27 @@ export const ApparatusDetailPage: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
               </div>
             ) : fuelLogs.length === 0 ? (
-              <p className="text-slate-400 text-center py-8">No fuel logs found.</p>
+              <p className="text-theme-text-muted text-center py-8">No fuel logs found.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b border-white/10">
+                  <thead className="border-b border-theme-surface-border">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs text-slate-400 uppercase">Date</th>
-                      <th className="px-4 py-2 text-left text-xs text-slate-400 uppercase">Fuel Type</th>
-                      <th className="px-4 py-2 text-right text-xs text-slate-400 uppercase">Gallons</th>
-                      <th className="px-4 py-2 text-right text-xs text-slate-400 uppercase">Cost</th>
-                      <th className="px-4 py-2 text-right text-xs text-slate-400 uppercase">Mileage</th>
+                      <th className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Date</th>
+                      <th className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Fuel Type</th>
+                      <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Gallons</th>
+                      <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Cost</th>
+                      <th className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Mileage</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-theme-surface-border">
                     {fuelLogs.map((log) => (
                       <tr key={log.id}>
-                        <td className="px-4 py-3 text-white">{formatDate(log.fuelDate, tz)}</td>
-                        <td className="px-4 py-3 text-slate-300 capitalize">{log.fuelType}</td>
-                        <td className="px-4 py-3 text-right text-white">{log.gallons.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-white">{formatCurrency(log.totalCost)}</td>
-                        <td className="px-4 py-3 text-right text-slate-300">
+                        <td className="px-4 py-3 text-theme-text-primary">{formatDate(log.fuelDate, tz)}</td>
+                        <td className="px-4 py-3 text-theme-text-secondary capitalize">{log.fuelType}</td>
+                        <td className="px-4 py-3 text-right text-theme-text-primary">{log.gallons.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-theme-text-primary">{formatCurrency(log.totalCost)}</td>
+                        <td className="px-4 py-3 text-right text-theme-text-secondary">
                           {log.mileageAtFill?.toLocaleString() || '-'}
                         </td>
                       </tr>
@@ -613,9 +613,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Operators Tab */}
         {activeTab === 'operators' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white font-bold flex items-center gap-2">
+              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Users className="w-5 h-5" />
                 Certified Operators
               </h2>
@@ -631,7 +631,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
               </div>
             ) : operators.length === 0 ? (
-              <p className="text-slate-400 text-center py-8">No operators assigned.</p>
+              <p className="text-theme-text-muted text-center py-8">No operators assigned.</p>
             ) : (
               <div className="space-y-3">
                 {operators.map((op) => (

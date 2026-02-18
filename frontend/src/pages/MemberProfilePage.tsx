@@ -649,7 +649,7 @@ export const MemberProfilePage: React.FC = () => {
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-theme-text-secondary">Active Training</span>
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-theme-text-primary">
                       {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
                     </span>
                   </div>
@@ -661,7 +661,7 @@ export const MemberProfilePage: React.FC = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-theme-text-secondary">Total Hours</span>
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-theme-text-primary">
                       {trainings.reduce((sum, t) => sum + (t.hours_completed || 0), 0)} hrs
                     </span>
                   </div>
@@ -670,7 +670,7 @@ export const MemberProfilePage: React.FC = () => {
               {inventoryModuleEnabled && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-theme-text-secondary">Assigned Equipment</span>
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-sm font-semibold text-theme-text-primary">
                     {inventoryItems.length}
                   </span>
                 </div>
