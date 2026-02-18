@@ -232,7 +232,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
 
               {/* Notes */}
               <div>
-                <label htmlFor="conversion-notes" className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="conversion-notes" className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Conversion Notes (optional)
                 </label>
                 <textarea
@@ -241,7 +241,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Any notes about this conversion..."
                   rows={2}
-                  className="w-full bg-slate-700 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  className="w-full bg-theme-surface-secondary border border-theme-surface-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 />
               </div>
 
@@ -256,10 +256,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
               >
                 Cancel
               </button>

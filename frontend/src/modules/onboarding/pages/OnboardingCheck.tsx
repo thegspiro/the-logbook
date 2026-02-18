@@ -445,7 +445,7 @@ const OnboardingCheck: React.FC = () => {
       case 'error':
         return 'text-red-400';
       default:
-        return 'text-slate-300';
+        return 'text-theme-text-secondary';
     }
   };
 
@@ -469,7 +469,7 @@ const OnboardingCheck: React.FC = () => {
           {schemaError && (
             <div className="mb-6 text-left bg-black/30 rounded-lg p-4 border border-orange-500/30">
               <p className="text-orange-300 text-sm font-semibold mb-2">To Fix This Issue:</p>
-              <ol className="text-slate-300 text-sm space-y-2 list-decimal list-inside">
+              <ol className="text-theme-text-secondary text-sm space-y-2 list-decimal list-inside">
                 <li>Stop all containers:
                   <code className="block mt-1 bg-black/40 rounded px-2 py-1 text-orange-200 font-mono text-xs">
                     docker compose down -v
@@ -481,7 +481,7 @@ const OnboardingCheck: React.FC = () => {
                   </code>
                 </li>
               </ol>
-              <p className="text-slate-400 text-xs mt-3">
+              <p className="text-theme-text-muted text-xs mt-3">
                 The <code className="text-orange-200">-v</code> flag removes database volumes for a fresh start.
                 Since onboarding hasn't completed, no data will be lost.
               </p>
