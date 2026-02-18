@@ -637,11 +637,11 @@ export const ApparatusDetailPage: React.FC = () => {
                 {operators.map((op) => (
                   <div
                     key={op.id}
-                    className="bg-slate-900/50 rounded-lg p-4 border border-white/10 flex items-center justify-between"
+                    className="bg-theme-surface-secondary rounded-lg p-4 border border-theme-surface-border flex items-center justify-between"
                   >
                     <div>
-                      <p className="text-white font-medium">Operator ID: {op.userId}</p>
-                      <p className="text-slate-400 text-sm">
+                      <p className="text-theme-text-primary font-medium">Operator ID: {op.userId}</p>
+                      <p className="text-theme-text-muted text-sm">
                         {op.isCertified ? 'Certified' : 'Not Certified'}
                         {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, tz)}`}
                       </p>
@@ -651,7 +651,7 @@ export const ApparatusDetailPage: React.FC = () => {
                     </div>
                     <span
                       className={`px-2 py-1 text-xs rounded ${
-                        op.isActive ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'
+                        op.isActive ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-theme-text-muted'
                       }`}
                     >
                       {op.isActive ? 'Active' : 'Inactive'}
@@ -665,9 +665,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {/* Equipment Tab */}
         {activeTab === 'equipment' && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white font-bold flex items-center gap-2">
+              <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
                 <Package className="w-5 h-5" />
                 Equipment
               </h2>
@@ -683,7 +683,7 @@ export const ApparatusDetailPage: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
               </div>
             ) : equipment.length === 0 ? (
-              <p className="text-slate-400 text-center py-8">No equipment assigned.</p>
+              <p className="text-theme-text-muted text-center py-8">No equipment assigned.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {equipment.map((item) => (

@@ -917,9 +917,9 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
 
       {/* Action Items */}
-      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Action Items ({minutes.action_items.length})</h3>
+          <h3 className="text-lg font-semibold text-theme-text-primary">Action Items ({minutes.action_items.length})</h3>
           {canManage && isEditable && (
             <button
               onClick={() => setShowActionForm(!showActionForm)}
@@ -931,7 +931,7 @@ export const MinutesDetailPage: React.FC = () => {
         </div>
 
         {showActionForm && (
-          <div className="border border-white/20 rounded-lg p-4 mb-4 bg-white/5 space-y-3" role="form" aria-label="Add action item">
+          <div className="border border-theme-surface-border rounded-lg p-4 mb-4 bg-theme-surface-secondary space-y-3" role="form" aria-label="Add action item">
             <label htmlFor="action-description" className="sr-only">Action item description</label>
             <textarea
               id="action-description"
@@ -993,11 +993,11 @@ export const MinutesDetailPage: React.FC = () => {
         )}
 
         {minutes.action_items.length === 0 ? (
-          <p className="text-sm text-slate-400">No action items.</p>
+          <p className="text-sm text-theme-text-muted">No action items.</p>
         ) : (
           <div className="space-y-3">
             {minutes.action_items.map(item => (
-              <div key={item.id} className="border border-white/20 rounded-lg p-4">
+              <div key={item.id} className="border border-theme-surface-border rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">

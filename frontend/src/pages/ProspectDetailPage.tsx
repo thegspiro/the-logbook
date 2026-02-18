@@ -220,11 +220,11 @@ export const ProspectDetailPage: React.FC = () => {
               <div className="flex items-center gap-3 mt-1">
                 {getStatusBadge(prospect.status)}
                 {prospect.pipeline_name && (
-                  <span className="text-sm text-slate-400">{prospect.pipeline_name}</span>
+                  <span className="text-sm text-theme-text-muted">{prospect.pipeline_name}</span>
                 )}
                 {prospect.current_step && (
                   <>
-                    <ChevronRight className="h-4 w-4 text-slate-500" />
+                    <ChevronRight className="h-4 w-4 text-theme-text-muted" />
                     <span className="text-sm text-gray-300">{prospect.current_step.name}</span>
                   </>
                 )}
@@ -249,7 +249,7 @@ export const ProspectDetailPage: React.FC = () => {
               </button>
               <button
                 onClick={handleReject}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-red-400 rounded-lg hover:bg-slate-600 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-theme-surface text-red-400 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
               >
                 <X className="h-4 w-4" />
                 Reject
@@ -269,7 +269,7 @@ export const ProspectDetailPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-700">
+      <div className="border-b border-theme-surface-border">
         <div className="flex gap-6">
           {(['progress', 'info', 'activity'] as const).map(tab => (
             <button
@@ -277,8 +277,8 @@ export const ProspectDetailPage: React.FC = () => {
               onClick={() => setActiveTab(tab)}
               className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
-                  ? 'border-red-500 text-white'
-                  : 'border-transparent text-slate-400 hover:text-white'
+                  ? 'border-red-500 text-theme-text-primary'
+                  : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               {tab === 'progress' && <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Pipeline Progress</span>}

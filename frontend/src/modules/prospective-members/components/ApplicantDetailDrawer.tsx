@@ -578,12 +578,12 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               )}
 
               {/* Stage History Timeline */}
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                   Stage History
                 </h3>
                 {applicant.stage_history.length === 0 ? (
-                  <p className="text-sm text-slate-500">No history yet.</p>
+                  <p className="text-sm text-theme-text-muted">No history yet.</p>
                 ) : (
                   <div className="space-y-0">
                     {applicant.stage_history.map(
@@ -603,13 +603,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                                 <Circle className="w-5 h-5 text-slate-600 flex-shrink-0" />
                               )}
                               {idx < applicant.stage_history.length - 1 && (
-                                <div className="w-px h-full min-h-[24px] bg-white/10 my-1" />
+                                <div className="w-px h-full min-h-[24px] bg-theme-surface-border my-1" />
                               )}
                             </div>
 
                             {/* Content */}
                             <div className="pb-4 min-w-0">
-                              <p className={`text-sm font-medium ${isComplete ? 'text-slate-300' : isCurrent ? 'text-white' : 'text-slate-500'}`}>
+                              <p className={`text-sm font-medium ${isComplete ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
                                 {entry.stage_name}
                               </p>
                               <p className="text-xs text-slate-500 mt-0.5">

@@ -169,7 +169,7 @@ export const RoleManagementPage: React.FC = () => {
         )}
 
         <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
-          <ul className="divide-y divide-white/10">
+          <ul className="divide-y divide-theme-surface-border">
             {roles.map((role) => (
               <li key={role.id} className="px-6 py-4">
                 <div className="flex items-center justify-between">
