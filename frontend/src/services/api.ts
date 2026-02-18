@@ -2875,12 +2875,17 @@ export interface Location {
   id: string;
   organization_id: string;
   name: string;
+  description?: string;
   address?: string;
   city?: string;
   state?: string;
   zip?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: string;
+  longitude?: string;
+  building?: string;
+  floor?: string;
+  room_number?: string;
+  capacity?: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -2888,12 +2893,17 @@ export interface Location {
 
 export interface LocationCreate {
   name: string;
+  description?: string;
   address?: string;
   city?: string;
   state?: string;
   zip?: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: string;
+  longitude?: string;
+  building?: string;
+  floor?: string;
+  room_number?: string;
+  capacity?: number;
 }
 
 export const locationsService = {

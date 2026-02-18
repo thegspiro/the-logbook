@@ -30,11 +30,13 @@ import {
   FormInput,
   Plug,
   Send,
+  MapPin,
 } from 'lucide-react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { organizationService } from '../../services/api';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -72,6 +74,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
+  const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
+
+  // Check if the full Facilities module is enabled for this organization
+  useEffect(() => {
+    organizationService.getEnabledModules()
+      .then(res => setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities')))
+      .catch(() => { /* default to false */ });
+  }, []);
 
   // Auto-expand parent menu when navigating to a child route
   useEffect(() => {
@@ -136,9 +146,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       subItems: [
         { label: 'Inventory', path: '/inventory', icon: Package },
         { label: 'Apparatus', path: '/apparatus', icon: Truck },
-        { label: 'Facilities', path: '/facilities', icon: Building2 },
+        ...(facilitiesModuleEnabled
+          ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }]
+          : []),
       ],
     },
+    // When Facilities module is off, show a lightweight Locations page
+    ...(facilitiesModuleEnabled ? [] : [
+      { label: 'Locations', path: '/locations', icon: MapPin } as NavItem,
+    ]),
     {
       label: 'Governance',
       path: '#',

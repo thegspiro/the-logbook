@@ -322,6 +322,28 @@ export const AVAILABLE_MODULES: Module[] = [
     ],
   },
   {
+    id: 'facilities',
+    name: 'Facilities Management',
+    description: 'Building management, maintenance, inspections, and compliance',
+    longDescription:
+      'Full facility and building management for organizations with a dedicated facilities officer. Track maintenance schedules, inspections, building systems, rooms, utility accounts, capital projects, and compliance checklists across all stations and buildings.',
+    category: 'optional',
+    enabled: false,
+    canDisable: true,
+    icon: 'Building2',
+    route: '/facilities',
+    features: [
+      'Facility and station management',
+      'Maintenance work orders and scheduling',
+      'Inspection tracking and compliance',
+      'Building systems inventory',
+      'Room and space management',
+      'Capital project tracking',
+    ],
+    requiresSetup: false,
+    setupDescription: 'When disabled, a simplified Locations page provides basic station, address, and room data for events, forms, and QR check-in.',
+  },
+  {
     id: 'prospective-members',
     name: 'Prospective Members Pipeline',
     description: 'Applicant-to-member pipeline with configurable stages',

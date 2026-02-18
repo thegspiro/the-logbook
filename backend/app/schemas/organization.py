@@ -294,6 +294,7 @@ class ModuleSettings(BaseModel):
     mobile: bool = Field(default=False, description="Mobile App Access module")
     forms: bool = Field(default=False, description="Custom Forms module")
     integrations: bool = Field(default=False, description="External Integrations module")
+    facilities: bool = Field(default=False, description="Facilities Management module (maintenance, inspections, systems)")
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -321,6 +322,8 @@ class ModuleSettings(BaseModel):
             enabled.append('forms')
         if self.integrations:
             enabled.append('integrations')
+        if self.facilities:
+            enabled.append('facilities')
 
         return enabled
 
@@ -341,6 +344,7 @@ class ModuleSettingsUpdate(BaseModel):
     mobile: Optional[bool] = None
     forms: Optional[bool] = None
     integrations: Optional[bool] = None
+    facilities: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):

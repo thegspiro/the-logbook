@@ -4,6 +4,7 @@ import { Home, LogOut, Menu, X, Sun, Moon, Monitor, ChevronDown } from 'lucide-r
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { organizationService } from '../../services/api';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -39,6 +40,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
+
+  useEffect(() => {
+    organizationService.getEnabledModules()
+      .then(res => setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities')))
+      .catch(() => { /* default to false */ });
+  }, []);
 
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system'] as const;
@@ -85,9 +93,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'Inventory', path: '/inventory' },
         { label: 'Apparatus', path: '/apparatus' },
-        { label: 'Facilities', path: '/facilities' },
+        ...(facilitiesModuleEnabled ? [{ label: 'Facilities', path: '/facilities' }] : []),
       ],
     },
+    ...(facilitiesModuleEnabled ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
     {
       label: 'Governance',
       path: '/elections',
