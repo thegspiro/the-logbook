@@ -1133,7 +1133,7 @@ class EventService:
             select(EventRSVP, User)
             .join(User, EventRSVP.user_id == User.id)
             .where(EventRSVP.event_id == str(event_id))
-            .order_by(EventRSVP.checked_in_at.desc().nullslast())
+            .order_by(EventRSVP.checked_in_at.desc())
         )
         rsvps_with_users = rsvp_result.all()
 

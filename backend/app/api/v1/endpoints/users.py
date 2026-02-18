@@ -36,7 +36,7 @@ from app.core.config import settings
 router = APIRouter()
 
 
-@router.get("/", response_model=List[UserListResponse])
+@router.get("", response_model=List[UserListResponse])
 async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -84,7 +84,7 @@ async def list_users(
     return users
 
 
-@router.post("/", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED)
 async def create_member(
     user_data: AdminUserCreate,
     background_tasks: BackgroundTasks,

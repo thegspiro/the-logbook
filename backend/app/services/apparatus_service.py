@@ -1713,7 +1713,7 @@ class ApparatusService:
         if compliance_status:
             query = query.where(ApparatusNFPACompliance.compliance_status == compliance_status)
 
-        query = query.order_by(ApparatusNFPACompliance.next_due_date.asc().nullslast())
+        query = query.order_by(ApparatusNFPACompliance.next_due_date.asc())
         result = await self.db.execute(query)
         return result.scalars().all()
 

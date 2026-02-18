@@ -345,7 +345,7 @@ class MeetingsService:
         if assigned_to:
             query = query.where(MeetingActionItem.assigned_to == assigned_to)
 
-        query = query.order_by(MeetingActionItem.due_date.asc().nullslast())
+        query = query.order_by(MeetingActionItem.due_date.asc())
         result = await self.db.execute(query)
         return result.scalars().all()
 
