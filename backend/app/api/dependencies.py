@@ -213,6 +213,7 @@ async def get_user_organization(
 def require_secretary():
     """Require user to have secretary permissions"""
     return require_permission(
+        "settings.manage",
         "settings.manage_contact_visibility",
         "organization.update_settings"
     )

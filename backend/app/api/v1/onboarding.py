@@ -1502,6 +1502,8 @@ async def save_session_roles(
             # Update existing system role permissions
             existing_role = existing_system_roles[role_data.id]
 
+            default_perms = DEFAULT_ROLES.get(role_data.id, {}).get("permissions", [])
+
             # Preserve the wildcard permission for roles that have it in
             # DEFAULT_ROLES (e.g. it_administrator). The frontend role editor
             # only knows about module-scoped view/manage permissions and cannot
@@ -1509,9 +1511,20 @@ async def save_session_roles(
             # it_administrator's ["*"] gets overwritten with a granular list
             # that is missing action-specific permissions (users.create,
             # audit.view, etc.), causing 403 errors on admin operations.
-            default_perms = DEFAULT_ROLES.get(role_data.id, {}).get("permissions", [])
             if "*" in default_perms:
                 permission_list = ["*"]
+            else:
+                # The frontend module registry doesn't cover every backend
+                # permission module (e.g. audit, organization, users,
+                # locations, meetings).  Preserve the default permissions
+                # for any modules the frontend submission doesn't include,
+                # so roles like Chief keep audit.view, users.create, etc.
+                submitted_modules = set(role_data.permissions.keys())
+                for perm in default_perms:
+                    if "." in perm:
+                        module_prefix = perm.split(".")[0]
+                        if module_prefix not in submitted_modules:
+                            permission_list.append(perm)
 
             existing_role.permissions = permission_list
             existing_role.priority = role_data.priority

@@ -112,7 +112,7 @@ async def update_organization_settings(
 async def update_contact_info_settings(
     contact_settings: ContactInfoSettings,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_contact_visibility", "organization.update_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "settings.manage_contact_visibility", "organization.update_settings")),
 ):
     """
     Update contact information visibility settings
@@ -299,7 +299,7 @@ async def get_membership_id_settings(
 async def update_membership_id_settings(
     membership_id_settings: MembershipIdSettings,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage_contact_visibility", "organization.update_settings")),
+    current_user: User = Depends(require_permission("settings.manage", "settings.manage_contact_visibility", "organization.update_settings")),
 ):
     """
     Update membership ID settings.
