@@ -93,7 +93,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-gray-500/20 text-gray-400'}`}>
+    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
       {labels[type] || type}
     </span>
   );
@@ -148,39 +148,39 @@ const EnrollModal: React.FC<{
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-gray-800 rounded-lg max-w-lg w-full">
-        <div className="p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Enroll Members</h2>
-          <p className="text-gray-400 text-sm mt-1">Enroll members into {programName}</p>
+      <div className="bg-theme-surface rounded-lg max-w-lg w-full">
+        <div className="p-6 border-b border-theme-surface-border">
+          <h2 className="text-xl font-bold text-theme-text-primary">Enroll Members</h2>
+          <p className="text-theme-text-muted text-sm mt-1">Enroll members into {programName}</p>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
               Member IDs (one per line)
             </label>
             <textarea
               value={userIds}
               onChange={(e) => setUserIds(e.target.value)}
               rows={5}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="Enter member user IDs, one per line..."
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Target Completion Date</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Target Completion Date</label>
             <input
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm"
+              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
             >
               Cancel
             </button>
@@ -288,7 +288,7 @@ const PipelineDetailPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
-          <p className="text-gray-400 mt-4">Loading pipeline...</p>
+          <p className="text-theme-text-muted mt-4">Loading pipeline...</p>
         </div>
       </div>
     );
@@ -307,29 +307,29 @@ const PipelineDetailPage: React.FC = () => {
           <div className="flex items-start space-x-4">
             <button
               onClick={() => navigate('/training/programs')}
-              className="mt-1 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+              className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
               aria-label="Back to programs"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
               <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-2xl font-bold text-white">{program.name}</h1>
+                <h1 className="text-2xl font-bold text-theme-text-primary">{program.name}</h1>
                 {program.is_template && (
                   <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">Template</span>
                 )}
               </div>
               {program.description && (
-                <p className="text-gray-400 text-sm max-w-2xl mb-3">{program.description}</p>
+                <p className="text-theme-text-muted text-sm max-w-2xl mb-3">{program.description}</p>
               )}
               <div className="flex flex-wrap items-center gap-2">
                 {program.code && (
-                  <span className="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded font-mono">{program.code}</span>
+                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-secondary text-xs rounded font-mono">{program.code}</span>
                 )}
                 <StructureBadge type={program.structure_type} />
                 {program.target_position && <PositionBadge position={program.target_position} />}
                 {program.version > 1 && (
-                  <span className="px-2 py-0.5 bg-gray-700 text-gray-400 text-xs rounded">v{program.version}</span>
+                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-muted text-xs rounded">v{program.version}</span>
                 )}
               </div>
             </div>
@@ -346,7 +346,7 @@ const PipelineDetailPage: React.FC = () => {
             <button
               onClick={handleDuplicate}
               disabled={isDuplicating}
-              className="flex items-center space-x-1 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm disabled:opacity-50"
+              className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm disabled:opacity-50"
             >
               <Copy className="w-4 h-4" />
               <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
@@ -356,41 +356,41 @@ const PipelineDetailPage: React.FC = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-gray-400 mb-1">
+          <div className="bg-theme-surface rounded-lg p-4">
+            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <Layers className="w-4 h-4" />
               <span className="text-xs uppercase">Phases</span>
             </div>
-            <p className="text-2xl font-bold text-white">{phases.length}</p>
+            <p className="text-2xl font-bold text-theme-text-primary">{phases.length}</p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-gray-400 mb-1">
+          <div className="bg-theme-surface rounded-lg p-4">
+            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <ListChecks className="w-4 h-4" />
               <span className="text-xs uppercase">Requirements</span>
             </div>
-            <p className="text-2xl font-bold text-white">{totalReqs}</p>
-            <p className="text-xs text-gray-500">{requiredReqs} required</p>
+            <p className="text-2xl font-bold text-theme-text-primary">{totalReqs}</p>
+            <p className="text-xs text-theme-text-muted">{requiredReqs} required</p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-gray-400 mb-1">
+          <div className="bg-theme-surface rounded-lg p-4">
+            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <Calendar className="w-4 h-4" />
               <span className="text-xs uppercase">Time Limit</span>
             </div>
-            <p className="text-2xl font-bold text-white">
+            <p className="text-2xl font-bold text-theme-text-primary">
               {program.time_limit_days ? `${program.time_limit_days}d` : '—'}
             </p>
           </div>
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-gray-400 mb-1">
+          <div className="bg-theme-surface rounded-lg p-4">
+            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
               <Users className="w-4 h-4" />
               <span className="text-xs uppercase">Enrolled</span>
             </div>
-            <p className="text-2xl font-bold text-white">{enrollments.length}</p>
+            <p className="text-2xl font-bold text-theme-text-primary">{enrollments.length}</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6" role="tablist">
+        <div className="flex space-x-1 bg-theme-surface p-1 rounded-lg mb-6" role="tablist">
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
             { key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users },
@@ -405,7 +405,7 @@ const PipelineDetailPage: React.FC = () => {
                 className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
                   activeTab === tab.key
                     ? 'bg-red-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -419,9 +419,9 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-4">
             {phases.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <Layers className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">No phases defined for this pipeline</p>
+              <div className="text-center py-12 bg-theme-surface rounded-lg">
+                <Layers className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+                <p className="text-theme-text-muted">No phases defined for this pipeline</p>
               </div>
             ) : (
               phases
@@ -431,10 +431,10 @@ const PipelineDetailPage: React.FC = () => {
                   const isExpanded = expandedPhases.has(phase.id);
 
                   return (
-                    <div key={phase.id} className="bg-gray-800 rounded-lg border border-gray-700">
+                    <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border">
                       {/* Phase header */}
                       <div
-                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-750"
+                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-theme-surface-hover"
                         onClick={() => togglePhase(phase.id)}
                       >
                         <div className="flex items-center space-x-3">
@@ -442,8 +442,8 @@ const PipelineDetailPage: React.FC = () => {
                             {phase.phase_number}
                           </div>
                           <div>
-                            <h3 className="text-white font-medium">{phase.name}</h3>
-                            <div className="flex items-center space-x-3 text-xs text-gray-400">
+                            <h3 className="text-theme-text-primary font-medium">{phase.name}</h3>
+                            <div className="flex items-center space-x-3 text-xs text-theme-text-muted">
                               <span>{phaseReqs.length} requirement{phaseReqs.length !== 1 ? 's' : ''}</span>
                               {phase.time_limit_days && (
                                 <span className="flex items-center space-x-1">
@@ -461,33 +461,33 @@ const PipelineDetailPage: React.FC = () => {
                           </div>
                         </div>
                         {isExpanded ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                          <ChevronUp className="w-5 h-5 text-theme-text-muted" />
                         ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                          <ChevronDown className="w-5 h-5 text-theme-text-muted" />
                         )}
                       </div>
 
                       {/* Phase content */}
                       {isExpanded && (
-                        <div className="border-t border-gray-700 p-4">
+                        <div className="border-t border-theme-surface-border p-4">
                           {phase.description && (
-                            <p className="text-gray-400 text-sm mb-4">{phase.description}</p>
+                            <p className="text-theme-text-muted text-sm mb-4">{phase.description}</p>
                           )}
 
                           {phaseReqs.length === 0 ? (
-                            <p className="text-gray-500 text-sm text-center py-4">No requirements assigned to this phase.</p>
+                            <p className="text-theme-text-muted text-sm text-center py-4">No requirements assigned to this phase.</p>
                           ) : (
                             <div className="space-y-2">
                               {phaseReqs.map((pr) => (
                                 <div
                                   key={pr.id}
-                                  className="bg-gray-700/50 rounded-lg p-3 flex items-start justify-between"
+                                  className="bg-theme-surface-secondary rounded-lg p-3 flex items-start justify-between"
                                 >
                                   <div className="flex items-start space-x-3">
-                                    <CheckCircle2 className="w-5 h-5 text-gray-500 mt-0.5" />
+                                    <CheckCircle2 className="w-5 h-5 text-theme-text-muted mt-0.5" />
                                     <div>
                                       <div className="flex items-center space-x-2 mb-1">
-                                        <span className="text-white text-sm font-medium">
+                                        <span className="text-theme-text-primary text-sm font-medium">
                                           {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
                                         </span>
                                         {pr.requirement?.requirement_type && (
@@ -498,12 +498,12 @@ const PipelineDetailPage: React.FC = () => {
                                         )}
                                       </div>
                                       {pr.requirement?.description && (
-                                        <p className="text-gray-400 text-xs">{pr.requirement.description}</p>
+                                        <p className="text-theme-text-muted text-xs">{pr.requirement.description}</p>
                                       )}
                                       {pr.program_specific_description && (
-                                        <p className="text-gray-300 text-xs mt-1 italic">{pr.program_specific_description}</p>
+                                        <p className="text-theme-text-secondary text-xs mt-1 italic">{pr.program_specific_description}</p>
                                       )}
-                                      <div className="flex items-center space-x-3 mt-1 text-xs text-gray-500">
+                                      <div className="flex items-center space-x-3 mt-1 text-xs text-theme-text-muted">
                                         {pr.requirement?.required_hours && (
                                           <span>{pr.requirement.required_hours}h required</span>
                                         )}
@@ -532,10 +532,10 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'enrollments' && (
           <div>
             {enrollments.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400 mb-2">No members enrolled yet</p>
-                <p className="text-gray-500 text-sm mb-4">
+              <div className="text-center py-12 bg-theme-surface rounded-lg">
+                <Users className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+                <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
+                <p className="text-theme-text-muted text-sm mb-4">
                   Use the Enroll button to add members to this pipeline
                 </p>
                 <button
@@ -548,15 +548,15 @@ const PipelineDetailPage: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 {enrollments.map((enrollment) => (
-                  <div key={enrollment.id} className="bg-gray-800 rounded-lg p-4 flex items-center justify-between">
+                  <div key={enrollment.id} className="bg-theme-surface rounded-lg p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-white font-medium">{enrollment.user_id}</p>
-                      <div className="flex items-center space-x-3 text-xs text-gray-400 mt-1">
+                      <p className="text-theme-text-primary font-medium">{enrollment.user_id}</p>
+                      <div className="flex items-center space-x-3 text-xs text-theme-text-muted mt-1">
                         <span>Status: {enrollment.status}</span>
                         <span>{enrollment.progress_percentage}% complete</span>
                       </div>
                     </div>
-                    <div className="w-32 bg-gray-700 rounded-full h-2">
+                    <div className="w-32 bg-theme-surface-secondary rounded-full h-2">
                       <div
                         className="bg-red-500 h-2 rounded-full transition-all"
                         style={{ width: `${enrollment.progress_percentage}%` }}

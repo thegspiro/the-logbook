@@ -203,13 +203,13 @@ export const ReportsPage: React.FC = () => {
 
     return (
       <>
-        <p className="text-sm text-slate-300 mb-4">
-          Total members: <span className="font-semibold text-white">{totalCount}</span>
+        <p className="text-sm text-theme-text-secondary mb-4">
+          Total members: <span className="font-semibold text-theme-text-primary">{totalCount}</span>
         </p>
         {members.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Name</th>
                   <th className="px-4 py-2">Email</th>
@@ -217,9 +217,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Role</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {members.map((m, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">
                       {toStr(m.first_name ?? m.name ?? '')} {toStr(m.last_name ?? '')}
                     </td>
@@ -233,7 +233,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {members.length === 0 && (
-          <p className="text-slate-400 text-sm">No member records found.</p>
+          <p className="text-theme-text-muted text-sm">No member records found.</p>
         )}
       </>
     );
@@ -246,9 +246,9 @@ export const ReportsPage: React.FC = () => {
     return (
       <>
         {completionRate !== undefined && (
-          <p className="text-sm text-slate-300 mb-4">
+          <p className="text-sm text-theme-text-secondary mb-4">
             Overall completion rate:{' '}
-            <span className="font-semibold text-white">
+            <span className="font-semibold text-theme-text-primary">
               {typeof completionRate === 'number'
                 ? `${Math.round(completionRate * (completionRate <= 1 ? 100 : 1))}%`
                 : toStr(completionRate)}
@@ -258,7 +258,7 @@ export const ReportsPage: React.FC = () => {
         {entries.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Member</th>
                   <th className="px-4 py-2">Course / Requirement</th>
@@ -266,9 +266,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Hours</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">
                       {toStr(e.member_name ?? e.member ?? e.name ?? '-')}
                     </td>
@@ -288,7 +288,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {entries.length === 0 && (
-          <p className="text-slate-400 text-sm">No training entries found.</p>
+          <p className="text-theme-text-muted text-sm">No training entries found.</p>
         )}
       </>
     );
@@ -301,9 +301,9 @@ export const ReportsPage: React.FC = () => {
     return (
       <>
         {overallRate !== undefined && (
-          <p className="text-sm text-slate-300 mb-4">
+          <p className="text-sm text-theme-text-secondary mb-4">
             Overall attendance rate:{' '}
-            <span className="font-semibold text-white">
+            <span className="font-semibold text-theme-text-primary">
               {typeof overallRate === 'number'
                 ? `${Math.round(overallRate * (overallRate <= 1 ? 100 : 1))}%`
                 : toStr(overallRate)}
@@ -313,7 +313,7 @@ export const ReportsPage: React.FC = () => {
         {events.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Event</th>
                   <th className="px-4 py-2">Date</th>
@@ -321,11 +321,11 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Attendance Rate</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {events.map((ev, i) => {
                   const rate = ev.attendance_rate ?? ev.rate;
                   return (
-                    <tr key={i} className="text-slate-200">
+                    <tr key={i} className="text-theme-text-secondary">
                       <td className="px-4 py-2 whitespace-nowrap">
                         {toStr(ev.title ?? ev.name ?? ev.event ?? '-')}
                       </td>
@@ -350,7 +350,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {events.length === 0 && (
-          <p className="text-slate-400 text-sm">No event attendance records found.</p>
+          <p className="text-theme-text-muted text-sm">No event attendance records found.</p>
         )}
       </>
     );
@@ -365,20 +365,20 @@ export const ReportsPage: React.FC = () => {
       <>
         <div className="flex flex-wrap gap-4 mb-4">
           {avgProgress !== undefined && (
-            <p className="text-sm text-slate-300">
-              Average progress: <span className="font-semibold text-white">{toStr(avgProgress)}%</span>
+            <p className="text-sm text-theme-text-secondary">
+              Average progress: <span className="font-semibold text-theme-text-primary">{toStr(avgProgress)}%</span>
             </p>
           )}
           {Object.entries(statusSummary).map(([status, count]) => (
-            <span key={status} className="text-xs px-2 py-1 bg-white/10 rounded text-slate-300">
-              {status}: <span className="font-semibold text-white">{count}</span>
+            <span key={status} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+              {status}: <span className="font-semibold text-theme-text-primary">{count}</span>
             </span>
           ))}
         </div>
         {entries.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Member</th>
                   <th className="px-4 py-2">Program</th>
@@ -387,14 +387,14 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.program_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-slate-700 rounded-full h-2">
+                        <div className="w-24 bg-theme-surface rounded-full h-2">
                           <div
                             className="bg-red-500 h-2 rounded-full"
                             style={{ width: `${Number(e.progress_percentage ?? 0)}%` }}
@@ -414,7 +414,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {entries.length === 0 && (
-          <p className="text-slate-400 text-sm">No pipeline enrollments found.</p>
+          <p className="text-theme-text-muted text-sm">No pipeline enrollments found.</p>
         )}
       </>
     );
@@ -428,31 +428,31 @@ export const ReportsPage: React.FC = () => {
     return (
       <>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{toStr(summary.total_combined_hours ?? 0)}</div>
-            <div className="text-xs text-slate-400">Total Hours</div>
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.total_combined_hours ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Total Hours</div>
           </div>
-          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{toStr(summary.total_completions ?? 0)}</div>
-            <div className="text-xs text-slate-400">Completions</div>
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.total_completions ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Completions</div>
           </div>
-          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{toStr(summary.total_calls_responded ?? 0)}</div>
-            <div className="text-xs text-slate-400">Calls Responded</div>
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.total_calls_responded ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Calls Responded</div>
           </div>
-          <div className="bg-slate-900/50 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-white">{toStr(summary.avg_hours_per_member ?? 0)}</div>
-            <div className="text-xs text-slate-400">Avg Hours/Member</div>
+          <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-theme-text-primary">{toStr(summary.avg_hours_per_member ?? 0)}</div>
+            <div className="text-xs text-theme-text-muted">Avg Hours/Member</div>
           </div>
         </div>
 
         {Object.keys(byType).length > 0 && (
           <div className="mb-4">
-            <p className="text-xs text-slate-400 mb-1">By Training Type:</p>
+            <p className="text-xs text-theme-text-muted mb-1">By Training Type:</p>
             <div className="flex flex-wrap gap-2">
               {Object.entries(byType).map(([type, count]) => (
-                <span key={type} className="text-xs px-2 py-1 bg-white/10 rounded text-slate-300">
-                  {type.replace(/_/g, ' ')}: <span className="font-semibold text-white">{count}</span>
+                <span key={type} className="text-xs px-2 py-1 bg-theme-surface rounded text-theme-text-secondary">
+                  {type.replace(/_/g, ' ')}: <span className="font-semibold text-theme-text-primary">{count}</span>
                 </span>
               ))}
             </div>
@@ -462,7 +462,7 @@ export const ReportsPage: React.FC = () => {
         {entries.length > 0 && (
           <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+              <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary sticky top-0">
                 <tr>
                   <th className="px-4 py-2">Member</th>
                   <th className="px-4 py-2">Rank</th>
@@ -474,9 +474,9 @@ export const ReportsPage: React.FC = () => {
                   <th className="px-4 py-2">Rating</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-theme-surface-border">
                 {entries.map((e, i) => (
-                  <tr key={i} className="text-slate-200">
+                  <tr key={i} className="text-theme-text-secondary">
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.member_name ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap capitalize">{toStr(e.rank ?? '-')}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{toStr(e.training_hours ?? 0)}</td>
@@ -492,7 +492,7 @@ export const ReportsPage: React.FC = () => {
           </div>
         )}
         {entries.length === 0 && (
-          <p className="text-slate-400 text-sm">No training data found for this period.</p>
+          <p className="text-theme-text-muted text-sm">No training data found for this period.</p>
         )}
       </>
     );
@@ -514,7 +514,7 @@ export const ReportsPage: React.FC = () => {
         return renderAnnualTraining(reportData);
       default:
         return (
-          <pre className="text-sm text-slate-300 whitespace-pre-wrap overflow-auto max-h-[50vh]">
+          <pre className="text-sm text-theme-text-secondary whitespace-pre-wrap overflow-auto max-h-[50vh]">
             {JSON.stringify(reportData, null, 2)}
           </pre>
         );
@@ -528,8 +528,8 @@ export const ReportsPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Reports</h1>
-            <p className="text-slate-300">
+            <h1 className="text-3xl font-bold text-theme-text-primary mb-2">Reports</h1>
+            <p className="text-theme-text-secondary">
               Generate and download reports for members, training, events, and compliance
             </p>
           </div>
@@ -544,7 +544,7 @@ export const ReportsPage: React.FC = () => {
 
       {/* Category Filter */}
       <div className="mb-6 flex items-center space-x-2">
-        <Filter className="w-5 h-5 text-slate-400" aria-hidden="true" />
+        <Filter className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => (
             <button
@@ -553,7 +553,7 @@ export const ReportsPage: React.FC = () => {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                 selectedCategory === category.id
                   ? 'bg-red-600 text-white'
-                  : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
               {category.label}
@@ -563,11 +563,11 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {/* Date Range Picker */}
-      <div className="mb-6 bg-white/5 border border-white/10 rounded-lg p-4">
+      <div className="mb-6 bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
         <div className="flex items-center space-x-2 mb-3">
-          <CalendarIcon className="w-4 h-4 text-slate-400" aria-hidden="true" />
-          <span className="text-sm font-medium text-slate-300">Reporting Period</span>
-          <span className="text-xs text-slate-500">(applies to date-based reports)</span>
+          <CalendarIcon className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+          <span className="text-sm font-medium text-theme-text-secondary">Reporting Period</span>
+          <span className="text-xs text-theme-text-muted">(applies to date-based reports)</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -583,7 +583,7 @@ export const ReportsPage: React.FC = () => {
               className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                 datePreset === preset.id
                   ? 'bg-red-600 text-white'
-                  : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
               {preset.label}
@@ -598,9 +598,9 @@ export const ReportsPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
-            <span className="text-slate-500 text-sm">to</span>
+            <span className="text-theme-text-muted text-sm">to</span>
             <input
               type="date"
               value={endDate}
@@ -608,7 +608,7 @@ export const ReportsPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -637,9 +637,9 @@ export const ReportsPage: React.FC = () => {
           return (
             <div
               key={report.id}
-              className={`bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-6 transition-all ${
+              className={`bg-theme-surface-secondary backdrop-blur-sm border border-theme-surface-border rounded-lg p-6 transition-all ${
                 report.available
-                  ? 'hover:bg-white/10 hover:border-white/20 cursor-pointer'
+                  ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
                   : 'opacity-60 cursor-not-allowed'
               }`}
             >
@@ -654,10 +654,10 @@ export const ReportsPage: React.FC = () => {
                 )}
               </div>
 
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <h3 className="text-lg font-semibold text-theme-text-primary mb-2">
                 {report.title}
               </h3>
-              <p className="text-sm text-slate-300 mb-4">{report.description}</p>
+              <p className="text-sm text-theme-text-secondary mb-4">{report.description}</p>
 
               {report.available && (
                 <button
@@ -687,10 +687,10 @@ export const ReportsPage: React.FC = () => {
       {filteredReports.length === 0 && (
         <div className="text-center py-12">
           <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" aria-hidden="true" />
-          <h3 className="text-xl font-semibold text-white mb-2">
+          <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
             No reports found
           </h3>
-          <p className="text-slate-400">
+          <p className="text-theme-text-muted">
             Try selecting a different category or check back later for new reports
           </p>
         </div>
@@ -719,7 +719,7 @@ export const ReportsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black/60" onClick={closeModal} />
-            <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full border border-white/20">
+            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full border border-theme-surface-border">
               <div className="px-6 pt-5 pb-4">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center space-x-3">
@@ -730,9 +730,9 @@ export const ReportsPage: React.FC = () => {
                       })}
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium text-white">{activeReport.title}</h3>
+                      <h3 className="text-lg font-medium text-theme-text-primary">{activeReport.title}</h3>
                       {activeReport.usesDateRange && (!!reportData?.period_start || !!reportData?.period_end) && (
-                        <p className="text-xs text-slate-400 mt-0.5">
+                        <p className="text-xs text-theme-text-muted mt-0.5">
                           {reportData.period_start ? toStr(reportData.period_start) : 'Start'} — {reportData.period_end ? toStr(reportData.period_end) : 'End'}
                         </p>
                       )}
@@ -741,7 +741,7 @@ export const ReportsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="text-slate-400 hover:text-white"
+                    className="text-theme-text-muted hover:text-theme-text-primary"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -750,10 +750,10 @@ export const ReportsPage: React.FC = () => {
                 {renderReportContent()}
               </div>
 
-              <div className="px-6 py-4 border-t border-white/10 flex justify-end">
+              <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                   Close
                 </button>

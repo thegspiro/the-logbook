@@ -255,7 +255,7 @@ const EmailConfiguration: React.FC = () => {
                   className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                     useOAuth
                       ? 'bg-blue-600 text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                   }`}
                 >
                   OAuth 2.0 (Recommended)
@@ -265,7 +265,7 @@ const EmailConfiguration: React.FC = () => {
                   className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                     !useOAuth
                       ? 'bg-blue-600 text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                   }`}
                 >
                   App Password
@@ -285,7 +285,7 @@ const EmailConfiguration: React.FC = () => {
                       value={config.googleClientId || ''}
                       onChange={(e) => handleInputChange('googleClientId', e.target.value)}
                       placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
@@ -298,7 +298,7 @@ const EmailConfiguration: React.FC = () => {
                       value={config.googleClientSecret || ''}
                       onChange={(e) => handleInputChange('googleClientSecret', e.target.value)}
                       placeholder="GOCSPX-xxxxxxxxxxxxx"
-                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -333,7 +333,7 @@ const EmailConfiguration: React.FC = () => {
                     value={config.fromEmail || ''}
                     onChange={(e) => handleInputChange('fromEmail', e.target.value)}
                     placeholder="notifications@yourdomain.com"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -346,7 +346,7 @@ const EmailConfiguration: React.FC = () => {
                     value={config.googleAppPassword || ''}
                     onChange={(e) => handleInputChange('googleAppPassword', e.target.value)}
                     placeholder="xxxx xxxx xxxx xxxx"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -400,7 +400,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.microsoftTenantId || ''}
                   onChange={(e) => handleInputChange('microsoftTenantId', e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -413,7 +413,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.microsoftClientId || ''}
                   onChange={(e) => handleInputChange('microsoftClientId', e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -426,7 +426,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.microsoftClientSecret || ''}
                   onChange={(e) => handleInputChange('microsoftClientSecret', e.target.value)}
                   placeholder="Client secret value"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -465,7 +465,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.smtpHost || ''}
                   onChange={(e) => handleInputChange('smtpHost', e.target.value)}
                   placeholder="mail.yourdomain.com"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -479,7 +479,7 @@ const EmailConfiguration: React.FC = () => {
                     value={config.smtpPort || ''}
                     onChange={(e) => handleInputChange('smtpPort', e.target.value)}
                     placeholder="587"
-                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
 
@@ -508,7 +508,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.smtpUsername || ''}
                   onChange={(e) => handleInputChange('smtpUsername', e.target.value)}
                   placeholder="notifications@yourdomain.com"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
@@ -521,7 +521,7 @@ const EmailConfiguration: React.FC = () => {
                   value={config.smtpPassword || ''}
                   onChange={(e) => handleInputChange('smtpPassword', e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
             </div>
@@ -601,7 +601,7 @@ const EmailConfiguration: React.FC = () => {
                 value={config.fromEmail || ''}
                 onChange={(e) => handleInputChange('fromEmail', e.target.value)}
                 placeholder="notifications@yourdomain.com"
-                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Email address that notifications will be sent from
@@ -617,7 +617,7 @@ const EmailConfiguration: React.FC = () => {
                 value={config.fromName || ''}
                 onChange={(e) => handleInputChange('fromName', e.target.value)}
                 placeholder={departmentName}
-                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Display name for outgoing emails (defaults to department name)
@@ -635,7 +635,7 @@ const EmailConfiguration: React.FC = () => {
                 className={`w-full px-6 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center ${
                   connectionTested
                     ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-700 disabled:text-slate-400'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-theme-surface disabled:text-theme-text-muted'
                 }`}
               >
                 {testingConnection ? (
@@ -675,7 +675,7 @@ const EmailConfiguration: React.FC = () => {
             <button
               onClick={handleSkip}
               disabled={isSaving}
-              className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-6 py-3 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Skip for Now
             </button>
@@ -702,7 +702,7 @@ const EmailConfiguration: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>

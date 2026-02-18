@@ -119,7 +119,7 @@ const FileStorageChoice: React.FC = () => {
       id: 'local',
       name: 'Local Storage',
       description: 'Store files on your server',
-      icon: <HardDrive className="w-10 h-10 text-slate-400" />,
+      icon: <HardDrive className="w-10 h-10 text-theme-text-muted" />,
       color: 'from-slate-600 to-slate-400',
       features: [
         'Complete control over your data',
@@ -134,7 +134,7 @@ const FileStorageChoice: React.FC = () => {
       id: 'other',
       name: 'Configure Later',
       description: 'Skip for now',
-      icon: <FolderOpen className="w-10 h-10 text-slate-500" />,
+      icon: <FolderOpen className="w-10 h-10 text-theme-text-muted" />,
       color: 'from-slate-700 to-slate-500',
       features: [
         'Set up file storage later',
@@ -261,7 +261,7 @@ const FileStorageChoice: React.FC = () => {
                 className={`relative bg-theme-surface backdrop-blur-sm rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   fileStoragePlatform === platform.id
                     ? 'border-red-500 shadow-lg shadow-red-500/50'
-                    : 'border-theme-surface-border hover:border-white/40'
+                    : 'border-theme-surface-border hover:border-theme-surface-hover'
                 }`}
                 aria-pressed={fileStoragePlatform === platform.id}
               >
@@ -340,7 +340,7 @@ const FileStorageChoice: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 fileStoragePlatform && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -362,7 +362,7 @@ const FileStorageChoice: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>

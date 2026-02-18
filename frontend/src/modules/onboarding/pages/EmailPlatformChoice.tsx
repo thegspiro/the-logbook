@@ -186,7 +186,7 @@ const EmailPlatformChoice: React.FC = () => {
                       className={`w-16 h-16 rounded-lg flex items-center justify-center transition-all ${
                         emailPlatform === platform.id
                           ? `bg-gradient-to-br ${platform.color} text-white`
-                          : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'
+                          : 'bg-theme-surface text-theme-text-muted group-hover:bg-theme-surface-hover'
                       }`}
                     >
                       {platform.icon}
@@ -272,7 +272,7 @@ const EmailPlatformChoice: React.FC = () => {
               className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                 emailPlatform
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -301,7 +301,7 @@ const EmailPlatformChoice: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-theme-text-muted text-xs mt-1">
             Powered by The Logbook
           </p>
         </div>
