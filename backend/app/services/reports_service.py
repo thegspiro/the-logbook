@@ -130,9 +130,9 @@ class ReportsService:
         )
 
         if start_date:
-            records_query = records_query.where(TrainingRecord.completed_date >= start_date)
+            records_query = records_query.where(TrainingRecord.completion_date >= start_date)
         if end_date:
-            records_query = records_query.where(TrainingRecord.completed_date <= end_date)
+            records_query = records_query.where(TrainingRecord.completion_date <= end_date)
 
         records_result = await self.db.execute(records_query)
         records = records_result.scalars().all()
@@ -418,8 +418,8 @@ class ReportsService:
             select(TrainingRecord)
             .where(
                 TrainingRecord.organization_id == organization_id,
-                TrainingRecord.completed_date >= start_date,
-                TrainingRecord.completed_date <= end_date,
+                TrainingRecord.completion_date >= start_date,
+                TrainingRecord.completion_date <= end_date,
             )
         )
         records = records_result.scalars().all()
