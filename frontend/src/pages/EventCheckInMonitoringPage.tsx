@@ -194,14 +194,14 @@ const EventCheckInMonitoringPage: React.FC = () => {
           <div>
             <span className="text-theme-text-secondary font-medium">Event Time:</span>
             <br />
-            <span className="text-white">
+            <span className="text-theme-text-primary">
               {formatShortDateTime(stats.start_datetime, tz)} - {formatShortDateTime(stats.end_datetime, tz)}
             </span>
           </div>
           <div>
             <span className="text-theme-text-secondary font-medium">Check-In Window:</span>
             <br />
-            <span className="text-white">
+            <span className="text-theme-text-primary">
               {formatShortDateTime(stats.check_in_window_start, tz)} -{' '}
               {formatShortDateTime(stats.check_in_window_end, tz)}
             </span>
@@ -214,19 +214,19 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-theme-text-primary">Recent Check-Ins</h2>
           {stats.last_check_in_at && (
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-theme-text-muted">
               Last: {formatTimeAgo(stats.last_check_in_at)}
             </span>
           )}
         </div>
 
         {stats.recent_check_ins.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
+          <div className="text-center py-8 text-theme-text-muted">
             No check-ins yet. Waiting for members to arrive...
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10">
+            <table className="min-w-full divide-y divide-theme-surface-border">
               <thead>
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
@@ -246,7 +246,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-theme-surface-border">
                 {stats.recent_check_ins.map((activity) => (
                   <tr key={activity.user_id} className="hover:bg-white/5">
                     <td className="px-6 py-4 whitespace-nowrap">
