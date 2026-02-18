@@ -447,7 +447,7 @@ const ITTeamBackupAccess: React.FC = () => {
                     Secondary Admin Email <span className="text-theme-text-muted">(Optional)</span>
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
                     <input
                       type="email"
                       value={secondaryAdminEmail}
@@ -483,7 +483,7 @@ const ITTeamBackupAccess: React.FC = () => {
                 disabled={isSaving}
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                   isSaving
-                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    ? 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                     : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                 }`}
               >
@@ -501,7 +501,7 @@ const ITTeamBackupAccess: React.FC = () => {
       <footer className="bg-theme-nav-bg backdrop-blur-sm border-t border-theme-nav-border px-6 py-4">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-slate-500 text-xs mt-1">Powered by The Logbook</p>
+          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

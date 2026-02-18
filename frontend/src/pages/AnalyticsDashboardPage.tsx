@@ -44,7 +44,7 @@ const AnalyticsDashboardPage: React.FC = () => {
   if (!metrics) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-slate-300">Loading analytics...</div>
+        <div className="text-theme-text-secondary">Loading analytics...</div>
       </div>
     );
   }
@@ -54,14 +54,14 @@ const AnalyticsDashboardPage: React.FC = () => {
       {/* Header */}
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-white">QR Code Analytics</h1>
-          <p className="text-slate-300 mt-1">
+          <h1 className="text-3xl font-bold text-theme-text-primary">QR Code Analytics</h1>
+          <p className="text-theme-text-secondary mt-1">
             {eventId ? 'Event-specific metrics' : 'Platform-wide metrics'}
           </p>
         </div>
         <button
           onClick={exportData}
-          className="px-4 py-2 border border-white/30 rounded-md text-sm font-medium text-blue-400 bg-white/10 hover:bg-white/15"
+          className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
         >
           Export Data
         </button>
