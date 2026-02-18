@@ -62,6 +62,7 @@ class ReportsService:
         query = (
             select(User)
             .where(User.organization_id == str(organization_id))
+            .options(selectinload(User.roles))
             .order_by(User.last_name, User.first_name)
         )
 
@@ -201,7 +202,7 @@ class ReportsService:
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == str(organization_id),
-                TrainingRequirement.is_active == True,  # noqa: E712
+                TrainingRequirement.active == True,  # noqa: E712
             )
         )
         requirements = req_result.scalars().all()
@@ -251,11 +252,11 @@ class ReportsService:
         )
 
         if start_date:
-            events_query = events_query.where(Event.start_date >= datetime.combine(start_date, datetime.min.time()))
+            events_query = events_query.where(Event.start_datetime >= datetime.combine(start_date, datetime.min.time()))
         if end_date:
-            events_query = events_query.where(Event.start_date <= datetime.combine(end_date, datetime.max.time()))
+            events_query = events_query.where(Event.start_datetime <= datetime.combine(end_date, datetime.max.time()))
 
-        events_query = events_query.order_by(Event.start_date.desc())
+        events_query = events_query.order_by(Event.start_datetime.desc())
         events_result = await self.db.execute(events_query)
         events = events_result.scalars().all()
 
@@ -283,7 +284,7 @@ class ReportsService:
             event_entries.append({
                 "event_id": str(event.id),
                 "event_title": event.title or "",
-                "event_date": str(event.start_date.date()) if event.start_date else None,
+                "event_date": str(event.start_datetime.date()) if event.start_datetime else None,
                 "total_rsvps": total_rsvps,
                 "attended": attended,
                 "attendance_rate": round(rate, 1),
