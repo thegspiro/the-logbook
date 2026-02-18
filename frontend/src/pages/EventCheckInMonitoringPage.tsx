@@ -262,10 +262,10 @@ const EventCheckInMonitoringPage: React.FC = () => {
                         {activity.rsvp_status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-secondary">
                       {activity.guest_count}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-secondary">
                       {formatTimeAgo(activity.checked_in_at)}
                     </td>
                   </tr>
@@ -277,7 +277,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Auto-Refresh Indicator */}
-      <div className="mt-6 text-center text-sm text-slate-400">
+      <div className="mt-6 text-center text-sm text-theme-text-muted">
         Auto-refreshing every 10 seconds
       </div>
     </div>
