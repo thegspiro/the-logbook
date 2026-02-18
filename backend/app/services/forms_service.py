@@ -727,6 +727,11 @@ class FormsService:
                         submission, integration
                     )
                     results["equipment_assignment"] = result
+                elif integration.integration_type == IntegrationType.EVENT_REGISTRATION:
+                    result = await self._process_event_registration(
+                        submission, integration
+                    )
+                    results["event_registration"] = result
             except Exception as e:
                 results[integration.integration_type] = {
                     "success": False,
@@ -815,6 +820,59 @@ class FormsService:
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    async def _process_event_registration(
+        self, submission: FormSubmission, integration: FormIntegration
+    ) -> Dict[str, Any]:
+        """
+        Process a public event registration form submission.
+        Creates an EventRSVP (if the submitter is a member) or stores
+        registration data for admin review.
+        """
+        mappings = integration.field_mappings or {}
+        mapped_data = {}
+
+        for field_id, target_field in mappings.items():
+            if field_id in submission.data:
+                mapped_data[target_field] = submission.data[field_id]
+
+        event_id = mapped_data.get("event_id")
+        if not event_id:
+            return {
+                "success": False,
+                "error": "event_id mapping is required for event registration",
+            }
+
+        # If the submitter is an authenticated member, create an RSVP
+        if submission.submitted_by:
+            try:
+                from app.models.event import EventRSVP, RSVPStatus
+                from app.core.utils import generate_uuid
+
+                rsvp = EventRSVP(
+                    id=generate_uuid(),
+                    organization_id=submission.organization_id,
+                    event_id=event_id,
+                    user_id=submission.submitted_by,
+                    status=RSVPStatus.GOING,
+                    notes=mapped_data.get("notes", "Registered via form"),
+                )
+                self.db.add(rsvp)
+                await self.db.flush()
+                return {
+                    "success": True,
+                    "rsvp_id": rsvp.id,
+                    "message": "Member RSVP created via form registration",
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        else:
+            # Public/anonymous submission — store for admin review
+            return {
+                "success": True,
+                "mapped_data": mapped_data,
+                "message": "Event registration recorded for admin review",
+            }
 
     # ============================================
     # Member Lookup

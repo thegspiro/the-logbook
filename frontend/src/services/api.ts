@@ -752,6 +752,18 @@ export const trainingService = {
     });
     return response.data;
   },
+
+  async getComplianceMatrix(): Promise<ComplianceMatrix> {
+    const response = await api.get<ComplianceMatrix>('/training/compliance-matrix');
+    return response.data;
+  },
+
+  async getExpiringCertificationsDetailed(days: number = 90): Promise<ExpiringCertification[]> {
+    const response = await api.get<ExpiringCertification[]>('/training/expiring-certifications', {
+      params: { days },
+    });
+    return response.data;
+  },
 };
 
 // ==================== External Training Integration Service ====================
@@ -2376,6 +2388,11 @@ export const meetingsService = {
     const response = await api.get(`/meetings/${meetingId}/attendance-waivers`);
     return response.data;
   },
+
+  async createFromEvent(eventId: string): Promise<MeetingRecord> {
+    const response = await api.post<MeetingRecord>(`/meetings/from-event/${eventId}`);
+    return response.data;
+  },
 };
 
 // Minutes Detail Service — uses the /minutes-records API
@@ -2435,6 +2452,11 @@ export const minutesService = {
 
   async deleteActionItem(minutesId: string, itemId: string): Promise<void> {
     await api.delete(`/minutes-records/${minutesId}/action-items/${itemId}`);
+  },
+
+  async createFromMeeting(meetingId: string): Promise<import('../types/minutes').MeetingMinutes> {
+    const response = await api.post<import('../types/minutes').MeetingMinutes>(`/minutes-records/from-meeting/${meetingId}`);
+    return response.data;
   },
 };
 
@@ -2853,12 +2875,81 @@ export interface DashboardStats {
   pending_tasks_count: number;
 }
 
+export interface AdminSummary {
+  active_members: number;
+  inactive_members: number;
+  total_members: number;
+  training_completion_pct: number;
+  upcoming_events_count: number;
+  overdue_action_items: number;
+  open_action_items: number;
+  recent_training_hours: number;
+}
+
+export interface ActionItemSummary {
+  id: string;
+  source: string;
+  source_id: string;
+  description: string;
+  assignee_id?: string;
+  assignee_name?: string;
+  due_date?: string;
+  status: string;
+  priority?: string;
+  created_at: string;
+}
+
+export interface CommunityEngagement {
+  total_public_events: number;
+  total_member_attendees: number;
+  total_external_attendees: number;
+  upcoming_public_events: number;
+}
+
+export interface ComplianceMatrixMember {
+  user_id: string;
+  member_name: string;
+  requirements: Array<{
+    requirement_id: string;
+    requirement_name: string;
+    status: string;
+    completion_date?: string;
+    expiry_date?: string;
+  }>;
+  completion_pct: number;
+}
+
+export interface ComplianceMatrix {
+  members: ComplianceMatrixMember[];
+  requirements: Array<{ id: string; name: string; recurrence_months?: number }>;
+  generated_at: string;
+}
+
+export interface ExpiringCertification {
+  user_id: string;
+  member_name: string;
+  requirement_id: string;
+  requirement_name: string;
+  expiry_date: string;
+  days_until_expiry: number;
+  status: string;
+}
+
 export const dashboardService = {
-  /**
-   * Get dashboard statistics
-   */
   async getStats(): Promise<DashboardStats> {
     const response = await api.get<DashboardStats>('/dashboard/stats');
+    return response.data;
+  },
+  async getAdminSummary(): Promise<AdminSummary> {
+    const response = await api.get<AdminSummary>('/dashboard/admin-summary');
+    return response.data;
+  },
+  async getActionItems(params?: { status_filter?: string; assigned_to_me?: boolean }): Promise<ActionItemSummary[]> {
+    const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
+    return response.data;
+  },
+  async getCommunityEngagement(): Promise<CommunityEngagement> {
+    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
     return response.data;
   },
 };
