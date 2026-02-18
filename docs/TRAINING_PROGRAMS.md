@@ -1257,10 +1257,10 @@ Every member has access to a personal training page at `/training/my-training` t
 
 Depending on the department's visibility configuration:
 - **Training Hours Summary**: Total records and hours completed
+- **Requirements Compliance**: Percentage of all active requirements met (supports annual, biannual, quarterly, monthly, and one-time frequencies)
 - **Certifications**: Status, expiration dates, days until expiry
 - **Pipeline Progress**: Enrollment status, progress bars, requirement completion
 - **Shift Reports**: Shift completion reports filed by officers
-- **Shift Statistics**: Aggregate shift hours, calls, average rating
 - **Self-Reported Submissions**: Status of submitted training
 - **Training History**: Full table of training records
 

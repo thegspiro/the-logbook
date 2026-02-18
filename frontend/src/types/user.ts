@@ -15,6 +15,7 @@ export interface User {
   phone?: string;
   mobile?: string;
   photo_url?: string;
+  rank?: string;
   status: string;
   hire_date?: string;
 }
