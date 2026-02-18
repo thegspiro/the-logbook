@@ -3522,6 +3522,10 @@ export const facilitiesService = {
     const response = await api.get('/facilities/rooms', { params });
     return response.data;
   },
+  async getRoom(roomId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/rooms/${roomId}`);
+    return response.data;
+  },
   async createRoom(data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post('/facilities/rooms', data);
     return response.data;
@@ -3532,6 +3536,234 @@ export const facilitiesService = {
   },
   async deleteRoom(roomId: string): Promise<void> {
     await api.delete(`/facilities/rooms/${roomId}`);
+  },
+
+  // Maintenance Types
+  async getMaintenanceTypes(params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/maintenance-types', { params });
+    return response.data;
+  },
+  async createMaintenanceType(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/maintenance-types', data);
+    return response.data;
+  },
+  async updateMaintenanceType(typeId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/maintenance-types/${typeId}`, data);
+    return response.data;
+  },
+  async deleteMaintenanceType(typeId: string): Promise<void> {
+    await api.delete(`/facilities/maintenance-types/${typeId}`);
+  },
+
+  // Building Systems
+  async getSystems(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/systems', { params });
+    return response.data;
+  },
+  async getSystem(systemId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/systems/${systemId}`);
+    return response.data;
+  },
+  async createSystem(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/systems', data);
+    return response.data;
+  },
+  async updateSystem(systemId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/systems/${systemId}`, data);
+    return response.data;
+  },
+  async deleteSystem(systemId: string): Promise<void> {
+    await api.delete(`/facilities/systems/${systemId}`);
+  },
+
+  // Emergency Contacts
+  async getEmergencyContacts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/emergency-contacts', { params });
+    return response.data;
+  },
+  async createEmergencyContact(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/emergency-contacts', data);
+    return response.data;
+  },
+  async updateEmergencyContact(contactId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/emergency-contacts/${contactId}`, data);
+    return response.data;
+  },
+  async deleteEmergencyContact(contactId: string): Promise<void> {
+    await api.delete(`/facilities/emergency-contacts/${contactId}`);
+  },
+
+  // Shutoff Locations
+  async getShutoffLocations(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/shutoff-locations', { params });
+    return response.data;
+  },
+  async createShutoffLocation(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/shutoff-locations', data);
+    return response.data;
+  },
+  async updateShutoffLocation(locationId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/shutoff-locations/${locationId}`, data);
+    return response.data;
+  },
+  async deleteShutoffLocation(locationId: string): Promise<void> {
+    await api.delete(`/facilities/shutoff-locations/${locationId}`);
+  },
+
+  // Capital Projects
+  async getCapitalProjects(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/capital-projects', { params });
+    return response.data;
+  },
+  async getCapitalProject(projectId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/capital-projects/${projectId}`);
+    return response.data;
+  },
+  async createCapitalProject(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/capital-projects', data);
+    return response.data;
+  },
+  async updateCapitalProject(projectId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/capital-projects/${projectId}`, data);
+    return response.data;
+  },
+  async deleteCapitalProject(projectId: string): Promise<void> {
+    await api.delete(`/facilities/capital-projects/${projectId}`);
+  },
+
+  // Insurance Policies
+  async getInsurancePolicies(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/insurance-policies', { params });
+    return response.data;
+  },
+  async getInsurancePolicy(policyId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/insurance-policies/${policyId}`);
+    return response.data;
+  },
+  async createInsurancePolicy(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/insurance-policies', data);
+    return response.data;
+  },
+  async updateInsurancePolicy(policyId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/insurance-policies/${policyId}`, data);
+    return response.data;
+  },
+  async deleteInsurancePolicy(policyId: string): Promise<void> {
+    await api.delete(`/facilities/insurance-policies/${policyId}`);
+  },
+
+  // Occupants
+  async getOccupants(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/occupants', { params });
+    return response.data;
+  },
+  async getOccupant(occupantId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/occupants/${occupantId}`);
+    return response.data;
+  },
+  async createOccupant(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/occupants', data);
+    return response.data;
+  },
+  async updateOccupant(occupantId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/occupants/${occupantId}`, data);
+    return response.data;
+  },
+  async deleteOccupant(occupantId: string): Promise<void> {
+    await api.delete(`/facilities/occupants/${occupantId}`);
+  },
+
+  // Utility Accounts
+  async getUtilityAccounts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/utility-accounts', { params });
+    return response.data;
+  },
+  async getUtilityAccount(accountId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/utility-accounts/${accountId}`);
+    return response.data;
+  },
+  async createUtilityAccount(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/utility-accounts', data);
+    return response.data;
+  },
+  async updateUtilityAccount(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/utility-accounts/${accountId}`, data);
+    return response.data;
+  },
+  async deleteUtilityAccount(accountId: string): Promise<void> {
+    await api.delete(`/facilities/utility-accounts/${accountId}`);
+  },
+
+  // Utility Readings
+  async getUtilityReadings(accountId: string, params?: { skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/facilities/utility-accounts/${accountId}/readings`, { params });
+    return response.data;
+  },
+  async createUtilityReading(accountId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/facilities/utility-accounts/${accountId}/readings`, data);
+    return response.data;
+  },
+  async deleteUtilityReading(readingId: string): Promise<void> {
+    await api.delete(`/facilities/utility-readings/${readingId}`);
+  },
+
+  // Access Keys
+  async getAccessKeys(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/access-keys', { params });
+    return response.data;
+  },
+  async getAccessKey(keyId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/access-keys/${keyId}`);
+    return response.data;
+  },
+  async createAccessKey(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/access-keys', data);
+    return response.data;
+  },
+  async updateAccessKey(keyId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/access-keys/${keyId}`, data);
+    return response.data;
+  },
+  async deleteAccessKey(keyId: string): Promise<void> {
+    await api.delete(`/facilities/access-keys/${keyId}`);
+  },
+
+  // Compliance Checklists
+  async getComplianceChecklists(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get('/facilities/compliance-checklists', { params });
+    return response.data;
+  },
+  async getComplianceChecklist(checklistId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/facilities/compliance-checklists/${checklistId}`);
+    return response.data;
+  },
+  async createComplianceChecklist(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/facilities/compliance-checklists', data);
+    return response.data;
+  },
+  async updateComplianceChecklist(checklistId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/compliance-checklists/${checklistId}`, data);
+    return response.data;
+  },
+  async deleteComplianceChecklist(checklistId: string): Promise<void> {
+    await api.delete(`/facilities/compliance-checklists/${checklistId}`);
+  },
+
+  // Compliance Items
+  async getComplianceItems(checklistId: string): Promise<Array<Record<string, unknown>>> {
+    const response = await api.get(`/facilities/compliance-checklists/${checklistId}/items`);
+    return response.data;
+  },
+  async createComplianceItem(checklistId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post(`/facilities/compliance-checklists/${checklistId}/items`, data);
+    return response.data;
+  },
+  async updateComplianceItem(itemId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/facilities/compliance-items/${itemId}`, data);
+    return response.data;
+  },
+  async deleteComplianceItem(itemId: string): Promise<void> {
+    await api.delete(`/facilities/compliance-items/${itemId}`);
   },
 };
 

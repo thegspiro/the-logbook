@@ -55,6 +55,8 @@ interface NavItem {
   icon: React.ElementType;
   permission?: string;
   subItems?: SubNavItem[];
+  /** If true, this item is a visual section divider label */
+  isSectionLabel?: boolean;
 }
 
 export const SideNavigation: React.FC<SideNavigationProps> = ({
@@ -94,28 +96,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
   const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
 
+  // Determine if user has any admin permission (to show/hide Administration section)
+  const hasAnyAdminPermission =
+    checkPermission('members.manage') ||
+    checkPermission('prospective_members.manage') ||
+    checkPermission('events.manage') ||
+    checkPermission('training.manage') ||
+    checkPermission('inventory.manage') ||
+    checkPermission('roles.manage') ||
+    checkPermission('settings.manage') ||
+    checkPermission('analytics.view');
+
   const navItems: NavItem[] = [
+    // ── Member-facing pages ──
     { label: 'Dashboard', path: '/dashboard', icon: Home },
-    {
-      label: 'Members',
-      path: '#',
-      icon: Users,
-      subItems: [
-        { label: 'All Members', path: '/members', icon: Users },
-        { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
-        { label: 'Pipeline Settings', path: '/prospective-members/settings', icon: Settings, permission: 'prospective_members.manage' },
-        { label: 'Members Admin', path: '/members/admin', icon: UserCog, permission: 'members.manage' },
-      ],
-    },
-    {
-      label: 'Events',
-      path: '#',
-      icon: Calendar,
-      subItems: [
-        { label: 'All Events', path: '/events', icon: Calendar },
-        { label: 'Events Admin', path: '/events/admin', icon: Shield, permission: 'events.manage' },
-      ],
-    },
+    { label: 'Members', path: '/members', icon: Users },
+    { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
     {
       label: 'Training',
@@ -126,8 +122,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
         { label: 'Course Library', path: '/training/courses', icon: BookOpen },
         { label: 'Programs', path: '/training/programs', icon: Layers },
-        { label: 'Training Admin', path: '/training/admin', icon: Shield, permission: 'training.manage' },
       ],
+    },
+    {
+      label: 'Shift Scheduling',
+      path: '/scheduling',
+      icon: Clock,
     },
     {
       label: 'Operations',
@@ -135,9 +135,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: Package,
       subItems: [
         { label: 'Inventory', path: '/inventory', icon: Package },
-        { label: 'Inventory Admin', path: '/inventory/admin', icon: Shield, permission: 'inventory.manage' },
-        { label: 'Scheduling', path: '/scheduling', icon: Clock },
         { label: 'Apparatus', path: '/apparatus', icon: Truck },
+        { label: 'Facilities', path: '/facilities', icon: Building2 },
       ],
     },
     {
@@ -147,32 +146,54 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       subItems: [
         { label: 'Elections', path: '/elections', icon: Vote },
         { label: 'Minutes', path: '/minutes', icon: ClipboardList },
-        { label: 'Reports', path: '/reports', icon: BarChart3 },
       ],
     },
-    {
-      label: 'Communication',
-      path: '#',
-      icon: Bell,
-      subItems: [
-        { label: 'Notifications', path: '/notifications', icon: Bell },
-        { label: 'Forms', path: '/forms', icon: FormInput },
-        { label: 'Integrations', path: '/integrations', icon: Plug },
-      ],
-    },
-    {
-      label: 'Settings',
-      path: '/settings',
-      icon: Settings,
-      subItems: [
-        { label: 'My Account', path: '/settings/account', icon: UserCog },
-        { label: 'Organization', path: '/settings', icon: Building2 },
-        { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'roles.manage' },
-        { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
-        { label: 'Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
-        { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },
-      ],
-    },
+    { label: 'Notifications', path: '/notifications', icon: Bell },
+
+    // ── Administration section (only shown to users with admin perms) ──
+    ...(hasAnyAdminPermission ? [
+      { label: 'Administration', path: '#', icon: Shield, isSectionLabel: true } as NavItem,
+      {
+        label: 'Members',
+        path: '#',
+        icon: Users,
+        permission: 'members.manage',
+        subItems: [
+          { label: 'Prospective', path: '/prospective-members', icon: UserPlus, permission: 'prospective_members.manage' },
+          { label: 'Pipeline Settings', path: '/prospective-members/settings', icon: Settings, permission: 'prospective_members.manage' },
+          { label: 'Member Management', path: '/members/admin', icon: UserCog, permission: 'members.manage' },
+        ],
+      } as NavItem,
+      { label: 'Events Admin', path: '/events/admin', icon: Calendar, permission: 'events.manage' } as NavItem,
+      { label: 'Training Admin', path: '/training/admin', icon: GraduationCap, permission: 'training.manage' } as NavItem,
+      { label: 'Inventory Admin', path: '/inventory/admin', icon: Package, permission: 'inventory.manage' } as NavItem,
+      {
+        label: 'Forms & Comms',
+        path: '#',
+        icon: FormInput,
+        permission: 'settings.manage',
+        subItems: [
+          { label: 'Forms', path: '/forms', icon: FormInput },
+          { label: 'Integrations', path: '/integrations', icon: Plug },
+        ],
+      } as NavItem,
+      { label: 'Reports', path: '/reports', icon: BarChart3 } as NavItem,
+      {
+        label: 'Settings',
+        path: '/settings',
+        icon: Settings,
+        subItems: [
+          { label: 'Organization', path: '/settings', icon: Building2 },
+          { label: 'Role Management', path: '/settings/roles', icon: Shield, permission: 'roles.manage' },
+          { label: 'Public Portal', path: '/admin/public-portal', icon: Globe, permission: 'settings.manage' },
+          { label: 'Analytics', path: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
+          { label: 'Error Monitor', path: '/admin/errors', icon: AlertTriangle, permission: 'settings.manage' },
+        ],
+      } as NavItem,
+    ] : []),
+
+    // ── Always-visible personal settings ──
+    { label: 'My Account', path: '/settings/account', icon: UserCog },
   ];
 
   const isActive = (path: string) => {
@@ -339,7 +360,27 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           {/* Navigation Items */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Side navigation">
             <ul role="list" className="space-y-1">
-              {navItems.map((item) => {
+              {navItems.map((item, idx) => {
+                // Render section label dividers
+                if (item.isSectionLabel) {
+                  return (
+                    <li key={`section-${item.label}`} aria-hidden="true">
+                      {!collapsed ? (
+                        <div className="pt-5 pb-2 px-4">
+                          <div className="border-t border-theme-surface-border" />
+                          <span className="block mt-3 text-[10px] font-semibold uppercase tracking-widest text-theme-text-muted">
+                            {item.label}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="pt-3 pb-1 px-3">
+                          <div className="border-t border-theme-surface-border" />
+                        </div>
+                      )}
+                    </li>
+                  );
+                }
+
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
                   (sub) => !sub.permission || checkPermission(sub.permission)
@@ -356,8 +397,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 const isExpanded = expandedMenus.includes(item.label);
                 const parentActive = isParentActive(item);
 
+                // Use unique key that accounts for duplicate labels across sections
+                const itemKey = `${item.label}-${item.path}-${idx}`;
+
                 return (
-                  <li key={item.label}>
+                  <li key={itemKey}>
                     <button
                       onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
                       aria-current={parentActive && !hasSubItems ? 'page' : undefined}
