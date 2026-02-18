@@ -320,7 +320,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {applicant.status === 'withdrawn' && (
               <div className="mx-4 mt-4 p-3 bg-slate-500/5 border border-slate-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
-                  <Archive className="w-4 h-4 text-slate-400" />
+                  <Archive className="w-4 h-4 text-theme-text-muted" />
                   <span className="text-sm font-medium text-theme-text-secondary">Application Withdrawn</span>
                 </div>
                 <p className="text-xs text-theme-text-muted">
@@ -763,7 +763,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -876,7 +876,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -929,7 +929,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -992,7 +992,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     title="Add notes"
                   >
                     <MessageSquare className="w-4 h-4" />

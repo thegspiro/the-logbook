@@ -415,21 +415,21 @@ export const ProspectDetailPage: React.FC = () => {
             </dl>
           </div>
           <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Address</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Address</h2>
             {prospect.address_street ? (
               <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
-                <div className="text-sm text-white">
+                <MapPin className="h-4 w-4 text-theme-text-muted mt-0.5" />
+                <div className="text-sm text-theme-text-primary">
                   <div>{prospect.address_street}</div>
                   <div>{prospect.address_city}{prospect.address_state ? `, ${prospect.address_state}` : ''} {prospect.address_zip}</div>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">No address provided</p>
+              <p className="text-sm text-theme-text-muted">No address provided</p>
             )}
           </div>
           <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Application Details</h2>
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Application Details</h2>
             <dl className="space-y-3">
               {prospect.interest_reason && (
                 <div>
