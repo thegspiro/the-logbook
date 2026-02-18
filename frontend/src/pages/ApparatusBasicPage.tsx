@@ -90,7 +90,7 @@ export default function ApparatusBasicPage() {
     setIsLoading(true);
     try {
       const data = await schedulingService.getBasicApparatus();
-      setApparatusList(data);
+      setApparatusList(data as unknown as BasicApparatus[]);
     } catch {
       toast.error('Failed to load apparatus');
     } finally {

@@ -281,8 +281,11 @@ Skills assessment framework.
 - `evaluation_results`: Results data (JSONB)
 - `evaluated_at`: Evaluation timestamp
 
-### Shift Models (Framework Only)
-Placeholder for future shift module.
+### Shift Models
+
+The shift models are shared with the Scheduling module. For full documentation of all shift-related models (Shift, ShiftAssignment, ShiftTemplate, ShiftPattern, SwapRequest, TimeOffRequest, BasicApparatus), see **[docs/SCHEDULING_MODULE.md](../../../docs/SCHEDULING_MODULE.md)**.
+
+**Key models used by Training:**
 
 **Shift:**
 - `shift_date`, `start_time`, `end_time`
@@ -299,6 +302,11 @@ Placeholder for future shift module.
 - `shift_id`, `incident_number`, `incident_type`
 - `cancelled_en_route`, `medical_refusal`
 - `responding_members`: Who responded (JSONB)
+
+**BasicApparatus** (new):
+- `unit_number`, `name`, `apparatus_type`
+- `min_staffing`, `positions` (JSON)
+- Lightweight vehicle definitions for departments without the full Apparatus module
 
 ## Services
 
@@ -1080,4 +1088,4 @@ Using SQLAlchemy ORM:
 
 ---
 
-*Last Updated: February 5, 2026*
+*Last Updated: February 18, 2026*
