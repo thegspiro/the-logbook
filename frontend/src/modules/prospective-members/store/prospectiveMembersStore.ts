@@ -89,6 +89,7 @@ interface ProspectiveMembersState {
   fetchApplicant: (id: string) => Promise<void>;
   setCurrentApplicant: (applicant: Applicant | null) => void;
   advanceApplicant: (id: string, notes?: string) => Promise<void>;
+  completeStep: (id: string, stepId: string, notes?: string) => Promise<void>;
   rejectApplicant: (id: string, reason?: string) => Promise<void>;
   holdApplicant: (id: string, reason?: string) => Promise<void>;
   resumeApplicant: (id: string) => Promise<void>;
@@ -315,6 +316,27 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>(
             error instanceof Error
               ? error.message
               : 'Failed to advance applicant',
+          isAdvancing: false,
+        });
+      }
+    },
+
+    completeStep: async (id: string, stepId: string, notes?: string) => {
+      set({ isAdvancing: true, error: null });
+      try {
+        await applicantService.completeStep(id, stepId, notes);
+        await get().fetchApplicants();
+        const currentApplicant = get().currentApplicant;
+        if (currentApplicant?.id === id) {
+          await get().fetchApplicant(id);
+        }
+        set({ isAdvancing: false });
+      } catch (error) {
+        set({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to complete step',
           isAdvancing: false,
         });
       }

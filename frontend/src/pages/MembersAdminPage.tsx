@@ -299,7 +299,7 @@ export const MembersAdminPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400" role="status" aria-live="polite">Loading...</div>
+            <div className="text-theme-text-muted" role="status" aria-live="polite">Loading...</div>
           </div>
         </div>
       </div>
@@ -327,8 +327,8 @@ export const MembersAdminPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-white">Members Administration</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Members Administration</h2>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Manage member roles, permissions, and contact information
           </p>
         </div>
@@ -370,7 +370,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-member'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Member
@@ -381,7 +381,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-role'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Role
@@ -391,52 +391,52 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* View by Member */}
       {viewMode === 'by-member' && (
-        <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-white/10" aria-label="Members and their roles">
-            <thead className="bg-slate-900/50">
+        <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+          <table className="min-w-full divide-y divide-theme-surface-border" aria-label="Members and their roles">
+            <thead className="bg-theme-surface-secondary">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Member
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Badge
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Roles
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-theme-surface-border">
               {users.map((user) => (
-                <tr key={user.id} className="hover:bg-white/5">
+                <tr key={user.id} className="hover:bg-theme-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-slate-300 font-medium">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface flex items-center justify-center">
+                        <span className="text-theme-text-secondary font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-theme-text-primary">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-sm text-slate-400">@{user.username}</div>
+                        <div className="text-sm text-theme-text-muted">@{user.username}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {user.badge_number || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length === 0 ? (
-                        <span className="text-sm text-slate-500">No roles</span>
+                        <span className="text-sm text-theme-text-muted">No roles</span>
                       ) : (
                         user.roles.map((role) => (
                           <span
@@ -444,7 +444,7 @@ export const MembersAdminPage: React.FC = () => {
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
                                 ? 'bg-blue-100 text-blue-800'
-                                : 'bg-white/10 text-slate-200'
+                                : 'bg-theme-surface text-theme-text-secondary'
                             }`}
                           >
                             {role.name}
@@ -503,12 +503,12 @@ export const MembersAdminPage: React.FC = () => {
             );
 
             return (
-              <div key={role.id} className="bg-white/10 backdrop-blur-sm shadow sm:rounded-lg">
-                <div className="px-6 py-4 border-b border-white/20">
+              <div key={role.id} className="bg-theme-surface backdrop-blur-sm shadow sm:rounded-lg">
+                <div className="px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-medium text-white">{role.name}</h3>
+                        <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                         {role.is_system && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             System
@@ -516,15 +516,15 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                       {role.description && (
-                        <p className="mt-1 text-sm text-slate-400">{role.description}</p>
+                        <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
                       )}
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-theme-text-muted">
                         {role.permissions.length} permissions • {usersWithRole.length} members
                       </p>
                     </div>
                     <button
                       onClick={() => handleEditMembers(role)}
-                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-white/5"
+                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-theme-surface-hover"
                     >
                       Manage Members
                     </button>
@@ -532,32 +532,32 @@ export const MembersAdminPage: React.FC = () => {
                 </div>
                 <div className="px-6 py-4">
                   {usersWithRole.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic">No members assigned to this role</p>
+                    <p className="text-sm text-theme-text-muted italic">No members assigned to this role</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {usersWithRole.map((user) => (
                         <div
                           key={user.id}
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg hover:bg-white/10"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover"
                         >
                           <div className="flex items-center gap-2">
-                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
-                              <span className="text-xs text-slate-400 font-medium">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                              <span className="text-xs text-theme-text-muted font-medium">
                                 {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-white">
+                              <div className="text-sm font-medium text-theme-text-primary">
                                 {user.full_name || user.username}
                               </div>
                               {user.badge_number && (
-                                <div className="text-xs text-slate-400">#{user.badge_number}</div>
+                                <div className="text-xs text-theme-text-muted">#{user.badge_number}</div>
                               )}
                             </div>
                           </div>
                           <button
                             onClick={() => handleQuickRemoveUser(user.id, role)}
-                            className="ml-2 text-slate-500 hover:text-red-600"
+                            className="ml-2 text-theme-text-muted hover:text-red-600"
                             aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
                             ×
@@ -582,9 +582,9 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="edit-profile-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingProfile(false); setProfileUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="edit-profile-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="edit-profile-title" className="text-lg font-medium text-theme-text-primary">
                 Edit Information for {profileUser.full_name || profileUser.username}
               </h3>
             </div>
@@ -593,32 +593,32 @@ export const MembersAdminPage: React.FC = () => {
               {/* Name Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">First Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
                   <input
                     type="text"
                     value={profileForm.first_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Middle Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Middle Name</label>
                   <input
                     type="text"
                     value={profileForm.middle_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Last Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Last Name</label>
                   <input
                     type="text"
                     value={profileForm.last_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -627,22 +627,22 @@ export const MembersAdminPage: React.FC = () => {
               {/* Contact Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Phone</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
                   <input
                     type="tel"
                     value={profileForm.phone}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Mobile</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Mobile</label>
                   <input
                     type="tel"
                     value={profileForm.mobile}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -651,32 +651,32 @@ export const MembersAdminPage: React.FC = () => {
               {/* Department Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Badge #</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Badge #</label>
                   <input
                     type="text"
                     value={profileForm.badge_number}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, badge_number: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Rank</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Rank</label>
                   <input
                     type="text"
                     value={profileForm.rank}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Station</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Station</label>
                   <input
                     type="text"
                     value={profileForm.station}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -687,7 +687,7 @@ export const MembersAdminPage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingProfile(false);
@@ -695,7 +695,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={savingProfile}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -720,15 +720,15 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="manage-roles-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingRoles(false); setSelectedUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="manage-roles-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="manage-roles-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Roles for {selectedUser.full_name || selectedUser.username}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-theme-text-muted mb-4">
                 Select the roles to assign to this member
               </p>
 
@@ -736,17 +736,17 @@ export const MembersAdminPage: React.FC = () => {
                 {roles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedRoleIds.includes(role.id)}
                       onChange={() => handleToggleRole(role.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                     />
                     <div className="ml-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white">
+                        <span className="text-sm font-medium text-theme-text-primary">
                           {role.name}
                         </span>
                         {role.is_system && (
@@ -756,7 +756,7 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                       {role.description && (
-                        <p className="text-xs text-slate-400 mt-1">{role.description}</p>
+                        <p className="text-xs text-theme-text-muted mt-1">{role.description}</p>
                       )}
                     </div>
                   </label>
@@ -764,7 +764,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingRoles(false);
@@ -772,7 +772,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -797,15 +797,15 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="manage-members-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingMembers(false); setSelectedRole(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="manage-members-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="manage-members-title" className="text-lg font-medium text-theme-text-primary">
                 Manage Members for {selectedRole.name}
               </h3>
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-theme-text-muted mb-4">
                 Select the members to assign to this role
               </p>
 
@@ -813,25 +813,25 @@ export const MembersAdminPage: React.FC = () => {
                 {users.map((user) => (
                   <label
                     key={user.id}
-                    className="flex items-start p-3 rounded-lg hover:bg-white/5 cursor-pointer"
+                    className="flex items-start p-3 rounded-lg hover:bg-theme-surface-hover cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selectedUserIds.includes(user.id)}
                       onChange={() => handleToggleUser(user.id)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                     />
                     <div className="ml-3 flex items-center gap-2">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-xs text-slate-400 font-medium">
+                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                        <span className="text-xs text-theme-text-muted font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-theme-text-primary">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-theme-text-muted">
                           @{user.username}
                           {user.badge_number && ` • Badge #${user.badge_number}`}
                         </div>
@@ -842,7 +842,7 @@ export const MembersAdminPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
               <button
                 onClick={() => {
                   setEditingMembers(false);
@@ -850,7 +850,7 @@ export const MembersAdminPage: React.FC = () => {
                   setError(null);
                 }}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 Cancel
               </button>

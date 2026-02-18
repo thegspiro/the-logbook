@@ -60,7 +60,7 @@ export function useIdleTimer() {
           icon: '\u26A0\uFE0F',
           style: {
             background: '#fbbf24',
-            color: '#1e293b',
+            color: '#1a1a2e',
             fontWeight: '500',
           },
         }

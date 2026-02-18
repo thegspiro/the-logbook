@@ -4,7 +4,7 @@
 
 This document describes the multi-layer safeguards implemented to prevent TypeScript build errors from reaching production. These safeguards catch common issues (unused imports, type mismatches, etc.) during development and before commits.
 
-**Last Updated**: 2026-02-14
+**Last Updated**: 2026-02-18
 
 ---
 
@@ -316,6 +316,43 @@ async function fetchData() {
 
 ---
 
+### Error 4: Missing API Service Methods
+
+**Before** (caught in Layer 3-5):
+```typescript
+// Page component calls a method that doesn't exist on the service
+const data = await schedulingService.getShiftCalls(shiftId);
+// ❌ Property 'getShiftCalls' does not exist on type schedulingService
+```
+
+**Cause**: New page components were created referencing API methods that hadn't been added to `services/api.ts`. This caused 70+ build errors in Docker (2026-02-18).
+
+**Prevention**:
+- **Layer 3**: `npm run typecheck` catches missing method errors immediately
+- **Layer 4**: Pre-commit hook blocks if methods are missing
+- **Layer 5**: Docker build fails (last resort)
+
+**Rule**: Always add API service methods to `services/api.ts` before or alongside creating page components that use them. Run `npx tsc --noEmit` before pushing.
+
+---
+
+### Error 5: Missing Type Exports
+
+**Before**:
+```typescript
+import { ArchivedMember } from '../types/user';
+// ❌ Module '"../types/user"' has no exported member 'ArchivedMember'
+```
+
+**Prevention**:
+- **Layer 1**: VSCode red squiggle on import
+- **Layer 3**: TypeScript compiler error
+- **Layer 4**: Pre-commit hook blocks
+
+**Rule**: When a page component needs a new type, define it in the appropriate types file (`types/user.ts`, `types/event.ts`, etc.) before importing it.
+
+---
+
 ## Developer Workflow
 
 ### Daily Development
@@ -622,6 +659,6 @@ class Event(Base):
 ---
 
 **Document Version**: 1.1
-**Last Updated**: 2026-02-14
+**Last Updated**: 2026-02-18
 **Maintained By**: Development Team
 **Related**: ERROR_MESSAGES_COMPLETE.md, TROUBLESHOOTING.md

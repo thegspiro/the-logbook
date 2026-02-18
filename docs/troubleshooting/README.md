@@ -28,6 +28,7 @@ This guide covers common issues and their solutions for The Logbook deployment.
 22. [Security Configuration Issues](#security-configuration-issues)
 23. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
 24. [Prospective Members Module Issues](#prospective-members-module-issues)
+25. [TypeScript Build Issues](#typescript-build-issues)
 
 ---
 

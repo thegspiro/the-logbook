@@ -277,7 +277,7 @@ export const EventDetailPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to="/events"
-          className="inline-flex items-center text-sm text-slate-400 hover:text-slate-200 mb-4"
+          className="inline-flex items-center text-sm text-theme-text-muted hover:text-theme-text-primary mb-4"
         >
           <svg className="mr-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -287,7 +287,7 @@ export const EventDetailPage: React.FC = () => {
 
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-white">{event.title}</h1>
+            <h1 className="text-3xl font-bold text-theme-text-primary">{event.title}</h1>
             <div className="mt-2 flex items-center space-x-2">
               <EventTypeBadge type={event.event_type} size="sm" />
               {event.is_cancelled && (
@@ -315,7 +315,7 @@ export const EventDetailPage: React.FC = () => {
               )}
               <button
                 onClick={() => navigate(`/events/${eventId}/qr`)}
-                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-400 bg-white/10 hover:bg-blue-500/20"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-400 bg-theme-surface hover:bg-blue-500/20"
               >
                 <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
@@ -326,7 +326,7 @@ export const EventDetailPage: React.FC = () => {
                 <>
                   <button
                     onClick={() => navigate(`/events/${eventId}/edit`)}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-white/10 hover:bg-white/5"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -336,7 +336,7 @@ export const EventDetailPage: React.FC = () => {
                   <button
                     onClick={handleDuplicateEvent}
                     disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-white/10 hover:bg-white/5 disabled:opacity-50"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -345,7 +345,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={openCheckInModal}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-white/10 hover:bg-white/5"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -354,7 +354,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={openRecordTimesModal}
-                    className="inline-flex items-center px-4 py-2 border border-white/30 rounded-md shadow-sm text-sm font-medium text-slate-200 bg-white/10 hover:bg-white/5"
+                    className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-sm text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -363,7 +363,7 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => navigate(`/events/${eventId}/monitoring`)}
-                    className="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-400 bg-white/10 hover:bg-green-500/20"
+                    className="inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-400 bg-theme-surface hover:bg-green-500/20"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -372,13 +372,13 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setShowCancelModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-400 bg-white/10 hover:bg-red-500/20"
+                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-400 bg-theme-surface hover:bg-red-500/20"
                   >
                     Cancel Event
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-400 bg-white/10 hover:bg-red-500/20"
+                    className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-400 bg-theme-surface hover:bg-red-500/20"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -396,8 +396,8 @@ export const EventDetailPage: React.FC = () => {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Event Details */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium text-white mb-4">Event Details</h2>
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+            <h2 className="text-lg font-medium text-theme-text-primary mb-4">Event Details</h2>
 
             {event.is_cancelled && (
               <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
@@ -410,22 +410,22 @@ export const EventDetailPage: React.FC = () => {
 
             {event.description && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-slate-200 mb-1">Description</h3>
-                <p className="text-slate-300 whitespace-pre-wrap">{event.description}</p>
+                <h3 className="text-sm font-medium text-theme-text-secondary mb-1">Description</h3>
+                <p className="text-theme-text-secondary whitespace-pre-wrap">{event.description}</p>
               </div>
             )}
 
             <div className="space-y-3">
               <div className="flex items-start">
-                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="flex-shrink-0 mr-3 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-medium text-slate-200">Date & Time</p>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm font-medium text-theme-text-secondary">Date & Time</p>
+                  <p className="text-sm text-theme-text-secondary">
                     {formatDateTime(event.start_datetime, tz)}
                   </p>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-theme-text-secondary">
                     to {formatTime(event.end_datetime, tz)}
                   </p>
                 </div>
@@ -433,15 +433,15 @@ export const EventDetailPage: React.FC = () => {
 
               {(event.location_name || event.location) && (
                 <div className="flex items-start">
-                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg className="flex-shrink-0 mr-3 h-5 w-5 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Location</p>
-                    <p className="text-sm text-slate-300">{event.location_name || event.location}</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Location</p>
+                    <p className="text-sm text-theme-text-secondary">{event.location_name || event.location}</p>
                     {event.location_details && (
-                      <p className="text-sm text-slate-400 mt-1">{event.location_details}</p>
+                      <p className="text-sm text-theme-text-muted mt-1">{event.location_details}</p>
                     )}
                   </div>
                 </div>
@@ -451,40 +451,40 @@ export const EventDetailPage: React.FC = () => {
 
           {/* Training Session Details */}
           {event.event_type === 'training' && event.custom_fields && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6 border-l-4 border-purple-600">
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6 border-l-4 border-purple-600">
               <div className="flex items-center mb-4">
                 <svg className="h-6 w-6 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
-                <h2 className="text-lg font-medium text-white">Training Session Details</h2>
+                <h2 className="text-lg font-medium text-theme-text-primary">Training Session Details</h2>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 {event.custom_fields.course_name && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Course Name</p>
-                    <p className="text-sm text-white">{event.custom_fields.course_name}</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Course Name</p>
+                    <p className="text-sm text-theme-text-primary">{event.custom_fields.course_name}</p>
                   </div>
                 )}
 
                 {event.custom_fields.course_code && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Course Code</p>
-                    <p className="text-sm text-white">{event.custom_fields.course_code}</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Course Code</p>
+                    <p className="text-sm text-theme-text-primary">{event.custom_fields.course_code}</p>
                   </div>
                 )}
 
                 {event.custom_fields.credit_hours && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Credit Hours</p>
-                    <p className="text-sm text-white">{event.custom_fields.credit_hours} hours</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Credit Hours</p>
+                    <p className="text-sm text-theme-text-primary">{event.custom_fields.credit_hours} hours</p>
                   </div>
                 )}
 
                 {event.custom_fields.training_type && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Training Type</p>
-                    <p className="text-sm text-white capitalize">
+                    <p className="text-sm font-medium text-theme-text-secondary">Training Type</p>
+                    <p className="text-sm text-theme-text-primary capitalize">
                       {typeof event.custom_fields.training_type === 'string'
                         ? event.custom_fields.training_type.replace('_', ' ')
                         : event.custom_fields.training_type}
@@ -494,22 +494,22 @@ export const EventDetailPage: React.FC = () => {
 
                 {event.custom_fields.instructor && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Instructor</p>
-                    <p className="text-sm text-white">{event.custom_fields.instructor}</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Instructor</p>
+                    <p className="text-sm text-theme-text-primary">{event.custom_fields.instructor}</p>
                   </div>
                 )}
 
                 {event.custom_fields.issuing_agency && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Issuing Agency</p>
-                    <p className="text-sm text-white">{event.custom_fields.issuing_agency}</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Issuing Agency</p>
+                    <p className="text-sm text-theme-text-primary">{event.custom_fields.issuing_agency}</p>
                   </div>
                 )}
 
                 {event.custom_fields.expiration_months && (
                   <div>
-                    <p className="text-sm font-medium text-slate-200">Certification Valid For</p>
-                    <p className="text-sm text-white">{event.custom_fields.expiration_months} months</p>
+                    <p className="text-sm font-medium text-theme-text-secondary">Certification Valid For</p>
+                    <p className="text-sm text-theme-text-primary">{event.custom_fields.expiration_months} months</p>
                   </div>
                 )}
 
@@ -540,8 +540,8 @@ export const EventDetailPage: React.FC = () => {
 
           {/* User's RSVP Status */}
           {event.user_rsvp_status && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium text-white mb-4">Your RSVP</h2>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+              <h2 className="text-lg font-medium text-theme-text-primary mb-4">Your RSVP</h2>
               <div className="flex items-center space-x-4">
                 <RSVPStatusBadge status={event.user_rsvp_status} />
                 {canRSVP && (
@@ -558,19 +558,19 @@ export const EventDetailPage: React.FC = () => {
 
           {/* RSVPs List (for managers) */}
           {canManage && rsvps.length > 0 && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium text-white mb-4">RSVPs</h2>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+              <h2 className="text-lg font-medium text-theme-text-primary mb-4">RSVPs</h2>
               <div className="space-y-3">
                 {rsvps.map((rsvp) => (
-                  <div key={rsvp.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                  <div key={rsvp.id} className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg">
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-white">{rsvp.user_name}</p>
-                      <p className="text-xs text-slate-400">{rsvp.user_email}</p>
+                      <p className="text-sm font-medium text-theme-text-primary">{rsvp.user_name}</p>
+                      <p className="text-xs text-theme-text-muted">{rsvp.user_email}</p>
                       {rsvp.guest_count > 0 && (
-                        <p className="text-xs text-slate-400 mt-1">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
+                        <p className="text-xs text-theme-text-muted mt-1">+{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}</p>
                       )}
                       {rsvp.notes && (
-                        <p className="text-xs text-slate-300 mt-1">{rsvp.notes}</p>
+                        <p className="text-xs text-theme-text-secondary mt-1">{rsvp.notes}</p>
                       )}
                     </div>
                     <div className="flex items-center space-x-3">
@@ -602,36 +602,36 @@ export const EventDetailPage: React.FC = () => {
         <div className="space-y-6">
           {/* Stats */}
           {stats && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium text-white mb-4">Statistics</h2>
+            <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+              <h2 className="text-lg font-medium text-theme-text-primary mb-4">Statistics</h2>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-slate-300">Total RSVPs</span>
-                  <span className="text-sm font-medium text-white">{stats.total_rsvps}</span>
+                  <span className="text-sm text-theme-text-secondary">Total RSVPs</span>
+                  <span className="text-sm font-medium text-theme-text-primary">{stats.total_rsvps}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-slate-300">Going</span>
+                  <span className="text-sm text-theme-text-secondary">Going</span>
                   <span className="text-sm font-medium text-green-600">{stats.going_count}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-slate-300">Not Going</span>
+                  <span className="text-sm text-theme-text-secondary">Not Going</span>
                   <span className="text-sm font-medium text-red-400">{stats.not_going_count}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-slate-300">Maybe</span>
+                  <span className="text-sm text-theme-text-secondary">Maybe</span>
                   <span className="text-sm font-medium text-yellow-600">{stats.maybe_count}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-slate-300">Checked In</span>
-                  <span className="text-sm font-medium text-white">{stats.checked_in_count}</span>
+                  <span className="text-sm text-theme-text-secondary">Checked In</span>
+                  <span className="text-sm font-medium text-theme-text-primary">{stats.checked_in_count}</span>
                 </div>
                 {stats.capacity_percentage !== null && stats.capacity_percentage !== undefined && (
                   <div className="pt-3 border-t">
                     <div className="flex justify-between mb-1">
-                      <span className="text-sm text-slate-300">Capacity</span>
-                      <span className="text-sm font-medium text-white">{stats.capacity_percentage.toFixed(0)}%</span>
+                      <span className="text-sm text-theme-text-secondary">Capacity</span>
+                      <span className="text-sm font-medium text-theme-text-primary">{stats.capacity_percentage.toFixed(0)}%</span>
                     </div>
-                    <div className="w-full bg-white/20 rounded-full h-2">
+                    <div className="w-full bg-theme-surface rounded-full h-2">
                       <div
                         className="bg-red-600 h-2 rounded-full"
                         style={{ width: `${Math.min(stats.capacity_percentage, 100)}%` }}
@@ -644,35 +644,35 @@ export const EventDetailPage: React.FC = () => {
           )}
 
           {/* Event Info */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow p-6">
-            <h2 className="text-lg font-medium text-white mb-4">Event Information</h2>
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow p-6">
+            <h2 className="text-lg font-medium text-theme-text-primary mb-4">Event Information</h2>
             <div className="space-y-3">
               {event.requires_rsvp && (
                 <>
                   <div>
-                    <p className="text-sm text-slate-300">RSVP Required</p>
-                    <p className="text-sm font-medium text-white">Yes</p>
+                    <p className="text-sm text-theme-text-secondary">RSVP Required</p>
+                    <p className="text-sm font-medium text-theme-text-primary">Yes</p>
                   </div>
                   {event.rsvp_deadline && (
                     <div>
-                      <p className="text-sm text-slate-300">RSVP Deadline</p>
-                      <p className="text-sm font-medium text-white">
+                      <p className="text-sm text-theme-text-secondary">RSVP Deadline</p>
+                      <p className="text-sm font-medium text-theme-text-primary">
                         {formatShortDateTime(event.rsvp_deadline, tz)}
                       </p>
                     </div>
                   )}
                   {event.max_attendees && (
                     <div>
-                      <p className="text-sm text-slate-300">Max Attendees</p>
-                      <p className="text-sm font-medium text-white">{event.max_attendees}</p>
+                      <p className="text-sm text-theme-text-secondary">Max Attendees</p>
+                      <p className="text-sm font-medium text-theme-text-primary">{event.max_attendees}</p>
                     </div>
                   )}
                 </>
               )}
               {event.allow_guests && (
                 <div>
-                  <p className="text-sm text-slate-300">Guests Allowed</p>
-                  <p className="text-sm font-medium text-white">Yes</p>
+                  <p className="text-sm text-theme-text-secondary">Guests Allowed</p>
+                  <p className="text-sm font-medium text-theme-text-primary">Yes</p>
                 </div>
               )}
             </div>
@@ -694,10 +694,10 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRSVP}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="rsvp-modal-title" className="text-lg font-medium text-white mb-4">RSVP for {event.title}</h3>
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
 
                   {submitError && (
                     <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
@@ -707,7 +707,7 @@ export const EventDetailPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <fieldset>
-                      <legend className="block text-sm font-medium text-slate-200 mb-2">
+                      <legend className="block text-sm font-medium text-theme-text-secondary mb-2">
                         Your Response
                       </legend>
                       <div className="space-y-2">
@@ -719,9 +719,9 @@ export const EventDetailPage: React.FC = () => {
                               value={status}
                               checked={rsvpStatus === status}
                               onChange={(e) => setRsvpStatus(e.target.value as RSVPStatus)}
-                              className="h-4 w-4 text-red-600 focus:ring-red-500 border-slate-600"
+                              className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border"
                             />
-                            <span className="ml-2 text-sm text-slate-200">
+                            <span className="ml-2 text-sm text-theme-text-secondary">
                               {getRSVPStatusLabel(status)}
                             </span>
                           </label>
@@ -731,7 +731,7 @@ export const EventDetailPage: React.FC = () => {
 
                     {event.allow_guests && rsvpStatus === 'going' && (
                       <div>
-                        <label htmlFor="guest_count" className="block text-sm font-medium text-slate-200">
+                        <label htmlFor="guest_count" className="block text-sm font-medium text-theme-text-secondary">
                           Number of Guests
                         </label>
                         <input
@@ -741,13 +741,13 @@ export const EventDetailPage: React.FC = () => {
                           max="10"
                           value={guestCount}
                           onChange={(e) => setGuestCount(parseInt(e.target.value))}
-                          className="mt-1 block w-full bg-slate-900/50 text-white border-slate-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                          className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                         />
                       </div>
                     )}
 
                     <div>
-                      <label htmlFor="notes" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="notes" className="block text-sm font-medium text-theme-text-secondary">
                         Notes (optional)
                       </label>
                       <textarea
@@ -755,14 +755,14 @@ export const EventDetailPage: React.FC = () => {
                         rows={3}
                         value={rsvpNotes}
                         onChange={(e) => setRsvpNotes(e.target.value)}
-                        className="mt-1 block w-full bg-slate-900/50 text-white border-slate-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                         placeholder="Dietary restrictions, special accommodations, etc."
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-slate-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                   <button
                     type="submit"
                     disabled={submitting}
@@ -776,7 +776,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRSVPModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-white/10 text-base font-medium text-slate-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -801,10 +801,10 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleCancelEvent}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="cancel-event-modal-title" className="text-lg font-medium text-white mb-4">Cancel Event</h3>
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
                   <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                     <p className="text-sm text-yellow-800">
@@ -819,7 +819,7 @@ export const EventDetailPage: React.FC = () => {
                   )}
 
                   <div>
-                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-slate-200">
+                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-theme-text-secondary">
                       Reason for Cancellation <span aria-hidden="true">*</span>
                     </label>
                     <textarea
@@ -831,10 +831,10 @@ export const EventDetailPage: React.FC = () => {
                       maxLength={500}
                       value={cancelReason}
                       onChange={(e) => setCancelReason(e.target.value)}
-                      className="mt-1 block w-full bg-slate-900/50 text-white border-slate-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                      className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                       placeholder="Please provide a reason for cancelling this event..."
                     />
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-theme-text-muted">
                       {cancelReason.length}/500 characters (minimum 10)
                     </p>
                   </div>
@@ -845,16 +845,16 @@ export const EventDetailPage: React.FC = () => {
                         type="checkbox"
                         checked={sendCancelNotifications}
                         onChange={(e) => setSendCancelNotifications(e.target.checked)}
-                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-slate-600 rounded"
+                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-theme-surface-border rounded"
                       />
-                      <span className="ml-2 text-sm text-slate-200">
+                      <span className="ml-2 text-sm text-theme-text-secondary">
                         Send cancellation notifications to all RSVPs
                       </span>
                     </label>
                   </div>
                 </div>
 
-                <div className="bg-slate-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                   <button
                     type="submit"
                     disabled={submitting || cancelReason.length < 10}
@@ -870,7 +870,7 @@ export const EventDetailPage: React.FC = () => {
                       setCancelReason('');
                       setSendCancelNotifications(false);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-white/10 text-base font-medium text-slate-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Go Back
                   </button>
@@ -895,14 +895,14 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
-              <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 id="checkin-modal-title" className="text-lg font-medium text-white">Check In Members</h3>
+                  <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary">Check In Members</h3>
                   <button
                     type="button"
                     onClick={() => setShowCheckInModal(false)}
-                    className="text-slate-500 hover:text-slate-400"
+                    className="text-theme-text-muted hover:text-theme-text-muted"
                     aria-label="Close dialog"
                   >
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -911,13 +911,13 @@ export const EventDetailPage: React.FC = () => {
                   </button>
                 </div>
 
-                <p className="text-sm text-slate-300 mb-4">
+                <p className="text-sm text-theme-text-secondary mb-4">
                   Check in members as they arrive at the event. Their attendance will be recorded with a timestamp.
                 </p>
 
                 {/* Search */}
                 <div className="mb-4">
-                  <label htmlFor="member-search" className="block text-sm font-medium text-slate-200 mb-2">
+                  <label htmlFor="member-search" className="block text-sm font-medium text-theme-text-secondary mb-2">
                     Search Members
                   </label>
                   <input
@@ -926,12 +926,12 @@ export const EventDetailPage: React.FC = () => {
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
                     placeholder="Search by name or email..."
-                    className="block w-full bg-slate-900/50 text-white border-slate-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                    className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                   />
                 </div>
 
                 {/* Member List */}
-                <div className="max-h-96 overflow-y-auto border border-white/20 rounded-md">
+                <div className="max-h-96 overflow-y-auto border border-theme-surface-border rounded-md">
                   {eligibleMembers
                     .filter(
                       (member) =>
@@ -948,13 +948,13 @@ export const EventDetailPage: React.FC = () => {
                       return (
                         <div
                           key={member.id}
-                          className="flex items-center justify-between p-3 border-b border-white/20 hover:bg-white/5"
+                          className="flex items-center justify-between p-3 border-b border-theme-surface-border hover:bg-theme-surface-hover"
                         >
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-white">
+                            <p className="text-sm font-medium text-theme-text-primary">
                               {member.first_name} {member.last_name}
                             </p>
-                            <p className="text-xs text-slate-400">{member.email}</p>
+                            <p className="text-xs text-theme-text-muted">{member.email}</p>
                             {rsvp && (
                               <div className="flex items-center mt-1 space-x-2">
                                 <span
@@ -1002,18 +1002,18 @@ export const EventDetailPage: React.FC = () => {
                         .includes(memberSearch.toLowerCase()) ||
                       member.email.toLowerCase().includes(memberSearch.toLowerCase())
                   ).length === 0 && (
-                    <div className="p-4 text-center text-slate-400">
+                    <div className="p-4 text-center text-theme-text-muted">
                       {memberSearch ? 'No members found matching your search.' : 'No members available for check-in.'}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-slate-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   type="button"
                   onClick={() => setShowCheckInModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-white/10 text-base font-medium text-slate-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Done
                 </button>
@@ -1037,12 +1037,12 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={handleRecordTimes}>
-                <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="record-times-modal-title" className="text-lg font-medium text-white mb-4">Record Official Event Times</h3>
+                <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
 
-                  <p className="text-sm text-slate-300 mb-4">
+                  <p className="text-sm text-theme-text-secondary mb-4">
                     Record the actual start and end times of the event. All checked-in members will be credited for attendance based on these times.
                   </p>
 
@@ -1054,7 +1054,7 @@ export const EventDetailPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-theme-text-secondary">
                         Actual Start Time
                       </label>
                       <input
@@ -1062,17 +1062,17 @@ export const EventDetailPage: React.FC = () => {
                         id="actual_start_time"
                         value={actualStartTime}
                         onChange={(e) => setActualStartTime(e.target.value)}
-                        className="mt-1 block w-full bg-slate-900/50 text-white border-slate-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                       />
                       {event?.actual_start_time && (
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-theme-text-muted">
                           Currently: {formatShortDateTime(event.actual_start_time, tz)}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-slate-200">
+                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-theme-text-secondary">
                         Actual End Time
                       </label>
                       <input
@@ -1080,10 +1080,10 @@ export const EventDetailPage: React.FC = () => {
                         id="actual_end_time"
                         value={actualEndTime}
                         onChange={(e) => setActualEndTime(e.target.value)}
-                        className="mt-1 block w-full bg-slate-900/50 text-white border-slate-600 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
                       />
                       {event?.actual_end_time && (
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-theme-text-muted">
                           Currently: {formatShortDateTime(event.actual_end_time, tz)}
                         </p>
                       )}
@@ -1100,7 +1100,7 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-slate-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                   <button
                     type="submit"
                     disabled={submitting}
@@ -1114,7 +1114,7 @@ export const EventDetailPage: React.FC = () => {
                       setShowRecordTimesModal(false);
                       setSubmitError(null);
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-white/10 text-base font-medium text-slate-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     Cancel
                   </button>
@@ -1139,8 +1139,8 @@ export const EventDetailPage: React.FC = () => {
               <div className="absolute inset-0 bg-slate-900/500 opacity-75"></div>
             </div>
 
-            <div className="inline-block align-bottom bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
                   <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                     <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1148,11 +1148,11 @@ export const EventDetailPage: React.FC = () => {
                     </svg>
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 id="delete-event-modal-title" className="text-lg leading-6 font-medium text-white">
+                    <h3 id="delete-event-modal-title" className="text-lg leading-6 font-medium text-theme-text-primary">
                       Delete Event
                     </h3>
                     <div className="mt-2">
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-theme-text-muted">
                         Are you sure you want to permanently delete &ldquo;{event.title}&rdquo;? This will remove all RSVPs and attendance records. This action cannot be undone.
                       </p>
                     </div>
@@ -1160,7 +1160,7 @@ export const EventDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-slate-900/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   type="button"
                   disabled={submitting}
@@ -1172,7 +1172,7 @@ export const EventDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-white/30 shadow-sm px-4 py-2 bg-white/10 text-base font-medium text-slate-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-sm px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Go Back
                 </button>

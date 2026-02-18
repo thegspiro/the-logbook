@@ -94,7 +94,7 @@ const ReviewPanel: React.FC<{
   };
 
   return (
-    <div className="border-t border-gray-700 pt-4 mt-4">
+    <div className="border-t border-theme-surface-border pt-4 mt-4">
       {/* Action Buttons */}
       <div className="flex items-center space-x-2 mb-3">
         <button
@@ -102,7 +102,7 @@ const ReviewPanel: React.FC<{
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             action === 'approve'
               ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
           <CheckCircle2 className="w-4 h-4" />
@@ -113,7 +113,7 @@ const ReviewPanel: React.FC<{
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             action === 'revision_requested'
               ? 'bg-orange-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
           <RotateCcw className="w-4 h-4" />
@@ -124,7 +124,7 @@ const ReviewPanel: React.FC<{
           className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
             action === 'reject'
               ? 'bg-red-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
           <XCircle className="w-4 h-4" />
@@ -142,7 +142,7 @@ const ReviewPanel: React.FC<{
             ? 'Optional notes for the member...'
             : 'Explain why (required for rejection or revision request)...'
         }
-        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-3"
+        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-3"
         required={action !== 'approve'}
       />
 
@@ -151,7 +151,7 @@ const ReviewPanel: React.FC<{
         <div className="mb-3">
           <button
             onClick={() => setShowOverrides(!showOverrides)}
-            className="text-xs text-gray-400 hover:text-white flex items-center space-x-1"
+            className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center space-x-1"
           >
             <Settings className="w-3 h-3" />
             <span>Override values before approving</span>
@@ -160,23 +160,23 @@ const ReviewPanel: React.FC<{
           {showOverrides && (
             <div className="grid grid-cols-2 gap-3 mt-2">
               <div>
-                <label className="text-xs text-gray-400">Hours</label>
+                <label className="text-xs text-theme-text-muted">Hours</label>
                 <input
                   type="number"
                   value={overrideHours ?? ''}
                   onChange={(e) => setOverrideHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder={String(submission.hours_completed)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                  className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={0}
                   step={0.5}
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400">Training Type</label>
+                <label className="text-xs text-theme-text-muted">Training Type</label>
                 <select
                   value={overrideType || ''}
                   onChange={(e) => setOverrideType(e.target.value as TrainingType || undefined)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                  className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                 >
                   <option value="">No change</option>
                   {Object.entries(TRAINING_TYPE_LABELS).map(([val, label]) => (
@@ -212,19 +212,19 @@ const SubmissionCard: React.FC<{
   const isPending = submission.status === 'pending_review';
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full text-left p-4 hover:bg-gray-750 transition-colors"
+        className="w-full text-left p-4 hover:bg-theme-surface-hover transition-colors"
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-1">
-              <h3 className="text-white font-medium">{submission.course_name}</h3>
+              <h3 className="text-theme-text-primary font-medium">{submission.course_name}</h3>
               <StatusBadge status={submission.status} />
             </div>
-            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-theme-text-muted">
               <span className="flex items-center space-x-1">
                 <User className="w-3 h-3" />
                 <span>{submission.submitted_by}</span>
@@ -243,9 +243,9 @@ const SubmissionCard: React.FC<{
             </div>
           </div>
           {expanded ? (
-            <ChevronUp className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
+            <ChevronUp className="w-5 h-5 text-theme-text-muted ml-2 flex-shrink-0" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-gray-400 ml-2 flex-shrink-0" />
+            <ChevronDown className="w-5 h-5 text-theme-text-muted ml-2 flex-shrink-0" />
           )}
         </div>
       </button>
@@ -253,62 +253,62 @@ const SubmissionCard: React.FC<{
       {/* Expanded Details */}
       {expanded && (
         <div className="px-4 pb-4">
-          <div className="border-t border-gray-700 pt-3">
+          <div className="border-t border-theme-surface-border pt-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               {submission.course_code && (
                 <div>
-                  <span className="text-gray-500">Course Code: </span>
-                  <span className="text-gray-300">{submission.course_code}</span>
+                  <span className="text-theme-text-muted">Course Code: </span>
+                  <span className="text-theme-text-secondary">{submission.course_code}</span>
                 </div>
               )}
               {submission.instructor && (
                 <div className="flex items-center space-x-1">
-                  <User className="w-3 h-3 text-gray-500" />
-                  <span className="text-gray-500">Instructor: </span>
-                  <span className="text-gray-300">{submission.instructor}</span>
+                  <User className="w-3 h-3 text-theme-text-muted" />
+                  <span className="text-theme-text-muted">Instructor: </span>
+                  <span className="text-theme-text-secondary">{submission.instructor}</span>
                 </div>
               )}
               {submission.location && (
                 <div className="flex items-center space-x-1">
-                  <MapPin className="w-3 h-3 text-gray-500" />
-                  <span className="text-gray-500">Location: </span>
-                  <span className="text-gray-300">{submission.location}</span>
+                  <MapPin className="w-3 h-3 text-theme-text-muted" />
+                  <span className="text-theme-text-muted">Location: </span>
+                  <span className="text-theme-text-secondary">{submission.location}</span>
                 </div>
               )}
               {submission.certification_number && (
                 <div className="flex items-center space-x-1">
-                  <Award className="w-3 h-3 text-gray-500" />
-                  <span className="text-gray-500">Cert #: </span>
-                  <span className="text-gray-300">{submission.certification_number}</span>
+                  <Award className="w-3 h-3 text-theme-text-muted" />
+                  <span className="text-theme-text-muted">Cert #: </span>
+                  <span className="text-theme-text-secondary">{submission.certification_number}</span>
                 </div>
               )}
               {submission.issuing_agency && (
                 <div>
-                  <span className="text-gray-500">Issuing Agency: </span>
-                  <span className="text-gray-300">{submission.issuing_agency}</span>
+                  <span className="text-theme-text-muted">Issuing Agency: </span>
+                  <span className="text-theme-text-secondary">{submission.issuing_agency}</span>
                 </div>
               )}
               {submission.expiration_date && (
                 <div>
-                  <span className="text-gray-500">Expires: </span>
-                  <span className="text-gray-300">{submission.expiration_date}</span>
+                  <span className="text-theme-text-muted">Expires: </span>
+                  <span className="text-theme-text-secondary">{submission.expiration_date}</span>
                 </div>
               )}
               <div>
-                <span className="text-gray-500">Submitted: </span>
-                <span className="text-gray-300">{formatDate(submission.submitted_at, tz)}</span>
+                <span className="text-theme-text-muted">Submitted: </span>
+                <span className="text-theme-text-secondary">{formatDate(submission.submitted_at, tz)}</span>
               </div>
             </div>
             {submission.description && (
               <div className="mt-3">
-                <span className="text-gray-500 text-sm">Description: </span>
-                <p className="text-gray-300 text-sm mt-1">{submission.description}</p>
+                <span className="text-theme-text-muted text-sm">Description: </span>
+                <p className="text-theme-text-secondary text-sm mt-1">{submission.description}</p>
               </div>
             )}
             {submission.reviewer_notes && (
-              <div className="mt-3 bg-gray-700/50 rounded p-2">
-                <span className="text-gray-400 text-xs">Previous reviewer notes: </span>
-                <p className="text-gray-300 text-sm">{submission.reviewer_notes}</p>
+              <div className="mt-3 bg-theme-surface-secondary rounded p-2">
+                <span className="text-theme-text-muted text-xs">Previous reviewer notes: </span>
+                <p className="text-theme-text-secondary text-sm">{submission.reviewer_notes}</p>
               </div>
             )}
           </div>
@@ -389,48 +389,48 @@ const ConfigEditor: React.FC<{
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 space-y-6">
-      <h2 className="text-lg font-semibold text-white flex items-center space-x-2">
-        <Settings className="w-5 h-5 text-gray-400" />
+    <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-6 space-y-6">
+      <h2 className="text-lg font-semibold text-theme-text-primary flex items-center space-x-2">
+        <Settings className="w-5 h-5 text-theme-text-muted" />
         <span>Self-Report Configuration</span>
       </h2>
 
       {/* Approval Settings */}
       <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Approval Settings</h3>
+        <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Approval Settings</h3>
         <div className="space-y-3">
           <label className="flex items-center space-x-3">
             <input
               type="checkbox"
               checked={requireApproval}
               onChange={(e) => setRequireApproval(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
             />
-            <span className="text-gray-300 text-sm">Require officer approval for submissions</span>
+            <span className="text-theme-text-secondary text-sm">Require officer approval for submissions</span>
           </label>
 
           {requireApproval && (
             <div className="ml-7 grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Auto-approve under (hours)</label>
+                <label className="text-xs text-theme-text-muted mb-1 block">Auto-approve under (hours)</label>
                 <input
                   type="number"
                   value={autoApproveHours ?? ''}
                   onChange={(e) => setAutoApproveHours(e.target.value ? parseFloat(e.target.value) : undefined)}
                   placeholder="Disabled"
-                  className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                  className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={0}
                   step={0.5}
                 />
-                <p className="text-xs text-gray-500 mt-1">Leave empty to require approval for all</p>
+                <p className="text-xs text-theme-text-muted mt-1">Leave empty to require approval for all</p>
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Approval deadline (days)</label>
+                <label className="text-xs text-theme-text-muted mb-1 block">Approval deadline (days)</label>
                 <input
                   type="number"
                   value={deadlineDays}
                   onChange={(e) => setDeadlineDays(parseInt(e.target.value) || 14)}
-                  className="w-full px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                  className="w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
                   min={1}
                   max={90}
                 />
@@ -442,40 +442,40 @@ const ConfigEditor: React.FC<{
 
       {/* Notification Settings */}
       <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Notifications</h3>
+        <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Notifications</h3>
         <div className="space-y-2">
           <label className="flex items-center space-x-3">
             <input
               type="checkbox"
               checked={notifyOfficer}
               onChange={(e) => setNotifyOfficer(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
             />
-            <span className="text-gray-300 text-sm">Notify officer when a submission is created</span>
+            <span className="text-theme-text-secondary text-sm">Notify officer when a submission is created</span>
           </label>
           <label className="flex items-center space-x-3">
             <input
               type="checkbox"
               checked={notifyMember}
               onChange={(e) => setNotifyMember(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+              className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
             />
-            <span className="text-gray-300 text-sm">Notify member when their submission is reviewed</span>
+            <span className="text-theme-text-secondary text-sm">Notify member when their submission is reviewed</span>
           </label>
         </div>
       </div>
 
       {/* Restrictions */}
       <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Restrictions</h3>
+        <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Restrictions</h3>
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Max hours per submission</label>
+          <label className="text-xs text-theme-text-muted mb-1 block">Max hours per submission</label>
           <input
             type="number"
             value={maxHours ?? ''}
             onChange={(e) => setMaxHours(e.target.value ? parseFloat(e.target.value) : undefined)}
             placeholder="No limit"
-            className="w-48 px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+            className="w-48 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded text-theme-text-primary text-sm"
             min={0.5}
             step={0.5}
           />
@@ -484,36 +484,36 @@ const ConfigEditor: React.FC<{
 
       {/* Instructions */}
       <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Member Instructions</h3>
+        <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Member Instructions</h3>
         <textarea
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
           rows={3}
           placeholder="Optional instructions displayed to members when submitting training..."
-          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         />
       </div>
 
       {/* Field Configuration */}
       <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Required Fields</h3>
-        <p className="text-xs text-gray-500 mb-3">Control which fields are visible and required on the submission form.</p>
+        <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Required Fields</h3>
+        <p className="text-xs text-theme-text-muted mb-3">Control which fields are visible and required on the submission form.</p>
         <div className="space-y-2">
           {Object.entries(fieldConfig).map(([name, fc]) => (
-            <div key={name} className="flex items-center justify-between py-2 px-3 bg-gray-700/50 rounded">
+            <div key={name} className="flex items-center justify-between py-2 px-3 bg-theme-surface-secondary rounded">
               <div className="flex items-center space-x-3 flex-1 min-w-0">
                 <input
                   type="checkbox"
                   checked={fc.visible}
                   onChange={(e) => updateField(name, 'visible', e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500"
+                  className="w-4 h-4 rounded border-theme-input-border bg-theme-input-bg text-red-600 focus:ring-red-500"
                   disabled={['course_name', 'training_type', 'completion_date', 'hours_completed'].includes(name)}
                 />
                 <input
                   type="text"
                   value={fc.label}
                   onChange={(e) => updateField(name, 'label', e.target.value)}
-                  className="bg-transparent border-none text-gray-300 text-sm focus:outline-none flex-1 min-w-0"
+                  className="bg-transparent border-none text-theme-text-secondary text-sm focus:outline-none flex-1 min-w-0"
                 />
               </div>
               <label className="flex items-center space-x-2 ml-4 flex-shrink-0">
@@ -521,10 +521,10 @@ const ConfigEditor: React.FC<{
                   type="checkbox"
                   checked={fc.required}
                   onChange={(e) => updateField(name, 'required', e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-orange-600 focus:ring-orange-500"
+                  className="w-3.5 h-3.5 rounded border-theme-input-border bg-theme-input-bg text-orange-600 focus:ring-orange-500"
                   disabled={!fc.visible}
                 />
-                <span className="text-xs text-gray-400">Required</span>
+                <span className="text-xs text-theme-text-muted">Required</span>
               </label>
             </div>
           ))}
@@ -621,16 +621,16 @@ const ReviewSubmissionsPage: React.FC = () => {
         <div className="flex items-center space-x-4 mb-6">
           <button
             onClick={() => navigate('/training/officer')}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white flex items-center space-x-2">
+            <h1 className="text-2xl font-bold text-theme-text-primary flex items-center space-x-2">
               <ClipboardCheck className="w-7 h-7 text-red-500" />
               <span>Review Submissions</span>
             </h1>
-            <p className="text-gray-400 text-sm">
+            <p className="text-theme-text-muted text-sm">
               Review and approve member self-reported training
             </p>
           </div>
@@ -643,13 +643,13 @@ const ReviewSubmissionsPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6">
+        <div className="flex space-x-1 bg-theme-surface p-1 rounded-lg mb-6">
           <button
             onClick={() => setActiveView('pending')}
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'pending'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Clock className="w-4 h-4 inline mr-2" />
@@ -665,7 +665,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'all'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <FileText className="w-4 h-4 inline mr-2" />
@@ -676,7 +676,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'config'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Settings className="w-4 h-4 inline mr-2" />
@@ -687,11 +687,11 @@ const ReviewSubmissionsPage: React.FC = () => {
         {/* Status Filter (All view only) */}
         {activeView === 'all' && (
           <div className="flex items-center space-x-2 mb-4">
-            <Filter className="w-4 h-4 text-gray-400" />
+            <Filter className="w-4 h-4 text-theme-text-muted" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <option value="">All statuses</option>
               <option value="pending_review">Pending Review</option>
@@ -709,20 +709,20 @@ const ReviewSubmissionsPage: React.FC = () => {
         ) : loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500" />
-            <p className="text-gray-400 mt-4">Loading submissions...</p>
+            <p className="text-theme-text-muted mt-4">Loading submissions...</p>
           </div>
         ) : submissions.length === 0 ? (
-          <div className="text-center py-16 bg-gray-800 rounded-lg border border-gray-700">
+          <div className="text-center py-16 bg-theme-surface rounded-lg border border-theme-surface-border">
             {activeView === 'pending' ? (
               <>
                 <CheckCircle2 className="w-16 h-16 text-green-500/50 mx-auto mb-4" />
-                <p className="text-gray-400 text-lg">All caught up!</p>
-                <p className="text-gray-500 text-sm mt-1">No submissions waiting for review.</p>
+                <p className="text-theme-text-muted text-lg">All caught up!</p>
+                <p className="text-theme-text-muted text-sm mt-1">No submissions waiting for review.</p>
               </>
             ) : (
               <>
                 <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">No submissions found</p>
+                <p className="text-theme-text-muted">No submissions found</p>
                 {statusFilter && (
                   <button
                     onClick={() => setStatusFilter('')}

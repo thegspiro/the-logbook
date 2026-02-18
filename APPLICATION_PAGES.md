@@ -55,6 +55,8 @@ Complete reference of all pages in the application, organized by module.
 | `/members/import` | Import Members | `members.create` |
 | `/members/:userId` | Member Profile | Authenticated |
 | `/members/:userId/training` | Member Training History | Authenticated |
+| `/members/:userId/permissions` | User Permissions | `roles.manage` |
+| `/members/lifecycle` | Member Lifecycle | `members.manage` |
 | `/admin/members` | Member Management | `members.manage` |
 
 ---
@@ -91,6 +93,7 @@ Complete reference of all pages in the application, organized by module.
 | `/events/:id/check-in` | Self Check-In | Authenticated |
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage` |
 | `/events/:id/analytics` | Event Analytics | `analytics.view` |
+| `/events/settings` | Events Module Settings | `events.manage` |
 
 ---
 
@@ -111,6 +114,7 @@ Complete reference of all pages in the application, organized by module.
 | `/training/shift-reports` | Shift Reports | Authenticated |
 | `/training/integrations` | External Integrations | `training.manage` |
 | `/training/my-training` | My Training | Authenticated |
+| `/training/approval/:token` | Training Approval | Public (token-based) |
 
 ---
 
@@ -134,7 +138,11 @@ Complete reference of all pages in the application, organized by module.
 
 | URL | Page | Permission |
 |-----|------|------------|
-| `/scheduling` | Scheduling | Authenticated |
+| `/scheduling` | Scheduling Calendar | Authenticated |
+| `/scheduling/assignments` | Shift Assignments | `scheduling.manage` |
+| `/scheduling/attendance` | Shift Attendance | `scheduling.manage` |
+| `/scheduling/templates` | Shift Templates & Patterns | `scheduling.manage` |
+| `/scheduling/reports` | Scheduling Reports | `scheduling.view` |
 
 ---
 
@@ -198,7 +206,8 @@ Complete reference of all pages in the application, organized by module.
 | `/admin/errors` | Error Monitoring | `settings.manage` |
 | `/admin/analytics` | Analytics Dashboard | `analytics.view` |
 | `/admin/public-portal` | Public Portal Admin | `settings.manage` |
+| `/admin/scheduled-tasks` | Scheduled Tasks | `settings.manage` |
 
 ---
 
-**Total: 70+ pages across 15 modules**
+**Total: 85+ pages across 15 modules**
