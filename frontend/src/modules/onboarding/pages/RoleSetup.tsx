@@ -903,7 +903,7 @@ const RoleSetup: React.FC = () => {
           aria-labelledby="custom-role-modal-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
         >
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
+          <div className="bg-theme-surface-modal rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
             <h3 id="custom-role-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Role</h3>
 
             <div className="space-y-4">

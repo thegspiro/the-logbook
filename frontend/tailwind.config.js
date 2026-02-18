@@ -26,6 +26,7 @@ export default {
           'surface-secondary': 'var(--surface-secondary)',
           'surface-hover': 'var(--surface-hover)',
           'surface-border': 'var(--surface-border)',
+          'surface-modal': 'var(--surface-modal)',
           'text-primary': 'var(--text-primary)',
           'text-secondary': 'var(--text-secondary)',
           'text-muted': 'var(--text-muted)',

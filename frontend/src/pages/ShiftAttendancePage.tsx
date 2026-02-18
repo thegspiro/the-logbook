@@ -303,7 +303,7 @@ export const ShiftAttendancePage: React.FC<ShiftAttendancePageProps> = ({ shiftI
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-1 flex justify-between items-center">
                   <h3 id="edit-attendance-title" className="text-lg font-medium text-theme-text-primary">
                     Edit Attendance

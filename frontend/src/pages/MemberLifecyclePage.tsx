@@ -300,7 +300,7 @@ const OverdueReturnsPanel: React.FC = () => {
         >
           <div className="flex items-center justify-center min-h-screen px-4">
             <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-            <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border max-h-[80vh] flex flex-col">
+            <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-2xl w-full border border-theme-surface-border max-h-[80vh] flex flex-col">
               <div className="px-6 pt-5 pb-3 border-b border-theme-surface-border flex justify-between items-center flex-shrink-0">
                 <h3 id="report-preview-title" className="text-lg font-medium text-theme-text-primary">
                   Property Return Report - {reportPreview.member_name}

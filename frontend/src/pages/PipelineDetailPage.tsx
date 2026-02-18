@@ -148,7 +148,7 @@ const EnrollModal: React.FC<{
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-gray-800 rounded-lg max-w-lg w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full">
         <div className="p-6 border-b border-gray-700">
           <h2 className="text-xl font-bold text-white">Enroll Members</h2>
           <p className="text-gray-400 text-sm mt-1">Enroll members into {programName}</p>

@@ -287,7 +287,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" aria-hidden="true" />
-              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
+              <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">
                     Check In: {checkInModal.itemName}

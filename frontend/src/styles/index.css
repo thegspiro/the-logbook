@@ -14,6 +14,7 @@
   --surface-secondary: #f8fafc;             /* slate-50 */
   --surface-hover: #f1f5f9;                 /* slate-100 */
   --surface-border: #e2e8f0;               /* slate-200 */
+  --surface-modal: #ffffff;                 /* opaque white — for modals over overlays */
 
   /* Text */
   --text-primary: #0f172a;                  /* slate-900 */
@@ -46,6 +47,7 @@
   --surface-secondary: rgba(255, 255, 255, 0.05); /* white/5 */
   --surface-hover: rgba(255, 255, 255, 0.15); /* white/15 */
   --surface-border: rgba(255, 255, 255, 0.2); /* white/20 */
+  --surface-modal: #1e293b;                /* slate-800 — opaque for modals over overlays */
 
   /* Text */
   --text-primary: #ffffff;                  /* white */

@@ -128,11 +128,11 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`inline-block align-bottom bg-theme-surface rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}
+          className={`inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}
           tabIndex={-1}
         >
           {/* Header */}
-          <div className="bg-theme-surface px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex items-start justify-between mb-4">
               <h3
                 className="text-lg font-medium text-theme-text-primary"

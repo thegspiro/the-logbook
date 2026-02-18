@@ -217,7 +217,7 @@ export const ScheduledTasksPage: React.FC = () => {
             aria-labelledby="confirm-task-title"
             onKeyDown={handleKeyDown}
           >
-            <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
               <div className="px-6 py-4 border-b border-theme-surface-border">
                 <h3 id="confirm-task-title" className="text-lg font-medium text-theme-text-primary">
                   Confirm Task Execution

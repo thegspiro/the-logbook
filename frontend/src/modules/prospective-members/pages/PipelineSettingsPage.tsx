@@ -616,7 +616,7 @@ export const PipelineSettingsPage: React.FC = () => {
           aria-labelledby="create-pipeline-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
         >
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-md w-full">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 id="create-pipeline-title" className="text-lg font-bold text-theme-text-primary">Create Pipeline</h2>
               <button

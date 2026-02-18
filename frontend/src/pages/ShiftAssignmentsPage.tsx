@@ -175,7 +175,7 @@ const AssignmentFormModal: React.FC<AssignmentModalProps> = ({
       aria-labelledby="assignment-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="assignment-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -300,7 +300,7 @@ const SwapRequestFormModal: React.FC<SwapFormModalProps> = ({ isOpen, onClose, o
       aria-labelledby="swap-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="swap-modal-title" className="text-xl font-bold text-theme-text-primary">Request Shift Swap</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -431,7 +431,7 @@ const TimeOffFormModal: React.FC<TimeOffFormModalProps> = ({ isOpen, onClose, on
       aria-labelledby="timeoff-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="timeoff-modal-title" className="text-xl font-bold text-theme-text-primary">Request Time Off</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -539,7 +539,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ isOpen, onClose, onSubmit, ti
       aria-labelledby="review-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="review-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">

@@ -181,7 +181,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
       aria-labelledby="template-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="template-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -390,7 +390,7 @@ const PatternFormModal: React.FC<PatternModalProps> = ({
       aria-labelledby="pattern-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="pattern-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
@@ -611,7 +611,7 @@ const GenerateShiftsModal: React.FC<GenerateModalProps> = ({ isOpen, onClose, pa
       aria-labelledby="generate-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-secondary rounded-lg max-w-md w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-md w-full">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="generate-modal-title" className="text-xl font-bold text-theme-text-primary">Generate Shifts</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
