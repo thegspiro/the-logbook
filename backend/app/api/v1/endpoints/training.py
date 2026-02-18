@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from uuid import UUID
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import calendar
 
 from app.core.database import get_db
@@ -1204,7 +1204,7 @@ async def get_compliance_matrix(
 # ============================================
 
 @router.get("/expiring-certifications")
-async def get_expiring_certifications(
+async def get_expiring_certifications_detailed(
     days: int = Query(90, ge=1, le=365, description="Number of days to look ahead"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
@@ -1214,8 +1214,10 @@ async def get_expiring_certifications(
     Used by Training Coordinators and Driver Trainers to proactively manage renewals.
     """
     org_id = current_user.organization_id
-    cutoff_date = date.today() + __import__("datetime").timedelta(days=days)
+    today = date.today()
+    cutoff_date = today + timedelta(days=days)
 
+    # Also include already-expired certifications so the tab shows them
     result = await db.execute(
         select(TrainingRecord)
         .where(
@@ -1223,7 +1225,6 @@ async def get_expiring_certifications(
             TrainingRecord.status == TrainingStatus.COMPLETED,
             TrainingRecord.expiration_date.isnot(None),
             TrainingRecord.expiration_date <= cutoff_date,
-            TrainingRecord.expiration_date >= date.today(),
         )
         .order_by(TrainingRecord.expiration_date.asc())
     )
@@ -1231,29 +1232,32 @@ async def get_expiring_certifications(
 
     # Enrich with member names
     user_ids = list(set(r.user_id for r in records))
-    users_result = await db.execute(
-        select(User).where(User.id.in_(user_ids))
-    )
-    users_map = {u.id: u for u in users_result.scalars().all()}
+    users_map: dict = {}
+    if user_ids:
+        users_result = await db.execute(
+            select(User).where(User.id.in_(user_ids))
+        )
+        users_map = {u.id: u for u in users_result.scalars().all()}
 
-    return {
-        "expiring_certifications": [
-            {
-                "record_id": r.id,
-                "user_id": r.user_id,
-                "member_name": (
-                    f"{users_map[r.user_id].last_name}, {users_map[r.user_id].first_name}"
-                    if r.user_id in users_map and users_map[r.user_id].last_name
-                    else users_map[r.user_id].username if r.user_id in users_map
-                    else "Unknown"
-                ),
-                "course_name": r.course_name,
-                "certification_number": r.certification_number,
-                "expiration_date": r.expiration_date.isoformat() if r.expiration_date else None,
-                "days_until_expiry": (r.expiration_date - date.today()).days if r.expiration_date else None,
-            }
-            for r in records
-        ],
-        "total": len(records),
-        "lookup_days": days,
-    }
+    # Return flat array matching frontend ExpiringCertification interface
+    return [
+        {
+            "user_id": r.user_id,
+            "member_name": (
+                f"{users_map[r.user_id].last_name}, {users_map[r.user_id].first_name}"
+                if r.user_id in users_map and users_map[r.user_id].last_name
+                else users_map[r.user_id].username if r.user_id in users_map
+                else "Unknown"
+            ),
+            "requirement_id": r.course_id or r.id,
+            "requirement_name": r.course_name or "Certification",
+            "expiry_date": r.expiration_date.isoformat() if r.expiration_date else None,
+            "days_until_expiry": (r.expiration_date - today).days if r.expiration_date else 0,
+            "status": (
+                "expired" if r.expiration_date and r.expiration_date < today
+                else "expiring_soon" if r.expiration_date and r.expiration_date <= cutoff_date
+                else "current"
+            ),
+        }
+        for r in records
+    ]
