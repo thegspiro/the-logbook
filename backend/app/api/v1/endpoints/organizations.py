@@ -351,11 +351,12 @@ async def preview_next_membership_id(
     **Authentication required**
     """
     org_service = OrganizationService(db)
-    settings = await org_service.get_membership_id_settings(current_user.organization_id)
+    org_settings = await org_service.get_organization_settings(current_user.organization_id)
+    membership_id_settings = org_settings.membership_id
 
-    if not settings.enabled:
+    if not membership_id_settings.enabled:
         return {"enabled": False, "next_id": None}
 
-    number_str = str(settings.next_number).zfill(settings.padding)
-    next_id = f"{settings.prefix}{number_str}"
+    number_str = str(membership_id_settings.next_number).zfill(4)
+    next_id = f"{membership_id_settings.prefix}{number_str}"
     return {"enabled": True, "next_id": next_id}

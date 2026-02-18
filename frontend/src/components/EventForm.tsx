@@ -91,7 +91,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(
-    initialData?.location_id ? 'select' : initialData?.location ? 'other' : 'select'
+    initialData?.location ? 'other' : 'select'
   );
 
   useEffect(() => {
@@ -165,13 +165,39 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
   };
 
-  const handleLocationModeChange = (mode: 'select' | 'other') => {
-    setLocationMode(mode);
-    if (mode === 'select') {
-      update({ location: '', location_id: undefined });
+  const handleLocationSelect = (value: string) => {
+    if (value === '__other__') {
+      setLocationMode('other');
+      update({ location_id: undefined, location: '' });
+    } else if (value === '') {
+      setLocationMode('select');
+      update({ location_id: undefined, location: undefined });
     } else {
-      update({ location_id: undefined });
+      setLocationMode('select');
+      update({ location_id: value, location: undefined });
     }
+  };
+
+  const selectedLocation = locations.find((l) => l.id === formData.location_id);
+
+  const formatLocationAddress = (loc: Location) => {
+    const parts: string[] = [];
+    if (loc.address) parts.push(loc.address);
+    if (loc.city) parts.push(loc.city);
+    if (loc.state && loc.zip) {
+      parts.push(`${loc.state} ${loc.zip}`);
+    } else if (loc.state) {
+      parts.push(loc.state);
+    }
+    return parts.join(', ');
+  };
+
+  const formatLocationLabel = (loc: Location) => {
+    const parts = [loc.name];
+    if (loc.building) parts.push(`(${loc.building})`);
+    const addr = [loc.address, loc.city].filter(Boolean).join(', ');
+    if (addr) parts.push(`— ${addr}`);
+    return parts.join(' ');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -350,54 +376,64 @@ export const EventForm: React.FC<EventFormProps> = ({
       <section>
         <h3 className="text-lg font-medium text-theme-text-primary mb-4">Location</h3>
         <div className="space-y-4">
-          {locations.length > 0 && (
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="location-mode"
-                  checked={locationMode === 'select'}
-                  onChange={() => handleLocationModeChange('select')}
-                  className="text-red-600 focus:ring-red-500"
-                />
-                Choose a location
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="location-mode"
-                  checked={locationMode === 'other'}
-                  onChange={() => handleLocationModeChange('other')}
-                  className="text-red-600 focus:ring-red-500"
-                />
-                Other / Enter manually
-              </label>
-            </div>
-          )}
-
-          {locationMode === 'select' && locations.length > 0 ? (
-            <div>
-              <label htmlFor="location-select" className="block text-sm font-medium text-theme-text-primary">
-                Location
-              </label>
+          <div>
+            <label htmlFor="location-select" className="block text-sm font-medium text-theme-text-primary">
+              Location
+            </label>
+            {locations.length > 0 ? (
               <select
                 id="location-select"
-                value={formData.location_id || ''}
-                onChange={(e) => update({ location_id: e.target.value || undefined })}
+                value={locationMode === 'other' ? '__other__' : (formData.location_id || '')}
+                onChange={(e) => handleLocationSelect(e.target.value)}
                 className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
               >
                 <option value="">-- Select a location --</option>
                 {locations.map((loc) => (
                   <option key={loc.id} value={loc.id}>
-                    {loc.name}
+                    {formatLocationLabel(loc)}
                   </option>
                 ))}
+                <option value="__other__">Other (off-site / enter manually)</option>
               </select>
+            ) : (
+              <input
+                type="text"
+                id="location-text-fallback"
+                maxLength={300}
+                value={formData.location || ''}
+                onChange={(e) => update({ location: e.target.value })}
+                className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                placeholder="e.g., Station 1 Conference Room"
+              />
+            )}
+          </div>
+
+          {/* Show selected location address */}
+          {locationMode === 'select' && selectedLocation && (
+            <div className="flex items-start gap-2 p-3 bg-theme-surface-secondary rounded-lg">
+              <svg className="w-4 h-4 mt-0.5 text-theme-text-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+              </svg>
+              <div className="text-sm">
+                {formatLocationAddress(selectedLocation) && (
+                  <p className="text-theme-text-secondary">{formatLocationAddress(selectedLocation)}</p>
+                )}
+                {selectedLocation.room_number && (
+                  <p className="text-theme-text-muted text-xs mt-0.5">Room {selectedLocation.room_number}</p>
+                )}
+                {selectedLocation.capacity && (
+                  <p className="text-theme-text-muted text-xs mt-0.5">Capacity: {selectedLocation.capacity}</p>
+                )}
+              </div>
             </div>
-          ) : (
+          )}
+
+          {/* Free-text location when "Other" is selected */}
+          {locationMode === 'other' && locations.length > 0 && (
             <div>
               <label htmlFor="location-text" className="block text-sm font-medium text-theme-text-primary">
-                Location
+                Location Name / Address
               </label>
               <input
                 type="text"
@@ -406,7 +442,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 value={formData.location || ''}
                 onChange={(e) => update({ location: e.target.value })}
                 className="mt-1 block w-full bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                placeholder="e.g., Station 1 Conference Room"
+                placeholder="e.g., City Hall — 123 Main St, Anytown"
               />
             </div>
           )}

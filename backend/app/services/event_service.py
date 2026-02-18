@@ -9,7 +9,7 @@ from uuid import UUID
 from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event, EventRSVP, EventTemplate, EventType, RSVPStatus, CheckInWindowType, RecurrencePattern
@@ -752,7 +752,7 @@ class EventService:
                 EventRSVP.status,
                 func.count(EventRSVP.id),
                 func.sum(EventRSVP.guest_count),
-                func.count(EventRSVP.id).filter(EventRSVP.checked_in == True)
+                func.sum(case((EventRSVP.checked_in == True, 1), else_=0))
             )
             .where(EventRSVP.event_id == str(event_id))
             .group_by(EventRSVP.status)
