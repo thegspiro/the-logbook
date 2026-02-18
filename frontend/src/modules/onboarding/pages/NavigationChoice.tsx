@@ -159,10 +159,10 @@ const NavigationChoice: React.FC = () => {
                     {/* Header bar */}
                     <div className="bg-theme-surface rounded h-8 flex items-center px-2 space-x-1">
                       <div className="bg-red-500 rounded h-4 w-12"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
-                      <div className="bg-slate-600 rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-16"></div>
                     </div>
                     {/* Content area */}
                     <div className="bg-theme-surface rounded h-32"></div>
@@ -250,13 +250,13 @@ const NavigationChoice: React.FC = () => {
                     {/* Sidebar */}
                     <div className="bg-theme-surface rounded w-16 flex flex-col space-y-1 p-1">
                       <div className="bg-red-500 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
-                      <div className="bg-slate-600 rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
+                      <div className="bg-theme-surface-border rounded h-4 w-full"></div>
                     </div>
                     {/* Content area */}
-                    <div className="bg-slate-700 rounded flex-1 h-32"></div>
+                    <div className="bg-theme-surface rounded flex-1 h-32"></div>
                   </div>
                   <p className="text-xs text-theme-text-muted mt-3 text-center">
                     Vertical sidebar menu

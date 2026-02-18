@@ -71,7 +71,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-slate-300">Loading monitoring dashboard...</div>
+        <div className="text-theme-text-secondary">Loading monitoring dashboard...</div>
       </div>
     );
   }
@@ -95,7 +95,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
   if (!stats) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <p className="text-slate-300">No monitoring data available</p>
+        <p className="text-theme-text-secondary">No monitoring data available</p>
         <Link
           to={`/events/${eventId}`}
           className="text-blue-600 hover:text-blue-800 mt-4 inline-block"
@@ -118,11 +118,11 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </Link>
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-white">Check-In Monitoring</h1>
-            <p className="text-xl text-slate-300 mt-1">{stats.event_name}</p>
+            <h1 className="text-3xl font-bold text-theme-text-primary">Check-In Monitoring</h1>
+            <p className="text-xl text-theme-text-secondary mt-1">{stats.event_name}</p>
           </div>
           <div className="text-right">
-            <div className="text-sm text-slate-400">
+            <div className="text-sm text-theme-text-muted">
               Last updated: {formatTime(lastUpdated, tz)}
             </div>
             <div className="mt-1">
@@ -132,7 +132,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
                   Check-In Active
                 </span>
               ) : (
-                <span className="inline-flex items-center px-3 py-1 bg-white/10 text-slate-300 rounded-full text-sm font-medium">
+                <span className="inline-flex items-center px-3 py-1 bg-theme-surface text-theme-text-secondary rounded-full text-sm font-medium">
                   Check-In Inactive
                 </span>
               )}
@@ -144,18 +144,18 @@ const EventCheckInMonitoringPage: React.FC = () => {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {/* Total Checked In */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
-          <div className="text-slate-400 text-sm font-medium mb-1">Checked In</div>
-          <div className="text-3xl font-bold text-white">{stats.total_checked_in}</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-theme-text-muted text-sm font-medium mb-1">Checked In</div>
+          <div className="text-3xl font-bold text-theme-text-primary">{stats.total_checked_in}</div>
           <div className="text-sm text-slate-300 mt-1">
             of {stats.total_eligible_members} members
           </div>
         </div>
 
         {/* Check-In Rate */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
-          <div className="text-slate-400 text-sm font-medium mb-1">Check-In Rate</div>
-          <div className="text-3xl font-bold text-white">{stats.check_in_rate}%</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-theme-text-muted text-sm font-medium mb-1">Check-In Rate</div>
+          <div className="text-3xl font-bold text-theme-text-primary">{stats.check_in_rate}%</div>
           <div className="mt-2">
             <div className="w-full bg-white/10 rounded-full h-2">
               <div
@@ -167,18 +167,18 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
 
         {/* Total RSVPs */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
-          <div className="text-slate-400 text-sm font-medium mb-1">Total RSVPs</div>
-          <div className="text-3xl font-bold text-white">{stats.total_rsvps}</div>
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-theme-text-muted text-sm font-medium mb-1">Total RSVPs</div>
+          <div className="text-3xl font-bold text-theme-text-primary">{stats.total_rsvps}</div>
           <div className="text-sm text-slate-300 mt-1">
             {stats.total_checked_in} checked in
           </div>
         </div>
 
         {/* Average Check-In Time */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
-          <div className="text-slate-400 text-sm font-medium mb-1">Avg Check-In Time</div>
-          <div className="text-3xl font-bold text-white">
+        <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
+          <div className="text-theme-text-muted text-sm font-medium mb-1">Avg Check-In Time</div>
+          <div className="text-3xl font-bold text-theme-text-primary">
             {stats.avg_check_in_time_minutes !== null
               ? `${Math.round(stats.avg_check_in_time_minutes)}m`
               : 'N/A'}
@@ -188,7 +188,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Event Info */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Event Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -210,7 +210,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Recent Check-Ins */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6">
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-white">Recent Check-Ins</h2>
           {stats.last_check_in_at && (

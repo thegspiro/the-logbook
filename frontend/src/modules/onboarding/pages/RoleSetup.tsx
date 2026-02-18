@@ -919,7 +919,7 @@ const RoleSetup: React.FC = () => {
                   placeholder="e.g., Social Media Manager"
                   required
                   aria-required="true"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
@@ -933,7 +933,7 @@ const RoleSetup: React.FC = () => {
                   value={customRoleDescription}
                   onChange={(e) => setCustomRoleDescription(e.target.value)}
                   placeholder="Brief description of this role"
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
