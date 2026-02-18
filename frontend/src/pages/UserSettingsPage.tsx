@@ -214,12 +214,12 @@ export const UserSettingsPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">User Settings</h1>
-        <p className="text-slate-500 dark:text-slate-300">Manage your account settings and preferences</p>
+        <h1 className="text-3xl font-bold text-theme-text-primary mb-2">User Settings</h1>
+        <p className="text-theme-text-secondary">Manage your account settings and preferences</p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200 dark:border-white/10 mb-6">
+      <div className="border-b border-theme-surface-border mb-6">
         <nav className="flex space-x-6" aria-label="Settings tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -229,8 +229,8 @@ export const UserSettingsPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center space-x-2 pb-4 px-1 border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                   activeTab === tab.id
-                    ? 'border-red-500 text-slate-900 dark:text-white'
-                    : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    ? 'border-red-500 text-theme-text-primary'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
                 }`}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
               >
@@ -243,57 +243,57 @@ export const UserSettingsPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white dark:bg-white/10 backdrop-blur-sm border border-slate-200 dark:border-white/20 rounded-lg p-6">
+      <div className="bg-theme-surface backdrop-blur-sm border border-theme-surface-border rounded-lg p-6">
         {/* Account Tab */}
         {activeTab === 'account' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Account Information</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Account Information</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Update your personal details and contact information
               </p>
             </div>
 
             {loadingProfile ? (
               <div className="flex justify-center items-center h-32">
-                <div className="text-slate-400">Loading profile...</div>
+                <div className="text-theme-text-muted">Loading profile...</div>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* Personal Information */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Personal Information</h3>
+                  <h3 className="text-sm font-medium text-theme-text-secondary mb-3 uppercase tracking-wider">Personal Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">First Name</label>
+                      <label htmlFor="firstName" className="block text-sm font-medium text-theme-text-secondary mb-1">First Name</label>
                       <input
                         id="firstName"
                         type="text"
                         value={profileForm.first_name || ''}
                         onChange={(e) => handleProfileChange('first_name', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
                     <div>
-                      <label htmlFor="middleName" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Middle Name</label>
+                      <label htmlFor="middleName" className="block text-sm font-medium text-theme-text-secondary mb-1">Middle Name</label>
                       <input
                         id="middleName"
                         type="text"
                         value={profileForm.middle_name || ''}
                         onChange={(e) => handleProfileChange('middle_name', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
                     <div>
-                      <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Last Name</label>
+                      <label htmlFor="lastName" className="block text-sm font-medium text-theme-text-secondary mb-1">Last Name</label>
                       <input
                         id="lastName"
                         type="text"
                         value={profileForm.last_name || ''}
                         onChange={(e) => handleProfileChange('last_name', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -302,27 +302,27 @@ export const UserSettingsPage: React.FC = () => {
 
                 {/* Contact Information */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Contact Information</h3>
+                  <h3 className="text-sm font-medium text-theme-text-secondary mb-3 uppercase tracking-wider">Contact Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="phone" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Phone</label>
+                      <label htmlFor="phone" className="block text-sm font-medium text-theme-text-secondary mb-1">Phone</label>
                       <input
                         id="phone"
                         type="tel"
                         value={profileForm.phone || ''}
                         onChange={(e) => handleProfileChange('phone', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
                     <div>
-                      <label htmlFor="mobile" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Mobile</label>
+                      <label htmlFor="mobile" className="block text-sm font-medium text-theme-text-secondary mb-1">Mobile</label>
                       <input
                         id="mobile"
                         type="tel"
                         value={profileForm.mobile || ''}
                         onChange={(e) => handleProfileChange('mobile', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -331,38 +331,38 @@ export const UserSettingsPage: React.FC = () => {
 
                 {/* Department Information */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Department Information</h3>
+                  <h3 className="text-sm font-medium text-theme-text-secondary mb-3 uppercase tracking-wider">Department Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label htmlFor="badgeNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Badge Number</label>
+                      <label htmlFor="badgeNumber" className="block text-sm font-medium text-theme-text-secondary mb-1">Badge Number</label>
                       <input
                         id="badgeNumber"
                         type="text"
                         value={profileForm.badge_number || ''}
                         onChange={(e) => handleProfileChange('badge_number', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
                     <div>
-                      <label htmlFor="rank" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Rank</label>
+                      <label htmlFor="rank" className="block text-sm font-medium text-theme-text-secondary mb-1">Rank</label>
                       <input
                         id="rank"
                         type="text"
                         value={profileForm.rank || ''}
                         onChange={(e) => handleProfileChange('rank', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
                     <div>
-                      <label htmlFor="station" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Station</label>
+                      <label htmlFor="station" className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
                       <input
                         id="station"
                         type="text"
                         value={profileForm.station || ''}
                         onChange={(e) => handleProfileChange('station', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
@@ -371,50 +371,50 @@ export const UserSettingsPage: React.FC = () => {
 
                 {/* Address */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Address</h3>
+                  <h3 className="text-sm font-medium text-theme-text-secondary mb-3 uppercase tracking-wider">Address</h3>
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="addressStreet" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Street Address</label>
+                      <label htmlFor="addressStreet" className="block text-sm font-medium text-theme-text-secondary mb-1">Street Address</label>
                       <input
                         id="addressStreet"
                         type="text"
                         value={profileForm.address_street || ''}
                         onChange={(e) => handleProfileChange('address_street', e.target.value)}
-                        className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                        className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                         disabled={savingProfile}
                       />
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div className="col-span-2 sm:col-span-1">
-                        <label htmlFor="addressCity" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">City</label>
+                        <label htmlFor="addressCity" className="block text-sm font-medium text-theme-text-secondary mb-1">City</label>
                         <input
                           id="addressCity"
                           type="text"
                           value={profileForm.address_city || ''}
                           onChange={(e) => handleProfileChange('address_city', e.target.value)}
-                          className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                           disabled={savingProfile}
                         />
                       </div>
                       <div>
-                        <label htmlFor="addressState" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">State</label>
+                        <label htmlFor="addressState" className="block text-sm font-medium text-theme-text-secondary mb-1">State</label>
                         <input
                           id="addressState"
                           type="text"
                           value={profileForm.address_state || ''}
                           onChange={(e) => handleProfileChange('address_state', e.target.value)}
-                          className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                           disabled={savingProfile}
                         />
                       </div>
                       <div>
-                        <label htmlFor="addressZip" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">ZIP Code</label>
+                        <label htmlFor="addressZip" className="block text-sm font-medium text-theme-text-secondary mb-1">ZIP Code</label>
                         <input
                           id="addressZip"
                           type="text"
                           value={profileForm.address_zip || ''}
                           onChange={(e) => handleProfileChange('address_zip', e.target.value)}
-                          className="block w-full px-3 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                          className="block w-full px-3 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                           disabled={savingProfile}
                         />
                       </div>

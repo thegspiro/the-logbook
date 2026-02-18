@@ -141,7 +141,7 @@ export const ApparatusDetailPage: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-slate-300">Loading apparatus...</p>
+          <p className="text-theme-text-secondary">Loading apparatus...</p>
         </div>
       </div>
     );
@@ -151,9 +151,9 @@ export const ApparatusDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <Truck className="w-16 h-16 text-slate-500 mx-auto mb-4" />
-          <h2 className="text-white text-xl font-bold mb-2">Apparatus Not Found</h2>
-          <p className="text-slate-400 mb-6">The apparatus you're looking for doesn't exist.</p>
+          <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+          <h2 className="text-theme-text-primary text-xl font-bold mb-2">Apparatus Not Found</h2>
+          <p className="text-theme-text-muted mb-6">The apparatus you're looking for doesn't exist.</p>
           <button
             onClick={() => navigate('/apparatus')}
             className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
@@ -180,13 +180,13 @@ export const ApparatusDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900">
       {/* Header */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+      <header className="bg-theme-surface-secondary backdrop-blur-sm border-b border-theme-surface-border px-6 py-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/apparatus')}
-                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+                className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -195,15 +195,15 @@ export const ApparatusDetailPage: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-white text-xl font-bold">{currentApparatus.unitNumber}</h1>
+                  <h1 className="text-theme-text-primary text-xl font-bold">{currentApparatus.unitNumber}</h1>
                   {status && <StatusBadge status={status} />}
                   {currentApparatus.isArchived && (
-                    <span className="px-2 py-1 bg-slate-500/20 text-slate-400 text-xs rounded border border-slate-500/30">
+                    <span className="px-2 py-1 bg-slate-500/20 text-theme-text-muted text-xs rounded border border-slate-500/30">
                       ARCHIVED
                     </span>
                   )}
                 </div>
-                <p className="text-slate-400 text-sm">
+                <p className="text-theme-text-muted text-sm">
                   {currentApparatus.name && `${currentApparatus.name} • `}
                   {currentApparatus.year} {currentApparatus.make} {currentApparatus.model}
                 </p>

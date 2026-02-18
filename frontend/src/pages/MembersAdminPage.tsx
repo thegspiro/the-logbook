@@ -299,7 +299,7 @@ export const MembersAdminPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400" role="status" aria-live="polite">Loading...</div>
+            <div className="text-theme-text-muted" role="status" aria-live="polite">Loading...</div>
           </div>
         </div>
       </div>
@@ -327,8 +327,8 @@ export const MembersAdminPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-white">Members Administration</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Members Administration</h2>
+          <p className="mt-1 text-sm text-theme-text-muted">
             Manage member roles, permissions, and contact information
           </p>
         </div>
@@ -370,7 +370,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-member'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Member
@@ -381,7 +381,7 @@ export const MembersAdminPage: React.FC = () => {
             className={`px-4 py-2 text-sm font-medium border ${
               viewMode === 'by-role'
                 ? 'bg-blue-600 text-white border-blue-600 z-10'
-                : 'bg-white/10 text-slate-300 border-white/30 hover:bg-white/5'
+                : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-blue-500`}
           >
             View by Role
@@ -391,52 +391,52 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* View by Member */}
       {viewMode === 'by-member' && (
-        <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-white/10" aria-label="Members and their roles">
-            <thead className="bg-slate-900/50">
+        <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+          <table className="min-w-full divide-y divide-theme-surface-border" aria-label="Members and their roles">
+            <thead className="bg-theme-surface-secondary">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Member
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Badge
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Roles
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Status
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-theme-surface-border">
               {users.map((user) => (
-                <tr key={user.id} className="hover:bg-white/5">
+                <tr key={user.id} className="hover:bg-theme-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-slate-300 font-medium">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-theme-surface flex items-center justify-center">
+                        <span className="text-theme-text-secondary font-medium">
                           {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                         </span>
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-theme-text-primary">
                           {user.full_name || user.username}
                         </div>
-                        <div className="text-sm text-slate-400">@{user.username}</div>
+                        <div className="text-sm text-theme-text-muted">@{user.username}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {user.badge_number || '-'}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length === 0 ? (
-                        <span className="text-sm text-slate-500">No roles</span>
+                        <span className="text-sm text-theme-text-muted">No roles</span>
                       ) : (
                         user.roles.map((role) => (
                           <span
@@ -444,7 +444,7 @@ export const MembersAdminPage: React.FC = () => {
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               role.is_system
                                 ? 'bg-blue-100 text-blue-800'
-                                : 'bg-white/10 text-slate-200'
+                                : 'bg-theme-surface text-theme-text-secondary'
                             }`}
                           >
                             {role.name}
@@ -503,8 +503,8 @@ export const MembersAdminPage: React.FC = () => {
             );
 
             return (
-              <div key={role.id} className="bg-white/10 backdrop-blur-sm shadow sm:rounded-lg">
-                <div className="px-6 py-4 border-b border-white/20">
+              <div key={role.id} className="bg-theme-surface backdrop-blur-sm shadow sm:rounded-lg">
+                <div className="px-6 py-4 border-b border-theme-surface-border">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3">

@@ -176,18 +176,18 @@ const SectionHeader: React.FC<{
   <button
     type="button"
     onClick={onToggle}
-    className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800/70 rounded-lg transition-colors"
+    className="w-full flex items-center justify-between p-4 bg-theme-surface hover:bg-theme-surface-hover rounded-lg transition-colors"
   >
     <div className="flex items-center gap-3">
       <span className="text-red-400">{icon}</span>
-      <span className="text-white font-semibold">{title}</span>
+      <span className="text-theme-text-primary font-semibold">{title}</span>
       {required && !isComplete && <span className="text-red-400 text-sm">*</span>}
       {isComplete && <Check className="w-5 h-5 text-green-400 ml-2" />}
     </div>
     {expanded ? (
-      <ChevronUp className="w-5 h-5 text-slate-400" />
+      <ChevronUp className="w-5 h-5 text-theme-text-muted" />
     ) : (
-      <ChevronDown className="w-5 h-5 text-slate-400" />
+      <ChevronDown className="w-5 h-5 text-theme-text-muted" />
     )}
   </button>
 );
@@ -219,7 +219,7 @@ const InputField: React.FC<{
   onBlur,
 }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
       {label} {required && <span className="text-red-400">*</span>}
     </label>
     <input
@@ -230,13 +230,13 @@ const InputField: React.FC<{
       onBlur={onBlur}
       placeholder={placeholder}
       maxLength={maxLength}
-      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-slate-600'
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+        error ? 'border-red-500' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
     />
-    {helpText && <p className="mt-1 text-xs text-slate-400">{helpText}</p>}
+    {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
     {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
   </div>
 );
@@ -253,7 +253,7 @@ const SelectField: React.FC<{
   error?: string;
 }> = ({ label, id, value, onChange, options, required, helpText, error }) => (
   <div>
-    <label htmlFor={id} className="block text-sm font-medium text-slate-200 mb-1">
+    <label htmlFor={id} className="block text-sm font-medium text-theme-text-secondary mb-1">
       {label} {required && <span className="text-red-400">*</span>}
     </label>
     <select
@@ -272,7 +272,7 @@ const SelectField: React.FC<{
         </option>
       ))}
     </select>
-    {helpText && <p className="mt-1 text-xs text-slate-400">{helpText}</p>}
+    {helpText && <p className="mt-1 text-xs text-theme-text-muted">{helpText}</p>}
     {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
   </div>
 );

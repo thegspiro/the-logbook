@@ -251,7 +251,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       />
 
       {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-slate-900 border-l border-white/10 z-50 flex flex-col shadow-2xl">
+      <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-theme-bg border-l border-theme-surface-border z-50 flex flex-col shadow-2xl">
         {/* Loading */}
         {isLoadingApplicant && (
           <div className="flex-1 flex items-center justify-center">
@@ -262,16 +262,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
         {applicant && !isLoadingApplicant && (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
+            <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-white">
                   {getInitials(applicant.first_name, applicant.last_name)}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">
+                  <h2 className="text-lg font-bold text-theme-text-primary">
                     {applicant.first_name} {applicant.last_name}
                   </h2>
-                  <p className="text-sm text-slate-400 capitalize">
+                  <p className="text-sm text-theme-text-muted capitalize">
                     {applicant.status.replace('_', ' ')} &middot;{' '}
                     {applicant.target_membership_type} member
                   </p>
@@ -280,14 +280,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowPii(!showPii)}
-                  className="text-slate-400 hover:text-white transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                   title={showPii ? 'Hide personal info' : 'Show personal info'}
                 >
                   {showPii ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
                 <button
                   onClick={onClose}
-                  className="text-slate-400 hover:text-white transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -301,7 +301,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
                   <span className="text-sm font-medium text-amber-300">Application Inactive</span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-theme-text-muted">
                   This application was marked inactive due to no activity
                   {applicant.deactivated_at && (
                     <> since {formatDate(applicant.deactivated_at, tz)}</>
@@ -309,7 +309,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   A coordinator can reactivate it, or the individual may resubmit an interest form.
                 </p>
                 {applicant.reactivated_at && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-theme-text-muted mt-1">
                     Previously reactivated on {formatDate(applicant.reactivated_at, tz)}
                   </p>
                 )}

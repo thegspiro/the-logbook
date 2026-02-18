@@ -249,7 +249,7 @@ export const MemberProfilePage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400">Loading...</div>
+            <div className="text-theme-text-muted">Loading...</div>
           </div>
         </div>
       </div>
@@ -288,12 +288,12 @@ export const MemberProfilePage: React.FC = () => {
       <div className="mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-sm text-slate-400 hover:text-slate-200 mb-4 flex items-center gap-1"
+          className="text-sm text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1"
         >
           &larr; Back
         </button>
 
-        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
               <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -302,12 +302,12 @@ export const MemberProfilePage: React.FC = () => {
                 </span>
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white">
+                <h1 className="text-3xl font-bold text-theme-text-primary">
                   {user.full_name || user.username}
                 </h1>
-                <p className="text-slate-400 mt-1">@{user.username}</p>
+                <p className="text-theme-text-muted mt-1">@{user.username}</p>
                 {user.badge_number && (
-                  <p className="text-sm text-slate-300 mt-1">Badge #{user.badge_number}</p>
+                  <p className="text-sm text-theme-text-secondary mt-1">Badge #{user.badge_number}</p>
                 )}
                 <div className="flex gap-2 mt-2">
                   {user.roles.map((role) => (
@@ -342,9 +342,9 @@ export const MemberProfilePage: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           {/* Training & Certifications */}
           {trainingEnabled && (
-            <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-theme-text-primary">
                   Training & Certifications
                 </h2>
                 <Link
@@ -356,12 +356,12 @@ export const MemberProfilePage: React.FC = () => {
               </div>
               {trainingsLoading ? (
                 <div className="flex items-center justify-center h-24">
-                  <div className="text-sm text-slate-400">Loading training records...</div>
+                  <div className="text-sm text-theme-text-muted">Loading training records...</div>
                 </div>
               ) : trainings.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-sm text-slate-400">No training records found.</p>
-                  <p className="text-xs text-slate-500 mt-1">Training records will appear here as they are completed.</p>
+                  <p className="text-sm text-theme-text-muted">No training records found.</p>
+                  <p className="text-xs text-theme-text-muted mt-1">Training records will appear here as they are completed.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -369,13 +369,13 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.slice(0, 5).map((training) => (
                     <div
                       key={training.id}
-                      className="border border-white/20 rounded-lg p-4 hover:border-slate-500 transition-colors"
+                      className="border border-theme-surface-border rounded-lg p-4 hover:border-theme-surface-border transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="font-medium text-white">{training.course_name}</h3>
+                          <h3 className="font-medium text-theme-text-primary">{training.course_name}</h3>
                           {training.certification_number && (
-                            <p className="text-sm text-slate-300 mt-1">
+                            <p className="text-sm text-theme-text-secondary mt-1">
                               Cert #: {training.certification_number}
                             </p>
                           )}
@@ -430,7 +430,7 @@ export const MemberProfilePage: React.FC = () => {
 
           {/* Assigned Inventory - Only shown if inventory module is enabled */}
           {inventoryModuleEnabled && (
-            <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+            <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Assigned Inventory</h2>
               {inventoryLoading ? (
                 <div className="text-center py-4 text-slate-400">Loading inventory...</div>
@@ -493,7 +493,7 @@ export const MemberProfilePage: React.FC = () => {
         {/* Right Column - Contact & Additional Info */}
         <div className="space-y-6">
           {/* Contact Information */}
-          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white">Contact Information</h2>
               {canEdit && !isEditing && (
@@ -625,7 +625,7 @@ export const MemberProfilePage: React.FC = () => {
           </div>
 
           {/* Employment Info */}
-          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Employment</h2>
             <div className="space-y-3">
               <div>
@@ -642,7 +642,7 @@ export const MemberProfilePage: React.FC = () => {
           </div>
 
           {/* Quick Stats */}
-          <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6">
+          <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Quick Stats</h2>
             <div className="space-y-3">
               {trainingEnabled && (

@@ -137,7 +137,7 @@ export const RoleManagementPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-center items-center h-64">
-            <div className="text-slate-400" role="status" aria-live="polite">Loading...</div>
+            <div className="text-theme-text-muted" role="status" aria-live="polite">Loading...</div>
           </div>
         </div>
       </div>
@@ -149,8 +149,8 @@ export const RoleManagementPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-white">Role Management</h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <h2 className="text-2xl font-bold text-theme-text-primary">Role Management</h2>
+            <p className="mt-1 text-sm text-theme-text-muted">
               Create and manage custom roles and permissions
             </p>
           </div>
@@ -168,35 +168,35 @@ export const RoleManagementPage: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-white/10 backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
+        <div className="bg-theme-surface backdrop-blur-sm shadow overflow-hidden sm:rounded-lg">
           <ul className="divide-y divide-white/10">
             {roles.map((role) => (
               <li key={role.id} className="px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-medium text-white">{role.name}</h3>
+                      <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                       {role.is_system && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           System Role
                         </span>
                       )}
-                      <span className="text-sm text-slate-400">Priority: {role.priority}</span>
+                      <span className="text-sm text-theme-text-muted">Priority: {role.priority}</span>
                     </div>
                     {role.description && (
-                      <p className="mt-1 text-sm text-slate-400">{role.description}</p>
+                      <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-1">
                       {role.permissions.slice(0, 5).map((perm) => (
                         <span
                           key={perm}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/10 text-slate-200"
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-theme-surface text-theme-text-secondary"
                         >
                           {perm.split('.').pop()}
                         </span>
                       ))}
                       {role.permissions.length > 5 && (
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-theme-text-muted">
                           +{role.permissions.length - 5} more
                         </span>
                       )}
@@ -233,9 +233,9 @@ export const RoleManagementPage: React.FC = () => {
             aria-labelledby="role-modal-title"
             onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
           >
-            <div className="bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="px-6 py-4 border-b border-white/20">
-                <h3 id="role-modal-title" className="text-lg font-medium text-white">
+            <div className="bg-theme-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="px-6 py-4 border-b border-theme-surface-border">
+                <h3 id="role-modal-title" className="text-lg font-medium text-theme-text-primary">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
                 </h3>
               </div>
@@ -251,7 +251,7 @@ export const RoleManagementPage: React.FC = () => {
                 )}
 
                 <div>
-                  <label htmlFor="role-name" className="block text-sm font-medium text-slate-200">Role Name</label>
+                  <label htmlFor="role-name" className="block text-sm font-medium text-theme-text-secondary">Role Name</label>
                   <input
                     id="role-name"
                     type="text"
@@ -260,7 +260,7 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system}
                     required
                     aria-required="true"
-                    className="mt-1 block w-full rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-slate-700"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-slate-700"
                   />
                 </div>
 

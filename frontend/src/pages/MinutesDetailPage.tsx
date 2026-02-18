@@ -624,7 +624,7 @@ export const MinutesDetailPage: React.FC = () => {
                 value={newSectionTitle}
                 onChange={(e) => setNewSectionTitle(e.target.value)}
                 placeholder="e.g., Fire Prevention Report"
-                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
             </div>
             <button
@@ -636,7 +636,7 @@ export const MinutesDetailPage: React.FC = () => {
             </button>
             <button
               onClick={() => { setShowAddSection(false); setNewSectionTitle(''); }}
-              className="px-4 py-2 border border-white/30 text-sm text-slate-300 rounded-md hover:bg-white/5"
+              className="px-4 py-2 border border-theme-surface-border text-sm text-theme-text-secondary rounded-md hover:bg-theme-surface-hover"
             >
               Cancel
             </button>
@@ -717,7 +717,7 @@ export const MinutesDetailPage: React.FC = () => {
                         rows={6}
                         value={sectionValue}
                         onChange={(e) => setSectionValue(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                         aria-label={`${section.title} content`}
                       />
                       <div className="mt-2 flex gap-2">
@@ -730,7 +730,7 @@ export const MinutesDetailPage: React.FC = () => {
                         </button>
                         <button
                           onClick={() => setEditingSection(null)}
-                          className="px-3 py-1.5 text-sm border border-white/30 text-slate-300 rounded-md hover:bg-white/5"
+                          className="px-3 py-1.5 text-sm border border-theme-surface-border text-theme-text-secondary rounded-md hover:bg-theme-surface-hover"
                         >
                           Cancel
                         </button>
@@ -781,7 +781,7 @@ export const MinutesDetailPage: React.FC = () => {
               onChange={(e) => setMotionForm({ ...motionForm, motion_text: e.target.value })}
               placeholder="Motion text..."
               aria-label="Motion text"
-              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -793,7 +793,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
                   placeholder="Moved by"
                   aria-label="Moved by"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -805,7 +805,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
                   placeholder="Seconded by"
                   aria-label="Seconded by"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -815,7 +815,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={motionForm.status}
                   onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as MotionStatus })}
                   aria-label="Motion status"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <option value="passed">Passed</option>
                   <option value="failed">Failed</option>
@@ -835,7 +835,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Votes for"
                   aria-label="Votes for"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -848,7 +848,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_against: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Votes against"
                   aria-label="Votes against"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -861,7 +861,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setMotionForm({ ...motionForm, votes_abstain: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="Abstentions"
                   aria-label="Abstentions"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
             </div>
@@ -940,7 +940,7 @@ export const MinutesDetailPage: React.FC = () => {
               onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
               placeholder="Action item description..."
               aria-label="Action item description"
-              className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -952,7 +952,7 @@ export const MinutesDetailPage: React.FC = () => {
                   onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
                   placeholder="Assignee name"
                   aria-label="Assignee name"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -963,7 +963,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={actionForm.due_date || ''}
                   onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
                   aria-label="Due date"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
               <div>
@@ -973,7 +973,7 @@ export const MinutesDetailPage: React.FC = () => {
                   value={actionForm.priority}
                   onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
                   aria-label="Priority"
-                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -1024,7 +1024,7 @@ export const MinutesDetailPage: React.FC = () => {
                         value={item.status}
                         onChange={(e) => handleUpdateActionItemStatus(item.id, e.target.value)}
                         aria-label={`Update status for: ${item.description.substring(0, 30)}`}
-                        className="text-xs bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                        className="text-xs bg-theme-input-bg border border-theme-input-border rounded px-2 py-1 text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-cyan-500"
                       >
                         <option value="pending">Pending</option>
                         <option value="in_progress">In Progress</option>
@@ -1126,7 +1126,7 @@ export const MinutesDetailPage: React.FC = () => {
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Describe what needs to be corrected..."
-                className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <div className="mt-4 flex justify-end gap-3">
                 <button
