@@ -773,12 +773,12 @@ const OnboardingCheck: React.FC = () => {
                   • The wait time is longest on the very first startup
                 </p>
               </div>
-              <div className="pt-2 border-t border-slate-700">
+              <div className="pt-2 border-t border-theme-surface-border">
                 <h4 className="text-theme-text-secondary font-semibold mb-1">🔧 Troubleshooting</h4>
                 <p className="text-theme-text-muted text-xs mb-2">
                   If startup is taking too long, check the logs:
                 </p>
-                <code className="block bg-slate-900/50 text-green-400 text-xs p-2 rounded font-mono">
+                <code className="block bg-theme-surface-secondary text-green-400 text-xs p-2 rounded font-mono">
                   docker compose logs backend
                 </code>
               </div>
@@ -804,7 +804,7 @@ const OnboardingCheck: React.FC = () => {
         {/* Help text */}
         <div className="mt-4 text-center">
           <p className="text-theme-text-muted text-xs">
-            If services don't connect, check your Docker logs with: <code className="text-slate-400">docker compose logs</code>
+            If services don't connect, check your Docker logs with: <code className="text-theme-text-muted">docker compose logs</code>
           </p>
         </div>
       </div>

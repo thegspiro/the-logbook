@@ -563,11 +563,11 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       {/* Date Range Picker */}
-      <div className="mb-6 bg-white/5 border border-white/10 rounded-lg p-4">
+      <div className="mb-6 bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
         <div className="flex items-center space-x-2 mb-3">
-          <CalendarIcon className="w-4 h-4 text-slate-400" aria-hidden="true" />
-          <span className="text-sm font-medium text-slate-300">Reporting Period</span>
-          <span className="text-xs text-slate-500">(applies to date-based reports)</span>
+          <CalendarIcon className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+          <span className="text-sm font-medium text-theme-text-secondary">Reporting Period</span>
+          <span className="text-xs text-theme-text-muted">(applies to date-based reports)</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -583,7 +583,7 @@ export const ReportsPage: React.FC = () => {
               className={`px-3 py-1.5 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                 datePreset === preset.id
                   ? 'bg-red-600 text-white'
-                  : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
               {preset.label}
@@ -598,7 +598,7 @@ export const ReportsPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
             <span className="text-slate-500 text-sm">to</span>
             <input
@@ -608,7 +608,7 @@ export const ReportsPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setDatePreset('custom');
               }}
-              className="bg-slate-700 border border-white/20 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
