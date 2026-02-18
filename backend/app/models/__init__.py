@@ -76,6 +76,10 @@ from app.models.notification import (
     NotificationTrigger,
     NotificationCategory,
     NotificationChannel,
+    DepartmentMessage,
+    DepartmentMessageRead,
+    MessagePriority,
+    MessageTargetType,
 )
 
 from app.models.integration import (
@@ -283,6 +287,11 @@ __all__ = [
     "NotificationTrigger",
     "NotificationCategory",
     "NotificationChannel",
+    # Department message models
+    "DepartmentMessage",
+    "DepartmentMessageRead",
+    "MessagePriority",
+    "MessageTargetType",
     # Integration models
     "Integration",
     # Analytics models

@@ -30,6 +30,9 @@ import type {
   NotificationLogRecord,
   NotificationsSummary,
 } from '../services/api';
+import { lazy, Suspense } from 'react';
+
+const DepartmentMessagesAdmin = lazy(() => import('./DepartmentMessagesAdmin'));
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -113,7 +116,7 @@ const NotificationsPage: React.FC = () => {
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'rules' | 'templates' | 'log'>('rules');
+  const [activeTab, setActiveTab] = useState<'messages' | 'rules' | 'templates' | 'log'>('messages');
 
   // Create form states
   const [createName, setCreateName] = useState('');
@@ -283,6 +286,16 @@ const NotificationsPage: React.FC = () => {
         {/* Tabs */}
         <div className="flex space-x-1 mb-6 bg-theme-surface-secondary rounded-lg p-1 w-fit" role="tablist" aria-label="Notification views">
           <button
+            onClick={() => setActiveTab('messages')}
+            role="tab"
+            aria-selected={activeTab === 'messages'}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'messages' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            Department Messages
+          </button>
+          <button
             onClick={() => setActiveTab('rules')}
             role="tab"
             aria-selected={activeTab === 'rules'}
@@ -313,6 +326,12 @@ const NotificationsPage: React.FC = () => {
             Send Log
           </button>
         </div>
+
+        {activeTab === 'messages' && (
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-8 w-8 text-slate-400 animate-spin" /></div>}>
+            <DepartmentMessagesAdmin />
+          </Suspense>
+        )}
 
         {activeTab === 'rules' && (
           <div role="tabpanel">

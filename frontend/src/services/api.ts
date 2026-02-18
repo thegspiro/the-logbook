@@ -4015,3 +4015,113 @@ export const scheduledTasksService = {
     return response.data;
   },
 };
+
+// ============================================
+// Department Messages Service
+// ============================================
+
+export interface DepartmentMessageRecord {
+  id: string;
+  organization_id: string;
+  title: string;
+  body: string;
+  priority: 'normal' | 'important' | 'urgent';
+  target_type: 'all' | 'roles' | 'statuses' | 'members';
+  target_roles?: string[];
+  target_statuses?: string[];
+  target_member_ids?: string[];
+  is_pinned: boolean;
+  is_active: boolean;
+  requires_acknowledgment: boolean;
+  posted_by?: string;
+  expires_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InboxMessage {
+  id: string;
+  title: string;
+  body: string;
+  priority: 'normal' | 'important' | 'urgent';
+  target_type: string;
+  is_pinned: boolean;
+  requires_acknowledgment: boolean;
+  posted_by?: string;
+  author_name?: string;
+  created_at?: string;
+  expires_at?: string;
+  is_read: boolean;
+  read_at?: string;
+  is_acknowledged: boolean;
+  acknowledged_at?: string;
+}
+
+export interface MessageStats {
+  message_id: string;
+  total_reads: number;
+  total_acknowledged: number;
+}
+
+export interface RoleOption {
+  name: string;
+  slug: string;
+}
+
+export const messagesService = {
+  // Admin CRUD
+  async getMessages(params?: { include_inactive?: boolean; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
+    const response = await api.get('/messages', { params });
+    return response.data;
+  },
+  async createMessage(data: {
+    title: string;
+    body: string;
+    priority?: string;
+    target_type?: string;
+    target_roles?: string[];
+    target_statuses?: string[];
+    target_member_ids?: string[];
+    is_pinned?: boolean;
+    requires_acknowledgment?: boolean;
+    expires_at?: string;
+  }): Promise<DepartmentMessageRecord> {
+    const response = await api.post<DepartmentMessageRecord>('/messages', data);
+    return response.data;
+  },
+  async getMessage(messageId: string): Promise<DepartmentMessageRecord> {
+    const response = await api.get<DepartmentMessageRecord>(`/messages/${messageId}`);
+    return response.data;
+  },
+  async updateMessage(messageId: string, data: Record<string, unknown>): Promise<DepartmentMessageRecord> {
+    const response = await api.patch<DepartmentMessageRecord>(`/messages/${messageId}`, data);
+    return response.data;
+  },
+  async deleteMessage(messageId: string): Promise<void> {
+    await api.delete(`/messages/${messageId}`);
+  },
+  async getAvailableRoles(): Promise<RoleOption[]> {
+    const response = await api.get<RoleOption[]>('/messages/roles');
+    return response.data;
+  },
+  async getMessageStats(messageId: string): Promise<MessageStats> {
+    const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
+    return response.data;
+  },
+
+  // Member inbox
+  async getInbox(params?: { include_read?: boolean; skip?: number; limit?: number }): Promise<InboxMessage[]> {
+    const response = await api.get<InboxMessage[]>('/messages/inbox', { params });
+    return response.data;
+  },
+  async getUnreadCount(): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/messages/inbox/unread-count');
+    return response.data;
+  },
+  async markAsRead(messageId: string): Promise<void> {
+    await api.post(`/messages/${messageId}/read`);
+  },
+  async acknowledge(messageId: string): Promise<void> {
+    await api.post(`/messages/${messageId}/acknowledge`);
+  },
+};

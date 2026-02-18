@@ -41,6 +41,7 @@ from app.api.v1.endpoints import (
     member_status,
     email_templates,
     minutes,
+    messages,
     scheduled,
 )
 
@@ -77,6 +78,7 @@ api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minu
 api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
 api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
