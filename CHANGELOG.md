@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Training Admin Dashboard Disconnect (2026-02-18)
+
+#### Compliance Matrix Rewrite
+- **Root cause**: The compliance matrix endpoint used broken matching logic — it tried to match training records to requirements by `course_id` (which doesn't exist on requirements) or exact `course_name == requirement.name` (which never matches for hours-based requirements like "Annual Training Requirement")
+- **Requirement-type-aware matching**: The compliance matrix now evaluates each member × requirement using the correct strategy per requirement type:
+  - **HOURS**: Sums completed training hours matching `training_type` within the frequency date window, compares to `required_hours`
+  - **COURSES**: Checks if all required `course_id`s have completed records
+  - **CERTIFICATION**: Matches by `training_type`, name substring, or certification number
+  - **SHIFTS/CALLS**: Counts matching records within the date window
+  - **Others**: Falls back to `training_type` or name-based matching
+- **Frequency-aware date windows**: All compliance evaluations now use proper date windows (annual, biannual, quarterly, monthly, one-time) instead of ignoring the requirement's frequency
+- **Active-only filtering**: The compliance matrix now only shows active requirements (previously showed all, including inactive ones)
+
+#### Competency Matrix (Heat Map) Fix
+- **Same fixes applied**: The competency matrix service (`CompetencyMatrixService`) now uses the same frequency-aware, type-aware evaluation logic
+- **Hours requirements properly evaluated**: Previously just checked for any matching record; now sums hours and compares to `required_hours`
+
+#### Training Service Consistency
+- **`check_requirement_progress()` fixed**: Now uses proper frequency-aware date windows for biannual, quarterly, monthly, and one-time requirements (previously fell back to `start_date`/`due_date` which may not be set)
+
+#### Officer Dashboard Compliance
+- **Improved compliance calculation**: The Training Officer Dashboard now calculates member compliance based on actual requirement completion (hours against requirements) rather than only checking for expired certifications
+
 ### Fixed - My Training Page & Build Errors (2026-02-18)
 
 #### My Training Page Cleanup

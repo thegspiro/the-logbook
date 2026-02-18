@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-18 (includes My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-18 (includes Training Admin compliance matrix fix — rewrote requirement matching to use type-aware evaluation with frequency-based date windows; My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -3043,6 +3043,24 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 1. **No shifts logged this month**: Hours are calculated from shift attendance records for the current month.
 2. **Scheduling permissions**: The `/scheduling/summary` endpoint requires `scheduling.view` permission.
 3. **Detailed hour breakdown**: Training and administrative hours require shift completion reports to be filed. The standby hours come from the scheduling summary.
+
+### Training Admin Compliance Matrix Not Showing Requirement Completion (Fixed 2026-02-18)
+
+**Symptom**: Members have completed training (hours logged, training records exist), but the Compliance Matrix and Training Officer Dashboard show them as "not started" or 0% compliant.
+
+**Root Cause**: The compliance matrix endpoint (`/api/v1/training/compliance-matrix`) used broken matching logic:
+1. It tried to match training records to requirements using `course_id` (which doesn't exist on the `TrainingRequirement` model)
+2. It fell back to exact `course_name == requirement.name` matching, which never works for hours-based requirements (e.g., a requirement named "Annual Training" won't match a record for "CPR Refresher")
+3. It didn't filter to active requirements only
+4. It didn't use frequency-based date windows
+
+**Fix Applied**: Rewrote the compliance matrix with requirement-type-aware evaluation:
+- **HOURS** requirements: Sums hours by `training_type` within the frequency date window, compares to `required_hours`
+- **COURSES** requirements: Checks if all required `course_id`s have completed records
+- **CERTIFICATION** requirements: Matches by `training_type`, name substring, or certification number
+- All evaluations use frequency-aware date windows (annual, biannual, quarterly, monthly, one-time)
+
+**Also fixed**: The competency matrix heat map (`/api/v1/training/competency-matrix`), the `check_requirement_progress()` service method, and the Training Officer Dashboard frontend compliance calculation.
 
 ---
 

@@ -263,7 +263,7 @@ async def get_unified_action_items(
     if assigned_to_me:
         query = query.where(MeetingActionItem.assigned_to == current_user.id)
 
-    result = await db.execute(query.order_by(MeetingActionItem.due_date.asc().nullslast()))
+    result = await db.execute(query.order_by(MeetingActionItem.due_date.asc()))
     for item in result.scalars().all():
         items.append(ActionItemSummary(
             id=item.id,
@@ -284,7 +284,7 @@ async def get_unified_action_items(
     if assigned_to_me:
         query2 = query2.where(ActionItem.assignee_id == current_user.id)
 
-    result2 = await db.execute(query2.order_by(ActionItem.due_date.asc().nullslast()))
+    result2 = await db.execute(query2.order_by(ActionItem.due_date.asc()))
     for item in result2.scalars().all():
         items.append(ActionItemSummary(
             id=item.id,
