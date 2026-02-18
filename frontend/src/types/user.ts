@@ -11,7 +11,6 @@ export interface User {
   last_name?: string;
   full_name?: string;
   badge_number?: string;
-  membership_number?: string;
   phone?: string;
   mobile?: string;
   photo_url?: string;
@@ -75,68 +74,4 @@ export interface UserProfileUpdate {
   address_zip?: string;
   address_country?: string;
   emergency_contacts?: EmergencyContact[];
-}
-
-export interface ArchivedMember {
-  user_id: string;
-  name: string;
-  email?: string;
-  badge_number?: string;
-  rank?: string;
-  archived_at?: string;
-  status_change_reason?: string;
-}
-
-export interface OverdueMember {
-  user_id: string;
-  name: string;
-  member_name: string;
-  email?: string;
-  badge_number?: string;
-  drop_date: string;
-  days_since_drop: number;
-  items_outstanding: unknown[];
-  items: Array<{
-    item_id: string;
-    item_name: string;
-    due_date: string;
-    days_overdue: number;
-  }>;
-}
-
-export interface MembershipTierBenefits {
-  voting_rights?: boolean;
-  voting_eligible?: boolean;
-  voting_requires_meeting_attendance?: boolean;
-  voting_min_attendance_pct?: number;
-  voting_attendance_period_months?: number;
-  can_hold_office?: boolean;
-  training_exempt?: boolean;
-  training_exempt_types?: string[];
-  discount_percentage?: number;
-  custom_benefits?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-export interface MembershipTier {
-  id: string;
-  name: string;
-  years_required: number;
-  sort_order: number;
-  benefits: MembershipTierBenefits;
-}
-
-export interface MembershipTierConfig {
-  auto_advance: boolean;
-  tiers: MembershipTier[];
-}
-
-export interface PropertyReturnReport {
-  user_id: string;
-  name: string;
-  member_name: string;
-  item_count: number;
-  total_value: number;
-  html?: string;
-  items: unknown[];
 }

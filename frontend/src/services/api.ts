@@ -266,7 +266,6 @@ export const userService = {
     middle_name?: string;
     last_name: string;
     badge_number?: string;
-    membership_id?: string;
     phone?: string;
     mobile?: string;
     date_of_birth?: string;
@@ -362,11 +361,6 @@ export const organizationService = {
     const response = await this.getEnabledModules();
     return response.enabled_modules.includes(moduleId);
   },
-
-  async previewNextMembershipId(): Promise<{ enabled: boolean; next_id?: string }> {
-    const response = await api.get<{ enabled: boolean; next_id?: string }>('/organization/settings/membership-id/preview');
-    return response.data;
-  },
 };
 
 export const roleService = {
@@ -446,11 +440,6 @@ export const roleService = {
     const response = await api.post<Role>(`/roles/${roleId}/clone`);
     return response.data;
   },
-
-  async getUserPermissions(userId: string): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
-    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(`/users/${userId}/permissions`);
-    return response.data;
-  },
 };
 
 export const authService = {
@@ -526,16 +515,6 @@ export const authService = {
     } catch (_error) {
       return false;
     }
-  },
-
-  getGoogleOAuthUrl(): string {
-    const baseUrl = api.defaults.baseURL || '';
-    return `${baseUrl}/auth/oauth/google`;
-  },
-
-  getMicrosoftOAuthUrl(): string {
-    const baseUrl = api.defaults.baseURL || '';
-    return `${baseUrl}/auth/oauth/microsoft`;
   },
 };
 
@@ -1547,16 +1526,6 @@ export const eventService = {
     const response = await api.post<import('../types/event').Event[]>('/events/recurring', data);
     return response.data;
   },
-
-  // Module Settings
-  async getModuleSettings(): Promise<import('../types/event').EventModuleSettings> {
-    const response = await api.get<import('../types/event').EventModuleSettings>('/events/settings');
-    return response.data;
-  },
-  async updateModuleSettings(data: Partial<import('../types/event').EventModuleSettings>): Promise<import('../types/event').EventModuleSettings> {
-    const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
-    return response.data;
-  },
 };
 
 export interface UserInventoryItem {
@@ -2517,147 +2486,6 @@ export const schedulingService = {
       status: a.assignment_status ?? a.status,
     }));
   },
-
-  // Shift Calls
-  async getShiftCalls(shiftId: string): Promise<Record<string, unknown>[]> {
-    const response = await api.get(`/scheduling/shifts/${shiftId}/calls`);
-    return response.data;
-  },
-  async createCall(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/shifts/${shiftId}/calls`, data);
-    return response.data;
-  },
-  async updateCall(callId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/calls/${callId}`, data);
-    return response.data;
-  },
-  async deleteCall(callId: string): Promise<void> {
-    await api.delete(`/scheduling/calls/${callId}`);
-  },
-
-  // Shift Assignments
-  async getShiftAssignments(shiftId: string): Promise<Record<string, unknown>[]> {
-    const response = await api.get(`/scheduling/shifts/${shiftId}/assignments`);
-    return response.data;
-  },
-  async createAssignment(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/shifts/${shiftId}/assignments`, data);
-    return response.data;
-  },
-  async updateAssignment(assignmentId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/assignments/${assignmentId}`, data);
-    return response.data;
-  },
-  async deleteAssignment(assignmentId: string): Promise<void> {
-    await api.delete(`/scheduling/assignments/${assignmentId}`);
-  },
-  async confirmAssignment(assignmentId: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/assignments/${assignmentId}/confirm`);
-    return response.data;
-  },
-
-  // Swap Requests
-  async getSwapRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/swap-requests', { params });
-    return response.data;
-  },
-  async createSwapRequest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/swap-requests', data);
-    return response.data;
-  },
-  async reviewSwapRequest(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/swap-requests/${requestId}/review`, data);
-    return response.data;
-  },
-  async cancelSwapRequest(requestId: string): Promise<void> {
-    await api.delete(`/scheduling/swap-requests/${requestId}`);
-  },
-
-  // Time Off
-  async getTimeOffRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/time-off', { params });
-    return response.data;
-  },
-  async createTimeOff(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/time-off', data);
-    return response.data;
-  },
-  async reviewTimeOff(requestId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/time-off/${requestId}/review`, data);
-    return response.data;
-  },
-  async cancelTimeOff(requestId: string): Promise<void> {
-    await api.delete(`/scheduling/time-off/${requestId}`);
-  },
-
-  // Shift Attendance
-  async getShiftAttendance(shiftId: string): Promise<ShiftAttendanceRecord[]> {
-    const response = await api.get<ShiftAttendanceRecord[]>(`/scheduling/shifts/${shiftId}/attendance`);
-    return response.data;
-  },
-  async updateAttendance(attendanceId: string, data: Record<string, unknown>): Promise<ShiftAttendanceRecord> {
-    const response = await api.patch<ShiftAttendanceRecord>(`/scheduling/attendance/${attendanceId}`, data);
-    return response.data;
-  },
-  async deleteAttendance(attendanceId: string): Promise<void> {
-    await api.delete(`/scheduling/attendance/${attendanceId}`);
-  },
-
-  // Templates
-  async getTemplates(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/templates', { params });
-    return response.data;
-  },
-  async createTemplate(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/templates', data);
-    return response.data;
-  },
-  async updateTemplate(templateId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/templates/${templateId}`, data);
-    return response.data;
-  },
-  async deleteTemplate(templateId: string): Promise<void> {
-    await api.delete(`/scheduling/templates/${templateId}`);
-  },
-
-  // Patterns
-  async getPatterns(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/patterns', { params });
-    return response.data;
-  },
-  async createPattern(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/scheduling/patterns', data);
-    return response.data;
-  },
-  async updatePattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/scheduling/patterns/${patternId}`, data);
-    return response.data;
-  },
-  async deletePattern(patternId: string): Promise<void> {
-    await api.delete(`/scheduling/patterns/${patternId}`);
-  },
-  async generateShiftsFromPattern(patternId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/scheduling/patterns/${patternId}/generate`, data);
-    return response.data;
-  },
-
-  // Reports
-  async getMemberHoursReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get('/scheduling/reports/member-hours', { params });
-    return response.data;
-  },
-  async getCoverageReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get('/scheduling/reports/coverage', { params });
-    return response.data;
-  },
-  async getCallVolumeReport(params?: Record<string, string>): Promise<Record<string, unknown>> {
-    const response = await api.get('/scheduling/reports/call-volume', { params });
-    return response.data;
-  },
-  async getAvailability(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
-    const response = await api.get('/scheduling/availability', { params });
-    return response.data;
-  },
 };
 
 // ============================================
@@ -3057,16 +2885,6 @@ export const trainingSessionService = {
 
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
     const response = await api.post<{ message: string; approval_id: string }>(`/training/sessions/${sessionId}/finalize`);
-    return response.data;
-  },
-
-  async getApprovalData(token: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/training/sessions/approval/${token}`);
-    return response.data;
-  },
-
-  async submitApproval(token: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/training/sessions/approval/${token}`, data);
     return response.data;
   },
 };
@@ -3487,121 +3305,5 @@ export const facilitiesService = {
   },
   async deleteRoom(roomId: string): Promise<void> {
     await api.delete(`/facilities/rooms/${roomId}`);
-  },
-};
-
-// ============================================
-// Member Status Service
-// ============================================
-
-export const memberStatusService = {
-  async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
-    const response = await api.get('/members/archived');
-    return response.data;
-  },
-
-  async reactivateMember(userId: string, data: { reason: string }): Promise<Record<string, unknown>> {
-    const response = await api.post(`/members/${userId}/reactivate`, data);
-    return response.data;
-  },
-
-  async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
-    const response = await api.get('/members/overdue-property-returns');
-    return response.data;
-  },
-
-  async processPropertyReturnReminders(): Promise<Record<string, unknown>> {
-    const response = await api.post('/members/property-return-reminders');
-    return response.data;
-  },
-
-  async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
-    const response = await api.get(`/members/${userId}/property-return-preview`);
-    return response.data;
-  },
-
-  async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.get('/members/tier-config');
-    return response.data;
-  },
-
-  async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.put('/members/tier-config', config);
-    return response.data;
-  },
-
-  async advanceMembershipTiers(): Promise<Record<string, unknown>> {
-    const response = await api.post('/members/advance-tiers');
-    return response.data;
-  },
-};
-
-// ============================================
-// Prospective Member Service
-// ============================================
-
-export const prospectiveMemberService = {
-  async listPipelines(activeOnly?: boolean): Promise<{ pipelines: Record<string, unknown>[] }> {
-    const params = activeOnly ? { active_only: true } : undefined;
-    const response = await api.get('/prospective-members/pipelines', { params });
-    return response.data;
-  },
-  async createPipeline(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/prospective-members/pipelines', data);
-    return response.data;
-  },
-  async updatePipeline(pipelineId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.patch(`/prospective-members/pipelines/${pipelineId}`, data);
-    return response.data;
-  },
-  async deletePipeline(pipelineId: string): Promise<void> {
-    await api.delete(`/prospective-members/pipelines/${pipelineId}`);
-  },
-  async duplicatePipeline(pipelineId: string, name: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/prospective-members/pipelines/${pipelineId}/duplicate`, { name });
-    return response.data;
-  },
-  async seedTemplates(pipelineId: string): Promise<{ message?: string }> {
-    const response = await api.post<{ message?: string }>(`/prospective-members/pipelines/${pipelineId}/seed-templates`);
-    return response.data;
-  },
-  async listProspects(params?: Record<string, unknown>): Promise<{ prospects: Record<string, unknown>[]; total: number }> {
-    const response = await api.get('/prospective-members/prospects', { params: params as Record<string, string> });
-    return response.data;
-  },
-  async createProspect(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post('/prospective-members/prospects', data);
-    return response.data;
-  },
-  async listElectionPackages(params?: Record<string, unknown>): Promise<{ packages: Record<string, unknown>[]; total: number }> {
-    const response = await api.get('/prospective-members/election-packages', { params: params as Record<string, string> });
-    return response.data;
-  },
-};
-
-// ============================================
-// Scheduled Tasks Service
-// ============================================
-
-export interface ScheduledTask {
-  id: string;
-  name: string;
-  description?: string;
-  frequency: string;
-  recommended_time?: string;
-  last_run_at?: string;
-  next_run_at?: string;
-  is_running: boolean;
-  enabled: boolean;
-}
-
-export const scheduledTasksService = {
-  async listTasks(): Promise<{ tasks: ScheduledTask[] }> {
-    const response = await api.get('/admin/scheduled-tasks');
-    return response.data;
-  },
-  async runTask(taskId: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/admin/scheduled-tasks/${taskId}/run`);
-    return response.data;
   },
 };
