@@ -198,10 +198,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                         : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
                     }`}
                   >
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-theme-text-primary">
                       Administrative
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-theme-text-muted mt-0.5">
                       Non-operational support role
                     </p>
                   </button>
@@ -210,22 +210,22 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
 
               {/* Target Role */}
               {applicant.target_role_name && (
-                <div className="flex items-center gap-2 text-sm bg-slate-700/30 rounded-lg p-3">
-                  <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                  <span className="text-slate-400">Assigned role:</span>
-                  <span className="text-white font-medium">
+                <div className="flex items-center gap-2 text-sm bg-theme-surface-secondary rounded-lg p-3">
+                  <Shield className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                  <span className="text-theme-text-muted">Assigned role:</span>
+                  <span className="text-theme-text-primary font-medium">
                     {applicant.target_role_name}
                   </span>
                 </div>
               )}
 
               {/* Welcome Email */}
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+              <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
                 <input
                   type="checkbox"
                   checked={sendWelcomeEmail}
                   onChange={(e) => setSendWelcomeEmail(e.target.checked)}
-                  className="rounded border-white/20 bg-slate-700 text-red-500 focus:ring-red-500"
+                  className="rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500"
                 />
                 Send welcome email with login credentials
               </label>

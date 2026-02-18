@@ -410,7 +410,7 @@ const AdminUserCreation: React.FC = () => {
                   htmlFor="badgeNumber"
                   className="block text-sm font-medium text-theme-text-secondary mb-2"
                 >
-                  Badge Number <span className="text-slate-500">(Optional)</span>
+                  Badge Number <span className="text-theme-text-muted">(Optional)</span>
                 </label>
                 <input
                   type="text"
@@ -548,7 +548,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.length ? (
                         <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -564,7 +564,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.uppercase ? (
                         <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -580,7 +580,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.lowercase ? (
                         <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -596,7 +596,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.number ? (
                         <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -612,7 +612,7 @@ const AdminUserCreation: React.FC = () => {
                       {passwordStrength.checks.special ? (
                         <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-slate-600 mr-2" />
+                        <XCircle className="w-4 h-4 text-theme-text-muted mr-2" />
                       )}
                       <span
                         className={
@@ -697,7 +697,7 @@ const AdminUserCreation: React.FC = () => {
                 className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
                   isFormValid && !isSaving
                     ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                    : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
                 aria-label="Create IT administrator account and access dashboard"
               >
@@ -715,7 +715,7 @@ const AdminUserCreation: React.FC = () => {
                   <span>Setup Progress</span>
                   <span>Step 10 of 10</span>
                 </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
+                <div className="w-full bg-theme-surface rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-red-600 to-orange-600 h-2 rounded-full transition-all duration-500"
                     style={{ width: '100%' }}
