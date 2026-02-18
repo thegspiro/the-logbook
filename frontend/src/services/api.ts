@@ -3117,6 +3117,7 @@ export interface Location {
   floor?: string;
   room_number?: string;
   capacity?: number;
+  facility_id?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

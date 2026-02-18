@@ -84,6 +84,7 @@ export interface TrainingSessionCreate {
   // Event details
   title: string;
   description?: string;
+  location_id?: string;
   location?: string;
   location_details?: string;
   start_datetime: string;
