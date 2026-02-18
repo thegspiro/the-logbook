@@ -248,3 +248,46 @@ class EventTemplate(Base):
     __table_args__ = (
         Index("ix_event_templates_organization_id", "organization_id"),
     )
+
+
+class EventExternalAttendee(Base):
+    """
+    External (non-member) attendee at an event.
+
+    Used primarily for public outreach events (public education, fundraisers,
+    ceremonies) where community members attend but are not system users.
+    Can be auto-created from public form submissions via Forms → Events integration.
+    """
+    __tablename__ = "event_external_attendees"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    event_id = Column(String(36), ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+
+    # Attendee info
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(50), nullable=True)
+    organization_name = Column(String(255), nullable=True)
+
+    # Check-in tracking
+    checked_in = Column(Boolean, nullable=False, default=False)
+    checked_in_at = Column(DateTime, nullable=True)
+
+    # Source tracking (e.g., "form_submission" with form submission ID)
+    source = Column(String(50), nullable=True)
+    source_id = Column(String(36), nullable=True)
+    notes = Column(Text, nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Relationships
+    event = relationship("Event", foreign_keys=[event_id])
+
+    __table_args__ = (
+        Index("ix_ext_attendees_event_id", "event_id"),
+        Index("ix_ext_attendees_org_id", "organization_id"),
+        Index("ix_ext_attendees_email", "email"),
+    )

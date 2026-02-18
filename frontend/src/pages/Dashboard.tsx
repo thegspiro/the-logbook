@@ -12,6 +12,9 @@ import {
   BookOpen,
   Briefcase,
   Shield,
+  Users,
+  ClipboardList,
+  Activity,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -23,8 +26,10 @@ import {
 import { getProgressBarColor } from '../utils/eventHelpers';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
+import { useAuthStore } from '../stores/authStore';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { NotificationLogRecord, ShiftRecord } from '../services/api';
+import axios from 'axios';
 
 /**
  * Main Dashboard Component
@@ -32,10 +37,27 @@ import type { NotificationLogRecord, ShiftRecord } from '../services/api';
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
+interface AdminSummaryData {
+  active_members: number;
+  inactive_members: number;
+  total_members: number;
+  training_completion_pct: number;
+  upcoming_events_count: number;
+  overdue_action_items: number;
+  open_action_items: number;
+  recent_training_hours: number;
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState('Fire Department');
+
+  // Admin summary (only loaded for users with settings.manage)
+  const isAdmin = checkPermission('settings.manage');
+  const [adminSummary, setAdminSummary] = useState<AdminSummaryData | null>(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(isAdmin);
 
   // Notifications
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>([]);
@@ -72,9 +94,21 @@ const Dashboard: React.FC = () => {
 
     loadNotifications();
     loadUpcomingShifts();
+    if (isAdmin) loadAdminSummary();
     loadHours();
     loadTrainingProgress();
   }, []);
+
+  const loadAdminSummary = async () => {
+    try {
+      const response = await axios.get('/api/v1/dashboard/admin-summary');
+      setAdminSummary(response.data);
+    } catch {
+      // Admin summary is non-critical
+    } finally {
+      setLoadingAdmin(false);
+    }
+  };
 
   const loadNotifications = async () => {
     try {
@@ -177,6 +211,86 @@ const Dashboard: React.FC = () => {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}
           </p>
         </div>
+
+        {/* Admin Department Summary (visible to Chiefs and admins) */}
+        {isAdmin && (
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-theme-text-primary mb-4 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-red-500" />
+              Department Overview
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" role="region" aria-label="Department overview">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Active Members</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.active_members ?? 0}</p>
+                    )}
+                  </div>
+                  <Users className="w-8 h-8 text-blue-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.total_members ?? 0} total</p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Training Compliance</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.training_completion_pct ?? 0}%</p>
+                    )}
+                  </div>
+                  <GraduationCap className="w-8 h-8 text-green-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">{adminSummary?.recent_training_hours ?? 0} hrs last 30 days</p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Upcoming Events</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.upcoming_events_count ?? 0}</p>
+                    )}
+                  </div>
+                  <Calendar className="w-8 h-8 text-purple-400" />
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
+              </div>
+
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/dashboard')}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-secondary text-xs font-medium uppercase">Action Items</p>
+                    {loadingAdmin ? (
+                      <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
+                    ) : (
+                      <p className="text-theme-text-primary text-2xl font-bold mt-1">{adminSummary?.open_action_items ?? 0}</p>
+                    )}
+                  </div>
+                  {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
+                    <AlertTriangle className="w-8 h-8 text-red-400" />
+                  ) : (
+                    <ClipboardList className="w-8 h-8 text-yellow-400" />
+                  )}
+                </div>
+                <p className="text-theme-text-muted text-xs mt-2">
+                  {(adminSummary?.overdue_action_items ?? 0) > 0
+                    ? `${adminSummary?.overdue_action_items} overdue`
+                    : 'All on track'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Hours Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" role="region" aria-label="Hours summary">

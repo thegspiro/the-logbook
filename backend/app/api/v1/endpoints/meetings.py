@@ -360,3 +360,40 @@ async def list_attendance_waivers(
         meeting_id=str(meeting_id),
         organization_id=str(current_user.organization_id),
     )
+
+
+# ============================================
+# Cross-module Bridges
+# ============================================
+
+@router.post("/from-event/{event_id}", status_code=201)
+async def create_meeting_from_event(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    Create a Meeting record from a completed business_meeting Event.
+    Automatically imports attendees from Event check-in data (EventRSVP).
+
+    **Requires permission: meetings.manage**
+    """
+    service = MeetingsService(db)
+    meeting, error = await service.create_from_event(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+    if error:
+        raise HTTPException(
+            status_code=400 if "already exists" in error else 404,
+            detail=error,
+        )
+    return {
+        "id": meeting.id,
+        "title": meeting.title,
+        "meeting_date": meeting.meeting_date.isoformat() if meeting.meeting_date else None,
+        "status": meeting.status.value if hasattr(meeting.status, 'value') else str(meeting.status),
+        "event_id": meeting.event_id,
+        "message": "Meeting created from event with attendees imported from check-in data",
+    }

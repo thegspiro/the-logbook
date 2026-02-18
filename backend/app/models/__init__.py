@@ -138,6 +138,7 @@ from app.models.election import (
 from app.models.event import (
     Event,
     EventRSVP,
+    EventExternalAttendee,
     EventType,
     RSVPStatus,
     CheckInWindowType,
@@ -331,6 +332,7 @@ __all__ = [
     # Event models
     "Event",
     "EventRSVP",
+    "EventExternalAttendee",
     "EventType",
     "RSVPStatus",
     "CheckInWindowType",

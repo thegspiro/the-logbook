@@ -1369,3 +1369,223 @@ async def get_event_folder(
         **{c.key: getattr(folder, c.key) for c in folder.__table__.columns},
         "document_count": folder.document_count,
     }
+
+
+# ============================================
+# External Attendees (for public outreach events)
+# ============================================
+
+from pydantic import BaseModel, EmailStr
+from app.models.event import EventExternalAttendee
+from app.core.utils import generate_uuid
+
+
+class ExternalAttendeeCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    organization_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ExternalAttendeeResponse(BaseModel):
+    id: str
+    event_id: str
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    organization_name: Optional[str] = None
+    checked_in: bool = False
+    checked_in_at: Optional[str] = None
+    source: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+
+@router.get("/{event_id}/external-attendees", response_model=List[ExternalAttendeeResponse])
+async def list_external_attendees(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """List all external (non-member) attendees for an event."""
+    result = await db.execute(
+        select(EventExternalAttendee)
+        .where(
+            EventExternalAttendee.event_id == str(event_id),
+            EventExternalAttendee.organization_id == current_user.organization_id,
+        )
+        .order_by(EventExternalAttendee.name)
+    )
+    attendees = result.scalars().all()
+    return [
+        ExternalAttendeeResponse(
+            id=a.id,
+            event_id=a.event_id,
+            name=a.name,
+            email=a.email,
+            phone=a.phone,
+            organization_name=a.organization_name,
+            checked_in=a.checked_in,
+            checked_in_at=a.checked_in_at.isoformat() if a.checked_in_at else None,
+            source=a.source,
+            notes=a.notes,
+            created_at=a.created_at.isoformat() if a.created_at else "",
+        )
+        for a in attendees
+    ]
+
+
+@router.post("/{event_id}/external-attendees", response_model=ExternalAttendeeResponse, status_code=status.HTTP_201_CREATED)
+async def add_external_attendee(
+    event_id: UUID,
+    data: ExternalAttendeeCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """Add an external (non-member) attendee to an event."""
+    # Verify event exists
+    event = await db.execute(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == current_user.organization_id,
+        )
+    )
+    if not event.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    attendee = EventExternalAttendee(
+        id=generate_uuid(),
+        organization_id=current_user.organization_id,
+        event_id=str(event_id),
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        organization_name=data.organization_name,
+        notes=data.notes,
+        created_by=current_user.id,
+    )
+    db.add(attendee)
+    await db.commit()
+    await db.refresh(attendee)
+
+    return ExternalAttendeeResponse(
+        id=attendee.id,
+        event_id=attendee.event_id,
+        name=attendee.name,
+        email=attendee.email,
+        phone=attendee.phone,
+        organization_name=attendee.organization_name,
+        checked_in=attendee.checked_in,
+        checked_in_at=None,
+        source=attendee.source,
+        notes=attendee.notes,
+        created_at=attendee.created_at.isoformat() if attendee.created_at else "",
+    )
+
+
+@router.patch("/{event_id}/external-attendees/{attendee_id}/check-in")
+async def check_in_external_attendee(
+    event_id: UUID,
+    attendee_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """Check in an external attendee at an event."""
+    result = await db.execute(
+        select(EventExternalAttendee).where(
+            EventExternalAttendee.id == str(attendee_id),
+            EventExternalAttendee.event_id == str(event_id),
+            EventExternalAttendee.organization_id == current_user.organization_id,
+        )
+    )
+    attendee = result.scalar_one_or_none()
+    if not attendee:
+        raise HTTPException(status_code=404, detail="External attendee not found")
+
+    attendee.checked_in = True
+    attendee.checked_in_at = datetime.utcnow()
+    await db.commit()
+    return {"status": "checked_in", "attendee_id": attendee.id}
+
+
+@router.delete("/{event_id}/external-attendees/{attendee_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_external_attendee(
+    event_id: UUID,
+    attendee_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """Remove an external attendee from an event."""
+    result = await db.execute(
+        select(EventExternalAttendee).where(
+            EventExternalAttendee.id == str(attendee_id),
+            EventExternalAttendee.event_id == str(event_id),
+            EventExternalAttendee.organization_id == current_user.organization_id,
+        )
+    )
+    attendee = result.scalar_one_or_none()
+    if not attendee:
+        raise HTTPException(status_code=404, detail="External attendee not found")
+
+    await db.delete(attendee)
+    await db.commit()
+
+
+# ============================================
+# Public Calendar (no auth required)
+# ============================================
+
+class PublicEventItem(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    event_type: str
+    start_datetime: str
+    end_datetime: str
+    location: Optional[str] = None
+    location_details: Optional[str] = None
+
+
+@router.get("/public-calendar", response_model=List[PublicEventItem])
+async def get_public_calendar(
+    organization_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public-facing event calendar. Returns upcoming public events.
+    No authentication required — intended for community-facing portals.
+    """
+    public_types = [
+        EventType.PUBLIC_EDUCATION.value,
+        EventType.FUNDRAISER.value,
+        EventType.CEREMONY.value,
+        EventType.SOCIAL.value,
+    ]
+
+    result = await db.execute(
+        select(Event)
+        .where(
+            Event.organization_id == organization_id,
+            Event.event_type.in_(public_types),
+            Event.start_datetime >= datetime.utcnow(),
+            Event.is_cancelled == False,  # noqa: E712
+        )
+        .order_by(Event.start_datetime.asc())
+        .limit(50)
+    )
+    events = result.scalars().all()
+
+    return [
+        PublicEventItem(
+            id=e.id,
+            title=e.title,
+            description=e.description,
+            event_type=e.event_type.value if hasattr(e.event_type, 'value') else str(e.event_type),
+            start_datetime=e.start_datetime.isoformat(),
+            end_datetime=e.end_datetime.isoformat(),
+            location=e.location,
+            location_details=e.location_details,
+        )
+        for e in events
+    ]
