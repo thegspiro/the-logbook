@@ -75,6 +75,9 @@ const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
 // Facilities Module
 const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage'));
 
+// Locations (lightweight alternative when Facilities module is off)
+const LocationsPage = lazy(() => import('./pages/LocationsPage'));
+
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = lazy(() => import('./pages/ElectionDetailPage').then(m => ({ default: m.ElectionDetailPage })));
@@ -190,8 +193,9 @@ function App() {
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />
 
-              {/* Facilities Module */}
+              {/* Facilities Module (full) / Locations (lightweight) */}
               <Route path="/facilities" element={<FacilitiesPage />} />
+              <Route path="/locations" element={<LocationsPage />} />
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
