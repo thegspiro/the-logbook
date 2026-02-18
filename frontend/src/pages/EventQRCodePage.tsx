@@ -56,7 +56,7 @@ const EventQRCodePage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-slate-300">Loading QR code...</div>
+        <div className="text-theme-text-secondary">Loading QR code...</div>
       </div>
     );
   }
@@ -65,13 +65,13 @@ const EventQRCodePage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <p className="text-red-300">{error}</p>
+          <p className="text-red-400">{error}</p>
         </div>
         <button
           onClick={() => navigate(`/events/${eventId}`)}
-          className="text-blue-600 hover:text-blue-300"
+          className="text-blue-600 hover:text-blue-400"
         >
-          ← Back to Event
+          &larr; Back to Event
         </button>
       </div>
     );
@@ -85,9 +85,9 @@ const EventQRCodePage: React.FC = () => {
         </div>
         <button
           onClick={() => navigate(`/events/${eventId}`)}
-          className="text-blue-600 hover:text-blue-300"
+          className="text-blue-600 hover:text-blue-400"
         >
-          ← Back to Event
+          &larr; Back to Event
         </button>
       </div>
     );
@@ -99,18 +99,18 @@ const EventQRCodePage: React.FC = () => {
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-300 mb-4 inline-block"
+          className="text-blue-600 hover:text-blue-400 mb-4 inline-block"
         >
-          ← Back to Event
+          &larr; Back to Event
         </Link>
-        <h1 className="text-3xl font-bold text-white">Event Check-In QR Code</h1>
+        <h1 className="text-3xl font-bold text-theme-text-primary">Event Check-In QR Code</h1>
       </div>
 
       {/* Event Info */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-2xl font-semibold text-white mb-2">{qrData.event_name}</h2>
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-2xl font-semibold text-theme-text-primary mb-2">{qrData.event_name}</h2>
 
-        <div className="space-y-2 text-slate-200">
+        <div className="space-y-2 text-theme-text-secondary">
           {qrData.event_type && (
             <p className="capitalize">
               <span className="font-medium">Type:</span> {qrData.event_type.replace('_', ' ')}
@@ -136,7 +136,7 @@ const EventQRCodePage: React.FC = () => {
       </div>
 
       {/* QR Code Section */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-md p-8">
+      <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-8">
         {qrData.is_valid ? (
           <div className="text-center">
             <div className="mb-6">
@@ -148,17 +148,17 @@ const EventQRCodePage: React.FC = () => {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
               Scan to Check In
             </h3>
 
-            <p className="text-slate-300 mb-6">
+            <p className="text-theme-text-secondary mb-6">
               Members can scan this QR code to check themselves in to the event
             </p>
 
             {/* QR Code */}
             <div className="flex justify-center mb-6">
-              <div className="bg-white p-8 rounded-lg border-4 border-white/20">
+              <div className="bg-white p-8 rounded-lg border-4 border-theme-surface-border">
                 <QRCodeSVG
                   value={getCheckInUrl()}
                   size={300}
@@ -190,7 +190,7 @@ const EventQRCodePage: React.FC = () => {
               </div>
             </div>
 
-            <h3 className="text-xl font-semibold text-white mb-4">
+            <h3 className="text-xl font-semibold text-theme-text-primary mb-4">
               QR Code Check-In Window
             </h3>
 
