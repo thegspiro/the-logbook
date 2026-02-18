@@ -1803,3 +1803,39 @@ class ShiftTimeOff(Base):
 
     def __repr__(self):
         return f"<ShiftTimeOff(user={self.user_id}, {self.start_date} - {self.end_date})>"
+
+
+# ============================================
+# Basic Apparatus (Lightweight, for non-module departments)
+# ============================================
+
+class BasicApparatus(Base):
+    """
+    Lightweight apparatus/vehicle definition for shift scheduling.
+
+    Used when the full Apparatus module is not enabled. Provides basic
+    vehicle/unit definitions with crew positions for shift staffing.
+    """
+
+    __tablename__ = "basic_apparatus"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    unit_number = Column(String(20), nullable=False)
+    name = Column(String(100), nullable=False)
+    apparatus_type = Column(String(50), nullable=False, default="engine")
+    min_staffing = Column(Integer, default=1)
+    positions = Column(JSON)  # List of position strings e.g. ["officer", "driver", "firefighter"]
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_basic_apparatus_org', 'organization_id'),
+    )
+
+    def __repr__(self):
+        return f"<BasicApparatus(unit={self.unit_number}, name={self.name})>"

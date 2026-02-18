@@ -2658,6 +2658,38 @@ export const schedulingService = {
     const response = await api.get('/scheduling/availability', { params });
     return response.data;
   },
+
+  // --- Basic Apparatus (lightweight, for departments without full Apparatus module) ---
+  async getBasicApparatus(params?: { is_active?: boolean }): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/apparatus', { params });
+    return response.data;
+  },
+  async createBasicApparatus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.post('/scheduling/apparatus', data);
+    return response.data;
+  },
+  async updateBasicApparatus(apparatusId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await api.patch(`/scheduling/apparatus/${apparatusId}`, data);
+    return response.data;
+  },
+  async deleteBasicApparatus(apparatusId: string): Promise<void> {
+    await api.delete(`/scheduling/apparatus/${apparatusId}`);
+  },
+
+  // --- Shift Signup (member self-service) ---
+  async signupForShift(shiftId: string, data: { position: string }): Promise<Record<string, unknown>> {
+    const response = await api.post(`/scheduling/shifts/${shiftId}/signup`, data);
+    return response.data;
+  },
+  async withdrawSignup(shiftId: string): Promise<void> {
+    await api.delete(`/scheduling/shifts/${shiftId}/signup`);
+  },
+
+  // --- Open Shifts ---
+  async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<Record<string, unknown>[]> {
+    const response = await api.get('/scheduling/shifts/open', { params });
+    return response.data;
+  },
 };
 
 // ============================================

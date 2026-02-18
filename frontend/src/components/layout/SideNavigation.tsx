@@ -75,11 +75,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
   const [facilitiesModuleEnabled, setFacilitiesModuleEnabled] = useState(false);
+  const [apparatusModuleEnabled, setApparatusModuleEnabled] = useState(false);
 
-  // Check if the full Facilities module is enabled for this organization
+  // Check if the full Facilities and Apparatus modules are enabled for this organization
   useEffect(() => {
     organizationService.getEnabledModules()
-      .then(res => setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities')))
+      .then(res => {
+        setFacilitiesModuleEnabled(res.enabled_modules.includes('facilities'));
+        setApparatusModuleEnabled(res.enabled_modules.includes('apparatus'));
+      })
       .catch(() => { /* default to false */ });
   }, []);
 
@@ -145,7 +149,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: Package,
       subItems: [
         { label: 'Inventory', path: '/inventory', icon: Package },
-        { label: 'Apparatus', path: '/apparatus', icon: Truck },
+        // Full apparatus module or lightweight version
+        ...(apparatusModuleEnabled
+          ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
+          : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
         ...(facilitiesModuleEnabled
           ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }]
           : []),
