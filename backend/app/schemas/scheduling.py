@@ -499,3 +499,50 @@ class MemberHoursListResponse(BaseModel):
     period_start: date
     period_end: date
     total_members: int
+
+
+# ============================================
+# Shift Signup (Member Self-Service)
+# ============================================
+
+class ShiftSignupRequest(BaseModel):
+    """Schema for a member signing up for an open shift position"""
+    position: ShiftPosition = ShiftPosition.FIREFIGHTER
+
+
+# ============================================
+# Basic Apparatus (Lightweight, for non-module departments)
+# ============================================
+
+class BasicApparatusCreate(BaseModel):
+    """Schema for creating a basic apparatus entry"""
+    unit_number: str = Field(..., min_length=1, max_length=20)
+    name: str = Field(..., min_length=1, max_length=100)
+    apparatus_type: str = Field(default="engine", max_length=50)
+    min_staffing: Optional[int] = Field(default=1, ge=1, le=50)
+    positions: Optional[List[str]] = None
+
+
+class BasicApparatusUpdate(BaseModel):
+    """Schema for updating a basic apparatus entry"""
+    unit_number: Optional[str] = Field(None, min_length=1, max_length=20)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    apparatus_type: Optional[str] = Field(None, max_length=50)
+    min_staffing: Optional[int] = Field(None, ge=1, le=50)
+    positions: Optional[List[str]] = None
+
+
+class BasicApparatusResponse(BaseModel):
+    """Schema for basic apparatus response"""
+    id: UUID
+    organization_id: UUID
+    unit_number: str
+    name: str
+    apparatus_type: str
+    min_staffing: Optional[int] = None
+    positions: Optional[List[str]] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

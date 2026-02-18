@@ -78,6 +78,9 @@ const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage'));
 // Locations (lightweight alternative when Facilities module is off)
 const LocationsPage = lazy(() => import('./pages/LocationsPage'));
 
+// Apparatus Basic (lightweight alternative when Apparatus module is off)
+const ApparatusBasicPage = lazy(() => import('./pages/ApparatusBasicPage'));
+
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = lazy(() => import('./pages/ElectionDetailPage').then(m => ({ default: m.ElectionDetailPage })));
@@ -196,6 +199,9 @@ function App() {
               {/* Facilities Module (full) / Locations (lightweight) */}
               <Route path="/facilities" element={<FacilitiesPage />} />
               <Route path="/locations" element={<LocationsPage />} />
+
+              {/* Apparatus Basic (lightweight alternative when Apparatus module is off) */}
+              <Route path="/apparatus-basic" element={<ApparatusBasicPage />} />
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />
