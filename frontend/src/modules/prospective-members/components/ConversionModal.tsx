@@ -92,25 +92,25 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
       aria-labelledby="conversion-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape' && !isConverting) onClose(); }}
     >
-      <div className="bg-slate-800 border border-white/10 rounded-xl max-w-lg w-full">
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl max-w-lg w-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
+        <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
               <UserCheck className="w-5 h-5 text-emerald-400" aria-hidden="true" />
             </div>
             <div>
-              <h2 id="conversion-modal-title" className="text-lg font-bold text-white">
+              <h2 id="conversion-modal-title" className="text-lg font-bold text-theme-text-primary">
                 Convert to Member
               </h2>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-theme-text-muted">
                 {applicant.first_name} {applicant.last_name}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -122,10 +122,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
           <div className="p-6">
             <div className="text-center py-6">
               <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" aria-hidden="true" />
-              <h3 className="text-xl font-bold text-white mb-2">
+              <h3 className="text-xl font-bold text-theme-text-primary mb-2">
                 Conversion Complete
               </h3>
-              <p className="text-slate-400 mb-4">{conversionResult.message}</p>
+              <p className="text-theme-text-muted mb-4">{conversionResult.message}</p>
               <p className="text-sm text-slate-500">
                 Member ID: {conversionResult.user_id}
               </p>

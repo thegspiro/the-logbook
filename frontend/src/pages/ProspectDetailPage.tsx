@@ -459,13 +459,13 @@ export const ProspectDetailPage: React.FC = () => {
                 <dd className="text-sm text-theme-text-primary">{formatDateTime(prospect.created_at, tz)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm text-slate-400">Last Updated</dt>
-                <dd className="text-sm text-white">{formatDateTime(prospect.updated_at, tz)}</dd>
+                <dt className="text-sm text-theme-text-muted">Last Updated</dt>
+                <dd className="text-sm text-theme-text-primary">{formatDateTime(prospect.updated_at, tz)}</dd>
               </div>
               {prospect.transferred_at && (
                 <div className="flex justify-between">
-                  <dt className="text-sm text-slate-400">Transferred</dt>
-                  <dd className="text-sm text-white">{formatDateTime(prospect.transferred_at, tz)}</dd>
+                  <dt className="text-sm text-theme-text-muted">Transferred</dt>
+                  <dd className="text-sm text-theme-text-primary">{formatDateTime(prospect.transferred_at, tz)}</dd>
                 </div>
               )}
             </dl>
@@ -475,13 +475,13 @@ export const ProspectDetailPage: React.FC = () => {
 
       {activeTab === 'activity' && (
         <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Activity Log</h2>
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Activity Log</h2>
           {activityLog.length === 0 ? (
-            <p className="text-slate-400 text-sm">No activity recorded yet.</p>
+            <p className="text-theme-text-muted text-sm">No activity recorded yet.</p>
           ) : (
             <div className="space-y-3">
               {activityLog.map(entry => (
-                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-700/50">
+                <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-theme-surface-hover">
                   <Activity className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
