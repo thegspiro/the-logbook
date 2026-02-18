@@ -318,8 +318,23 @@ export const userService = {
   },
 };
 
+export interface ModuleSettingsData {
+  training: boolean;
+  inventory: boolean;
+  scheduling: boolean;
+  elections: boolean;
+  minutes: boolean;
+  reports: boolean;
+  notifications: boolean;
+  mobile: boolean;
+  forms: boolean;
+  integrations: boolean;
+  facilities: boolean;
+}
+
 export interface EnabledModulesResponse {
   enabled_modules: string[];
+  module_settings: ModuleSettingsData;
 }
 
 export const organizationService = {
@@ -352,6 +367,14 @@ export const organizationService = {
    */
   async getEnabledModules(): Promise<EnabledModulesResponse> {
     const response = await api.get<EnabledModulesResponse>('/organization/modules');
+    return response.data;
+  },
+
+  /**
+   * Update module settings (enable/disable modules)
+   */
+  async updateModuleSettings(updates: Partial<ModuleSettingsData>): Promise<EnabledModulesResponse> {
+    const response = await api.patch<EnabledModulesResponse>('/organization/modules', updates);
     return response.data;
   },
 
