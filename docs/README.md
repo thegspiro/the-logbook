@@ -28,18 +28,6 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - File size, type, and dimension requirements
    - Testing procedures
 
-4. **[ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md)**
-   - Error message improvements (Feb 7, 2026)
-   - Before/after comparisons
-   - New error handler features
-   - Developer guidelines
-
-5. **[ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md)**
-   - Security hardening error messages (Feb 12, 2026)
-   - Session timeout and password reset messages
-   - Frontend error message standardization
-   - Updated error message guidelines
-
 ---
 
 ### 🔒 Security Documentation
@@ -299,7 +287,7 @@ Previous Improvements (2026-02-07):
 - ✅ Network error standardization - Comprehensive error handler
 - ✅ SMTP errors - User-friendly instead of technical
 
-See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md) for latest details.
+See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full error message catalog.
 
 ---
 
@@ -379,7 +367,6 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 **References** (Complete catalogs):
 - ERROR_MESSAGES_COMPLETE.md - All errors
 - ERROR_MESSAGES_LOGO_UPLOAD.md - Logo errors
-- ERROR_MESSAGES_UPDATES_2026_02_07.md - Latest changes
 
 **Technical** (Architecture & security):
 - SECURITY_IMAGE_UPLOADS.md - Security implementation
@@ -397,7 +384,7 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 
 ### Contributing?
 
-1. **Error Messages**: Follow standards in [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md#developer-guidelines)
+1. **Error Messages**: Follow standards in [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md)
 2. **Enums**: Follow [ENUM_CONVENTIONS.md](./ENUM_CONVENTIONS.md)
 3. **Security**: Review [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md)
 4. **Testing**: Run enum tests and database verification
@@ -436,8 +423,6 @@ docker-compose ps
 | TROUBLESHOOTING.md | 1.9 | 2026-02-16 | Current |
 | ERROR_MESSAGES_COMPLETE.md | 1.0 | 2026-02-07 | Current |
 | ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0 | 2026-02-07 | Current |
-| ERROR_MESSAGES_UPDATES_2026_02_07.md | 1.0 | 2026-02-07 | Current |
-| ERROR_MESSAGES_UPDATES_2026_02_12.md | 1.0 | 2026-02-12 | Current |
 | SECURITY_IMAGE_UPLOADS.md | 1.0 | 2026-02-07 | Current |
 | ENUM_CONVENTIONS.md | 1.0 | 2026-02-07 | Current |
 | FORMS_MODULE.md | 1.0 | 2026-02-12 | Current |
@@ -663,8 +648,6 @@ docker-compose ps
 - Updated TROUBLESHOOTING.md with security & session management section
 - Updated ERROR_MESSAGES_COMPLETE.md with 14 new error entries
 
-See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.md) for error message details.
-
 ---
 
 ### 2026-02-12 - Forms Module & Public Forms
@@ -738,11 +721,8 @@ See [ERROR_MESSAGES_UPDATES_2026_02_12.md](./ERROR_MESSAGES_UPDATES_2026_02_12.m
 
 **Documentation**:
 - Created TROUBLESHOOTING.md (comprehensive guide)
-- Created ERROR_MESSAGES_UPDATES_2026_02_07.md (change log)
 - Created ENUM_CONVENTIONS.md (developer guide)
 - Updated all error references
-
-See [ERROR_MESSAGES_UPDATES_2026_02_07.md](./ERROR_MESSAGES_UPDATES_2026_02_07.md) for complete details.
 
 ---
 
