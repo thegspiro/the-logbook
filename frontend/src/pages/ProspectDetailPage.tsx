@@ -482,21 +482,21 @@ export const ProspectDetailPage: React.FC = () => {
             <div className="space-y-3">
               {activityLog.map(entry => (
                 <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-theme-surface-hover">
-                  <Activity className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                  <Activity className="h-4 w-4 text-theme-text-muted mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">
+                      <span className="text-sm font-medium text-theme-text-primary">
                         {entry.action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-theme-text-muted">
                         {formatDateTime(entry.created_at, tz)}
                       </span>
                     </div>
                     {entry.performer_name && (
-                      <span className="text-xs text-slate-400">by {entry.performer_name}</span>
+                      <span className="text-xs text-theme-text-muted">by {entry.performer_name}</span>
                     )}
                     {entry.details && (
-                      <div className="mt-1 text-xs text-slate-400">
+                      <div className="mt-1 text-xs text-theme-text-muted">
                         {entry.details.notes ? <span>Note: {typeof entry.details.notes === 'string' ? entry.details.notes : JSON.stringify(entry.details.notes)}</span> : null}
                         {entry.details.to_step_name ? <span>Moved to: {typeof entry.details.to_step_name === 'string' ? entry.details.to_step_name : JSON.stringify(entry.details.to_step_name)}</span> : null}
                       </div>
@@ -512,7 +512,7 @@ export const ProspectDetailPage: React.FC = () => {
       {/* Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg">
+          <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-slate-700">
               <h2 className="text-lg font-semibold text-white">Transfer to Membership</h2>
               <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white">

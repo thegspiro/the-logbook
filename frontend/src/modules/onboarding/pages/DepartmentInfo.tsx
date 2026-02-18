@@ -172,7 +172,7 @@ const DepartmentInfo: React.FC = () => {
                 clearError();
               }}
               placeholder="e.g., Springfield Volunteer Fire Department"
-              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
               maxLength={100}
               autoFocus
               aria-required="true"
@@ -202,7 +202,7 @@ const DepartmentInfo: React.FC = () => {
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                   dragActive
                     ? 'border-red-500 bg-red-500/10'
-                    : 'border-theme-input-border hover:border-red-500 hover:bg-white/5'
+                    : 'border-theme-input-border hover:border-red-500 hover:bg-theme-surface-hover'
                 }`}
                 onClick={() => fileInputRef.current?.click()}
                 role="button"
@@ -223,8 +223,8 @@ const DepartmentInfo: React.FC = () => {
                   aria-label="File input for logo"
                 />
                 <div className="flex flex-col items-center space-y-3">
-                  <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center">
-                    <Upload className="w-8 h-8 text-slate-400" />
+                  <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
+                    <Upload className="w-8 h-8 text-theme-text-muted" />
                   </div>
                   <div>
                     <p className="text-theme-text-primary font-medium mb-1">
@@ -237,7 +237,7 @@ const DepartmentInfo: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="border-2 border-theme-input-border rounded-lg p-6 bg-slate-900/50">
+              <div className="border-2 border-theme-input-border rounded-lg p-6 bg-theme-surface-secondary">
                 <div className="flex items-start space-x-4">
                   {/* Preview - transparent background to preserve PNG transparency */}
                   <div className="flex-shrink-0 w-24 h-24 rounded-lg flex items-center justify-center overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZTJlOGYwIi8+PHJlY3QgeD0iOCIgeT0iOCIgd2lkdGg9IjgiIGhlaWdodD0iOCIgZmlsbD0iI2UyZThmMCIvPjxyZWN0IHg9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmMWY1ZjkiLz48cmVjdCB5PSI4IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZjFmNWY5Ii8+PC9zdmc+')]">
@@ -308,7 +308,7 @@ const DepartmentInfo: React.FC = () => {
               className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
                 departmentName.trim() && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
@@ -318,7 +318,7 @@ const DepartmentInfo: React.FC = () => {
             {departmentName.trim() && !logo && (
               <button
                 onClick={handleSkipLogo}
-                className="sm:w-auto px-6 py-3 bg-transparent border border-slate-500 hover:border-slate-400 text-slate-300 hover:text-white rounded-lg font-semibold transition-all duration-300"
+                className="sm:w-auto px-6 py-3 bg-transparent border border-theme-surface-border hover:border-theme-surface-hover text-theme-text-secondary hover:text-theme-text-primary rounded-lg font-semibold transition-all duration-300"
                 aria-label="Skip logo upload"
               >
                 Skip Logo for Now

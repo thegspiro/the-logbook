@@ -126,14 +126,14 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 Conversion Complete
               </h3>
               <p className="text-theme-text-muted mb-4">{conversionResult.message}</p>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-theme-text-muted">
                 Member ID: {conversionResult.user_id}
               </p>
             </div>
             <div className="flex justify-end">
               <button
                 onClick={onClose}
-                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                className="px-6 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 Close
               </button>
@@ -144,10 +144,10 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
             {/* Body */}
             <div className="p-6 space-y-5">
               {/* Applicant Summary */}
-              <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
+              <div className="bg-theme-surface-secondary rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Mail className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                  <span className="text-slate-300">{applicant.email}</span>
+                  <Mail className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                  <span className="text-theme-text-secondary">{applicant.email}</span>
                 </div>
                 {applicant.phone && (
                   <div className="flex items-center gap-2 text-sm">
