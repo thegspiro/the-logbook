@@ -315,7 +315,7 @@ const MyTrainingPage: React.FC = () => {
             />
             <StatCard
               icon={BarChart3}
-              label="Annual Requirements"
+              label="Requirements"
               value={
                 data.requirements_summary?.avg_compliance != null
                   ? `${data.requirements_summary.avg_compliance}%`
@@ -325,13 +325,7 @@ const MyTrainingPage: React.FC = () => {
             />
           </div>
 
-          {/* Additional Stats Row */}
-          {v?.show_shift_stats && data.shift_stats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard icon={ClipboardList} label="Shifts" value={data.shift_stats.total_shifts} color="text-purple-400" />
-              <StatCard icon={Star} label="Avg Rating" value={data.shift_stats.avg_rating ?? '-'} color="text-yellow-400" />
-            </div>
-          )}
+
 
           {/* Certifications */}
           {v?.show_certification_status && data.certifications && data.certifications.length > 0 && (

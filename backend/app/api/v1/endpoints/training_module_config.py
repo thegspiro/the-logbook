@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, Dict, Any, List
+import calendar
 from datetime import date
 
 from app.core.database import get_db
@@ -140,13 +141,13 @@ async def get_my_training_summary(
         "completed_courses": row[0],
     }
 
-    # --- Annual Requirements Summary (always returned for core stats) ---
+    # --- Requirements Summary (always returned for core stats) ---
+    # Include ALL active requirements, not just annual
     req_result = await db.execute(
         select(TrainingRequirement)
         .where(
             TrainingRequirement.organization_id == org_id,
-            TrainingRequirement.active == True,
-            TrainingRequirement.frequency == RequirementFrequency.ANNUAL,
+            TrainingRequirement.active == True,  # noqa: E712
         )
     )
     all_requirements = req_result.scalars().all()
@@ -166,15 +167,45 @@ async def get_my_training_summary(
         elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
             applicable.append(req)
 
-    # Check progress for each applicable annual requirement
+    # Check progress for each applicable requirement
     today = date.today()
     current_year = today.year
     met_count = 0
     total_progress_pct = 0.0
 
     for req in applicable:
-        start_date = date(req.year, 1, 1) if req.year else date(current_year, 1, 1)
-        end_date = date(req.year, 12, 31) if req.year else date(current_year, 12, 31)
+        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+
+        # Determine the evaluation window based on frequency
+        if freq == "one_time":
+            # One-time: no date window, just check if any completed record exists
+            start_date = None
+            end_date = None
+        elif freq == "biannual":
+            # Biannual: 2-year window ending at current year
+            base_year = req.year if req.year else current_year
+            start_date = date(base_year - 1, 1, 1)
+            end_date = date(base_year, 12, 31)
+        elif freq == "quarterly":
+            # Quarterly: current quarter
+            quarter_month = ((today.month - 1) // 3) * 3 + 1
+            start_date = date(current_year, quarter_month, 1)
+            end_month = quarter_month + 2
+            end_year = current_year
+            if end_month > 12:
+                end_month -= 12
+                end_year += 1
+            end_day = calendar.monthrange(end_year, end_month)[1]
+            end_date = date(end_year, end_month, end_day)
+        elif freq == "monthly":
+            # Monthly: current month
+            start_date = date(current_year, today.month, 1)
+            end_day = calendar.monthrange(current_year, today.month)[1]
+            end_date = date(current_year, today.month, end_day)
+        else:
+            # Annual (default)
+            start_date = date(req.year, 1, 1) if req.year else date(current_year, 1, 1)
+            end_date = date(req.year, 12, 31) if req.year else date(current_year, 12, 31)
 
         req_hours_query = (
             select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0))
@@ -182,10 +213,14 @@ async def get_my_training_summary(
                 TrainingRecord.organization_id == org_id,
                 TrainingRecord.user_id == user_id,
                 TrainingRecord.status == TrainingStatus.COMPLETED,
+            )
+        )
+        # Apply date window (one_time has no window)
+        if start_date and end_date:
+            req_hours_query = req_hours_query.where(
                 TrainingRecord.completion_date >= start_date,
                 TrainingRecord.completion_date <= end_date,
             )
-        )
         if req.training_type:
             req_hours_query = req_hours_query.where(
                 TrainingRecord.training_type == req.training_type
