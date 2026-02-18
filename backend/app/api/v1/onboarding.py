@@ -1465,6 +1465,7 @@ async def save_session_roles(
     # Backend stores: ["module.view", "module.manage", ...]
     from app.models.user import Role
     from sqlalchemy import delete
+    from app.core.permissions import DEFAULT_ROLES
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
@@ -1500,6 +1501,18 @@ async def save_session_roles(
         if role_data.id in existing_system_roles:
             # Update existing system role permissions
             existing_role = existing_system_roles[role_data.id]
+
+            # Preserve the wildcard permission for roles that have it in
+            # DEFAULT_ROLES (e.g. it_administrator). The frontend role editor
+            # only knows about module-scoped view/manage permissions and cannot
+            # represent the backend wildcard "*". Without this guard the
+            # it_administrator's ["*"] gets overwritten with a granular list
+            # that is missing action-specific permissions (users.create,
+            # audit.view, etc.), causing 403 errors on admin operations.
+            default_perms = DEFAULT_ROLES.get(role_data.id, {}).get("permissions", [])
+            if "*" in default_perms:
+                permission_list = ["*"]
+
             existing_role.permissions = permission_list
             existing_role.priority = role_data.priority
             if role_data.description:
