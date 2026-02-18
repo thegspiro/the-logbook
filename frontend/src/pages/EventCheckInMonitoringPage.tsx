@@ -147,7 +147,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Checked In</div>
           <div className="text-3xl font-bold text-theme-text-primary">{stats.total_checked_in}</div>
-          <div className="text-sm text-slate-300 mt-1">
+          <div className="text-sm text-theme-text-secondary mt-1">
             of {stats.total_eligible_members} members
           </div>
         </div>
@@ -157,7 +157,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
           <div className="text-theme-text-muted text-sm font-medium mb-1">Check-In Rate</div>
           <div className="text-3xl font-bold text-theme-text-primary">{stats.check_in_rate}%</div>
           <div className="mt-2">
-            <div className="w-full bg-white/10 rounded-full h-2">
+            <div className="w-full bg-theme-surface-secondary rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${Math.min(stats.check_in_rate, 100)}%` }}
@@ -170,7 +170,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
           <div className="text-theme-text-muted text-sm font-medium mb-1">Total RSVPs</div>
           <div className="text-3xl font-bold text-theme-text-primary">{stats.total_rsvps}</div>
-          <div className="text-sm text-slate-300 mt-1">
+          <div className="text-sm text-theme-text-secondary mt-1">
             {stats.total_checked_in} checked in
           </div>
         </div>
@@ -183,23 +183,23 @@ const EventCheckInMonitoringPage: React.FC = () => {
               ? `${Math.round(stats.avg_check_in_time_minutes)}m`
               : 'N/A'}
           </div>
-          <div className="text-sm text-slate-300 mt-1">before event start</div>
+          <div className="text-sm text-theme-text-secondary mt-1">before event start</div>
         </div>
       </div>
 
       {/* Event Info */}
       <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Event Details</h2>
+        <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Event Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <span className="text-slate-300 font-medium">Event Time:</span>
+            <span className="text-theme-text-secondary font-medium">Event Time:</span>
             <br />
             <span className="text-white">
               {formatShortDateTime(stats.start_datetime, tz)} - {formatShortDateTime(stats.end_datetime, tz)}
             </span>
           </div>
           <div>
-            <span className="text-slate-300 font-medium">Check-In Window:</span>
+            <span className="text-theme-text-secondary font-medium">Check-In Window:</span>
             <br />
             <span className="text-white">
               {formatShortDateTime(stats.check_in_window_start, tz)} -{' '}
@@ -212,7 +212,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       {/* Recent Check-Ins */}
       <div className="bg-theme-surface backdrop-blur-sm rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-white">Recent Check-Ins</h2>
+          <h2 className="text-lg font-semibold text-theme-text-primary">Recent Check-Ins</h2>
           {stats.last_check_in_at && (
             <span className="text-sm text-slate-400">
               Last: {formatTimeAgo(stats.last_check_in_at)}
