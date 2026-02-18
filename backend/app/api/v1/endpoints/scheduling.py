@@ -60,6 +60,26 @@ router = APIRouter()
 
 
 # ============================================
+# Apparatus enrichment helper
+# ============================================
+
+async def _enrich_shifts(
+    service: SchedulingService,
+    organization_id,
+    shifts: list,
+) -> list[dict]:
+    """Convert Shift ORM objects to dicts enriched with apparatus details."""
+    apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
+    apparatus_map = await service._get_apparatus_map(organization_id, apparatus_ids)
+    enriched = []
+    for s in shifts:
+        d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
+        service._enrich_shift_dict(d, apparatus_map)
+        enriched.append(d)
+    return enriched
+
+
+# ============================================
 # Shift Endpoints
 # ============================================
 
@@ -89,8 +109,9 @@ async def list_shifts(
         limit=limit,
     )
 
+    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
     return {
-        "shifts": shifts,
+        "shifts": enriched,
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -111,7 +132,8 @@ async def create_shift(
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to create shift. {error}")
-    return result
+    enriched = await _enrich_shifts(service, current_user.organization_id, [result])
+    return enriched[0]
 
 
 @router.get("/shifts/{shift_id}", response_model=ShiftDetailResponse)
@@ -127,8 +149,12 @@ async def get_shift(
         raise HTTPException(status_code=404, detail="Shift not found")
 
     attendance = await service.get_shift_attendance(shift_id, current_user.organization_id)
+    apparatus_ids = [shift.apparatus_id] if shift.apparatus_id else []
+    apparatus_map = await service._get_apparatus_map(current_user.organization_id, apparatus_ids)
+    d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
+    service._enrich_shift_dict(d, apparatus_map)
     return {
-        **{c.key: getattr(shift, c.key) for c in shift.__table__.columns},
+        **d,
         "attendees": attendance,
         "attendee_count": len(attendance),
     }
@@ -149,7 +175,8 @@ async def update_shift(
     )
     if error:
         raise HTTPException(status_code=400, detail=f"Unable to update shift. {error}")
-    return result
+    enriched = await _enrich_shifts(service, current_user.organization_id, [result])
+    return enriched[0]
 
 
 @router.delete("/shifts/{shift_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -245,7 +272,7 @@ async def get_week_calendar(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     shifts = await service.get_week_shifts(current_user.organization_id, start)
-    return shifts
+    return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
 @router.get("/calendar/month", response_model=list[ShiftResponse])
@@ -261,7 +288,7 @@ async def get_month_calendar(
     y = year or today.year
     m = month or today.month
     shifts = await service.get_month_shifts(current_user.organization_id, y, m)
-    return shifts
+    return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
 # ============================================
@@ -858,7 +885,8 @@ async def get_my_shifts(
         skip=skip,
         limit=limit,
     )
-    return {"shifts": shifts, "total": total, "skip": skip, "limit": limit}
+    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
+    return {"shifts": enriched, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/my-assignments", response_model=list[ShiftAssignmentResponse])
@@ -1031,7 +1059,7 @@ async def get_open_shifts(
     # Optionally filter by apparatus_id
     if apparatus_id:
         shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
-    return shifts_list
+    return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
 
 # ============================================

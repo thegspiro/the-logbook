@@ -105,7 +105,7 @@ const SchedulingPage: React.FC = () => {
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
 
   // Apparatus list for shift creation
-  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string; unit_number: string; apparatus_type: string }>>([]);
+  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>>([]);
 
   const [shiftForm, setShiftForm] = useState({
     name: '',
@@ -122,7 +122,7 @@ const SchedulingPage: React.FC = () => {
     const loadApparatus = async () => {
       try {
         const data = await schedulingService.getBasicApparatus();
-        setApparatusList(data as Array<{ id: string; name: string; unit_number: string; apparatus_type: string }>);
+        setApparatusList(data as Array<{ id: string; name: string; unit_number: string; apparatus_type: string; positions?: string[] }>);
       } catch {
         // Not critical — apparatus may not be set up yet
       }
@@ -491,9 +491,9 @@ const SchedulingPage: React.FC = () => {
                                   <Users className="w-3 h-3" /> {shift.attendee_count}
                                 </span>
                               )}
-                              {shift.apparatus_id && (
+                              {shift.apparatus_unit_number && (
                                 <span className="opacity-70 flex items-center gap-0.5">
-                                  <Truck className="w-3 h-3" />
+                                  <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
                                 </span>
                               )}
                             </div>
@@ -540,6 +540,7 @@ const SchedulingPage: React.FC = () => {
                           >
                             <p className="font-medium truncate">
                               {formatTime(shift.start_time)}
+                              {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
                               {shift.attendee_count > 0 && <span className="ml-1 opacity-70">({shift.attendee_count})</span>}
                             </p>
                           </button>
@@ -657,9 +658,41 @@ const SchedulingPage: React.FC = () => {
                             <option key={a.id} value={a.id}>{a.unit_number} — {a.name}</option>
                           ))}
                         </select>
-                        <p className="text-xs text-theme-text-muted mt-1">
-                          Assign this shift to a specific vehicle for crew staffing
-                        </p>
+                        {/* Positions preview when an apparatus is selected */}
+                        {(() => {
+                          const selected = apparatusList.find(a => a.id === shiftForm.apparatus_id);
+                          if (selected?.positions && selected.positions.length > 0) {
+                            return (
+                              <div className="mt-2 p-2.5 bg-violet-500/5 border border-violet-500/20 rounded-lg">
+                                <p className="text-xs font-medium text-violet-700 dark:text-violet-400 mb-1.5">
+                                  Positions on {selected.unit_number}:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selected.positions.map((pos, i) => (
+                                    <span key={i} className="px-2 py-0.5 text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 rounded capitalize">
+                                      {pos}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-theme-text-muted mt-1.5">
+                                  Members will be able to sign up for these positions
+                                </p>
+                              </div>
+                            );
+                          }
+                          if (shiftForm.apparatus_id) {
+                            return (
+                              <p className="text-xs text-theme-text-muted mt-1">
+                                This apparatus has no positions defined. Members can still sign up with any position.
+                              </p>
+                            );
+                          }
+                          return (
+                            <p className="text-xs text-theme-text-muted mt-1">
+                              Assign a vehicle to define crew positions for this shift
+                            </p>
+                          );
+                        })()}
                       </div>
                     )}
 

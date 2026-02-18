@@ -175,11 +175,16 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                             </p>
                             <div className="flex items-center gap-3 mt-1">
                               <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                                <Users className="w-3 h-3" /> {shift.attendee_count} assigned
+                                <Users className="w-3 h-3" />
+                                {shift.apparatus_positions && shift.apparatus_positions.length > 0
+                                  ? `${shift.attendee_count} / ${shift.apparatus_positions.length} filled`
+                                  : `${shift.attendee_count} assigned`
+                                }
                               </span>
-                              {shift.apparatus_id && (
+                              {shift.apparatus_unit_number && (
                                 <span className="flex items-center gap-1 text-xs text-theme-text-muted">
-                                  <Truck className="w-3 h-3" /> {shift.apparatus_id}
+                                  <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
+                                  {shift.apparatus_name && ` — ${shift.apparatus_name}`}
                                 </span>
                               )}
                               {shift.shift_officer_name && (
@@ -199,7 +204,10 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
                                 className="bg-theme-input-bg border border-theme-input-border rounded-lg px-2 py-1.5 text-xs text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                               >
-                                {Object.entries(POSITION_LABELS).map(([val, label]) => (
+                                {(shift.apparatus_positions && shift.apparatus_positions.length > 0
+                                  ? shift.apparatus_positions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)] as const)
+                                  : Object.entries(POSITION_LABELS)
+                                ).map(([val, label]) => (
                                   <option key={val} value={val}>{label}</option>
                                 ))}
                               </select>
