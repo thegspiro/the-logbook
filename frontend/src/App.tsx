@@ -72,6 +72,9 @@ const InventoryAdminHub = lazy(() => import('./pages/InventoryAdminHub').then(m 
 // Scheduling Module
 const SchedulingPage = lazy(() => import('./pages/SchedulingPage'));
 
+// Facilities Module
+const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage'));
+
 // Elections Module
 const ElectionsPage = lazy(() => import('./pages/ElectionsPage').then(m => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = lazy(() => import('./pages/ElectionDetailPage').then(m => ({ default: m.ElectionDetailPage })));
@@ -186,6 +189,9 @@ function App() {
 
               {/* Scheduling Module */}
               <Route path="/scheduling" element={<SchedulingPage />} />
+
+              {/* Facilities Module */}
+              <Route path="/facilities" element={<FacilitiesPage />} />
 
               {/* Elections Module */}
               <Route path="/elections" element={<ElectionsPage />} />

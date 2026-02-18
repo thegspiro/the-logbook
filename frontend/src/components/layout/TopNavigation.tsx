@@ -22,6 +22,7 @@ interface NavItem {
   path: string;
   permission?: string;
   subItems?: SubNavItem[];
+  isSectionLabel?: boolean;
 }
 
 export const TopNavigation: React.FC<TopNavigationProps> = ({
@@ -50,27 +51,22 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
   const ThemeIcon = themeIcon;
 
+  const hasAnyAdminPermission =
+    checkPermission('members.manage') ||
+    checkPermission('prospective_members.manage') ||
+    checkPermission('events.manage') ||
+    checkPermission('training.manage') ||
+    checkPermission('inventory.manage') ||
+    checkPermission('roles.manage') ||
+    checkPermission('settings.manage') ||
+    checkPermission('analytics.view');
+
   // Match the side navigation structure
   const navItems: NavItem[] = [
+    // ── Member-facing pages ──
     { label: 'Dashboard', path: '/dashboard' },
-    {
-      label: 'Members',
-      path: '/members',
-      subItems: [
-        { label: 'All Members', path: '/members' },
-        { label: 'Prospective', path: '/prospective-members', permission: 'prospective_members.manage' },
-        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
-        { label: 'Members Admin', path: '/members/admin', permission: 'members.manage' },
-      ],
-    },
-    {
-      label: 'Events',
-      path: '/events',
-      subItems: [
-        { label: 'All Events', path: '/events' },
-        { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
-      ],
-    },
+    { label: 'Members', path: '/members' },
+    { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
     {
       label: 'Training',
@@ -80,17 +76,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit' },
         { label: 'Course Library', path: '/training/courses' },
         { label: 'Programs', path: '/training/programs' },
-        { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
       ],
     },
+    { label: 'Scheduling', path: '/scheduling' },
     {
       label: 'Operations',
       path: '/inventory',
       subItems: [
         { label: 'Inventory', path: '/inventory' },
-        { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
-        { label: 'Scheduling', path: '/scheduling' },
         { label: 'Apparatus', path: '/apparatus' },
+        { label: 'Facilities', path: '/facilities' },
       ],
     },
     {
@@ -99,30 +94,34 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       subItems: [
         { label: 'Elections', path: '/elections' },
         { label: 'Minutes', path: '/minutes' },
+      ],
+    },
+    { label: 'Notifications', path: '/notifications' },
+
+    // ── Administration (only for admins) ──
+    ...(hasAnyAdminPermission ? [{
+      label: 'Admin',
+      path: '#',
+      subItems: [
+        { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
+        { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
+        { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
+        { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+        { label: 'Training Admin', path: '/training/admin', permission: 'training.manage' },
+        { label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' },
+        { label: 'Forms', path: '/forms', permission: 'settings.manage' },
+        { label: 'Integrations', path: '/integrations', permission: 'settings.manage' },
         { label: 'Reports', path: '/reports' },
-      ],
-    },
-    {
-      label: 'Communication',
-      path: '/notifications',
-      subItems: [
-        { label: 'Notifications', path: '/notifications' },
-        { label: 'Forms', path: '/forms' },
-        { label: 'Integrations', path: '/integrations' },
-      ],
-    },
-    {
-      label: 'Settings',
-      path: '/settings',
-      subItems: [
-        { label: 'My Account', path: '/settings/account' },
-        { label: 'Organization', path: '/settings' },
+        { label: 'Organization', path: '/settings', permission: 'settings.manage' },
         { label: 'Role Management', path: '/settings/roles', permission: 'roles.manage' },
         { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
         { label: 'Analytics', path: '/admin/analytics', permission: 'analytics.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
       ],
-    },
+    } as NavItem] : []),
+
+    // ── Always-visible personal ──
+    { label: 'My Account', path: '/settings/account' },
   ];
 
   const isActive = (path: string) => {
