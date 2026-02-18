@@ -354,7 +354,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.firstName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.firstName && touched.firstName
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-input-border focus:ring-red-600'
@@ -386,7 +386,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.lastName}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.lastName && touched.lastName
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-input-border focus:ring-red-600'
@@ -418,7 +418,7 @@ const AdminUserCreation: React.FC = () => {
                   name="badgeNumber"
                   value={formData.badgeNumber}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
+                  className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-600 transition-all"
                   placeholder="e.g., FF-1234"
                 />
               </div>
@@ -445,7 +445,7 @@ const AdminUserCreation: React.FC = () => {
                   value={formData.username}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                     errors.username && touched.username
                       ? 'border-red-500 focus:ring-red-500/50'
                       : 'border-theme-input-border focus:ring-red-600'
@@ -478,7 +478,7 @@ const AdminUserCreation: React.FC = () => {
                   value={formData.email}
                   onChange={handleChange}
                   onBlur={handleBlur}
-                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                     errors.email && touched.email
                       ? 'border-red-500 focus:ring-red-500/50'
                       : 'border-theme-input-border focus:ring-red-600'
@@ -512,7 +512,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.password && touched.password
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-input-border focus:ring-red-600'
@@ -525,7 +525,7 @@ const AdminUserCreation: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
@@ -554,7 +554,7 @@ const AdminUserCreation: React.FC = () => {
                         className={
                           passwordStrength.checks.length
                             ? 'text-green-400'
-                            : 'text-slate-400'
+                            : 'text-theme-text-muted'
                         }
                       >
                         At least 12 characters
@@ -570,7 +570,7 @@ const AdminUserCreation: React.FC = () => {
                         className={
                           passwordStrength.checks.uppercase
                             ? 'text-green-400'
-                            : 'text-slate-400'
+                            : 'text-theme-text-muted'
                         }
                       >
                         One uppercase letter
@@ -586,7 +586,7 @@ const AdminUserCreation: React.FC = () => {
                         className={
                           passwordStrength.checks.lowercase
                             ? 'text-green-400'
-                            : 'text-slate-400'
+                            : 'text-theme-text-muted'
                         }
                       >
                         One lowercase letter
@@ -602,7 +602,7 @@ const AdminUserCreation: React.FC = () => {
                         className={
                           passwordStrength.checks.number
                             ? 'text-green-400'
-                            : 'text-slate-400'
+                            : 'text-theme-text-muted'
                         }
                       >
                         One number
@@ -618,7 +618,7 @@ const AdminUserCreation: React.FC = () => {
                         className={
                           passwordStrength.checks.special
                             ? 'text-green-400'
-                            : 'text-slate-400'
+                            : 'text-theme-text-muted'
                         }
                       >
                         One special character (!@#$%^&*...)
@@ -643,7 +643,7 @@ const AdminUserCreation: React.FC = () => {
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${
+                    className={`w-full px-4 py-3 pr-12 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 transition-all ${
                       errors.confirmPassword && touched.confirmPassword
                         ? 'border-red-500 focus:ring-red-500/50'
                         : 'border-theme-input-border focus:ring-red-600'
@@ -656,7 +656,7 @@ const AdminUserCreation: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? (

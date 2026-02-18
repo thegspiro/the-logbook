@@ -513,9 +513,9 @@ export const ProspectDetailPage: React.FC = () => {
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-theme-surface rounded-xl border border-theme-surface-border w-full max-w-lg">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
-              <h2 className="text-lg font-semibold text-white">Transfer to Membership</h2>
-              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white">
+            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
+              <h2 className="text-lg font-semibold text-theme-text-primary">Transfer to Membership</h2>
+              <button onClick={() => setShowTransferModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -533,34 +533,34 @@ export const ProspectDetailPage: React.FC = () => {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Username</label>
                 <input
                   type="text"
                   value={transferData.username || ''}
                   onChange={e => setTransferData(prev => ({ ...prev, username: e.target.value }))}
                   placeholder="Auto-generated if left blank"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Rank</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Rank</label>
                   <input
                     type="text"
                     value={transferData.rank || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, rank: e.target.value }))}
                     placeholder="e.g., Probationary"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Station</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Station</label>
                   <input
                     type="text"
                     value={transferData.station || ''}
                     onChange={e => setTransferData(prev => ({ ...prev, station: e.target.value }))}
                     placeholder="e.g., Station 1"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="form-input w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -570,9 +570,9 @@ export const ProspectDetailPage: React.FC = () => {
                   id="send_welcome"
                   checked={transferData.send_welcome_email}
                   onChange={e => setTransferData(prev => ({ ...prev, send_welcome_email: e.target.checked }))}
-                  className="rounded border-slate-600 bg-slate-700 text-red-500 focus:ring-red-500"
+                  className="rounded border-theme-surface-border bg-theme-surface text-red-500 focus:ring-red-500"
                 />
-                <label htmlFor="send_welcome" className="text-sm text-gray-300">
+                <label htmlFor="send_welcome" className="text-sm text-theme-text-secondary">
                   Send welcome email with login credentials
                 </label>
               </div>

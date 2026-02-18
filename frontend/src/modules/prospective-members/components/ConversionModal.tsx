@@ -151,19 +151,19 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                 </div>
                 {applicant.phone && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Phone className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                    <span className="text-slate-300">{applicant.phone}</span>
+                    <Phone className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                    <span className="text-theme-text-secondary">{applicant.phone}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                  <span className="text-slate-300">
+                  <Calendar className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                  <span className="text-theme-text-secondary">
                     Applied {formatDate(applicant.created_at, tz)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Shield className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                  <span className="text-slate-300">
+                  <Shield className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+                  <span className="text-theme-text-secondary">
                     Completed {applicant.stage_history.filter(s => s.completed_at).length} stages
                   </span>
                 </div>
@@ -171,7 +171,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
 
               {/* Membership Type */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Membership Type
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -180,13 +180,13 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === 'probationary'
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-white/10 bg-slate-700/50 hover:border-white/20'
+                        : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
                     }`}
                   >
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-theme-text-primary">
                       Probationary
                     </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-theme-text-muted mt-0.5">
                       New member in trial period
                     </p>
                   </button>
@@ -195,7 +195,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
                     className={`p-3 rounded-lg border text-left transition-all ${
                       membershipType === 'administrative'
                         ? 'border-red-500 bg-red-500/10'
-                        : 'border-white/10 bg-slate-700/50 hover:border-white/20'
+                        : 'border-theme-surface-border bg-theme-surface-secondary hover:border-theme-surface-border'
                     }`}
                   >
                     <p className="text-sm font-medium text-white">
