@@ -508,7 +508,7 @@ export const MembersAdminPage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-medium text-white">{role.name}</h3>
+                        <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
                         {role.is_system && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             System
@@ -516,15 +516,15 @@ export const MembersAdminPage: React.FC = () => {
                         )}
                       </div>
                       {role.description && (
-                        <p className="mt-1 text-sm text-slate-400">{role.description}</p>
+                        <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
                       )}
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-theme-text-muted">
                         {role.permissions.length} permissions • {usersWithRole.length} members
                       </p>
                     </div>
                     <button
                       onClick={() => handleEditMembers(role)}
-                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-white/5"
+                      className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 border border-blue-400 rounded-md hover:bg-theme-surface-hover"
                     >
                       Manage Members
                     </button>
@@ -532,32 +532,32 @@ export const MembersAdminPage: React.FC = () => {
                 </div>
                 <div className="px-6 py-4">
                   {usersWithRole.length === 0 ? (
-                    <p className="text-sm text-slate-500 italic">No members assigned to this role</p>
+                    <p className="text-sm text-theme-text-muted italic">No members assigned to this role</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {usersWithRole.map((user) => (
                         <div
                           key={user.id}
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg hover:bg-white/10"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover"
                         >
                           <div className="flex items-center gap-2">
-                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
-                              <span className="text-xs text-slate-400 font-medium">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-theme-surface flex items-center justify-center">
+                              <span className="text-xs text-theme-text-muted font-medium">
                                 {(user.first_name?.[0] || user.username[0]).toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-white">
+                              <div className="text-sm font-medium text-theme-text-primary">
                                 {user.full_name || user.username}
                               </div>
                               {user.badge_number && (
-                                <div className="text-xs text-slate-400">#{user.badge_number}</div>
+                                <div className="text-xs text-theme-text-muted">#{user.badge_number}</div>
                               )}
                             </div>
                           </div>
                           <button
                             onClick={() => handleQuickRemoveUser(user.id, role)}
-                            className="ml-2 text-slate-500 hover:text-red-600"
+                            className="ml-2 text-theme-text-muted hover:text-red-600"
                             aria-label={`Remove ${user.full_name || user.username} from ${role.name}`}
                           >
                             ×
@@ -582,9 +582,9 @@ export const MembersAdminPage: React.FC = () => {
           aria-labelledby="edit-profile-title"
           onKeyDown={(e) => { if (e.key === 'Escape') { setEditingProfile(false); setProfileUser(null); setError(null); } }}
         >
-          <div className="bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-white/20">
-              <h3 id="edit-profile-title" className="text-lg font-medium text-white">
+          <div className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-theme-surface-border">
+              <h3 id="edit-profile-title" className="text-lg font-medium text-theme-text-primary">
                 Edit Information for {profileUser.full_name || profileUser.username}
               </h3>
             </div>
@@ -593,32 +593,32 @@ export const MembersAdminPage: React.FC = () => {
               {/* Name Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">First Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
                   <input
                     type="text"
                     value={profileForm.first_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, first_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Middle Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Middle Name</label>
                   <input
                     type="text"
                     value={profileForm.middle_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, middle_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Last Name</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Last Name</label>
                   <input
                     type="text"
                     value={profileForm.last_name}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, last_name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -627,22 +627,22 @@ export const MembersAdminPage: React.FC = () => {
               {/* Contact Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Phone</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Phone</label>
                   <input
                     type="tel"
                     value={profileForm.phone}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Mobile</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Mobile</label>
                   <input
                     type="tel"
                     value={profileForm.mobile}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, mobile: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
@@ -651,32 +651,32 @@ export const MembersAdminPage: React.FC = () => {
               {/* Department Fields */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Badge #</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Badge #</label>
                   <input
                     type="text"
                     value={profileForm.badge_number}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, badge_number: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Rank</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Rank</label>
                   <input
                     type="text"
                     value={profileForm.rank}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">Station</label>
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Station</label>
                   <input
                     type="text"
                     value={profileForm.station}
                     onChange={(e) => setProfileForm((prev) => ({ ...prev, station: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={savingProfile}
                   />
                 </div>

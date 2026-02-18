@@ -396,7 +396,7 @@ export const MinutesDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="text-slate-400 text-center py-12" role="status" aria-live="polite">Loading minutes...</div>
+          <div className="text-theme-text-muted text-center py-12" role="status" aria-live="polite">Loading minutes...</div>
         </div>
       </div>
     );
@@ -424,8 +424,8 @@ export const MinutesDetailPage: React.FC = () => {
         </Link>
         <div className="flex justify-between items-start mt-2">
           <div>
-            <h1 className="text-2xl font-bold text-white">{minutes.title}</h1>
-            <p className="text-slate-400 mt-1">
+            <h1 className="text-2xl font-bold text-theme-text-primary">{minutes.title}</h1>
+            <p className="text-theme-text-muted mt-1">
               {formatDateTime(minutes.meeting_date, tz)}
               {minutes.location && ` \u00b7 ${minutes.location}`}
               {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
@@ -447,9 +447,9 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Linked Event */}
       {(linkedEvent || (canManage && isEditable)) && (
-        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-slate-200">Linked Meeting Event</h3>
+            <h3 className="text-sm font-medium text-theme-text-secondary">Linked Meeting Event</h3>
             {canManage && isEditable && (
               <div className="flex gap-2">
                 {linkedEvent && (
@@ -478,16 +478,16 @@ export const MinutesDetailPage: React.FC = () => {
               >
                 {linkedEvent.title}
               </Link>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-theme-text-muted">
                 {formatDate(linkedEvent.start_datetime, tz)}
               </span>
               {linkedEvent.location && (
-                <span className="text-xs text-slate-400">{linkedEvent.location}</span>
+                <span className="text-xs text-theme-text-muted">{linkedEvent.location}</span>
               )}
             </div>
           ) : (
             canManage && isEditable && (
-              <p className="mt-1 text-xs text-slate-500 italic">
+              <p className="mt-1 text-xs text-theme-text-muted italic">
                 No event linked. Link to a scheduled meeting to connect attendance and event data.
               </p>
             )
@@ -497,7 +497,7 @@ export const MinutesDetailPage: React.FC = () => {
 
       {/* Workflow Actions */}
       {canManage && (
-        <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-4 mb-6">
+        <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-4 mb-6">
           <div className="flex flex-wrap gap-3">
             {(minutes.status === 'draft' || minutes.status === 'rejected') && (
               <button
@@ -555,23 +555,23 @@ export const MinutesDetailPage: React.FC = () => {
       )}
 
       {/* Meeting Info */}
-      <div className="bg-white/10 backdrop-blur-sm shadow rounded-lg p-6 mb-6">
+      <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6 mb-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {minutes.called_to_order_at && (
             <div>
-              <span className="text-slate-400">Called to Order:</span>
-              <div className="font-medium text-white">{formatDateTime(minutes.called_to_order_at, tz)}</div>
+              <span className="text-theme-text-muted">Called to Order:</span>
+              <div className="font-medium text-theme-text-primary">{formatDateTime(minutes.called_to_order_at, tz)}</div>
             </div>
           )}
           {minutes.adjourned_at && (
             <div>
-              <span className="text-slate-400">Adjourned:</span>
-              <div className="font-medium text-white">{formatDateTime(minutes.adjourned_at, tz)}</div>
+              <span className="text-theme-text-muted">Adjourned:</span>
+              <div className="font-medium text-theme-text-primary">{formatDateTime(minutes.adjourned_at, tz)}</div>
             </div>
           )}
           {minutes.quorum_met !== null && minutes.quorum_met !== undefined && (
             <div>
-              <span className="text-slate-400">Quorum:</span>
+              <span className="text-theme-text-muted">Quorum:</span>
               <div className={`font-medium ${minutes.quorum_met ? 'text-green-300' : 'text-red-300'}`}>
                 {minutes.quorum_met ? 'Met' : 'Not Met'}
                 {minutes.quorum_count !== null && ` (${minutes.quorum_count})`}

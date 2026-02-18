@@ -260,8 +260,8 @@ const SelectField: React.FC<{
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full px-3 py-2 bg-slate-900/50 border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
-        error ? 'border-red-500' : 'border-slate-600'
+      className={`w-full px-3 py-2 bg-theme-surface-secondary border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all ${
+        error ? 'border-red-500' : 'border-theme-surface-border'
       }`}
       aria-required={required}
       aria-invalid={!!error}
@@ -893,9 +893,9 @@ const OrganizationSetup: React.FC = () => {
                     type="checkbox"
                     checked={formData.physicalAddressSame}
                     onChange={(e) => updateFormData('physicalAddressSame', e.target.checked)}
-                    className="w-5 h-5 rounded border-slate-600 bg-slate-900/50 text-red-500 focus:ring-red-500 focus:ring-offset-0"
+                    className="w-5 h-5 rounded border-theme-surface-border bg-theme-surface-secondary text-red-500 focus:ring-red-500 focus:ring-offset-0"
                   />
-                  <span className="text-slate-200">Same as mailing address</span>
+                  <span className="text-theme-text-secondary">Same as mailing address</span>
                 </label>
 
                 {!formData.physicalAddressSame && (
@@ -921,7 +921,7 @@ const OrganizationSetup: React.FC = () => {
             />
             {expandedSections.identifiers && (
               <div className="p-4 space-y-4 bg-theme-surface-secondary">
-                <p className="text-sm text-slate-400 mb-4">
+                <p className="text-sm text-theme-text-muted mb-4">
                   Select the primary identifier your department uses for official reporting.
                 </p>
 
@@ -950,7 +950,7 @@ const OrganizationSetup: React.FC = () => {
                         className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-all ${
                           formData.identifierType === option.value
                             ? 'border-red-500 bg-red-500/10'
-                            : 'border-slate-600 hover:border-slate-500'
+                            : 'border-theme-surface-border hover:border-theme-surface-hover'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -964,9 +964,9 @@ const OrganizationSetup: React.FC = () => {
                             }
                             className="text-red-500 focus:ring-red-500"
                           />
-                          <span className="text-white font-medium">{option.label}</span>
+                          <span className="text-theme-text-primary font-medium">{option.label}</span>
                         </div>
-                        <span className="text-xs text-slate-400 mt-1 ml-6">
+                        <span className="text-xs text-theme-text-muted mt-1 ml-6">
                           {option.description}
                         </span>
                       </label>
@@ -1073,7 +1073,7 @@ const OrganizationSetup: React.FC = () => {
                       className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer ${
                         dragActive
                           ? 'border-red-500 bg-red-500/10'
-                          : 'border-slate-600 hover:border-red-500 hover:bg-white/5'
+                          : 'border-theme-surface-border hover:border-red-500 hover:bg-theme-surface-hover'
                       }`}
                       onClick={() => fileInputRef.current?.click()}
                       role="button"
@@ -1094,19 +1094,19 @@ const OrganizationSetup: React.FC = () => {
                         aria-label="File input for logo"
                       />
                       <div className="flex flex-col items-center space-y-3">
-                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center">
-                          <Upload className="w-8 h-8 text-slate-400" />
+                        <div className="w-16 h-16 bg-theme-surface rounded-full flex items-center justify-center">
+                          <Upload className="w-8 h-8 text-theme-text-muted" />
                         </div>
                         <div>
-                          <p className="text-white font-medium mb-1">
+                          <p className="text-theme-text-primary font-medium mb-1">
                             Drop your logo here, or click to browse
                           </p>
-                          <p className="text-sm text-slate-400">PNG, JPG or WebP (max 5MB)</p>
+                          <p className="text-sm text-theme-text-muted">PNG, JPG or WebP (max 5MB)</p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="border-2 border-slate-600 rounded-lg p-6 bg-slate-900/50">
+                    <div className="border-2 border-theme-surface-border rounded-lg p-6 bg-theme-surface-secondary">
                       <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0 w-24 h-24 bg-white rounded-lg flex items-center justify-center overflow-hidden">
                           <img
@@ -1118,8 +1118,8 @@ const OrganizationSetup: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between">
                             <div>
-                              <p className="text-white font-medium">Logo uploaded</p>
-                              <p className="text-sm text-slate-400 mt-1">
+                              <p className="text-theme-text-primary font-medium">Logo uploaded</p>
+                              <p className="text-sm text-theme-text-muted mt-1">
                                 Click to change or drag a new image
                               </p>
                             </div>
@@ -1150,7 +1150,7 @@ const OrganizationSetup: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-slate-400 flex items-start">
+                <p className="mt-2 text-xs text-theme-text-muted flex items-start">
                   <ImageIcon className="w-4 h-4 mr-1 flex-shrink-0 mt-0.5" />
                   <span>
                     Your logo will be displayed in the header and on reports. You can change it
@@ -1189,7 +1189,7 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-slate-900 via-slate-900 to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="pt-4 sticky bottom-0 md:relative bg-gradient-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={handleContinue}
               disabled={isSaving}

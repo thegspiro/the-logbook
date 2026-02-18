@@ -379,7 +379,7 @@ export const MemberProfilePage: React.FC = () => {
                               Cert #: {training.certification_number}
                             </p>
                           )}
-                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-300">
+                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-theme-text-secondary">
                             {training.completion_date && (
                               <span>Completed: {formatDate(training.completion_date, tz)}</span>
                             )}
@@ -418,7 +418,7 @@ export const MemberProfilePage: React.FC = () => {
                   {trainings.length > 5 && (
                     <Link
                       to={`/members/${userId}/training`}
-                      className="block text-center py-3 text-sm text-blue-400 hover:text-blue-300 border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+                      className="block text-center py-3 text-sm text-blue-400 hover:text-blue-300 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
                     >
                       View all {trainings.length} training records →
                     </Link>
@@ -431,39 +431,39 @@ export const MemberProfilePage: React.FC = () => {
           {/* Assigned Inventory - Only shown if inventory module is enabled */}
           {inventoryModuleEnabled && (
             <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">Assigned Inventory</h2>
+              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Assigned Inventory</h2>
               {inventoryLoading ? (
-                <div className="text-center py-4 text-slate-400">Loading inventory...</div>
+                <div className="text-center py-4 text-theme-text-muted">Loading inventory...</div>
               ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-white/10">
+                <table className="min-w-full divide-y divide-theme-surface-border">
                   <thead>
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                         Item
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                         Item #
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                         Category
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                         Condition
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
                         Assigned
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-theme-surface-border">
                     {inventoryItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-white/5">
-                        <td className="px-4 py-3 text-sm font-medium text-white">
+                      <tr key={item.id} className="hover:bg-theme-surface-hover">
+                        <td className="px-4 py-3 text-sm font-medium text-theme-text-primary">
                           {item.name}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-300">{item.item_number}</td>
-                        <td className="px-4 py-3 text-sm text-slate-300">{item.category}</td>
+                        <td className="px-4 py-3 text-sm text-theme-text-secondary">{item.item_number}</td>
+                        <td className="px-4 py-3 text-sm text-theme-text-secondary">{item.category}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
@@ -477,7 +477,7 @@ export const MemberProfilePage: React.FC = () => {
                             {item.condition}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-300">
+                        <td className="px-4 py-3 text-sm text-theme-text-secondary">
                           {formatDate(item.assigned_date, tz)}
                         </td>
                       </tr>
@@ -495,7 +495,7 @@ export const MemberProfilePage: React.FC = () => {
           {/* Contact Information */}
           <div className="bg-theme-surface backdrop-blur-sm shadow rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Contact Information</h2>
+              <h2 className="text-lg font-semibold text-theme-text-primary">Contact Information</h2>
               {canEdit && !isEditing && (
                 <button
                   onClick={handleEditClick}
@@ -510,61 +510,61 @@ export const MemberProfilePage: React.FC = () => {
               <div className="space-y-3">
                 {user.email && (
                   <div>
-                    <p className="text-xs text-slate-400 uppercase font-medium">Email</p>
-                    <p className="text-sm text-white mt-1">{user.email}</p>
+                    <p className="text-xs text-theme-text-muted uppercase font-medium">Email</p>
+                    <p className="text-sm text-theme-text-primary mt-1">{user.email}</p>
                   </div>
                 )}
                 {user.phone && (
                   <div>
-                    <p className="text-xs text-slate-400 uppercase font-medium">Phone</p>
-                    <p className="text-sm text-white mt-1">{user.phone}</p>
+                    <p className="text-xs text-theme-text-muted uppercase font-medium">Phone</p>
+                    <p className="text-sm text-theme-text-primary mt-1">{user.phone}</p>
                   </div>
                 )}
                 {user.mobile && (
                   <div>
-                    <p className="text-xs text-slate-400 uppercase font-medium">Mobile</p>
-                    <p className="text-sm text-white mt-1">{user.mobile}</p>
+                    <p className="text-xs text-theme-text-muted uppercase font-medium">Mobile</p>
+                    <p className="text-sm text-theme-text-primary mt-1">{user.mobile}</p>
                   </div>
                 )}
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
                     Email
                   </label>
                   <input
                     type="email"
                     value={editForm.email}
                     onChange={(e) => handleFormChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
                     Phone
                   </label>
                   <input
                     type="tel"
                     value={editForm.phone}
                     onChange={(e) => handleFormChange('phone', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-1">
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
                     Mobile
                   </label>
                   <input
                     type="tel"
                     value={editForm.mobile}
                     onChange={(e) => handleFormChange('mobile', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-600 rounded-md text-sm text-white bg-slate-900/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
-                <div className="pt-4 border-t border-white/20">
-                  <label className="block text-xs text-slate-400 uppercase font-medium mb-3">
+                <div className="pt-4 border-t border-theme-surface-border">
+                  <label className="block text-xs text-theme-text-muted uppercase font-medium mb-3">
                     Notification Preferences
                   </label>
                   <div className="space-y-2">
@@ -629,13 +629,13 @@ export const MemberProfilePage: React.FC = () => {
             <h2 className="text-lg font-semibold text-white mb-4">Employment</h2>
             <div className="space-y-3">
               <div>
-                <p className="text-xs text-slate-400 uppercase font-medium">Status</p>
-                <p className="text-sm text-white mt-1 capitalize">{user.status}</p>
+                <p className="text-xs text-theme-text-muted uppercase font-medium">Status</p>
+                <p className="text-sm text-theme-text-primary mt-1 capitalize">{user.status}</p>
               </div>
               {user.hire_date && (
                 <div>
-                  <p className="text-xs text-slate-400 uppercase font-medium">Hire Date</p>
-                  <p className="text-sm text-white mt-1">{formatDate(user.hire_date, tz)}</p>
+                  <p className="text-xs text-theme-text-muted uppercase font-medium">Hire Date</p>
+                  <p className="text-sm text-theme-text-primary mt-1">{formatDate(user.hire_date, tz)}</p>
                 </div>
               )}
             </div>

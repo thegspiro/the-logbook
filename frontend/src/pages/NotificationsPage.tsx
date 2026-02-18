@@ -437,9 +437,9 @@ const NotificationsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
+                <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border overflow-hidden">
                   {/* Table Header */}
-                  <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-white/10 text-xs font-medium text-slate-400 uppercase">
+                  <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-theme-surface-border text-xs font-medium text-theme-text-muted uppercase">
                     <div className="col-span-4">Subject</div>
                     <div className="col-span-3">Recipient</div>
                     <div className="col-span-2">Channel</div>
@@ -450,32 +450,32 @@ const NotificationsPage: React.FC = () => {
                   {logs.map((log) => (
                     <div
                       key={log.id}
-                      className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors"
+                      className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-theme-surface-border last:border-b-0 hover:bg-theme-surface-hover transition-colors"
                     >
                       <div className="col-span-4">
-                        <p className="text-white text-sm truncate">{log.subject || '(No subject)'}</p>
+                        <p className="text-theme-text-primary text-sm truncate">{log.subject || '(No subject)'}</p>
                         {log.rule_name && (
-                          <p className="text-slate-500 text-xs mt-0.5 truncate">Rule: {log.rule_name}</p>
+                          <p className="text-theme-text-muted text-xs mt-0.5 truncate">Rule: {log.rule_name}</p>
                         )}
                       </div>
                       <div className="col-span-3">
-                        <p className="text-slate-300 text-sm truncate">
+                        <p className="text-theme-text-secondary text-sm truncate">
                           {log.recipient_name || log.recipient_email || 'Unknown'}
                         </p>
                         {log.recipient_name && log.recipient_email && (
-                          <p className="text-slate-500 text-xs mt-0.5 truncate">{log.recipient_email}</p>
+                          <p className="text-theme-text-muted text-xs mt-0.5 truncate">{log.recipient_email}</p>
                         )}
                       </div>
                       <div className="col-span-2">
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded bg-slate-500/10 text-slate-400">
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded bg-slate-500/10 text-theme-text-muted">
                           {log.channel === 'in_app' ? 'In-App' : log.channel === 'email' ? 'Email' : log.channel}
                         </span>
                       </div>
                       <div className="col-span-2">
-                        <p className="text-slate-300 text-sm">
+                        <p className="text-theme-text-secondary text-sm">
                           {formatDate(log.sent_at, tz)}
                         </p>
-                        <p className="text-slate-500 text-xs mt-0.5">
+                        <p className="text-theme-text-muted text-xs mt-0.5">
                           {formatTime(log.sent_at, tz)}
                         </p>
                       </div>
@@ -509,11 +509,11 @@ const NotificationsPage: React.FC = () => {
           >
             <div className="flex items-center justify-center min-h-screen px-4">
               <div className="fixed inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
-              <div className="relative bg-slate-800 rounded-lg shadow-xl max-w-lg w-full border border-white/20">
+              <div className="relative bg-theme-surface rounded-lg shadow-xl max-w-lg w-full border border-theme-surface-border">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-white">Create Notification Rule</h3>
-                    <button onClick={() => { setShowCreateModal(false); setCreateError(null); }} className="text-slate-400 hover:text-white">
+                    <h3 className="text-lg font-medium text-theme-text-primary">Create Notification Rule</h3>
+                    <button onClick={() => { setShowCreateModal(false); setCreateError(null); }} className="text-theme-text-muted hover:text-theme-text-primary">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
@@ -525,24 +525,24 @@ const NotificationsPage: React.FC = () => {
                   )}
                   <div className="space-y-4">
                     <div>
-                      <label htmlFor="rule-name" className="block text-sm font-medium text-slate-300 mb-1">Rule Name <span aria-hidden="true">*</span></label>
+                      <label htmlFor="rule-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Rule Name <span aria-hidden="true">*</span></label>
                       <input
                         id="rule-name"
                         type="text"
                         value={createName}
                         onChange={(e) => setCreateName(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-orange-500"
                         placeholder="e.g., Monthly Report Reminder"
                         required
                         aria-required="true"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Trigger Event</label>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trigger Event</label>
                       <select
                         value={createTrigger}
                         onChange={(e) => setCreateTrigger(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-orange-500"
                       >
                         {TRIGGER_OPTIONS.map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -550,29 +550,29 @@ const NotificationsPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="rule-description" className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                      <label htmlFor="rule-description" className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
                       <textarea
                         id="rule-description"
                         rows={2}
                         value={createDescription}
                         onChange={(e) => setCreateDescription(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
                     </div>
-                    <div className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-3">
+                    <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-3">
                       <div className="flex items-start space-x-2">
-                        <AlertCircle className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-slate-400 text-sm">
-                          Category will be set to <strong className="text-slate-300">{formatCategory(TRIGGER_CATEGORY_MAP[createTrigger] || 'general')}</strong> based on the selected trigger. Channel defaults to <strong className="text-slate-300">In-App</strong>.
+                        <AlertCircle className="w-4 h-4 text-theme-text-muted mt-0.5 flex-shrink-0" />
+                        <p className="text-theme-text-muted text-sm">
+                          Category will be set to <strong className="text-theme-text-secondary">{formatCategory(TRIGGER_CATEGORY_MAP[createTrigger] || 'general')}</strong> based on the selected trigger. Channel defaults to <strong className="text-theme-text-secondary">In-App</strong>.
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                <div className="bg-theme-surface-secondary px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => { setShowCreateModal(false); setCreateError(null); }}
-                    className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                   >
                     Cancel
                   </button>

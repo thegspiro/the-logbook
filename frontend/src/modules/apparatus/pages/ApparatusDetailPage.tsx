@@ -212,7 +212,7 @@ export const ApparatusDetailPage: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => navigate(`/apparatus/${id}/edit`)}
-                className="flex items-center space-x-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 <Edit className="w-4 h-4" />
                 <span>Edit</span>
@@ -220,7 +220,7 @@ export const ApparatusDetailPage: React.FC = () => {
               {!currentApparatus.isArchived && (
                 <button
                   onClick={() => navigate(`/apparatus/${id}/archive`)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors"
                 >
                   <Archive className="w-4 h-4" />
                   <span>Archive</span>
@@ -248,7 +248,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-6 pt-6">
-        <div className="flex space-x-1 bg-slate-900/50 rounded-lg p-1 border border-white/10">
+        <div className="flex space-x-1 bg-theme-surface-secondary rounded-lg p-1 border border-theme-surface-border">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -256,7 +256,7 @@ export const ApparatusDetailPage: React.FC = () => {
               className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors flex-1 justify-center ${
                 activeTab === tab.id
                   ? 'bg-red-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary'
               }`}
             >
               {tab.icon}
@@ -273,137 +273,137 @@ export const ApparatusDetailPage: React.FC = () => {
             {/* Main Info Card */}
             <div className="lg:col-span-2 space-y-6">
               {/* Vehicle Details */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                <h2 className="text-white font-bold mb-4 flex items-center gap-2">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <Truck className="w-5 h-5" />
                   Vehicle Details
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Type</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Type</p>
                     {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Year</p>
-                    <p className="text-white">{currentApparatus.year || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Year</p>
+                    <p className="text-theme-text-primary">{currentApparatus.year || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Make</p>
-                    <p className="text-white">{currentApparatus.make || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Make</p>
+                    <p className="text-theme-text-primary">{currentApparatus.make || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Model</p>
-                    <p className="text-white">{currentApparatus.model || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Model</p>
+                    <p className="text-theme-text-primary">{currentApparatus.model || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Body Manufacturer</p>
-                    <p className="text-white">{currentApparatus.bodyManufacturer || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Body Manufacturer</p>
+                    <p className="text-theme-text-primary">{currentApparatus.bodyManufacturer || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">VIN</p>
-                    <p className="text-white font-mono text-sm">{currentApparatus.vin || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">VIN</p>
+                    <p className="text-theme-text-primary font-mono text-sm">{currentApparatus.vin || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">License Plate</p>
-                    <p className="text-white">{currentApparatus.licensePlate || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">License Plate</p>
+                    <p className="text-theme-text-primary">{currentApparatus.licensePlate || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Radio ID</p>
-                    <p className="text-white">{currentApparatus.radioId || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Radio ID</p>
+                    <p className="text-theme-text-primary">{currentApparatus.radioId || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Asset Tag</p>
-                    <p className="text-white">{currentApparatus.assetTag || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Asset Tag</p>
+                    <p className="text-theme-text-primary">{currentApparatus.assetTag || '-'}</p>
                   </div>
                 </div>
               </div>
 
               {/* Specifications */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                <h2 className="text-white font-bold mb-4 flex items-center gap-2">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <Gauge className="w-5 h-5" />
                   Specifications
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Fuel Type</p>
-                    <p className="text-white capitalize">{currentApparatus.fuelType?.replace('_', ' ') || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Fuel Type</p>
+                    <p className="text-theme-text-primary capitalize">{currentApparatus.fuelType?.replace('_', ' ') || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Fuel Capacity</p>
-                    <p className="text-white">{currentApparatus.fuelCapacityGallons ? `${currentApparatus.fuelCapacityGallons} gal` : '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Fuel Capacity</p>
+                    <p className="text-theme-text-primary">{currentApparatus.fuelCapacityGallons ? `${currentApparatus.fuelCapacityGallons} gal` : '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Seating Capacity</p>
-                    <p className="text-white">{currentApparatus.seatingCapacity || '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Seating Capacity</p>
+                    <p className="text-theme-text-primary">{currentApparatus.seatingCapacity || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">GVWR</p>
-                    <p className="text-white">{currentApparatus.gvwr ? `${currentApparatus.gvwr.toLocaleString()} lbs` : '-'}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">GVWR</p>
+                    <p className="text-theme-text-primary">{currentApparatus.gvwr ? `${currentApparatus.gvwr.toLocaleString()} lbs` : '-'}</p>
                   </div>
                   {currentApparatus.pumpCapacityGpm && (
                     <div>
-                      <p className="text-slate-400 text-xs uppercase">Pump Capacity</p>
-                      <p className="text-white">{currentApparatus.pumpCapacityGpm} GPM</p>
+                      <p className="text-theme-text-muted text-xs uppercase">Pump Capacity</p>
+                      <p className="text-theme-text-primary">{currentApparatus.pumpCapacityGpm} GPM</p>
                     </div>
                   )}
                   {currentApparatus.tankCapacityGallons && (
                     <div>
-                      <p className="text-slate-400 text-xs uppercase">Tank Capacity</p>
-                      <p className="text-white">{currentApparatus.tankCapacityGallons} gal</p>
+                      <p className="text-theme-text-muted text-xs uppercase">Tank Capacity</p>
+                      <p className="text-theme-text-primary">{currentApparatus.tankCapacityGallons} gal</p>
                     </div>
                   )}
                   {currentApparatus.foamCapacityGallons && (
                     <div>
-                      <p className="text-slate-400 text-xs uppercase">Foam Capacity</p>
-                      <p className="text-white">{currentApparatus.foamCapacityGallons} gal</p>
+                      <p className="text-theme-text-muted text-xs uppercase">Foam Capacity</p>
+                      <p className="text-theme-text-primary">{currentApparatus.foamCapacityGallons} gal</p>
                     </div>
                   )}
                   {currentApparatus.ladderLengthFeet && (
                     <div>
-                      <p className="text-slate-400 text-xs uppercase">Ladder Length</p>
-                      <p className="text-white">{currentApparatus.ladderLengthFeet} ft</p>
+                      <p className="text-theme-text-muted text-xs uppercase">Ladder Length</p>
+                      <p className="text-theme-text-primary">{currentApparatus.ladderLengthFeet} ft</p>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Financial Info */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                <h2 className="text-white font-bold mb-4 flex items-center gap-2">
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
                   <DollarSign className="w-5 h-5" />
                   Financial Information
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Purchase Date</p>
-                    <p className="text-white">{formatDate(currentApparatus.purchaseDate, tz)}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Purchase Date</p>
+                    <p className="text-theme-text-primary">{formatDate(currentApparatus.purchaseDate, tz)}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Purchase Price</p>
-                    <p className="text-white">{formatCurrency(currentApparatus.purchasePrice)}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Purchase Price</p>
+                    <p className="text-theme-text-primary">{formatCurrency(currentApparatus.purchasePrice)}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">Current Value</p>
-                    <p className="text-white">{formatCurrency(currentApparatus.currentValue)}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">Current Value</p>
+                    <p className="text-theme-text-primary">{formatCurrency(currentApparatus.currentValue)}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs uppercase">In Service Date</p>
-                    <p className="text-white">{formatDate(currentApparatus.inServiceDate, tz)}</p>
+                    <p className="text-theme-text-muted text-xs uppercase">In Service Date</p>
+                    <p className="text-theme-text-primary">{formatDate(currentApparatus.inServiceDate, tz)}</p>
                   </div>
                   {currentApparatus.isFinanced && (
                     <>
                       <div>
-                        <p className="text-slate-400 text-xs uppercase">Financing Company</p>
-                        <p className="text-white">{currentApparatus.financingCompany || '-'}</p>
+                        <p className="text-theme-text-muted text-xs uppercase">Financing Company</p>
+                        <p className="text-theme-text-primary">{currentApparatus.financingCompany || '-'}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-xs uppercase">Monthly Payment</p>
-                        <p className="text-white">{formatCurrency(currentApparatus.monthlyPayment)}</p>
+                        <p className="text-theme-text-muted text-xs uppercase">Monthly Payment</p>
+                        <p className="text-theme-text-primary">{formatCurrency(currentApparatus.monthlyPayment)}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-xs uppercase">Financing Ends</p>
-                        <p className="text-white">{formatDate(currentApparatus.financingEndDate, tz)}</p>
+                        <p className="text-theme-text-muted text-xs uppercase">Financing Ends</p>
+                        <p className="text-theme-text-primary">{formatDate(currentApparatus.financingEndDate, tz)}</p>
                       </div>
                     </>
                   )}
@@ -414,24 +414,24 @@ export const ApparatusDetailPage: React.FC = () => {
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Quick Stats */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6">
-                <h2 className="text-white font-bold mb-4">Quick Stats</h2>
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg border border-theme-surface-border p-6">
+                <h2 className="text-theme-text-primary font-bold mb-4">Quick Stats</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-slate-400">
+                    <div className="flex items-center gap-2 text-theme-text-muted">
                       <Gauge className="w-4 h-4" />
                       <span>Mileage</span>
                     </div>
-                    <span className="text-white font-semibold">
+                    <span className="text-theme-text-primary font-semibold">
                       {currentApparatus.currentMileage?.toLocaleString() || '-'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-slate-400">
+                    <div className="flex items-center gap-2 text-theme-text-muted">
                       <Clock className="w-4 h-4" />
                       <span>Hours</span>
                     </div>
-                    <span className="text-white font-semibold">
+                    <span className="text-theme-text-primary font-semibold">
                       {currentApparatus.currentHours?.toLocaleString() || '-'}
                     </span>
                   </div>

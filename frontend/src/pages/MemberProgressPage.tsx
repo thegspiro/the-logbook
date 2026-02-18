@@ -146,7 +146,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ progress, onClick }) => {
 
       {/* Next Milestones */}
       {progress.next_milestones.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-700">
+        <div className="mt-4 pt-4 border-t border-theme-surface-border">
           <div className="flex items-center space-x-2 mb-2">
             <Award className="w-4 h-4 text-yellow-400" />
             <span className="text-sm font-medium text-theme-text-secondary">Next Milestone</span>
@@ -438,9 +438,9 @@ const MemberProgressPage: React.FC = () => {
           </div>
         ) : enrollments.length === 0 ? (
           <div className="text-center py-12 bg-theme-surface rounded-lg">
-            <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <GraduationCap className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <p className="text-theme-text-muted">No {filter !== 'all' && filter} programs found</p>
-            <p className="text-gray-500 mt-2 text-sm">
+            <p className="text-theme-text-muted mt-2 text-sm">
               Contact your training officer to enroll in a program
             </p>
           </div>

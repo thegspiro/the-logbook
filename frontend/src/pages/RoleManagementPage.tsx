@@ -266,32 +266,32 @@ export const RoleManagementPage: React.FC = () => {
 
                 {!editingRole && (
                   <div>
-                    <label htmlFor="role-slug" className="block text-sm font-medium text-slate-200">Slug</label>
+                    <label htmlFor="role-slug" className="block text-sm font-medium text-theme-text-secondary">Slug</label>
                     <input
                       id="role-slug"
                       type="text"
                       value={formData.slug}
                       onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                      className="mt-1 block w-full rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       placeholder="custom_role"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label htmlFor="role-description" className="block text-sm font-medium text-slate-200">Description</label>
+                  <label htmlFor="role-description" className="block text-sm font-medium text-theme-text-secondary">Description</label>
                   <textarea
                     id="role-description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="mt-1 block w-full rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                 </div>
 
                 {!editingRole?.is_system && (
                   <div>
-                    <label htmlFor="role-priority" className="block text-sm font-medium text-slate-200">Priority (0-100)</label>
+                    <label htmlFor="role-priority" className="block text-sm font-medium text-theme-text-secondary">Priority (0-100)</label>
                     <input
                       id="role-priority"
                       type="number"
@@ -299,14 +299,14 @@ export const RoleManagementPage: React.FC = () => {
                       max="100"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-32 rounded-md border-slate-600 bg-slate-900/50 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 block w-32 rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
-                    <p className="mt-1 text-xs text-slate-400">Higher priority roles have more authority</p>
+                    <p className="mt-1 text-xs text-theme-text-muted">Higher priority roles have more authority</p>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-200 mb-3">Permissions</label>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-3">Permissions</label>
                   <div className="space-y-4">
                     {permissionCategories.map((category) => {
                       const categoryPermissions = category.permissions.map((p) => p.name);
@@ -314,7 +314,7 @@ export const RoleManagementPage: React.FC = () => {
                       const someSelected = categoryPermissions.some((p) => formData.permissions.includes(p));
 
                       return (
-                        <div key={category.category} className="border border-white/20 rounded-lg p-4">
+                        <div key={category.category} className="border border-theme-surface-border rounded-lg p-4">
                           <label className="flex items-center mb-2 cursor-pointer">
                             <input
                               type="checkbox"
@@ -323,9 +323,9 @@ export const RoleManagementPage: React.FC = () => {
                                 if (input) input.indeterminate = someSelected && !allSelected;
                               }}
                               onChange={() => handleToggleCategory(category)}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                             />
-                            <span className="ml-2 text-sm font-medium text-white uppercase">
+                            <span className="ml-2 text-sm font-medium text-theme-text-primary uppercase">
                               {category.category.replace(/_/g, ' ')}
                             </span>
                           </label>
@@ -336,11 +336,11 @@ export const RoleManagementPage: React.FC = () => {
                                   type="checkbox"
                                   checked={formData.permissions.includes(perm.name)}
                                   onChange={() => handleTogglePermission(perm.name)}
-                                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-600 rounded"
+                                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-theme-surface-border rounded"
                                 />
                                 <div className="ml-2">
-                                  <div className="text-sm text-white">{perm.name}</div>
-                                  <div className="text-xs text-slate-400">{perm.description}</div>
+                                  <div className="text-sm text-theme-text-primary">{perm.name}</div>
+                                  <div className="text-xs text-theme-text-muted">{perm.description}</div>
                                 </div>
                               </label>
                             ))}
@@ -352,10 +352,10 @@ export const RoleManagementPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
+              <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-white/30 rounded-md hover:bg-white/5"
+                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
                 >
                   Cancel
                 </button>

@@ -93,7 +93,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-gray-500/20 text-gray-400'}`}>
+    <span className={`px-2 py-0.5 text-xs rounded ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
       {labels[type] || type}
     </span>
   );
@@ -288,7 +288,7 @@ const PipelineDetailPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
-          <p className="text-gray-400 mt-4">Loading pipeline...</p>
+          <p className="text-theme-text-muted mt-4">Loading pipeline...</p>
         </div>
       </div>
     );
@@ -484,10 +484,10 @@ const PipelineDetailPage: React.FC = () => {
                                   className="bg-theme-surface-secondary rounded-lg p-3 flex items-start justify-between"
                                 >
                                   <div className="flex items-start space-x-3">
-                                    <CheckCircle2 className="w-5 h-5 text-gray-500 mt-0.5" />
+                                    <CheckCircle2 className="w-5 h-5 text-theme-text-muted mt-0.5" />
                                     <div>
                                       <div className="flex items-center space-x-2 mb-1">
-                                        <span className="text-white text-sm font-medium">
+                                        <span className="text-theme-text-primary text-sm font-medium">
                                           {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
                                         </span>
                                         {pr.requirement?.requirement_type && (
@@ -498,12 +498,12 @@ const PipelineDetailPage: React.FC = () => {
                                         )}
                                       </div>
                                       {pr.requirement?.description && (
-                                        <p className="text-gray-400 text-xs">{pr.requirement.description}</p>
+                                        <p className="text-theme-text-muted text-xs">{pr.requirement.description}</p>
                                       )}
                                       {pr.program_specific_description && (
-                                        <p className="text-gray-300 text-xs mt-1 italic">{pr.program_specific_description}</p>
+                                        <p className="text-theme-text-secondary text-xs mt-1 italic">{pr.program_specific_description}</p>
                                       )}
-                                      <div className="flex items-center space-x-3 mt-1 text-xs text-gray-500">
+                                      <div className="flex items-center space-x-3 mt-1 text-xs text-theme-text-muted">
                                         {pr.requirement?.required_hours && (
                                           <span>{pr.requirement.required_hours}h required</span>
                                         )}
@@ -532,10 +532,10 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'enrollments' && (
           <div>
             {enrollments.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400 mb-2">No members enrolled yet</p>
-                <p className="text-gray-500 text-sm mb-4">
+              <div className="text-center py-12 bg-theme-surface rounded-lg">
+                <Users className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+                <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
+                <p className="text-theme-text-muted text-sm mb-4">
                   Use the Enroll button to add members to this pipeline
                 </p>
                 <button
@@ -548,15 +548,15 @@ const PipelineDetailPage: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 {enrollments.map((enrollment) => (
-                  <div key={enrollment.id} className="bg-gray-800 rounded-lg p-4 flex items-center justify-between">
+                  <div key={enrollment.id} className="bg-theme-surface rounded-lg p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-white font-medium">{enrollment.user_id}</p>
-                      <div className="flex items-center space-x-3 text-xs text-gray-400 mt-1">
+                      <p className="text-theme-text-primary font-medium">{enrollment.user_id}</p>
+                      <div className="flex items-center space-x-3 text-xs text-theme-text-muted mt-1">
                         <span>Status: {enrollment.status}</span>
                         <span>{enrollment.progress_percentage}% complete</span>
                       </div>
                     </div>
-                    <div className="w-32 bg-gray-700 rounded-full h-2">
+                    <div className="w-32 bg-theme-surface-secondary rounded-full h-2">
                       <div
                         className="bg-red-500 h-2 rounded-full transition-all"
                         style={{ width: `${enrollment.progress_percentage}%` }}

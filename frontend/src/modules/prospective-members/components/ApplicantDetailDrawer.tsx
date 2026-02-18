@@ -321,16 +321,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               <div className="mx-4 mt-4 p-3 bg-slate-500/5 border border-slate-500/20 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <Archive className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-medium text-slate-300">Application Withdrawn</span>
+                  <span className="text-sm font-medium text-theme-text-secondary">Application Withdrawn</span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-theme-text-muted">
                   This applicant voluntarily withdrew from the pipeline
                   {applicant.withdrawn_at && (
                     <> on {formatDate(applicant.withdrawn_at, tz)}</>
                   )}.
                 </p>
                 {applicant.withdrawal_reason && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-theme-text-muted mt-1">
                     Reason: {applicant.withdrawal_reason}
                   </p>
                 )}
@@ -340,33 +340,33 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
               {/* Contact Info */}
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                   Contact Information
                 </h3>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
-                    <Mail className="w-4 h-4 text-slate-500" />
-                    <span className="text-slate-300">{maskValue(applicant.email)}</span>
+                    <Mail className="w-4 h-4 text-theme-text-muted" />
+                    <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
                   </div>
                   {applicant.phone && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Phone className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">{maskValue(applicant.phone)}</span>
+                      <Phone className="w-4 h-4 text-theme-text-muted" />
+                      <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
                     </div>
                   )}
                   {applicant.date_of_birth && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">
+                      <Calendar className="w-4 h-4 text-theme-text-muted" />
+                      <span className="text-theme-text-secondary">
                         DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
                       </span>
                     </div>
                   )}
                   {applicant.address?.city && (
                     <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="w-4 h-4 text-slate-500" />
-                      <span className="text-slate-300">
+                      <MapPin className="w-4 h-4 text-theme-text-muted" />
+                      <span className="text-theme-text-secondary">
                         {showPii
                           ? [applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
                               .filter(Boolean)
@@ -379,11 +379,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               </div>
 
               {/* Current Stage */}
-              <div className="p-4 border-b border-white/10">
-                <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">
+              <div className="p-4 border-b border-theme-surface-border">
+                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
                   Current Stage
                 </h3>
-                <div className="bg-slate-800 rounded-lg p-3 border border-white/10">
+                <div className="bg-theme-surface rounded-lg p-3 border border-theme-surface-border">
                   <div className="flex items-center gap-2 mb-1">
                     {applicant.current_stage_type && (
                       (() => {
@@ -391,11 +391,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         return <Icon className="w-4 h-4 text-red-400" />;
                       })()
                     )}
-                    <span className="text-sm font-medium text-white">
+                    <span className="text-sm font-medium text-theme-text-primary">
                       {applicant.current_stage_name ?? 'Unknown stage'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
+                  <div className="flex items-center gap-1 text-xs text-theme-text-muted mt-1">
                     <Clock className="w-3 h-3" />
                     Entered {formatDateTime(applicant.stage_entered_at, tz)}
                   </div>

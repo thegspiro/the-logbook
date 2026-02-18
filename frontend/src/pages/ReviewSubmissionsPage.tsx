@@ -626,11 +626,11 @@ const ReviewSubmissionsPage: React.FC = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white flex items-center space-x-2">
+            <h1 className="text-2xl font-bold text-theme-text-primary flex items-center space-x-2">
               <ClipboardCheck className="w-7 h-7 text-red-500" />
               <span>Review Submissions</span>
             </h1>
-            <p className="text-gray-400 text-sm">
+            <p className="text-theme-text-muted text-sm">
               Review and approve member self-reported training
             </p>
           </div>
@@ -643,13 +643,13 @@ const ReviewSubmissionsPage: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-6">
+        <div className="flex space-x-1 bg-theme-surface p-1 rounded-lg mb-6">
           <button
             onClick={() => setActiveView('pending')}
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'pending'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Clock className="w-4 h-4 inline mr-2" />
@@ -665,7 +665,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'all'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <FileText className="w-4 h-4 inline mr-2" />
@@ -676,7 +676,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
               activeView === 'config'
                 ? 'bg-red-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
             }`}
           >
             <Settings className="w-4 h-4 inline mr-2" />
@@ -687,11 +687,11 @@ const ReviewSubmissionsPage: React.FC = () => {
         {/* Status Filter (All view only) */}
         {activeView === 'all' && (
           <div className="flex items-center space-x-2 mb-4">
-            <Filter className="w-4 h-4 text-gray-400" />
+            <Filter className="w-4 h-4 text-theme-text-muted" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <option value="">All statuses</option>
               <option value="pending_review">Pending Review</option>
@@ -709,20 +709,20 @@ const ReviewSubmissionsPage: React.FC = () => {
         ) : loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500" />
-            <p className="text-gray-400 mt-4">Loading submissions...</p>
+            <p className="text-theme-text-muted mt-4">Loading submissions...</p>
           </div>
         ) : submissions.length === 0 ? (
-          <div className="text-center py-16 bg-gray-800 rounded-lg border border-gray-700">
+          <div className="text-center py-16 bg-theme-surface rounded-lg border border-theme-surface-border">
             {activeView === 'pending' ? (
               <>
                 <CheckCircle2 className="w-16 h-16 text-green-500/50 mx-auto mb-4" />
-                <p className="text-gray-400 text-lg">All caught up!</p>
-                <p className="text-gray-500 text-sm mt-1">No submissions waiting for review.</p>
+                <p className="text-theme-text-muted text-lg">All caught up!</p>
+                <p className="text-theme-text-muted text-sm mt-1">No submissions waiting for review.</p>
               </>
             ) : (
               <>
                 <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400">No submissions found</p>
+                <p className="text-theme-text-muted">No submissions found</p>
                 {statusFilter && (
                   <button
                     onClick={() => setStatusFilter('')}

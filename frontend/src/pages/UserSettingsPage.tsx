@@ -423,7 +423,7 @@ export const UserSettingsPage: React.FC = () => {
                 </div>
 
                 {/* Save Button */}
-                <div className="pt-4 border-t border-slate-200 dark:border-white/10">
+                <div className="pt-4 border-t border-theme-surface-border">
                   <button
                     onClick={handleSaveProfile}
                     disabled={savingProfile}
@@ -441,8 +441,8 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'password' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Change Password</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Change Password</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Update your password to keep your account secure
               </p>
             </div>
@@ -450,12 +450,12 @@ export const UserSettingsPage: React.FC = () => {
             <form onSubmit={handlePasswordChange} className="space-y-4">
               {/* Current Password */}
               <div>
-                <label htmlFor="currentPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Current Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="currentPassword"
@@ -463,7 +463,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showCurrentPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Enter current password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -472,7 +472,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 dark:hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
                     aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
                   >
                     {showCurrentPassword ? (
@@ -486,12 +486,12 @@ export const UserSettingsPage: React.FC = () => {
 
               {/* New Password */}
               <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                <label htmlFor="newPassword" className="block text-sm font-medium text-theme-text-secondary mb-2">
                   New Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="newPassword"
@@ -499,7 +499,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showNewPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Enter new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -508,7 +508,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 dark:hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
                   >
                     {showNewPassword ? (
@@ -522,7 +522,7 @@ export const UserSettingsPage: React.FC = () => {
                 {/* Password strength indicator */}
                 {newPassword && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs text-slate-500 dark:text-slate-300 font-medium">Password must contain:</p>
+                    <p className="text-xs text-theme-text-secondary font-medium">Password must contain:</p>
                     <ul className="space-y-1 text-xs">
                       {[
                         { label: 'At least 8 characters', valid: passwordValidation.checks.length },
@@ -535,9 +535,9 @@ export const UserSettingsPage: React.FC = () => {
                           {check.valid ? (
                             <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" aria-hidden="true" />
                           ) : (
-                            <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-slate-500 flex-shrink-0" aria-hidden="true" />
+                            <div className="w-4 h-4 rounded-full border-2 border-theme-surface-border flex-shrink-0" aria-hidden="true" />
                           )}
-                          <span className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-slate-400'}>
+                          <span className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-theme-text-muted'}>
                             {check.label}
                           </span>
                         </li>
@@ -549,12 +549,12 @@ export const UserSettingsPage: React.FC = () => {
 
               {/* Confirm Password */}
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Confirm New Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                    <Lock className="h-5 w-5 text-theme-text-muted" aria-hidden="true" />
                   </div>
                   <input
                     id="confirmPassword"
@@ -562,7 +562,7 @@ export const UserSettingsPage: React.FC = () => {
                     type={showConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-10 py-2 border border-slate-300 dark:border-white/20 rounded-md bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
+                    className="block w-full pl-10 pr-10 py-2 border border-theme-input-border rounded-md bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent sm:text-sm"
                     placeholder="Confirm new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -571,7 +571,7 @@ export const UserSettingsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 dark:hover:text-white focus:outline-none"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-text-muted hover:text-theme-text-primary focus:outline-none"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? (
@@ -603,14 +603,14 @@ export const UserSettingsPage: React.FC = () => {
         {activeTab === 'appearance' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Appearance</h2>
-              <p className="text-slate-500 dark:text-slate-300 text-sm mb-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-4">Appearance</h2>
+              <p className="text-theme-text-secondary text-sm mb-6">
                 Choose how The Logbook looks to you
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">
+              <label className="block text-sm font-medium text-theme-text-secondary mb-3">
                 Theme
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

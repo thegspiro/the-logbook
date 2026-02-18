@@ -250,7 +250,7 @@ const DocumentsPage: React.FC = () => {
               <FileText className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-white text-2xl font-bold">Documents & Files</h1>
+              <h1 className="text-theme-text-primary text-2xl font-bold">Documents & Files</h1>
               <p className="text-theme-text-secondary text-sm">
                 Centralized document storage for SOPs, policies, forms, and department files
               </p>
@@ -260,7 +260,7 @@ const DocumentsPage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setShowCreateFolder(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
               >
                 <Folder className="w-4 h-4" aria-hidden="true" />
                 <span>New Folder</span>
@@ -293,19 +293,19 @@ const DocumentsPage: React.FC = () => {
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-              <p className="text-slate-400 text-xs font-medium uppercase">Total Documents</p>
-              <p className="text-white text-2xl font-bold mt-1">{summary.total_documents}</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Total Documents</p>
+              <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary.total_documents}</p>
             </div>
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-              <p className="text-slate-400 text-xs font-medium uppercase">Folders</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Folders</p>
               <p className="text-amber-400 text-2xl font-bold mt-1">{summary.total_folders}</p>
             </div>
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-              <p className="text-slate-400 text-xs font-medium uppercase">Total Size</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Total Size</p>
               <p className="text-blue-400 text-2xl font-bold mt-1">{formatFileSize(summary.total_size_bytes)}</p>
             </div>
             <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border">
-              <p className="text-slate-400 text-xs font-medium uppercase">This Month</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">This Month</p>
               <p className="text-green-400 text-2xl font-bold mt-1">{summary.documents_this_month}</p>
             </div>
           </div>
@@ -315,7 +315,7 @@ const DocumentsPage: React.FC = () => {
         <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 border border-theme-surface-border mb-6" role="search" aria-label="Search documents">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <label htmlFor="doc-search" className="sr-only">Search documents</label>
               <input
                 id="doc-search"
@@ -339,7 +339,7 @@ const DocumentsPage: React.FC = () => {
               <div className="flex bg-theme-surface-secondary rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  className={`p-2 rounded ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                 >
@@ -347,7 +347,7 @@ const DocumentsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  className={`p-2 rounded ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                 >
@@ -368,14 +368,14 @@ const DocumentsPage: React.FC = () => {
                   <button
                     key={folder.id}
                     onClick={() => handleFolderSelect(folder.id)}
-                    className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border text-left hover:bg-white/15 hover:border-amber-500/30 transition-all group"
+                    className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border text-left hover:bg-theme-surface-hover hover:border-amber-500/30 transition-all group"
                   >
                     <div className="flex items-start space-x-3">
                       <FolderOpen className={`w-8 h-8 ${folder.color || 'text-amber-400'} group-hover:scale-110 transition-transform`} />
                       <div className="flex-1 min-w-0">
                         <h3 className="text-white font-semibold truncate">{folder.name}</h3>
-                        <p className="text-slate-400 text-sm mt-1">{folder.description || 'No description'}</p>
-                        <p className="text-slate-500 text-xs mt-2">{folder.document_count} documents</p>
+                        <p className="text-theme-text-muted text-sm mt-1">{folder.description || 'No description'}</p>
+                        <p className="text-theme-text-muted text-xs mt-2">{folder.document_count} documents</p>
                       </div>
                     </div>
                   </button>
@@ -383,7 +383,7 @@ const DocumentsPage: React.FC = () => {
               </div>
             ) : (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-8 border border-theme-surface-border text-center">
-                <FolderOpen className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                <FolderOpen className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
                 <p className="text-theme-text-secondary">No folders yet. Create a folder to get started.</p>
               </div>
             )}
@@ -404,22 +404,22 @@ const DocumentsPage: React.FC = () => {
                   {filteredDocuments.map((doc) => (
                     <div
                       key={doc.id}
-                      className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:bg-white/15 transition-all group"
+                      className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:bg-theme-surface-hover transition-all group"
                     >
                       <div className="flex items-start space-x-3">
                         <File className="w-8 h-8 text-amber-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <h3 className="text-white font-semibold truncate">{doc.name}</h3>
                           {doc.description && (
-                            <p className="text-slate-400 text-sm mt-1 line-clamp-2">{doc.description}</p>
+                            <p className="text-theme-text-muted text-sm mt-1 line-clamp-2">{doc.description}</p>
                           )}
                           <div className="flex items-center space-x-3 mt-2">
-                            <span className="text-slate-500 text-xs">{formatFileSize(doc.file_size)}</span>
+                            <span className="text-theme-text-muted text-xs">{formatFileSize(doc.file_size)}</span>
                             {doc.file_type && (
-                              <span className="text-slate-500 text-xs uppercase">{doc.file_type}</span>
+                              <span className="text-theme-text-muted text-xs uppercase">{doc.file_type}</span>
                             )}
                           </div>
-                          <p className="text-slate-500 text-xs mt-1">
+                          <p className="text-theme-text-muted text-xs mt-1">
                             {doc.uploader_name ? `Uploaded by ${doc.uploader_name}` : ''}{' '}
                             {formatDate(doc.created_at, tz)}
                           </p>
@@ -430,7 +430,7 @@ const DocumentsPage: React.FC = () => {
                               e.stopPropagation();
                               setDeleteConfirm(doc.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 transition-all p-1"
+                            className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-400 transition-all p-1"
                             title="Delete document"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -445,39 +445,39 @@ const DocumentsPage: React.FC = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-theme-surface-border">
-                        <th className="text-left text-slate-400 text-xs font-medium uppercase px-4 py-3">Name</th>
-                        <th className="text-left text-slate-400 text-xs font-medium uppercase px-4 py-3">Size</th>
-                        <th className="text-left text-slate-400 text-xs font-medium uppercase px-4 py-3">Type</th>
-                        <th className="text-left text-slate-400 text-xs font-medium uppercase px-4 py-3">Uploaded</th>
+                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Name</th>
+                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Size</th>
+                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Type</th>
+                        <th className="text-left text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Uploaded</th>
                         {canManage && (
-                          <th className="text-right text-slate-400 text-xs font-medium uppercase px-4 py-3">Actions</th>
+                          <th className="text-right text-theme-text-muted text-xs font-medium uppercase px-4 py-3">Actions</th>
                         )}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredDocuments.map((doc) => (
-                        <tr key={doc.id} className="border-b border-theme-surface-border hover:bg-white/5 transition-colors">
+                        <tr key={doc.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center space-x-2">
                               <File className="w-4 h-4 text-amber-400 flex-shrink-0" />
                               <div>
                                 <p className="text-white text-sm font-medium truncate max-w-xs">{doc.name}</p>
                                 {doc.description && (
-                                  <p className="text-slate-500 text-xs truncate max-w-xs">{doc.description}</p>
+                                  <p className="text-theme-text-muted text-xs truncate max-w-xs">{doc.description}</p>
                                 )}
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-theme-text-secondary text-sm">{formatFileSize(doc.file_size)}</td>
                           <td className="px-4 py-3 text-theme-text-secondary text-sm uppercase">{doc.file_type || '-'}</td>
-                          <td className="px-4 py-3 text-slate-400 text-sm">
+                          <td className="px-4 py-3 text-theme-text-muted text-sm">
                             {formatDate(doc.created_at, tz)}
                           </td>
                           {canManage && (
                             <td className="px-4 py-3 text-right">
                               <button
                                 onClick={() => setDeleteConfirm(doc.id)}
-                                className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                                className="text-theme-text-muted hover:text-red-400 transition-colors p-1"
                                 title="Delete document"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -492,7 +492,7 @@ const DocumentsPage: React.FC = () => {
               )
             ) : (
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-                <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+                <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
                 <h3 className="text-white text-xl font-bold mb-2">No Documents in This Folder</h3>
                 <p className="text-theme-text-secondary mb-6">
                   Upload documents to this folder to get started.
@@ -514,7 +514,7 @@ const DocumentsPage: React.FC = () => {
         {/* Empty State - No folder selected and no folders exist */}
         {!selectedFolder && folders.length === 0 && (
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-12 border border-theme-surface-border text-center">
-            <FolderOpen className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+            <FolderOpen className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
             <h3 className="text-white text-xl font-bold mb-2">No Documents Yet</h3>
             <p className="text-theme-text-secondary mb-6">
               Start building your document library by uploading SOPs, policies, and department files.
@@ -540,16 +540,16 @@ const DocumentsPage: React.FC = () => {
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-medium text-white">Upload Document</h3>
-                    <button onClick={() => setShowUploadModal(false)} className="text-slate-400 hover:text-white">
+                    <button onClick={() => setShowUploadModal(false)} className="text-theme-text-muted hover:text-theme-text-primary">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     <div className="border-2 border-dashed border-theme-surface-border rounded-lg p-8 text-center hover:border-amber-500/50 transition-colors">
-                      <Upload className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+                      <Upload className="w-10 h-10 text-theme-text-muted mx-auto mb-3" />
                       <p className="text-white font-medium mb-1">Drag and drop your file here</p>
-                      <p className="text-slate-400 text-sm mb-3">or click to browse</p>
+                      <p className="text-theme-text-muted text-sm mb-3">or click to browse</p>
                       <input
                         type="file"
                         className="hidden"
@@ -609,7 +609,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="bg-theme-surface-secondary px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowUploadModal(false)}
-                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                   >
                     Cancel
                   </button>
@@ -646,7 +646,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 id="create-folder-title" className="text-lg font-medium text-white">Create Folder</h3>
-                    <button onClick={() => setShowCreateFolder(false)} className="text-slate-400 hover:text-white" aria-label="Close dialog">
+                    <button onClick={() => setShowCreateFolder(false)} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close dialog">
                       <X className="w-5 h-5" aria-hidden="true" />
                     </button>
                   </div>
@@ -678,7 +678,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="bg-theme-surface-secondary px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setShowCreateFolder(false)}
-                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                   >
                     Cancel
                   </button>
@@ -713,7 +713,7 @@ const DocumentsPage: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-medium text-white">Delete Document</h3>
-                      <p className="text-slate-400 text-sm mt-1">
+                      <p className="text-theme-text-muted text-sm mt-1">
                         Are you sure you want to delete this document? This action cannot be undone.
                       </p>
                     </div>
@@ -722,7 +722,7 @@ const DocumentsPage: React.FC = () => {
                 <div className="bg-theme-surface-secondary px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                   <button
                     onClick={() => setDeleteConfirm(null)}
-                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-slate-700 transition-colors"
+                    className="px-4 py-2 border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
                   >
                     Cancel
                   </button>
