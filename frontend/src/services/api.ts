@@ -367,7 +367,30 @@ export const organizationService = {
     const response = await api.get<{ enabled: boolean; next_id?: string }>('/organization/settings/membership-id/preview');
     return response.data;
   },
+
+  async getSetupChecklist(): Promise<SetupChecklistResponse> {
+    const response = await api.get<SetupChecklistResponse>('/organization/setup-checklist');
+    return response.data;
+  },
 };
+
+export interface SetupChecklistItem {
+  key: string;
+  title: string;
+  description: string;
+  path: string;
+  category: string;
+  is_complete: boolean;
+  count: number;
+  required: boolean;
+}
+
+export interface SetupChecklistResponse {
+  items: SetupChecklistItem[];
+  completed_count: number;
+  total_count: number;
+  enabled_modules: string[];
+}
 
 export const roleService = {
   /**

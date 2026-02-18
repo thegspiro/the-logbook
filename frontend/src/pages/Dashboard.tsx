@@ -18,6 +18,7 @@ import {
   Megaphone,
   Pin,
   Eye,
+  Rocket,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,6 +27,7 @@ import {
   schedulingService,
   notificationsService,
   messagesService,
+  organizationService,
 } from '../services/api';
 import type { InboxMessage } from '../services/api';
 import { getProgressBarColor } from '../utils/eventHelpers';
@@ -87,6 +89,9 @@ const Dashboard: React.FC = () => {
   const [progressDetails, setProgressDetails] = useState<Map<string, MemberProgramProgress>>(new Map());
   const [loadingTraining, setLoadingTraining] = useState(true);
 
+  // Setup checklist (admin-only)
+  const [setupProgress, setSetupProgress] = useState<{ completed: number; total: number } | null>(null);
+
   useEffect(() => {
     const savedDepartmentName = sessionStorage.getItem('departmentName');
     if (savedDepartmentName) {
@@ -105,7 +110,10 @@ const Dashboard: React.FC = () => {
     loadNotifications();
     loadUpcomingShifts();
     loadDeptMessages();
-    if (isAdmin) loadAdminSummary();
+    if (isAdmin) {
+      loadAdminSummary();
+      loadSetupProgress();
+    }
     loadHours();
     loadTrainingProgress();
   }, []);
@@ -118,6 +126,15 @@ const Dashboard: React.FC = () => {
       // Admin summary is non-critical
     } finally {
       setLoadingAdmin(false);
+    }
+  };
+
+  const loadSetupProgress = async () => {
+    try {
+      const data = await organizationService.getSetupChecklist();
+      setSetupProgress({ completed: data.completed_count, total: data.total_count });
+    } catch {
+      // Non-critical
     }
   };
 
@@ -255,6 +272,35 @@ const Dashboard: React.FC = () => {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}
           </p>
         </div>
+
+        {/* Setup Prompt (shown to admins when setup is incomplete) */}
+        {isAdmin && setupProgress && setupProgress.completed < setupProgress.total && (
+          <button
+            onClick={() => navigate('/setup')}
+            className="w-full mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                <Rocket className="w-5 h-5 text-red-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-theme-text-primary">Complete Department Setup</h3>
+                <p className="text-xs text-theme-text-muted mt-0.5">
+                  {setupProgress.completed} of {setupProgress.total} steps complete — finish setting up to unlock all features.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
+                  <div
+                    className="h-2 rounded-full bg-red-500 transition-all"
+                    style={{ width: `${Math.round((setupProgress.completed / setupProgress.total) * 100)}%` }}
+                  />
+                </div>
+                <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors" />
+              </div>
+            </div>
+          </button>
+        )}
 
         {/* Admin Department Summary (visible to Chiefs and admins) */}
         {isAdmin && (

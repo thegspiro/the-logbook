@@ -600,6 +600,26 @@ class OrganizationSetupCreate(BaseModel):
 
 
 
+class SetupChecklistItem(BaseModel):
+    """A single item on the department setup checklist"""
+    key: str
+    title: str
+    description: str
+    path: str
+    category: str
+    is_complete: bool = False
+    count: int = 0
+    required: bool = True
+
+
+class SetupChecklistResponse(BaseModel):
+    """Department setup checklist with completion status for each step"""
+    items: List[SetupChecklistItem]
+    completed_count: int = 0
+    total_count: int = 0
+    enabled_modules: List[str] = Field(default_factory=list)
+
+
 class OrganizationSetupResponse(BaseModel):
     """Response schema for organization setup"""
     id: UUID
