@@ -35,6 +35,13 @@ class FormFieldBase(BaseModel):
     max_value: Optional[int] = None
     validation_pattern: Optional[str] = Field(None, max_length=500)
     options: Optional[List[FormFieldOption]] = None
+    # Conditional visibility — show this field only when a condition is met
+    condition_field_id: Optional[str] = None
+    condition_operator: Optional[str] = Field(
+        None,
+        pattern="^(equals|not_equals|contains|not_empty|is_empty)$",
+    )
+    condition_value: Optional[str] = Field(None, max_length=500)
     sort_order: int = Field(default=0, ge=0)
     width: str = Field(default="full", pattern="^(full|half|third)$")
 
@@ -58,6 +65,9 @@ class FormFieldUpdate(BaseModel):
     max_value: Optional[int] = None
     validation_pattern: Optional[str] = Field(None, max_length=500)
     options: Optional[List[FormFieldOption]] = None
+    condition_field_id: Optional[str] = None
+    condition_operator: Optional[str] = None
+    condition_value: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=0)
     width: Optional[str] = None
 
@@ -241,6 +251,9 @@ class PublicFormFieldResponse(BaseModel):
     min_value: Optional[int] = None
     max_value: Optional[int] = None
     options: Optional[List[FormFieldOption]] = None
+    condition_field_id: Optional[str] = None
+    condition_operator: Optional[str] = None
+    condition_value: Optional[str] = None
     sort_order: int = 0
     width: str = "full"
 

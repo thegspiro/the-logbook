@@ -1852,3 +1852,58 @@ class BasicApparatus(Base):
 
     def __repr__(self):
         return f"<BasicApparatus(unit={self.unit_number}, name={self.name})>"
+
+
+class TrainingWaiverType(str, enum.Enum):
+    LEAVE_OF_ABSENCE = "leave_of_absence"
+    MEDICAL = "medical"
+    MILITARY = "military"
+    PERSONAL = "personal"
+    ADMINISTRATIVE = "administrative"
+    OTHER = "other"
+
+
+class TrainingWaiver(Base):
+    """
+    Training Waiver / Leave of Absence
+
+    Records periods where a member is excused from training requirements.
+    When a rolling-period requirement is calculated (e.g., average 6 hours
+    over 12 months), waived months are excluded from the denominator so the
+    member's required average is computed only over months they were active.
+    """
+
+    __tablename__ = "training_waivers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    waiver_type = Column(Enum(TrainingWaiverType), nullable=False, default=TrainingWaiverType.LEAVE_OF_ABSENCE)
+    reason = Column(Text, nullable=True)
+
+    # The period the member is excused (inclusive)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    # Which requirements this waiver applies to (null = all requirements)
+    requirement_ids = Column(JSON, nullable=True)
+
+    # Approval
+    granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    granted_at = Column(DateTime(timezone=True), nullable=True)
+
+    active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    grantor = relationship("User", foreign_keys=[granted_by])
+
+    __table_args__ = (
+        Index('idx_training_waivers_org_user', 'organization_id', 'user_id'),
+        Index('idx_training_waivers_dates', 'start_date', 'end_date'),
+    )

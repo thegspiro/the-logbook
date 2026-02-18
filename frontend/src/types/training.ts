@@ -1122,8 +1122,26 @@ export interface MemberVisibility {
   allow_member_report_export: boolean;
 }
 
+export interface RequirementDetail {
+  id: string;
+  name: string;
+  description?: string;
+  frequency: string;
+  training_type?: string;
+  required_hours: number;
+  original_required_hours?: number;
+  completed_hours: number;
+  progress_percentage: number;
+  is_met: boolean;
+  due_date?: string;
+  days_until_due?: number;
+  waived_months?: number;
+  active_months?: number;
+}
+
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
+  requirements_detail?: RequirementDetail[];
   training_records?: Array<{
     id: string;
     course_name: string;

@@ -22,6 +22,7 @@ from app.models.training import (
     ProgramEnrollment, RequirementProgress,
     ShiftCompletionReport, TrainingSubmission,
     SubmissionStatus,
+    TrainingWaiver,
 )
 from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
@@ -167,6 +168,85 @@ async def get_my_training_summary(
         elif req.required_roles and any(rid in user_role_ids for rid in req.required_roles):
             applicable.append(req)
 
+    # --- Fetch active training waivers for this user ---
+    waiver_result = await db.execute(
+        select(TrainingWaiver)
+        .where(
+            TrainingWaiver.organization_id == org_id,
+            TrainingWaiver.user_id == user_id,
+            TrainingWaiver.active == True,  # noqa: E712
+        )
+    )
+    user_waivers = waiver_result.scalars().all()
+
+    def _count_waived_months(
+        waivers: list, period_start: date, period_end: date,
+        req_id: Optional[str] = None,
+    ) -> int:
+        """Count how many full months within [period_start, period_end] are covered by waivers."""
+        if not waivers or not period_start or not period_end:
+            return 0
+
+        waived_months = set()
+        for w in waivers:
+            # Check if waiver applies to this specific requirement
+            if w.requirement_ids and req_id and str(req_id) not in w.requirement_ids:
+                continue
+
+            # Find overlap with the evaluation period
+            overlap_start = max(w.start_date, period_start)
+            overlap_end = min(w.end_date, period_end)
+            if overlap_start > overlap_end:
+                continue
+
+            # Mark each month in the overlap as waived
+            y, m = overlap_start.year, overlap_start.month
+            while date(y, m, 1) <= overlap_end:
+                # A month is waived if the waiver covers most of it (>= 15 days)
+                month_start = date(y, m, 1)
+                month_end_day = calendar.monthrange(y, m)[1]
+                month_end = date(y, m, month_end_day)
+
+                cov_start = max(overlap_start, month_start)
+                cov_end = min(overlap_end, month_end)
+                covered_days = (cov_end - cov_start).days + 1
+                if covered_days >= 15:
+                    waived_months.add((y, m))
+
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+
+        return len(waived_months)
+
+    def _total_months_in_period(period_start: date, period_end: date) -> int:
+        """Count total months spanned by [period_start, period_end]."""
+        if not period_start or not period_end:
+            return 0
+        months = (period_end.year - period_start.year) * 12 + (period_end.month - period_start.month) + 1
+        return max(months, 1)
+
+    def _adjust_required_hours(
+        base_required: float, period_start: date, period_end: date,
+        waivers: list, req_id: Optional[str] = None,
+    ) -> tuple:
+        """
+        Adjust required hours based on waived months.
+        Returns (adjusted_required_hours, waived_months_count, active_months_count).
+        """
+        if not period_start or not period_end or base_required <= 0:
+            return base_required, 0, 0
+
+        total_months = _total_months_in_period(period_start, period_end)
+        waived = _count_waived_months(waivers, period_start, period_end, req_id)
+        active_months = max(total_months - waived, 1)
+
+        # Adjust: if requirement is X hours over N months, and member was active
+        # for M months, the adjusted requirement is X * (M / N)
+        adjusted = base_required * (active_months / total_months)
+        return round(adjusted, 2), waived, active_months
+
     # Check progress for each applicable requirement
     today = date.today()
     current_year = today.year
@@ -230,8 +310,16 @@ async def get_my_training_summary(
         completed_hours = float(req_hours_result.scalar() or 0)
 
         required = req.required_hours or 0
-        if required > 0:
-            pct = min(completed_hours / required * 100, 100)
+        # Adjust required hours for waived months
+        if required > 0 and start_date and end_date and user_waivers:
+            adjusted_required, _, _ = _adjust_required_hours(
+                required, start_date, end_date, user_waivers, str(req.id)
+            )
+        else:
+            adjusted_required = required
+
+        if adjusted_required > 0:
+            pct = min(completed_hours / adjusted_required * 100, 100)
         else:
             pct = 100.0
 
@@ -247,6 +335,91 @@ async def get_my_training_summary(
         "met_requirements": met_count,
         "avg_compliance": avg_compliance,
     }
+
+    # --- Detailed Requirements Breakdown (always included) ---
+    requirements_detail: List[Dict[str, Any]] = []
+    for req in applicable:
+        freq = req.frequency.value if hasattr(req.frequency, 'value') else str(req.frequency)
+
+        # Determine evaluation window (same logic as summary above)
+        if freq == "one_time":
+            r_start_date = None
+            r_end_date = None
+        elif freq == "biannual":
+            base_year = req.year if req.year else current_year
+            r_start_date = date(base_year - 1, 1, 1)
+            r_end_date = date(base_year, 12, 31)
+        elif freq == "quarterly":
+            quarter_month = ((today.month - 1) // 3) * 3 + 1
+            r_start_date = date(current_year, quarter_month, 1)
+            end_month = quarter_month + 2
+            r_end_year = current_year
+            if end_month > 12:
+                end_month -= 12
+                r_end_year += 1
+            r_end_day = calendar.monthrange(r_end_year, end_month)[1]
+            r_end_date = date(r_end_year, end_month, r_end_day)
+        elif freq == "monthly":
+            r_start_date = date(current_year, today.month, 1)
+            r_end_day = calendar.monthrange(current_year, today.month)[1]
+            r_end_date = date(current_year, today.month, r_end_day)
+        else:
+            r_start_date = date(req.year, 1, 1) if req.year else date(current_year, 1, 1)
+            r_end_date = date(req.year, 12, 31) if req.year else date(current_year, 12, 31)
+
+        rq_hours_query = (
+            select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0))
+            .where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.user_id == user_id,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+            )
+        )
+        if r_start_date and r_end_date:
+            rq_hours_query = rq_hours_query.where(
+                TrainingRecord.completion_date >= r_start_date,
+                TrainingRecord.completion_date <= r_end_date,
+            )
+        if req.training_type:
+            rq_hours_query = rq_hours_query.where(
+                TrainingRecord.training_type == req.training_type
+            )
+
+        rq_hours_result = await db.execute(rq_hours_query)
+        rq_completed_hours = float(rq_hours_result.scalar() or 0)
+        rq_base_required = req.required_hours or 0
+
+        # Adjust for waivers
+        rq_waived = 0
+        rq_active = 0
+        if rq_base_required > 0 and r_start_date and r_end_date and user_waivers:
+            rq_adjusted, rq_waived, rq_active = _adjust_required_hours(
+                rq_base_required, r_start_date, r_end_date, user_waivers, str(req.id)
+            )
+        else:
+            rq_adjusted = rq_base_required
+
+        rq_pct = min(rq_completed_hours / rq_adjusted * 100, 100) if rq_adjusted > 0 else 100.0
+
+        detail_entry: Dict[str, Any] = {
+            "id": str(req.id),
+            "name": req.name,
+            "description": req.description,
+            "frequency": freq,
+            "training_type": req.training_type.value if req.training_type and hasattr(req.training_type, 'value') else (str(req.training_type) if req.training_type else None),
+            "required_hours": rq_adjusted,
+            "original_required_hours": rq_base_required,
+            "completed_hours": rq_completed_hours,
+            "progress_percentage": round(rq_pct, 1),
+            "is_met": rq_pct >= 100,
+            "due_date": str(req.due_date) if req.due_date else (str(r_end_date) if r_end_date else None),
+            "days_until_due": (r_end_date - today).days if r_end_date else None,
+            "waived_months": rq_waived,
+            "active_months": rq_active,
+        }
+        requirements_detail.append(detail_entry)
+
+    result["requirements_detail"] = requirements_detail
 
     # --- Certification Status ---
     if is_officer or visibility.get("show_certification_status", True):

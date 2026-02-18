@@ -154,6 +154,9 @@ export interface FieldDefinition {
   max_value?: number;
   validation_pattern?: string;
   options?: { value: string; label: string }[];
+  condition_field_id?: string;
+  condition_operator?: string;
+  condition_value?: string;
   sort_order: number;
   width: string;
 }
