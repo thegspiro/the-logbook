@@ -129,11 +129,13 @@ export const LoginPage: React.FC = () => {
         <div>
           {branding.logo ? (
             <div className="flex justify-center">
-              <img
-                src={branding.logo}
-                alt={branding.name ? `${branding.name} logo` : 'Organization logo'}
-                className="h-24 w-24 rounded-lg object-cover shadow-md"
-              />
+              <div className="h-24 max-w-[12rem] rounded-lg overflow-hidden shadow-md flex items-center justify-center">
+                <img
+                  src={branding.logo}
+                  alt={branding.name ? `${branding.name} logo` : 'Organization logo'}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
             </div>
           ) : (
             <div className="flex justify-center">
