@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - My Training Page & Build Errors (2026-02-18)
+
+#### My Training Page Cleanup
+- **Removed "Average Rating" stat card**: The Avg Rating box on the My Training overview was not useful for members and has been removed
+- **Removed "Shifts" stat card**: The Shifts count (shift completion reports) was not relevant to the My Training overview and has been removed
+- **Renamed "Annual Requirements" to "Requirements"**: Label is now generic since the system supports all requirement frequencies
+
+#### Requirements Compliance Fix
+- **Fixed requirements showing N/A**: The My Training requirements compliance calculation was filtering to annual-frequency requirements only. Biannual, quarterly, monthly, and one-time requirements were excluded, causing the stat to show "N/A" when only non-annual requirements existed
+- **All frequencies now included**: The backend requirements query now includes all active requirements with frequency-appropriate evaluation windows (annual=calendar year, biannual=2-year window, quarterly=current quarter, monthly=current month, one-time=all-time)
+
+#### Rank Permission Restriction
+- **Rank changes restricted**: Member rank can now only be changed by users with `members.manage` permission (Chief, membership coordinator) or admin wildcard. Regular members can no longer change their own rank through profile editing
+- **Added `rank` field to User type**: The frontend `User` interface was missing the `rank` field, causing TypeScript build errors in `CreateTrainingSessionPage.tsx`
+
+#### Additional Build Fixes
+- **Missing `BookOpen` import**: Added missing `BookOpen` lucide-react icon import in `MinutesPage.tsx` that caused TypeScript build failure
+
 ### Fixed - TypeScript Build Errors (2026-02-18)
 
 #### API Service Layer Completeness

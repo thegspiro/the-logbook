@@ -2579,6 +2579,62 @@ The stats annotation at the bottom of the stats bar explains: "Statistics includ
 
 ---
 
+## TypeScript Build Issues
+
+### Problem: `rank` property not found on User type
+**Symptom:** Docker build fails with `Property 'rank' does not exist on type 'User'` in `CreateTrainingSessionPage.tsx`
+
+### Root Cause
+The `User` interface in `types/user.ts` was missing the `rank` field even though the backend model and API schemas include it.
+
+### Solution
+Ensure `rank?: string` is defined in the `User` interface in `frontend/src/types/user.ts`. Pull latest changes and rebuild:
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+---
+
+### Problem: `BookOpen` not found in MinutesPage
+**Symptom:** Docker build fails with `Cannot find name 'BookOpen'` in `MinutesPage.tsx`
+
+### Root Cause
+The `BookOpen` icon was used in the template but not imported from `lucide-react`.
+
+### Solution
+Ensure `BookOpen` is included in the lucide-react import at the top of `MinutesPage.tsx`. Pull latest changes and rebuild.
+
+---
+
+### Problem: My Training "Requirements" box shows N/A
+**Symptom:** The Requirements stat card on the My Training page shows "N/A" even though training requirements have been created.
+
+### Root Cause
+The backend query for the My Training summary was filtering requirements to `frequency = 'annual'` only. Requirements with other frequencies (biannual, quarterly, monthly, one_time) were excluded from the compliance calculation, resulting in zero applicable requirements and an N/A display.
+
+### Solution
+Pull latest changes which fix the query to include all active requirements regardless of frequency:
+```bash
+git pull origin main
+docker compose build --no-cache backend
+docker compose up -d
+```
+
+---
+
+### Problem: Rank field can be changed by any member
+**Symptom:** Members can change their own rank through profile editing
+
+### Root Cause
+The profile update endpoint did not restrict rank changes — any authenticated user could modify rank via self-profile update.
+
+### Solution
+Pull latest changes. Rank updates are now restricted to users with `members.manage` permission (Chief, membership coordinator) or wildcard admin permissions. Regular members' rank field changes are silently ignored during profile updates.
+
+---
+
 **Most Common Fix:** 90% of issues are resolved by:
 1. Updating `frontend/.env` with correct `VITE_API_URL`
 2. Running `docker-compose build --no-cache frontend`

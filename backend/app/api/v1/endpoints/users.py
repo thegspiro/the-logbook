@@ -746,6 +746,15 @@ async def update_user_profile(
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
 
+    # Rank changes restricted to Chief / membership coordinator
+    if "rank" in update_data:
+        user_permissions: list[str] = []
+        for role in current_user.roles:
+            user_permissions.extend(role.permissions or [])
+        has_wildcard = "*" in user_permissions
+        if not has_wildcard and "members.manage" not in user_permissions:
+            update_data.pop("rank")
+
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
         ec_list = update_data.pop("emergency_contacts")

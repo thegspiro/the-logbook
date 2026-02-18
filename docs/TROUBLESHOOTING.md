@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-18 (includes TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-18 (includes My Training page fixes — removed Avg Rating/Shifts cards, fixed requirements compliance for all frequencies, restricted rank changes to Chief/coordinator, fixed missing User.rank type and BookOpen import build errors; plus TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -3047,6 +3047,34 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 ---
 
 ## TypeScript Build Issues
+
+### Missing `rank` on User Type / Missing `BookOpen` Import (Fixed 2026-02-18)
+
+**Status**: Fixed
+
+**Symptoms**: Docker frontend build fails with:
+```
+src/pages/CreateTrainingSessionPage.tsx(462,58): error TS2339: Property 'rank' does not exist on type 'User'.
+src/pages/CreateTrainingSessionPage.tsx(462,72): error TS2339: Property 'rank' does not exist on type 'User'.
+src/pages/MinutesPage.tsx(378,26): error TS2304: Cannot find name 'BookOpen'.
+```
+
+**Cause**: Two separate issues:
+1. The `User` interface in `types/user.ts` was missing the `rank` field, even though the backend User model includes it. The `CreateTrainingSessionPage` displays rank next to instructor names.
+2. The `MinutesPage` used the `BookOpen` icon from lucide-react but it wasn't included in the import statement.
+
+**Fix**: Pull latest changes and rebuild:
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+**What was added**:
+- `rank?: string` field to the `User` interface in `types/user.ts`
+- `BookOpen` to the lucide-react import in `MinutesPage.tsx`
+
+---
 
 ### Missing API Service Methods (Fixed 2026-02-18)
 
