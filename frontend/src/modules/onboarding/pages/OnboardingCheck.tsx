@@ -694,7 +694,7 @@ const OnboardingCheck: React.FC = () => {
                     <div
                       key={index}
                       className={`h-1 rounded-full transition-all duration-300 ${
-                        index === currentTipIndex ? 'w-6 bg-blue-400' : 'w-1 bg-slate-600'
+                        index === currentTipIndex ? 'w-6 bg-blue-400' : 'w-1 bg-theme-surface-border'
                       }`}
                     />
                   ))}
@@ -706,7 +706,7 @@ const OnboardingCheck: React.FC = () => {
           {isWaiting && (
             <div className="mt-4 pt-4 border-t border-theme-nav-border">
               {/* Retry progress bar */}
-              <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+              <div className="w-full bg-theme-surface rounded-full h-2 mb-3">
                 <div
                   className="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${progressPercent}%` }}
@@ -731,7 +731,7 @@ const OnboardingCheck: React.FC = () => {
         <div className="mt-4">
           <button
             onClick={() => setShowWhatsHappening(!showWhatsHappening)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 rounded-lg transition-all duration-300"
+            className="w-full flex items-center justify-between px-4 py-3 bg-theme-surface-secondary hover:bg-theme-surface-hover border border-theme-surface-border rounded-lg transition-all duration-300"
           >
             <span className="text-theme-text-secondary text-sm font-medium">What's happening?</span>
             <span className={`text-theme-text-muted transition-transform duration-300 ${showWhatsHappening ? 'rotate-180' : ''}`}>
@@ -740,7 +740,7 @@ const OnboardingCheck: React.FC = () => {
           </button>
 
           {showWhatsHappening && (
-            <div className="mt-2 bg-slate-800/30 border border-slate-700 rounded-lg p-4 space-y-3 text-sm">
+            <div className="mt-2 bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4 space-y-3 text-sm">
               <div>
                 <h4 className="text-theme-text-secondary font-semibold mb-1">🔍 Preflight Checks</h4>
                 <p className="text-theme-text-muted text-xs">

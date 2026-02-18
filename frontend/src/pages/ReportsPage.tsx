@@ -514,7 +514,7 @@ export const ReportsPage: React.FC = () => {
         return renderAnnualTraining(reportData);
       default:
         return (
-          <pre className="text-sm text-slate-300 whitespace-pre-wrap overflow-auto max-h-[50vh]">
+          <pre className="text-sm text-theme-text-secondary whitespace-pre-wrap overflow-auto max-h-[50vh]">
             {JSON.stringify(reportData, null, 2)}
           </pre>
         );
@@ -528,8 +528,8 @@ export const ReportsPage: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Reports</h1>
-            <p className="text-slate-300">
+            <h1 className="text-3xl font-bold text-theme-text-primary mb-2">Reports</h1>
+            <p className="text-theme-text-secondary">
               Generate and download reports for members, training, events, and compliance
             </p>
           </div>
@@ -544,7 +544,7 @@ export const ReportsPage: React.FC = () => {
 
       {/* Category Filter */}
       <div className="mb-6 flex items-center space-x-2">
-        <Filter className="w-5 h-5 text-slate-400" aria-hidden="true" />
+        <Filter className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => (
             <button
@@ -553,7 +553,7 @@ export const ReportsPage: React.FC = () => {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
                 selectedCategory === category.id
                   ? 'bg-red-600 text-white'
-                  : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
               {category.label}
