@@ -451,6 +451,21 @@ export const roleService = {
     const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>(`/users/${userId}/permissions`);
     return response.data;
   },
+
+  async getMyRoles(): Promise<Role[]> {
+    const response = await api.get<Role[]>('/roles/my/roles');
+    return response.data;
+  },
+
+  async getMyPermissions(): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {
+    const response = await api.get<{ user_id: string; permissions: string[]; roles: string[] }>('/roles/my/permissions');
+    return response.data;
+  },
+
+  async checkAdminAccess(): Promise<{ has_access: boolean; admin_roles: string[]; user_roles: string[]; admin_permissions: string[] }> {
+    const response = await api.get<{ has_access: boolean; admin_roles: string[]; user_roles: string[]; admin_permissions: string[] }>('/roles/admin-access/check');
+    return response.data;
+  },
 };
 
 export const authService = {
@@ -1557,6 +1572,11 @@ export const eventService = {
     const response = await api.patch<import('../types/event').EventModuleSettings>('/events/settings', data);
     return response.data;
   },
+
+  async getEventFolder(eventId: string): Promise<DocumentFolder> {
+    const response = await api.get<DocumentFolder>(`/events/${eventId}/folder`);
+    return response.data;
+  },
 };
 
 export interface UserInventoryItem {
@@ -2209,6 +2229,11 @@ export const documentsService = {
     const response = await api.get<DocumentsSummary>('/documents/stats/summary');
     return response.data;
   },
+
+  async getMyFolder(): Promise<DocumentFolder> {
+    const response = await api.get<DocumentFolder>('/documents/my-folder');
+    return response.data;
+  },
 };
 
 // ============================================
@@ -2523,6 +2548,10 @@ export const schedulingService = {
     const response = await api.get(`/scheduling/shifts/${shiftId}/calls`);
     return response.data;
   },
+  async getCall(callId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/calls/${callId}`);
+    return response.data;
+  },
   async createCall(shiftId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post(`/scheduling/shifts/${shiftId}/calls`, data);
     return response.data;
@@ -2561,6 +2590,10 @@ export const schedulingService = {
     const response = await api.get('/scheduling/swap-requests', { params });
     return response.data;
   },
+  async getSwapRequest(requestId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/swap-requests/${requestId}`);
+    return response.data;
+  },
   async createSwapRequest(data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post('/scheduling/swap-requests', data);
     return response.data;
@@ -2576,6 +2609,10 @@ export const schedulingService = {
   // Time Off
   async getTimeOffRequests(params?: Record<string, string>): Promise<Record<string, unknown>[]> {
     const response = await api.get('/scheduling/time-off', { params });
+    return response.data;
+  },
+  async getTimeOff(requestId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/time-off/${requestId}`);
     return response.data;
   },
   async createTimeOff(data: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -2608,6 +2645,10 @@ export const schedulingService = {
     const response = await api.get('/scheduling/templates', { params });
     return response.data;
   },
+  async getTemplate(templateId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/templates/${templateId}`);
+    return response.data;
+  },
   async createTemplate(data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.post('/scheduling/templates', data);
     return response.data;
@@ -2623,6 +2664,10 @@ export const schedulingService = {
   // Patterns
   async getPatterns(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
     const response = await api.get('/scheduling/patterns', { params });
+    return response.data;
+  },
+  async getPattern(patternId: string): Promise<Record<string, unknown>> {
+    const response = await api.get(`/scheduling/patterns/${patternId}`);
     return response.data;
   },
   async createPattern(data: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -3061,12 +3106,12 @@ export const trainingSessionService = {
   },
 
   async getApprovalData(token: string): Promise<Record<string, unknown>> {
-    const response = await api.get(`/training/sessions/approval/${token}`);
+    const response = await api.get(`/training/sessions/approve/${token}`);
     return response.data;
   },
 
   async submitApproval(token: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await api.post(`/training/sessions/approval/${token}`, data);
+    const response = await api.post(`/training/sessions/approve/${token}`, data);
     return response.data;
   },
 };
@@ -3496,42 +3541,42 @@ export const facilitiesService = {
 
 export const memberStatusService = {
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
-    const response = await api.get('/members/archived');
+    const response = await api.get('/users/archived');
     return response.data;
   },
 
   async reactivateMember(userId: string, data: { reason: string }): Promise<Record<string, unknown>> {
-    const response = await api.post(`/members/${userId}/reactivate`, data);
+    const response = await api.post(`/users/${userId}/reactivate`, data);
     return response.data;
   },
 
   async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
-    const response = await api.get('/members/overdue-property-returns');
+    const response = await api.get('/users/property-return-reminders/overdue');
     return response.data;
   },
 
   async processPropertyReturnReminders(): Promise<Record<string, unknown>> {
-    const response = await api.post('/members/property-return-reminders');
+    const response = await api.post('/users/property-return-reminders/process');
     return response.data;
   },
 
   async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
-    const response = await api.get(`/members/${userId}/property-return-preview`);
+    const response = await api.get(`/users/${userId}/property-return-report`);
     return response.data;
   },
 
   async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.get('/members/tier-config');
+    const response = await api.get('/users/membership-tiers/config');
     return response.data;
   },
 
   async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.put('/members/tier-config', config);
+    const response = await api.put('/users/membership-tiers/config', config);
     return response.data;
   },
 
   async advanceMembershipTiers(): Promise<Record<string, unknown>> {
-    const response = await api.post('/members/advance-tiers');
+    const response = await api.post('/users/advance-membership-tiers');
     return response.data;
   },
 };
@@ -3597,11 +3642,11 @@ export interface ScheduledTask {
 
 export const scheduledTasksService = {
   async listTasks(): Promise<{ tasks: ScheduledTask[] }> {
-    const response = await api.get('/admin/scheduled-tasks');
+    const response = await api.get('/scheduled/tasks');
     return response.data;
   },
   async runTask(taskId: string): Promise<Record<string, unknown>> {
-    const response = await api.post(`/admin/scheduled-tasks/${taskId}/run`);
+    const response = await api.post('/scheduled/run-task', null, { params: { task: taskId } });
     return response.data;
   },
 };

@@ -169,6 +169,26 @@ export const ProspectiveMembersPage: React.FC = () => {
     }
     setIsCreating(true);
     try {
+      // Check for duplicate/existing members before creating
+      try {
+        const check = await applicantService.checkExisting(
+          newApplicant.email.trim(),
+          newApplicant.first_name.trim(),
+          newApplicant.last_name.trim()
+        );
+        if (check.has_matches) {
+          const proceed = window.confirm(
+            `This email or name matches ${check.match_count} existing member(s). Do you want to continue creating this applicant?`
+          );
+          if (!proceed) {
+            setIsCreating(false);
+            return;
+          }
+        }
+      } catch {
+        // If the check fails, continue with creation anyway
+      }
+
       await applicantService.createApplicant({
         pipeline_id: currentPipeline.id,
         ...newApplicant,
