@@ -83,7 +83,7 @@ const ModuleConfigTemplate: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={handleSkip}
-            className="flex items-center text-slate-400 hover:text-white transition-colors mb-4"
+            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Modules
@@ -102,7 +102,7 @@ const ModuleConfigTemplate: React.FC = () => {
             <Info className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
             <div>
               <p className="text-blue-400 font-semibold mb-1">How Permissions Work</p>
-              <p className="text-slate-300 text-sm">
+              <p className="text-theme-text-secondary text-sm">
                 <strong>View Access</strong> allows members to see and use basic features.{' '}
                 <strong>Manage Access</strong> allows creating, editing, and administrative actions.
                 All members can view by default; you choose who can manage.

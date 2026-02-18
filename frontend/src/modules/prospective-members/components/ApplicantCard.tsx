@@ -99,7 +99,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-white/5">
+      <div className="flex items-center justify-between pt-2 border-t border-theme-surface-border">
         <div className="flex items-center gap-1 text-xs text-theme-text-muted">
           <Clock className="w-3 h-3" />
           <span>

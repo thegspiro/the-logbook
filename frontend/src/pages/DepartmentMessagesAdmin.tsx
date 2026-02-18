@@ -27,9 +27,9 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 
 const PRIORITY_STYLES: Record<string, string> = {
-  normal: 'bg-slate-500/20 text-slate-300',
-  important: 'bg-amber-500/20 text-amber-300',
-  urgent: 'bg-red-500/20 text-red-300',
+  normal: 'bg-slate-500/20 text-slate-600 dark:text-slate-300',
+  important: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+  urgent: 'bg-red-500/20 text-red-700 dark:text-red-300',
 };
 
 const TARGET_LABELS: Record<string, string> = {
@@ -349,7 +349,7 @@ const DepartmentMessagesAdmin: React.FC = () => {
       {/* Messages List */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 text-slate-400 animate-spin" />
+          <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
         </div>
       ) : messages.length === 0 ? (
         <div className="text-center py-12 text-theme-text-muted">
@@ -375,7 +375,7 @@ const DepartmentMessagesAdmin: React.FC = () => {
                       {msg.priority}
                     </span>
                     {!msg.is_active && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-slate-500/30 text-slate-400">Inactive</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-slate-500/20 text-theme-text-muted">Inactive</span>
                     )}
                   </div>
                   <p className="text-theme-text-secondary text-sm line-clamp-2">{msg.body}</p>
