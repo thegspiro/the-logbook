@@ -600,7 +600,7 @@ export const ReportsPage: React.FC = () => {
               }}
               className="form-input bg-theme-surface border border-theme-surface-border rounded px-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
             />
-            <span className="text-slate-500 text-sm">to</span>
+            <span className="text-theme-text-muted text-sm">to</span>
             <input
               type="date"
               value={endDate}
@@ -637,9 +637,9 @@ export const ReportsPage: React.FC = () => {
           return (
             <div
               key={report.id}
-              className={`bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-6 transition-all ${
+              className={`bg-theme-surface-secondary backdrop-blur-sm border border-theme-surface-border rounded-lg p-6 transition-all ${
                 report.available
-                  ? 'hover:bg-white/10 hover:border-white/20 cursor-pointer'
+                  ? 'hover:bg-theme-surface hover:border-theme-surface-border cursor-pointer'
                   : 'opacity-60 cursor-not-allowed'
               }`}
             >

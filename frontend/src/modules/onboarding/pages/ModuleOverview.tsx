@@ -87,8 +87,8 @@ const ModuleOverview: React.FC = () => {
     switch (priority) {
       case 'essential': return 'text-red-400 bg-red-500/10 border-red-500/30';
       case 'recommended': return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
-      case 'optional': return 'text-slate-400 bg-slate-500/10 border-slate-500/30';
-      default: return 'text-slate-400 bg-slate-500/10 border-slate-500/30';
+      case 'optional': return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
+      default: return 'text-theme-text-muted bg-slate-500/10 border-slate-500/30';
     }
   };
 
@@ -96,7 +96,7 @@ const ModuleOverview: React.FC = () => {
     switch (status) {
       case 'enabled': return <CheckCircle className="w-4 h-4 text-green-400" />;
       case 'skipped': return <Clock4 className="w-4 h-4 text-yellow-400" />;
-      case 'ignored': return <XCircle className="w-4 h-4 text-slate-500" />;
+      case 'ignored': return <XCircle className="w-4 h-4 text-theme-text-muted" />;
       default: return null;
     }
   };
@@ -169,7 +169,7 @@ const ModuleOverview: React.FC = () => {
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
                   ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
               {isSaving ? 'Saving...' : 'Continue to Admin Setup'}
@@ -306,7 +306,7 @@ const ModuleOverview: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center mb-4">
               <div className="flex-1 h-px bg-slate-500/30"></div>
-              <h2 className="px-4 text-lg font-bold text-slate-400">OPTIONAL MODULES</h2>
+              <h2 className="px-4 text-lg font-bold text-theme-text-muted">OPTIONAL MODULES</h2>
               <div className="flex-1 h-px bg-slate-500/30"></div>
             </div>
             <p className="text-center text-theme-text-muted text-sm mb-6">
@@ -319,7 +319,7 @@ const ModuleOverview: React.FC = () => {
                 return (
                   <div
                     key={module.id}
-                    className="bg-white/5 backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-slate-400/50 transition-all"
+                    className="bg-theme-surface-secondary backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border hover:border-theme-surface-hover transition-all"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
