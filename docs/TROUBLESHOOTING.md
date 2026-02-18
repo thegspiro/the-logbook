@@ -4,7 +4,7 @@
 
 This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
 
-**Last Updated**: 2026-02-16 (includes database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements; plus system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
+**Last Updated**: 2026-02-18 (includes TypeScript build error fixes for missing API service methods/types, onboarding theme variable migration, new scheduling/member lifecycle/events settings pages; plus database startup reliability improvements, hierarchical document folders, role sync fixes, dark theme unification, form enhancements, system-wide theme support, member-focused dashboard redesign, election dark theme fixes, election timezone fixes, footer positioning fix, duplicate index crash fix, codebase quality fixes, shift module enhancements, facilities module, meeting quorum, peer eval sign-offs, cert expiration alerts, competency matrix, training calendar/booking, bulk voter overrides, proxy voting, events module, TypeScript fixes, meeting minutes module, documents module, prospective members, elections, inactivity timeout system, and pipeline troubleshooting)
 
 ---
 
@@ -3048,6 +3048,43 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 
 ## TypeScript Build Issues
 
+### Missing API Service Methods (Fixed 2026-02-18)
+
+**Status**: Fixed in commit `5b38fed`
+
+**Symptoms**: Docker frontend build fails with 70+ TypeScript errors like:
+```
+Property 'getShiftCalls' does not exist on type schedulingService
+Property 'getModuleSettings' does not exist on type eventService
+Module '"../services/api"' has no exported member 'memberStatusService'
+Module '"../types/user"' has no exported member 'ArchivedMember'
+```
+
+**Cause**: New page components (ShiftCallsPanel, EventsSettingsPage, MemberLifecyclePage, ShiftAssignmentsPage, ShiftTemplatesPage, etc.) were added referencing API service methods and types that hadn't been implemented yet in `services/api.ts` and `types/user.ts`.
+
+**Fix**: Pull the latest changes which add all missing methods and types:
+```bash
+git pull origin main
+docker compose build --no-cache frontend
+docker compose up -d
+```
+
+**What was added**:
+- 30+ methods to `schedulingService` (calls, assignments, swaps, time-off, attendance, templates, patterns, reports)
+- `getModuleSettings`/`updateModuleSettings` to `eventService`
+- OAuth URL methods to `authService`
+- `previewNextMembershipId` to `organizationService`
+- `getUserPermissions` to `roleService`
+- Approval methods to `trainingSessionService`
+- New services: `memberStatusService`, `prospectiveMemberService`, `scheduledTasksService`
+- 6 new types in `types/user.ts`: `ArchivedMember`, `OverdueMember`, `MembershipTier`, `MembershipTierBenefits`, `MembershipTierConfig`, `PropertyReturnReport`
+- `membership_number` field on `User` interface
+- `membership_id` field on `createMember` type
+
+**Prevention**: Always ensure new page components have corresponding API service methods before committing. Run `npx tsc --noEmit` locally before pushing.
+
+---
+
 ### All Build Errors (Fixed 2026-02-14)
 
 **Status**: Fixed in commit `e97be90`
@@ -3101,6 +3138,12 @@ If you find new `as any` assertions, replace them with proper types following th
 ---
 
 ## Version History
+
+**v1.9** - 2026-02-18
+- Added missing API service methods troubleshooting (70+ TS build errors from missing service methods/types)
+- Documents fix for missing `schedulingService`, `eventService`, `authService`, `organizationService`, `roleService`, `trainingSessionService` methods
+- Documents new exported services: `memberStatusService`, `prospectiveMemberService`, `scheduledTasksService`
+- Documents missing types in `user.ts` and `api.ts`
 
 **v1.8** - 2026-02-14
 - Expanded Scheduling module section with 10 new troubleshooting entries (templates, patterns, assignments, swaps, time-off, calls, reports, permissions)

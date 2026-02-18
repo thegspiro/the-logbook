@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - TypeScript Build Errors (2026-02-18)
+
+#### API Service Layer Completeness
+- **Missing scheduling methods**: Added 30+ methods to `schedulingService` including shift calls (CRUD), shift assignments (CRUD + confirm), swap requests (CRUD + review), time-off requests (CRUD + review), shift attendance (get/update/delete), templates (CRUD), patterns (CRUD + generate), and reports (member hours, coverage, call volume, availability)
+- **Missing event settings methods**: Added `getModuleSettings()` and `updateModuleSettings()` to `eventService` for the Events Settings page
+- **Missing OAuth methods**: Added `getGoogleOAuthUrl()` and `getMicrosoftOAuthUrl()` to `authService` for SSO login flows
+- **Missing organization method**: Added `previewNextMembershipId()` to `organizationService` for membership ID preview during member creation
+- **Missing role method**: Added `getUserPermissions()` to `roleService` for the User Permissions page
+- **Missing training approval methods**: Added `getApprovalData()` and `submitApproval()` to `trainingSessionService`
+- **Missing member creation field**: Added `membership_id` to `createMember` type parameter
+- **New service exports**: Added `memberStatusService` (archived members, property returns, tier management), `prospectiveMemberService` (pipelines, prospects, election packages), and `scheduledTasksService` (list/run background tasks) with `ScheduledTask` type
+
+#### Type Definitions
+- **Missing user types**: Added `ArchivedMember`, `OverdueMember`, `MembershipTier`, `MembershipTierBenefits`, `MembershipTierConfig`, `PropertyReturnReport` to `types/user.ts`
+- **Missing user field**: Added `membership_number` to `User` interface for member list display
+
+### Fixed - CSS Accessibility & Theme Consistency (2026-02-17)
+
+#### Onboarding Module Theme Migration
+- **23 onboarding files refactored**: Converted all hardcoded Tailwind color classes to CSS theme variables across the entire onboarding module
+- **Converted patterns**: `bg-slate-900` → `bg-theme-bg-from`, `text-white` → `text-theme-text-primary`, `bg-white/10` → `bg-theme-surface`, `border-white/20` → `border-theme-surface-border`, `text-slate-300` → `text-theme-text-secondary`, `text-slate-400` → `text-theme-text-muted`, `bg-slate-800/50` → `bg-theme-surface-secondary`, input styling standardized to `bg-theme-input-bg border-theme-input-border`
+- **Preserved semantic colors**: All accent/status colors (red, green, blue, purple, amber, etc.) for buttons, badges, alerts, and interactive states left intentionally unchanged
+
+### Added - New Application Pages (2026-02-17)
+
+#### Scheduling Module
+- **ShiftCallsPanel**: Component for managing calls attached to shifts with create/update/delete
+- **ShiftAssignmentsPage**: Full shift assignment management with swap requests and time-off handling
+- **ShiftAttendancePage**: Shift attendance tracking with bulk update support
+- **ShiftTemplatesPage**: Shift template and pattern management with auto-generation from patterns
+- **SchedulingReportsPage**: Scheduling reports including member hours, coverage, call volume, and availability
+
+#### Member & Admin Pages
+- **MemberLifecyclePage**: Archived member management, overdue property returns, membership tier configuration, and property return report previews
+- **EventsSettingsPage**: Event module configuration (event types, defaults, QR codes, cancellation policies)
+- **UserPermissionsPage**: Individual user permission and role assignment viewer
+- **TrainingApprovalPage**: Token-based training session approval workflow
+- **ScheduledTasksPage**: View and manually trigger scheduled background tasks
+- **ProspectiveMembersPage** (standalone): Pipeline management, prospect creation, election packages
+
+### Changed - Navigation & Structure (2026-02-17)
+- **Module restructuring**: Admin hubs with clean member/admin navigation separation
+- **User profile editing**: Self-service and admin profile editing capabilities
+- **Training navigation**: Training sub-items added to sidebar and top navigation; `/training` routes to `MyTrainingPage`
+- **Pipeline settings nav**: Added Pipeline Settings entry for prospective members
+- **Full nav coverage**: All missing pages added to navigation menus
+- **Membership ID settings**: Added Membership ID Number settings to Organization Settings
+- **Department timezone**: All date/time displays now use department's local timezone instead of UTC
+- **Dashboard training hours**: Fixed Dashboard showing 0 training hours despite completed courses
+- **Role assignment fix**: Fixed role assignment permissions for Officers and Vice President roles
+- **Training pipeline fix**: Fixed save error, added knowledge tests and milestone reorder
+
 ### Added - System-Wide Theme Support (2026-02-15)
 
 #### Theme System
