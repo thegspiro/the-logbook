@@ -871,15 +871,6 @@ const SchedulingPage: React.FC = () => {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Name</label>
-                      <input
-                        type="text" value={shiftForm.name}
-                        onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
-                        placeholder="e.g., February Week 3 Schedule"
-                      />
-                    </div>
-                    <div>
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Template</label>
                       <select
                         value={shiftForm.shiftTemplate}
@@ -1032,6 +1023,24 @@ const SchedulingPage: React.FC = () => {
                         })()}
                       </div>
                     )}
+
+                    {/* Auto-generated shift label preview */}
+                    {(() => {
+                      const tmpl = effectiveTemplates.find(t => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                      const apparatus = apparatusList.find(a => a.id === shiftForm.apparatus_id);
+                      if (!tmpl) return null;
+                      const suffix = tmpl.duration_hours >= 24 ? '24'
+                        : (tmpl.start_time_of_day < tmpl.end_time_of_day ? 'DS' : 'NS');
+                      const label = apparatus
+                        ? `${apparatus.unit_number} ${suffix}`
+                        : `${tmpl.name}`;
+                      return (
+                        <div className="flex items-center gap-2 p-2.5 bg-theme-surface-hover/50 rounded-lg border border-theme-surface-border">
+                          <span className="text-xs text-theme-text-muted">Shift label:</span>
+                          <span className="text-sm font-semibold text-theme-text-primary">{label}</span>
+                        </div>
+                      );
+                    })()}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
