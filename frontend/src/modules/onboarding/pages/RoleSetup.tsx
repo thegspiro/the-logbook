@@ -374,6 +374,14 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'member'),
       },
       {
+        id: 'administrative_member',
+        name: 'Administrative Member',
+        description: 'Members focused on administrative and support duties',
+        icon: Briefcase,
+        priority: 8,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
         id: 'social_member',
         name: 'Social / Associate Member',
         description: 'Non-operational members involved socially',
