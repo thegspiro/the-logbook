@@ -739,6 +739,18 @@ class MembershipPipelineService:
         )
         self.db.add(new_user)
 
+        # Assign initial roles/positions if provided
+        if role_ids:
+            from app.models.user import Role
+            role_result = await self.db.execute(
+                select(Role)
+                .where(Role.id.in_([str(rid) for rid in role_ids]))
+                .where(Role.organization_id == prospect.organization_id)
+            )
+            roles = list(role_result.scalars().all())
+            if roles:
+                new_user.roles = roles
+
         # Auto-assign membership number if enabled for this organization
         from app.services.organization_service import OrganizationService
         org_service = OrganizationService(self.db)
