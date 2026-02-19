@@ -49,6 +49,15 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "organization_name", "description": "Organization name"},
         {"name": "expiry_hours", "description": "Minutes until link expires"},
     ],
+    "inventory_change": [
+        {"name": "first_name", "description": "Member's first name"},
+        {"name": "organization_name", "description": "Organization/department name"},
+        {"name": "change_date", "description": "Date the changes occurred"},
+        {"name": "items_issued_html", "description": "HTML list of items issued/assigned"},
+        {"name": "items_returned_html", "description": "HTML list of items returned"},
+        {"name": "items_issued_text", "description": "Plain-text list of items issued/assigned"},
+        {"name": "items_returned_text", "description": "Plain-text list of items returned"},
+    ],
     "member_dropped": [
         {"name": "member_name", "description": "Full name of the dropped member"},
         {"name": "organization_name", "description": "Organization/department name"},
@@ -214,6 +223,70 @@ Respectfully,
 
 ---
 This is an official department notice. A copy has been placed in your member file."""
+
+
+# Default inventory change notification email
+DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
+    <div class="header">
+        <h1>{{organization_name}}</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{first_name}},</p>
+        <p>
+            This message is to confirm recent changes to the department property
+            assigned to you as of <strong>{{change_date}}</strong>.
+        </p>
+
+        {{items_issued_html}}
+
+        {{items_returned_html}}
+
+        <div class="details">
+            <p><strong>Important Reminder:</strong> All items listed above remain
+            the property of <strong>{{organization_name}}</strong>. Members are
+            responsible for the care, maintenance, and safekeeping of all
+            department-issued property. Any lost, stolen, or damaged items
+            must be reported to the Quartermaster immediately.</p>
+        </div>
+
+        <p>If you believe there is an error in this notice, please contact the
+        Quartermaster or department administration at your earliest convenience.</p>
+
+        <p>Thank you,<br/>{{organization_name}}</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated inventory notice from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</div>"""
+
+DEFAULT_INVENTORY_CHANGE_TEXT = """Inventory Change Confirmation — {{organization_name}}
+
+Hello {{first_name}},
+
+This message is to confirm recent changes to the department property
+assigned to you as of {{change_date}}.
+
+{{items_issued_text}}
+
+{{items_returned_text}}
+
+IMPORTANT REMINDER: All items listed above remain the property of
+{{organization_name}}. Members are responsible for the care, maintenance,
+and safekeeping of all department-issued property. Any lost, stolen, or
+damaged items must be reported to the Quartermaster immediately.
+
+If you believe there is an error in this notice, please contact the
+Quartermaster or department administration at your earliest convenience.
+
+Thank you,
+{{organization_name}}
+
+---
+This is an automated inventory notice from {{organization_name}}.
+Please do not reply to this email."""
+
+DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 
 
 class EmailTemplateService:
@@ -452,5 +525,29 @@ class EmailTemplateService:
             )
             created.append(template)
             logger.info(f"Created default member dropped email template for org {organization_id}")
+
+        # Check for inventory change template
+        existing = await self.get_template(
+            organization_id, EmailTemplateType.INVENTORY_CHANGE, active_only=False
+        )
+        if not existing:
+            template = await self.create_template(
+                organization_id=organization_id,
+                template_type=EmailTemplateType.INVENTORY_CHANGE,
+                name="Inventory Change Confirmation",
+                subject=DEFAULT_INVENTORY_CHANGE_SUBJECT,
+                html_body=DEFAULT_INVENTORY_CHANGE_HTML,
+                text_body=DEFAULT_INVENTORY_CHANGE_TEXT,
+                description=(
+                    "Sent to a member approximately one hour after inventory changes "
+                    "(items issued, assigned, returned, etc.). Multiple changes within "
+                    "the window are consolidated into a single email. Offsetting actions "
+                    "(e.g. issue + return of the same item) are netted out."
+                ),
+                allow_attachments=False,
+                created_by=created_by,
+            )
+            created.append(template)
+            logger.info(f"Created default inventory change email template for org {organization_id}")
 
         return created

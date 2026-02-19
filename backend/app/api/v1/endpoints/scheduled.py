@@ -46,6 +46,7 @@ async def run_scheduled_task(
     - `struggling_member_check` — Detect members falling behind (weekly)
     - `enrollment_deadline_warnings` — Warn approaching deadlines (weekly)
     - `membership_tier_advance` — Auto-advance membership tiers (monthly)
+    - `inventory_notifications` — Process delayed inventory change emails (every 15 min)
 
     **Requires admin permission**
     """

@@ -580,6 +580,64 @@ class DepartureClearanceItem(Base):
     )
 
 
+class InventoryActionType(str, enum.Enum):
+    """Types of inventory actions that generate notifications"""
+    ASSIGNED = "assigned"          # Individual item permanently assigned
+    UNASSIGNED = "unassigned"      # Individual item returned / unassigned
+    ISSUED = "issued"              # Pool item units issued to member
+    RETURNED = "returned"          # Pool item units returned to pool
+    CHECKED_OUT = "checked_out"    # Individual item temporarily checked out
+    CHECKED_IN = "checked_in"     # Individual item checked back in
+
+
+class InventoryNotificationQueue(Base):
+    """
+    Queues inventory change events for delayed, consolidated email
+    notifications.  A scheduled task processes records older than 1 hour,
+    groups them per member, nets out offsetting actions (e.g. issue + return
+    of the same item cancel out), and sends a single email per member
+    summarising the net changes.
+    """
+
+    __tablename__ = "inventory_notification_queue"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # What happened
+    action_type = Column(
+        Enum(InventoryActionType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+
+    # Item snapshot (readable even if item is later retired)
+    item_id = Column(String(36), ForeignKey("inventory_items.id", ondelete="SET NULL"))
+    item_name = Column(String(255), nullable=False)
+    item_serial_number = Column(String(255))
+    item_asset_tag = Column(String(255))
+    quantity = Column(Integer, nullable=False, default=1)
+
+    # Who performed the action
+    performed_by = Column(String(36), ForeignKey("users.id"))
+
+    # Processing state
+    processed = Column(Boolean, default=False, nullable=False, index=True)
+    processed_at = Column(DateTime(timezone=True))
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+
+    __table_args__ = (
+        Index("idx_inv_notif_queue_pending", "processed", "created_at"),
+        Index("idx_inv_notif_queue_org_user", "organization_id", "user_id"),
+    )
+
+
 class PropertyReturnReminder(Base):
     """
     Tracks which property-return reminder notices have been sent to

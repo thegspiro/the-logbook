@@ -36,6 +36,37 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    # ------------------------------------------------------------------
+    # Notification helper
+    # ------------------------------------------------------------------
+
+    async def _queue_inventory_notification(
+        self,
+        organization_id,
+        user_id,
+        action_type,
+        item: "InventoryItem",
+        quantity: int = 1,
+        performed_by=None,
+    ) -> None:
+        """Queue a delayed notification for an inventory change."""
+        try:
+            from app.services.inventory_notification_service import InventoryNotificationService
+            from app.models.inventory import InventoryActionType
+            svc = InventoryNotificationService(self.db)
+            await svc.queue_notification(
+                organization_id=str(organization_id),
+                user_id=str(user_id),
+                action_type=action_type,
+                item=item,
+                quantity=quantity,
+                performed_by=str(performed_by) if performed_by else None,
+            )
+        except Exception as e:
+            # Notification queue failure must not break the primary operation
+            from loguru import logger
+            logger.warning(f"Failed to queue inventory notification: {e}")
+
     # ============================================
     # Category Management
     # ============================================
@@ -278,6 +309,13 @@ class InventoryService:
             item.assigned_date = datetime.now()
             item.status = ItemStatus.ASSIGNED
 
+            # Queue notification
+            from app.models.inventory import InventoryActionType
+            await self._queue_inventory_notification(
+                organization_id, user_id, InventoryActionType.ASSIGNED,
+                item, performed_by=assigned_by,
+            )
+
             await self.db.commit()
             await self.db.refresh(assignment)
             return assignment, None
@@ -328,6 +366,13 @@ class InventoryService:
             item.status = ItemStatus.AVAILABLE
             if return_condition:
                 item.condition = return_condition
+
+            # Queue notification
+            from app.models.inventory import InventoryActionType
+            await self._queue_inventory_notification(
+                organization_id, previous_user_id, InventoryActionType.UNASSIGNED,
+                item, performed_by=returned_by,
+            )
 
             await self.db.commit()
 
@@ -403,6 +448,13 @@ class InventoryService:
             )
             self.db.add(issuance)
 
+            # Queue notification
+            from app.models.inventory import InventoryActionType
+            await self._queue_inventory_notification(
+                organization_id, user_id, InventoryActionType.ISSUED,
+                item, quantity=quantity, performed_by=issued_by,
+            )
+
             await self.db.commit()
             await self.db.refresh(issuance)
             return issuance, None
@@ -458,6 +510,13 @@ class InventoryService:
                 issuance.returned_by = returned_by
                 issuance.return_condition = return_condition
                 issuance.return_notes = return_notes
+
+            # Queue notification
+            from app.models.inventory import InventoryActionType
+            await self._queue_inventory_notification(
+                organization_id, issuance_user_id, InventoryActionType.RETURNED,
+                item, quantity=qty, performed_by=returned_by,
+            )
 
             await self.db.commit()
 
@@ -548,6 +607,13 @@ class InventoryService:
             # Update item status
             item.status = ItemStatus.CHECKED_OUT
 
+            # Queue notification
+            from app.models.inventory import InventoryActionType
+            await self._queue_inventory_notification(
+                organization_id, user_id, InventoryActionType.CHECKED_OUT,
+                item, performed_by=checked_out_by,
+            )
+
             await self.db.commit()
             await self.db.refresh(checkout)
             return checkout, None
@@ -594,6 +660,13 @@ class InventoryService:
             item = checkout.item
             item.status = ItemStatus.AVAILABLE
             item.condition = return_condition
+
+            # Queue notification
+            from app.models.inventory import InventoryActionType
+            await self._queue_inventory_notification(
+                organization_id, checkout_user_id, InventoryActionType.CHECKED_IN,
+                item, performed_by=checked_in_by,
+            )
 
             await self.db.commit()
 
