@@ -173,6 +173,33 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent iOS overscroll bounce on body */
+  overscroll-behavior: none;
+}
+
+/* Mobile touch optimizations */
+@media (max-width: 767px) {
+  /* Prevent text size adjustment on orientation change (iOS) */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Improve touch responsiveness — remove 300ms tap delay */
+  a, button, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  /* Prevent horizontal overflow from any uncontained elements */
+  main {
+    overflow-x: hidden;
+  }
+
+  /* Hide scrollbars on mobile tab bars for cleaner look */
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 0;
+    width: 0;
+  }
 }
 
 /* Focus visible for accessibility */

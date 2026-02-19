@@ -125,23 +125,23 @@ export const RequestsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Tab + Filter Bar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex bg-theme-input-bg rounded-lg p-1">
           <button onClick={() => setActiveView('swaps')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 sm:gap-2 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
-            <ArrowLeftRight className="w-4 h-4" /> Swap Requests ({swapRequests.length})
+            <ArrowLeftRight className="w-4 h-4" /> <span className="hidden sm:inline">Swap Requests</span><span className="sm:hidden">Swaps</span> ({swapRequests.length})
           </button>
           <button onClick={() => setActiveView('timeoff')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 sm:gap-2 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <CalendarOff className="w-4 h-4" /> Time Off ({timeOffRequests.length})
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-theme-text-muted" />
+          <Filter className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            className="bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -171,42 +171,42 @@ export const RequestsTab: React.FC = () => {
             {swapRequests.map(req => {
               const statusColor = STATUS_COLORS[req.status] || STATUS_COLORS.pending;
               return (
-                <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                        <ArrowLeftRight className="w-5 h-5 text-orange-500" />
+                <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
+                  <div className="flex items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                        <ArrowLeftRight className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-theme-text-primary">
-                          {req.user_name || 'Member'} requests swap
-                        </p>
-                        <p className="text-xs text-theme-text-muted">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-theme-text-primary">
+                            {req.user_name || 'Member'} requests swap
+                          </p>
+                          <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
+                            {req.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-theme-text-muted mt-0.5">
                           Shift: {req.offering_shift_id?.slice(0, 8)}...
                           {req.requesting_shift_id && ` for ${req.requesting_shift_id.slice(0, 8)}...`}
                         </p>
-                        {req.reason && <p className="text-xs text-theme-text-secondary mt-1">{req.reason}</p>}
+                        {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                         <p className="text-xs text-theme-text-muted mt-1">
                           {new Date(req.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
-                        {req.status}
-                      </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {canManage && req.status === 'pending' && (
-                        <>
-                          <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
-                            className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg" title="Review"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        </>
+                        <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
+                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Review"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
                       )}
                       {req.status === 'pending' && (
                         <button onClick={() => handleCancel('swap', req.id)}
-                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg" title="Cancel"
+                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Cancel"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -233,37 +233,39 @@ export const RequestsTab: React.FC = () => {
             {timeOffRequests.map(req => {
               const statusColor = STATUS_COLORS[req.status] || STATUS_COLORS.pending;
               return (
-                <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <CalendarOff className="w-5 h-5 text-blue-500" />
+                <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
+                  <div className="flex items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                        <CalendarOff className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-theme-text-primary">
-                          {req.user_name || 'Member'} — Time Off
-                        </p>
-                        <p className="text-xs text-theme-text-muted">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-theme-text-primary">
+                            {req.user_name || 'Member'} — Time Off
+                          </p>
+                          <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
+                            {req.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-theme-text-muted mt-0.5">
                           {new Date(req.start_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           {req.end_date !== req.start_date && ` - ${new Date(req.end_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
                         </p>
-                        {req.reason && <p className="text-xs text-theme-text-secondary mt-1">{req.reason}</p>}
+                        {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
-                        {req.status}
-                      </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       {canManage && req.status === 'pending' && (
                         <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
-                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg" title="Review"
+                          className="p-2 text-theme-text-muted hover:text-green-600 hover:bg-green-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Review"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                       )}
                       {req.status === 'pending' && (
                         <button onClick={() => handleCancel('timeoff', req.id)}
-                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg" title="Cancel"
+                          className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" title="Cancel"
                         >
                           <X className="w-4 h-4" />
                         </button>

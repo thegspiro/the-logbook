@@ -313,7 +313,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed top-0 left-0 h-full bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 ${
+        className={`fixed top-0 left-0 h-full bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 overscroll-contain ${
           collapsed ? 'w-20' : 'w-64'
         } ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
@@ -384,7 +384,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto" aria-label="Side navigation">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch" aria-label="Side navigation">
             <ul role="list" className="space-y-1">
               {navItems.map((item, idx) => {
                 // Render section label dividers

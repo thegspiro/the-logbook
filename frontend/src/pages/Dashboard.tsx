@@ -262,13 +262,13 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full">
         {/* Welcome Header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-theme-text-primary mb-1">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold text-theme-text-primary mb-1">
             Welcome to {departmentName}
           </h2>
-          <p className="text-theme-text-secondary">
+          <p className="text-theme-text-secondary text-sm sm:text-base">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz })}
           </p>
         </div>
@@ -277,19 +277,26 @@ const Dashboard: React.FC = () => {
         {isAdmin && setupProgress && setupProgress.completed < setupProgress.total && (
           <button
             onClick={() => navigate('/setup')}
-            className="w-full mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
+            className="w-full mb-6 sm:mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
           >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
                 <Rocket className="w-5 h-5 text-red-500" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-theme-text-primary">Complete Department Setup</h3>
                 <p className="text-xs text-theme-text-muted mt-0.5">
-                  {setupProgress.completed} of {setupProgress.total} steps complete — finish setting up to unlock all features.
+                  {setupProgress.completed} of {setupProgress.total} steps complete
                 </p>
+                {/* Progress bar — mobile inline, desktop in separate column */}
+                <div className="mt-2 sm:hidden w-full bg-theme-surface-secondary rounded-full h-2">
+                  <div
+                    className="h-2 rounded-full bg-red-500 transition-all"
+                    style={{ width: `${Math.round((setupProgress.completed / setupProgress.total) * 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
                 <div className="w-24 bg-theme-surface-secondary rounded-full h-2">
                   <div
                     className="h-2 rounded-full bg-red-500 transition-all"
@@ -309,7 +316,7 @@ const Dashboard: React.FC = () => {
               <Shield className="w-5 h-5 text-red-500" />
               Department Overview
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" role="region" aria-label="Department overview">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" role="region" aria-label="Department overview">
               <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
@@ -383,7 +390,7 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Hours Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" role="region" aria-label="Hours summary">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8" role="region" aria-label="Hours summary">
           <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border">
             <div className="flex items-center justify-between">
               <div>
@@ -529,9 +536,9 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
           {/* Notifications */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <Bell className="w-5 h-5 text-red-400" />
@@ -587,7 +594,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Upcoming Shifts */}
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <Calendar className="w-5 h-5 text-blue-400" />
@@ -646,7 +653,7 @@ const Dashboard: React.FC = () => {
 
         {/* Quick Access: Meeting Minutes */}
         {checkPermission('meetings.manage') && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <ClipboardList className="w-5 h-5 text-cyan-500" />
@@ -663,16 +670,16 @@ const Dashboard: React.FC = () => {
             <p className="text-sm text-theme-text-muted mt-2">
               Record, review, and publish meeting minutes. Track motions, votes, and action items.
             </p>
-            <div className="flex items-center gap-3 mt-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
               <button
                 onClick={() => navigate('/minutes')}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors"
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors text-center"
               >
                 Record Minutes
               </button>
               <button
                 onClick={() => navigate('/minutes')}
-                className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors"
+                className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
               >
                 Review Pending
               </button>
@@ -682,7 +689,7 @@ const Dashboard: React.FC = () => {
 
         {/* Training Progress */}
         {!loadingTraining && enrollments.length > 0 && (
-          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-6 border border-theme-surface-border mb-8">
+          <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6 sm:mb-8">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
                 <GraduationCap className="w-5 h-5 text-red-500" />

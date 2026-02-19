@@ -111,17 +111,17 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   return (
     <div className="space-y-6">
       {/* Filter Bar */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-theme-text-muted" />
-          <span className="text-sm text-theme-text-secondary">From:</span>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <Filter className="w-4 h-4 text-theme-text-muted flex-shrink-0" />
+          <span className="text-sm text-theme-text-secondary flex-shrink-0">From:</span>
           <input type="date" value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            className="bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
         </div>
         <button onClick={loadShifts}
-          className="px-3 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
+          className="px-3 py-2 text-sm text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors w-full sm:w-auto"
         >
           Refresh
         </button>
@@ -161,19 +161,19 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 <div className="space-y-3">
                   {dayShifts.map(shift => (
                     <div key={shift.id}
-                      className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 hover:border-violet-500/30 transition-colors"
+                      className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 hover:border-violet-500/30 transition-colors"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="w-12 h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
-                            <Clock className="w-6 h-6 text-violet-500" />
+                      <div className="flex items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-base font-semibold text-theme-text-primary">
+                            <p className="text-sm sm:text-base font-semibold text-theme-text-primary">
                               {formatTime(shift.start_time, tz)}
                               {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
                             </p>
-                            <div className="flex items-center gap-3 mt-1">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
                               <span className="flex items-center gap-1 text-xs text-theme-text-muted">
                                 <Users className="w-3 h-3" />
                                 {shift.apparatus_positions && shift.apparatus_positions.length > 0
@@ -184,11 +184,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                               {shift.apparatus_unit_number && (
                                 <span className="flex items-center gap-1 text-xs text-theme-text-muted">
                                   <Truck className="w-3 h-3" /> {shift.apparatus_unit_number}
-                                  {shift.apparatus_name && ` — ${shift.apparatus_name}`}
+                                  {shift.apparatus_name && <span className="hidden sm:inline"> — {shift.apparatus_name}</span>}
                                 </span>
                               )}
                               {shift.shift_officer_name && (
-                                <span className="flex items-center gap-1 text-xs text-theme-text-muted">
+                                <span className="hidden sm:flex items-center gap-1 text-xs text-theme-text-muted">
                                   <MapPin className="w-3 h-3" /> {shift.shift_officer_name}
                                 </span>
                               )}
@@ -198,49 +198,54 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {signupShiftId === shift.id ? (
+                        {/* Desktop buttons (hidden on mobile when signup form is open) */}
+                        {signupShiftId !== shift.id && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button onClick={() => setSignupShiftId(shift.id)}
+                              className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors"
+                            >
+                              <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
+                            </button>
+                            {onViewShift && (
+                              <button onClick={() => onViewShift(shift)}
+                                className="hidden sm:block px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+                              >
+                                Details
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {/* Signup form — stacks below card content on mobile */}
+                      {signupShiftId === shift.id && (
+                        <div className="mt-3 pt-3 border-t border-theme-surface-border">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                            <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
+                              className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            >
+                              {(shift.apparatus_positions && shift.apparatus_positions.length > 0
+                                ? shift.apparatus_positions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)] as const)
+                                : Object.entries(POSITION_LABELS)
+                              ).map(([val, label]) => (
+                                <option key={val} value={val}>{label}</option>
+                              ))}
+                            </select>
                             <div className="flex items-center gap-2">
-                              <select value={signupPosition} onChange={e => setSignupPosition(e.target.value)}
-                                className="bg-theme-input-bg border border-theme-input-border rounded-lg px-2 py-1.5 text-xs text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
-                              >
-                                {(shift.apparatus_positions && shift.apparatus_positions.length > 0
-                                  ? shift.apparatus_positions.map(p => [p, POSITION_LABELS[p] || p.charAt(0).toUpperCase() + p.slice(1)] as const)
-                                  : Object.entries(POSITION_LABELS)
-                                ).map(([val, label]) => (
-                                  <option key={val} value={val}>{label}</option>
-                                ))}
-                              </select>
                               <button onClick={() => handleSignup(shift.id)} disabled={signingUp}
-                                className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                                className="flex-1 sm:flex-none px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1"
                               >
-                                {signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                {signingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                 Confirm
                               </button>
                               <button onClick={() => setSignupShiftId(null)}
-                                className="px-2 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary"
+                                className="px-3 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg"
                               >
                                 Cancel
                               </button>
                             </div>
-                          ) : (
-                            <>
-                              <button onClick={() => setSignupShiftId(shift.id)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
-                              >
-                                <UserPlus className="w-4 h-4" /> Sign Up
-                              </button>
-                              {onViewShift && (
-                                <button onClick={() => onViewShift(shift)}
-                                  className="px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
-                                >
-                                  Details
-                                </button>
-                              )}
-                            </>
-                          )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>

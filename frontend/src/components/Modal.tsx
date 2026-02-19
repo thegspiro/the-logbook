@@ -37,10 +37,10 @@ export const Modal: React.FC<ModalProps> = ({
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const sizeClasses = {
-    sm: 'sm:max-w-md',
-    md: 'sm:max-w-lg',
-    lg: 'sm:max-w-2xl',
-    xl: 'sm:max-w-4xl',
+    sm: 'max-w-[calc(100vw-2rem)] sm:max-w-md',
+    md: 'max-w-[calc(100vw-2rem)] sm:max-w-lg',
+    lg: 'max-w-[calc(100vw-2rem)] sm:max-w-2xl',
+    xl: 'max-w-[calc(100vw-2rem)] sm:max-w-4xl',
   };
 
   useEffect(() => {
@@ -111,7 +111,7 @@ export const Modal: React.FC<ModalProps> = ({
       aria-modal="true"
     >
       <div
-        className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0"
+        className="flex items-center justify-center min-h-screen px-4 py-4 text-center sm:block sm:p-0"
         onClick={handleBackdropClick}
       >
         {/* Background overlay */}
@@ -128,7 +128,7 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}
+          className={`inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto`}
           tabIndex={-1}
         >
           {/* Header */}

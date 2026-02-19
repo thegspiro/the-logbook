@@ -154,21 +154,21 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   return (
     <div className="space-y-6">
       {/* Actions Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex bg-theme-input-bg rounded-lg p-1">
           <button onClick={() => setView('upcoming')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             Upcoming ({upcoming.length})
           </button>
           <button onClick={() => setView('past')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'past' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'past' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             Past ({past.length})
           </button>
         </div>
         <button onClick={() => { setTimeOffForm({ start_date: '', end_date: '', reason: '' }); setShowTimeOffModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors w-full sm:w-auto"
         >
           <CalendarOff className="w-4 h-4" /> Request Time Off
         </button>
@@ -194,46 +194,51 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
             return (
               <div key={assignment.id}
-                className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 hover:border-theme-text-muted/30 transition-colors"
+                className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 hover:border-theme-text-muted/30 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                      <Clock className="w-6 h-6 text-violet-500" />
+                <div className="flex items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
                     </div>
-                    <div>
-                      <p className="text-base font-semibold text-theme-text-primary">
+                    <div className="min-w-0">
+                      <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
                         {shiftDate ? shiftDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Unknown Date'}
                       </p>
-                      <p className="text-sm text-theme-text-secondary">
+                      <p className="text-xs sm:text-sm text-theme-text-secondary">
                         {shift ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}` : ''}
                       </p>
-                      <p className="text-xs text-theme-text-muted capitalize mt-0.5">
-                        Position: {assignment.position}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-theme-text-muted capitalize">
+                          Position: {assignment.position}
+                        </p>
+                        <span className={`px-2 py-0.5 text-[10px] sm:hidden font-medium rounded-full border capitalize ${statusColor}`}>
+                          {assignment.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
+                  <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                    <span className={`hidden sm:inline-block px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
                       {assignment.status}
                     </span>
                     {view === 'upcoming' && assignment.status === 'assigned' && (
                       <button onClick={() => handleConfirm(assignment.id)}
-                        className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors" title="Confirm shift"
+                        className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift"
                       >
                         <Check className="w-5 h-5" />
                       </button>
                     )}
                     {view === 'upcoming' && (
                       <button onClick={() => openSwapRequest(assignment)}
-                        className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors" title="Request swap"
+                        className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Request swap"
                       >
                         <ArrowLeftRight className="w-5 h-5" />
                       </button>
                     )}
                     {shift && onViewShift && (
                       <button onClick={() => onViewShift(shift)}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors" title="View details"
+                        className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="View details"
                       >
                         <ChevronDown className="w-5 h-5" />
                       </button>
