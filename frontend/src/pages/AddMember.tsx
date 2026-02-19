@@ -12,10 +12,21 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
-import { userService, organizationService } from '../services/api';
+import { userService, organizationService, roleService, locationsService } from '../services/api';
+import type { Location } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
+
+const OPERATIONAL_RANKS = [
+  { value: 'fire_chief', label: 'Fire Chief' },
+  { value: 'deputy_chief', label: 'Deputy Chief' },
+  { value: 'assistant_chief', label: 'Assistant Chief' },
+  { value: 'captain', label: 'Captain' },
+  { value: 'lieutenant', label: 'Lieutenant' },
+  { value: 'engineer', label: 'Engineer' },
+  { value: 'firefighter', label: 'Firefighter' },
+];
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -55,6 +66,10 @@ const AddMember: React.FC = () => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Dropdown data
+  const [availablePositions, setAvailablePositions] = useState<{ id: string; name: string }[]>([]);
+  const [availableStations, setAvailableStations] = useState<Location[]>([]);
+
   useEffect(() => {
     organizationService.previewNextMembershipId().then((data) => {
       if (data.enabled && data.next_id) {
@@ -63,6 +78,17 @@ const AddMember: React.FC = () => {
     }).catch(() => {
       // Silently ignore - membership ID may not be configured
     });
+
+    // Load positions (roles) for dropdown
+    roleService.getRoles().then((roles) => {
+      setAvailablePositions(roles.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
+    }).catch(() => {});
+
+    // Load stations for dropdown (only top-level locations with an address)
+    locationsService.getLocations({ is_active: true }).then((locs) => {
+      const stations = locs.filter((l: Location) => l.address && !l.room_number);
+      setAvailableStations(stations);
+    }).catch(() => {});
   }, []);
 
   const handleInputChange = (
@@ -560,39 +586,48 @@ const AddMember: React.FC = () => {
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Rank
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Firefighter"
-                />
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Rank</option>
+                  {OPERATIONAL_RANKS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
-                  Role
+                  Position
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.role}
                   onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Engine Operator"
-                />
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Position</option>
+                  {availablePositions.map((p) => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-theme-text-primary mb-2">
                   Station
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.station}
                   onChange={(e) => handleInputChange('station', e.target.value)}
-                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Station 1"
-                />
+                  className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Station</option>
+                  {availableStations.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

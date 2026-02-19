@@ -52,7 +52,7 @@ interface BackendTemplate {
 const FALLBACK_TEMPLATES: BackendTemplate[] = [
   { id: '_day', name: 'Day Shift', start_time_of_day: '07:00', end_time_of_day: '19:00', duration_hours: 12, min_staffing: 4, is_default: true, is_active: true },
   { id: '_night', name: 'Night Shift', start_time_of_day: '19:00', end_time_of_day: '07:00', duration_hours: 12, min_staffing: 4, is_default: false, is_active: true },
-  { id: '_morning', name: 'Morning Shift', start_time_of_day: '06:00', end_time_of_day: '14:00', duration_hours: 8, min_staffing: 3, is_default: false, is_active: true },
+  { id: '_24hr', name: '24 Hour', start_time_of_day: '07:00', end_time_of_day: '07:00', duration_hours: 24, min_staffing: 4, is_default: false, is_active: true },
 ];
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -62,6 +62,21 @@ const formatDateISO = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+/** Compute the end date for a shift given its start date and template times. */
+const computeEndDate = (startDate: string, template: BackendTemplate | undefined): string => {
+  if (!startDate || !template) return '';
+  const [startHour] = template.start_time_of_day.split(':').map(Number);
+  const [endHour] = template.end_time_of_day.split(':').map(Number);
+  // Same-day shift: end time is after start time and not a 24-hour shift
+  if (endHour > startHour && template.duration_hours < 24) {
+    return startDate;
+  }
+  // Overnight or 24-hour shift: end date is the next day
+  const nextDay = new Date(startDate + 'T12:00:00'); // noon to avoid DST edge cases
+  nextDay.setDate(nextDay.getDate() + 1);
+  return formatDateISO(nextDay);
 };
 
 const getShiftTemplateColor = (shift: ShiftRecord): string => {
@@ -291,14 +306,8 @@ const SchedulingPage: React.FC = () => {
       const endTime = template.end_time_of_day;
       const startDateTime = `${shiftForm.startDate}T${startTime}:00`;
 
-      let endDate = shiftForm.startDate;
-      const [startHour] = startTime.split(':').map(Number);
-      const [endHour] = endTime.split(':').map(Number);
-      if (endHour < startHour) {
-        const nextDay = new Date(shiftForm.startDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        endDate = formatDateISO(nextDay);
-      }
+      // Use the form's end date (auto-computed or user-overridden)
+      const endDate = shiftForm.endDate || computeEndDate(shiftForm.startDate, template) || shiftForm.startDate;
       const endDateTime = `${endDate}T${endTime}:00`;
 
       await schedulingService.createShift({
@@ -876,11 +885,12 @@ const SchedulingPage: React.FC = () => {
                         value={shiftForm.shiftTemplate}
                         onChange={(e) => {
                           const tmpl = effectiveTemplates.find(t => t.id === e.target.value);
-                          setShiftForm({
-                            ...shiftForm,
+                          setShiftForm(prev => ({
+                            ...prev,
                             shiftTemplate: e.target.value,
-                            minStaffing: tmpl?.min_staffing || shiftForm.minStaffing,
-                          });
+                            minStaffing: tmpl?.min_staffing || prev.minStaffing,
+                            endDate: computeEndDate(prev.startDate, tmpl),
+                          }));
                         }}
                         className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                       >
@@ -1028,7 +1038,15 @@ const SchedulingPage: React.FC = () => {
                         <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
                         <input
                           type="date" value={shiftForm.startDate}
-                          onChange={(e) => setShiftForm({ ...shiftForm, startDate: e.target.value })}
+                          onChange={(e) => {
+                            const newStart = e.target.value;
+                            const tmpl = effectiveTemplates.find(t => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                            setShiftForm(prev => ({
+                              ...prev,
+                              startDate: newStart,
+                              endDate: computeEndDate(newStart, tmpl),
+                            }));
+                          }}
                           className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
                       </div>
@@ -1039,6 +1057,16 @@ const SchedulingPage: React.FC = () => {
                           onChange={(e) => setShiftForm({ ...shiftForm, endDate: e.target.value })}
                           className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-violet-500"
                         />
+                        {shiftForm.startDate && shiftForm.endDate && (() => {
+                          const tmpl = effectiveTemplates.find(t => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                          if (!tmpl) return null;
+                          const sameDay = shiftForm.startDate === shiftForm.endDate;
+                          return (
+                            <p className="text-xs text-theme-text-muted mt-1">
+                              {tmpl.start_time_of_day} &rarr; {tmpl.end_time_of_day} ({sameDay ? 'same day' : 'next day'})
+                            </p>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div>
@@ -1105,8 +1133,6 @@ const BUILTIN_POSITIONS = [
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
   { value: 'ems', label: 'EMS' },
-  { value: 'captain', label: 'Captain' },
-  { value: 'lieutenant', label: 'Lieutenant' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
 ];
