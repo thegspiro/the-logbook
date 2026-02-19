@@ -230,8 +230,6 @@ const BUILTIN_POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
   { value: 'ems', label: 'EMS' },
-  { value: 'captain', label: 'Captain' },
-  { value: 'lieutenant', label: 'Lieutenant' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
   { value: 'other', label: 'Other' },

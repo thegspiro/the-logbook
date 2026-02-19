@@ -1105,8 +1105,6 @@ const BUILTIN_POSITIONS = [
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
   { value: 'ems', label: 'EMS' },
-  { value: 'captain', label: 'Captain' },
-  { value: 'lieutenant', label: 'Lieutenant' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
 ];
