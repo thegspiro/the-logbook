@@ -1126,6 +1126,14 @@ const DEFAULT_APPARATUS_TYPE_POSITIONS: Record<string, { positions: string[]; mi
   utility: { positions: ['driver'], minStaffing: 1 },
 };
 
+// Default positions per event resource type
+const DEFAULT_RESOURCE_TYPE_POSITIONS: Record<string, { positions: string[]; label: string }> = {
+  first_aid_station: { positions: ['ems', 'ems'], label: 'First Aid Station' },
+  bicycle_team: { positions: ['ems', 'ems'], label: 'Bicycle Team' },
+  command_post: { positions: ['officer', 'captain'], label: 'Command Post' },
+  rehab_station: { positions: ['ems', 'firefighter'], label: 'Rehab Station' },
+};
+
 interface ApparatusTypeDefaults {
   positions: string[];
   minStaffing: number;
@@ -1133,6 +1141,11 @@ interface ApparatusTypeDefaults {
 
 interface CustomPosition {
   value: string;
+  label: string;
+}
+
+interface ResourceTypeDefaults {
+  positions: string[];
   label: string;
 }
 
@@ -1144,6 +1157,7 @@ interface ShiftSettings {
   enabledPositions: string[];
   customPositions: CustomPosition[];
   apparatusTypeDefaults: Record<string, ApparatusTypeDefaults>;
+  resourceTypeDefaults: Record<string, ResourceTypeDefaults>;
 }
 
 const DEFAULT_SETTINGS: ShiftSettings = {
@@ -1154,6 +1168,7 @@ const DEFAULT_SETTINGS: ShiftSettings = {
   enabledPositions: ['officer', 'driver', 'firefighter', 'ems', 'captain', 'lieutenant'],
   customPositions: [],
   apparatusTypeDefaults: { ...DEFAULT_APPARATUS_TYPE_POSITIONS },
+  resourceTypeDefaults: { ...DEFAULT_RESOURCE_TYPE_POSITIONS },
 };
 
 interface ShiftSettingsPanelProps {
@@ -1420,6 +1435,108 @@ const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     </div>
                     <button
                       onClick={() => startEditApparatusType(type)}
+                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline flex-shrink-0"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Event Resource Type Defaults */}
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+        <h3 className="text-base font-semibold text-theme-text-primary mb-1">Event Resource Defaults</h3>
+        <p className="text-xs text-theme-text-muted mb-4">
+          Define default staffing for non-vehicle resources used during events (first aid stations, bicycle teams, etc.). These defaults are used when adding resources to event templates.
+        </p>
+        <div className="space-y-2">
+          {Object.entries(settings.resourceTypeDefaults).map(([type, defaults]) => {
+            const isEditing = editingApparatusType === `resource_${type}`;
+            return (
+              <div key={type} className="p-3 bg-theme-surface-hover/50 rounded-lg">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-theme-text-primary">{defaults.label}</h4>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingApparatusType(null)} className="text-xs text-theme-text-muted hover:text-theme-text-primary">Cancel</button>
+                        <button onClick={() => {
+                          setSettings(prev => ({
+                            ...prev,
+                            resourceTypeDefaults: {
+                              ...prev.resourceTypeDefaults,
+                              [type]: { ...prev.resourceTypeDefaults[type], positions: editPositions },
+                            },
+                          }));
+                          setEditingApparatusType(null);
+                        }} className="text-xs text-violet-600 dark:text-violet-400 font-medium hover:underline">Save</button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Default Positions</label>
+                      <div className="space-y-1.5">
+                        {editPositions.map((pos, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-xs text-theme-text-muted w-5 text-right">{i + 1}.</span>
+                            <select
+                              value={pos}
+                              onChange={(e) => {
+                                const updated = [...editPositions];
+                                updated[i] = e.target.value;
+                                setEditPositions(updated);
+                              }}
+                              className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-violet-500"
+                            >
+                              {allPositionOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => setEditPositions(prev => prev.filter((_, idx) => idx !== i))}
+                              className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setEditPositions(prev => [...prev, 'ems'])}
+                        className="mt-1.5 text-xs text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Add position
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start sm:items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-theme-text-primary">{defaults.label}</h4>
+                        <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded">
+                          {defaults.positions.length} positions
+                        </span>
+                      </div>
+                      {defaults.positions.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {defaults.positions.map((pos, i) => {
+                            const label = allPositionOptions.find(o => o.value === pos)?.label || pos;
+                            return (
+                              <span key={i} className="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded capitalize">{label}</span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingApparatusType(`resource_${type}`);
+                        setEditPositions([...defaults.positions]);
+                      }}
                       className="text-xs text-violet-600 dark:text-violet-400 hover:underline flex-shrink-0"
                     >
                       Edit
