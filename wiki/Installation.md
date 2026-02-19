@@ -144,6 +144,15 @@ docker-compose logs -f
 - **Backend API:** http://localhost:3001
 - **API Docs:** http://localhost:3001/docs
 
+### Choosing Your Environment File
+
+Two templates are provided:
+
+- **`.env.example`** — Quick-start config (~30 variables). Covers security keys, database, Redis, CORS, ports, basic modules, and email. Sufficient for most deployments. Defaults to `production`.
+- **`.env.example.full`** — Complete reference (~100+ variables). Adds cloud storage (S3, Azure, GCS), OAuth/SSO (Azure AD, Google, LDAP), SMS (Twilio), HIPAA fine-tuning, IP whitelisting, geofencing, feature flags, and development tools. Defaults to `development`.
+
+Start with `.env.example` unless you know you need advanced settings. You can add variables from `.env.example.full` at any time — they are fully compatible.
+
 ### Required Environment Variables
 
 Edit `.env` file:
