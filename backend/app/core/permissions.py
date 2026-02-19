@@ -658,6 +658,68 @@ def get_rank_default_permissions(rank: str) -> List[str]:
 # These are created for every new organisation during onboarding.
 
 DEFAULT_POSITIONS: Dict[str, dict] = {
+    # ------------------------------------------------------------------
+    # Operational rank positions (mirror OPERATIONAL_RANKS permissions)
+    # ------------------------------------------------------------------
+    "fire_chief": {
+        "name": "Fire Chief",
+        "slug": "fire_chief",
+        "description": "Highest-ranking officer with full operational and administrative authority",
+        "is_system": True,
+        "priority": 95,
+        "permissions": OPERATIONAL_RANKS["fire_chief"]["default_permissions"],
+    },
+    "deputy_chief": {
+        "name": "Deputy Chief",
+        "slug": "deputy_chief",
+        "description": "Second in command, oversees operations in the Chief's absence",
+        "is_system": True,
+        "priority": 90,
+        "permissions": OPERATIONAL_RANKS["deputy_chief"]["default_permissions"],
+    },
+    "assistant_chief": {
+        "name": "Assistant Chief",
+        "slug": "assistant_chief",
+        "description": "Assists the Chief and Deputy Chief with operational oversight",
+        "is_system": True,
+        "priority": 85,
+        "permissions": OPERATIONAL_RANKS["assistant_chief"]["default_permissions"],
+    },
+    "captain": {
+        "name": "Captain",
+        "slug": "captain",
+        "description": "Company officer responsible for crew management and operations",
+        "is_system": True,
+        "priority": 70,
+        "permissions": OPERATIONAL_RANKS["captain"]["default_permissions"],
+    },
+    "lieutenant": {
+        "name": "Lieutenant",
+        "slug": "lieutenant",
+        "description": "Company officer assisting the Captain with crew supervision",
+        "is_system": True,
+        "priority": 60,
+        "permissions": OPERATIONAL_RANKS["lieutenant"]["default_permissions"],
+    },
+    "engineer": {
+        "name": "Engineer / Driver Operator",
+        "slug": "engineer",
+        "description": "Apparatus operator responsible for vehicle operations and maintenance",
+        "is_system": True,
+        "priority": 40,
+        "permissions": OPERATIONAL_RANKS["engineer"]["default_permissions"],
+    },
+    "firefighter": {
+        "name": "Firefighter",
+        "slug": "firefighter",
+        "description": "Line firefighter with standard operational access",
+        "is_system": True,
+        "priority": 15,
+        "permissions": OPERATIONAL_RANKS["firefighter"]["default_permissions"],
+    },
+    # ------------------------------------------------------------------
+    # Corporate / organisational positions
+    # ------------------------------------------------------------------
     "it_manager": {
         "name": "IT Manager",
         "slug": "it_manager",
@@ -1127,6 +1189,10 @@ def get_admin_position_slugs() -> List[str]:
     """
     return [
         "it_manager",
+        "fire_chief",
+        "deputy_chief",
+        "assistant_chief",
+        "captain",
         "president",
         "vice_president",
         "secretary",
