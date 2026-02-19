@@ -235,7 +235,7 @@ const ModuleSelection: React.FC = () => {
               )}
 
               {module.requiresSetup && (
-                <p className="text-yellow-400 text-xs mt-2 flex items-center space-x-1">
+                <p className="text-yellow-600 text-xs mt-2 flex items-center space-x-1">
                   <Info className="w-3 h-3" />
                   <span>{module.setupDescription}</span>
                 </p>
