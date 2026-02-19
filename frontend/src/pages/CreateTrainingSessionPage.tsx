@@ -17,7 +17,7 @@ import type { Location } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput } from '../utils/dateFormatting';
-import { userService, schedulingService, locationsService } from '../services/api';
+import { userService, schedulingService, locationsService, trainingSessionService, trainingService } from '../services/api';
 
 /**
  * Create Training Session Page
@@ -73,7 +73,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
   useEffect(() => {
     // Load available courses, members, apparatus, and locations from API
-    // trainingService.getCourses().then(setAvailableCourses);
+    trainingService.getCourses().then(setAvailableCourses).catch(() => {});
     userService.getUsers().then(setMembers).catch(() => {});
     schedulingService.getBasicApparatus({ is_active: true }).then((data) => {
       setApparatusList(data.map((a: Record<string, unknown>) => ({ id: a.id as string, name: (a.name || a.unit_number || 'Unknown') as string })));
@@ -106,13 +106,16 @@ const CreateTrainingSessionPage: React.FC = () => {
 
     try {
       // Create training session (creates Event + TrainingCourse link)
-      // const response = await trainingService.createSession(formData);
+      const response = await trainingSessionService.createSession(formData);
 
       toast.success('Training session created successfully!');
 
       // Navigate to the event page to view QR code
-      // navigate(`/events/${response.event_id}`);
-      navigate('/training/officer');
+      if (response.event_id) {
+        navigate(`/events/${response.event_id}`);
+      } else {
+        navigate('/training/officer');
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create training session'));
       setSaving(false);

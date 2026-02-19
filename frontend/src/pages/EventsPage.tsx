@@ -88,7 +88,7 @@ export const EventsPage: React.FC = () => {
         {canManage && (
           <div className="flex items-center gap-3">
             <Link
-              to="/events/settings"
+              to="/events/admin"
               className="inline-flex items-center px-3 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               title="Module Settings"
             >

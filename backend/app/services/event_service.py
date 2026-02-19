@@ -723,7 +723,7 @@ class EventService:
             query = (
                 query
                 .join(user_roles, User.id == user_roles.c.user_id)
-                .join(Role, Role.id == user_roles.c.role_id)
+                .join(Role, Role.id == user_roles.c.position_id)
                 .where(Role.slug.in_(event.eligible_roles))
                 .distinct()
             )

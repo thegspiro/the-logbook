@@ -264,14 +264,14 @@ class LocationService:
         )
         return result.scalar_one_or_none()
 
-    async def _generate_unique_display_code(self, max_attempts: int = 10) -> str:
+    async def _generate_unique_display_code(self, max_attempts: int = 20) -> str:
         """Generate a display code that doesn't collide with existing ones"""
-        for _ in range(max_attempts):
-            code = generate_display_code()
+        for attempt in range(max_attempts):
+            length = 8 if attempt < 10 else 12
+            code = generate_display_code(length=length)
             result = await self.db.execute(
                 select(Location.id).where(Location.display_code == code)
             )
             if result.scalar_one_or_none() is None:
                 return code
-        # Extremely unlikely — fall back to longer code
-        return generate_display_code(length=12)
+        raise ValueError("Unable to generate a unique display code. Please try again.")

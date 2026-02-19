@@ -202,6 +202,7 @@ const AddMember: React.FC = () => {
         address_zip: formData.zipCode || undefined,
         address_country: 'USA',
         emergency_contacts: emergencyContacts,
+        role_ids: formData.role ? [formData.role] : undefined,
         send_welcome_email: true,
       });
 
@@ -609,7 +610,7 @@ const AddMember: React.FC = () => {
                 >
                   <option value="">Select Position</option>
                   {availablePositions.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
+                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>

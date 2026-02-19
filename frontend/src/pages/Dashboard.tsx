@@ -362,7 +362,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
               </div>
 
-              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/dashboard')}>
+              <div className="bg-theme-surface backdrop-blur-sm rounded-lg p-5 border border-theme-surface-border cursor-pointer hover:border-red-500/50 transition-colors" onClick={() => navigate('/action-items')}>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-theme-text-secondary text-xs font-medium uppercase">Action Items</p>

@@ -29,7 +29,7 @@ class HealthCheckService {
     const component = 'API';
 
     try {
-      const response = await fetch('/api/v1/health', {
+      const response = await fetch('/health', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
