@@ -369,13 +369,14 @@ const ModuleSelection: React.FC = () => {
               {isSaving ? 'Saving Module Configuration...' : 'Continue to Admin Setup'}
             </button>
 
-            {/* Progress Indicator */}
-            <ProgressIndicator
-              currentStep={8}
-              totalSteps={10}
-              className="mt-6 pt-6 border-t border-theme-nav-border"
-            />
           </div>
+
+          {/* Progress Indicator */}
+          <ProgressIndicator
+            currentStep={8}
+            totalSteps={10}
+            className="mt-6 pt-6 border-t border-theme-nav-border"
+          />
         </div>
       </main>
 

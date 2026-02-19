@@ -351,12 +351,13 @@ const AuthenticationChoice: React.FC = () => {
               {isSaving ? 'Saving...' : 'Continue'}
             </button>
 
-            {/* Progress Indicator */}
-            <ProgressIndicator currentStep={6} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
-
-            {/* Auto-Save Notification */}
-            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
+
+          {/* Progress Indicator */}
+          <ProgressIndicator currentStep={6} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+
+          {/* Auto-Save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
       </main>
 

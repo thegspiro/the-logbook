@@ -490,10 +490,11 @@ const ITTeamBackupAccess: React.FC = () => {
                 {isSaving ? 'Saving Securely...' : 'Continue to Module Selection'}
               </button>
 
-              {/* Progress Indicator */}
-              <ProgressIndicator currentStep={7} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
-              <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
             </div>
+
+            {/* Progress Indicator */}
+            <ProgressIndicator currentStep={7} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </form>
         </div>
       </main>

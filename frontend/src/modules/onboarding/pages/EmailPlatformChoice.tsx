@@ -286,12 +286,13 @@ const EmailPlatformChoice: React.FC = () => {
                 : 'Your email credentials are encrypted and stored securely'}
             </p>
 
-            {/* Progress Indicator */}
-            <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
-
-            {/* Auto-Save Notification */}
-            <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
+
+          {/* Progress Indicator */}
+          <ProgressIndicator currentStep={3} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+
+          {/* Auto-Save Notification */}
+          <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
         </div>
       </main>
 

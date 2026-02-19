@@ -333,12 +333,13 @@ const NavigationChoice: React.FC = () => {
               Don't worry, you can change this later in settings
             </p>
 
+          </div>
+
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={2} totalSteps={10} className="pt-6 border-t border-theme-nav-border" />
+          <ProgressIndicator currentStep={2} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
-          </div>
         </div>
       </main>
 
