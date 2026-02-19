@@ -143,7 +143,19 @@ function LocationSetupWizard({
       await organizationService.updateSettings({ station_mode: selected });
       setMode(selected);
       if (selected === 'single_station') {
-        setStations([{ name: '', address: '', city: '', state: '', zip: '' }]);
+        // Pre-fill from the organization's onboarding address
+        try {
+          const orgAddr = await organizationService.getAddress();
+          setStations([{
+            name: '',
+            address: orgAddr.address || '',
+            city: orgAddr.city || '',
+            state: orgAddr.state || '',
+            zip: orgAddr.zip || '',
+          }]);
+        } catch {
+          setStations([{ name: '', address: '', city: '', state: '', zip: '' }]);
+        }
       }
       setStep('stations');
     } catch {
@@ -801,13 +813,13 @@ export default function LocationsPage() {
 
   useEffect(() => { loadLocations(); }, [loadLocations]);
 
-  // Auto-show wizard when setup is incomplete (no stations, no mode, or no rooms yet)
+  // Auto-show wizard only when initial setup is truly missing (no mode or no stations)
   useEffect(() => {
     if (stationModeLoading || isLoading) return;
-    const { stations: existingStations, rooms: existingRooms } = groupLocations(locations);
-    const hasRooms = existingRooms.size > 0 && !([...existingRooms.keys()].length === 1 && existingRooms.has('__other__'));
-    // Show wizard if: no station mode, or no stations, or stations but no rooms
-    if (stationMode === null || existingStations.length === 0 || !hasRooms) {
+    const { stations: existingStations } = groupLocations(locations);
+    // Show wizard only if station mode has never been set or there are zero stations.
+    // Do NOT re-show just because rooms are missing — that's optional.
+    if (stationMode === null || existingStations.length === 0) {
       setShowWizard(true);
     }
   }, [stationModeLoading, isLoading, locations, stationMode]);

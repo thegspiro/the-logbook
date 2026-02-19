@@ -579,3 +579,37 @@ async def get_setup_checklist(
         total_count=len(items),
         enabled_modules=enabled_modules,
     )
+
+
+@router.get("/address")
+async def get_organization_address(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the organization's physical/mailing address.
+    Used by the location wizard to pre-fill the single-station address.
+    """
+    from app.models.user import Organization
+
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        return {"address": "", "city": "", "state": "", "zip": ""}
+
+    # Prefer physical address; fall back to mailing address
+    if org.physical_address_line1 and not org.physical_address_same:
+        return {
+            "address": org.physical_address_line1 or "",
+            "city": org.physical_city or "",
+            "state": org.physical_state or "",
+            "zip": org.physical_zip or "",
+        }
+    return {
+        "address": org.mailing_address_line1 or "",
+        "city": org.mailing_city or "",
+        "state": org.mailing_state or "",
+        "zip": org.mailing_zip or "",
+    }

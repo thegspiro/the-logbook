@@ -203,7 +203,7 @@ async def create_member(
         new_user.roles = roles
 
     await db.commit()
-    await db.refresh(new_user, ["roles"])
+    await db.refresh(new_user, ["positions"])
 
     await log_audit_event(
         db=db,

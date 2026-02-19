@@ -400,6 +400,11 @@ export const organizationService = {
     const response = await api.patch('/organization/settings', updates);
     return response.data;
   },
+
+  async getAddress(): Promise<{ address: string; city: string; state: string; zip: string }> {
+    const response = await api.get<{ address: string; city: string; state: string; zip: string }>('/organization/address');
+    return response.data;
+  },
 };
 
 export interface SetupChecklistItem {
