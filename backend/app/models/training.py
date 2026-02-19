@@ -1467,7 +1467,7 @@ class Shift(Base):
     station_id = Column(String(36))  # Link to station (future)
 
     # Leadership
-    shift_officer_id = Column(String(36), ForeignKey("users.id"))
+    shift_officer_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Notes
     notes = Column(Text)
