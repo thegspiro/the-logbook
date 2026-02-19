@@ -535,7 +535,24 @@ docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 
 ## Environment Variables Reference
 
-See `.env.example` for basic settings and `.env.example.full` for all options.
+### Choosing Your Environment File
+
+Two templates ship with the project:
+
+- **`.env.example`** — Quick-start config (~30 variables). Covers security keys, database, Redis, CORS, ports, timezone, basic module toggles, email, and backups. This is sufficient for most single-server deployments and defaults to `ENVIRONMENT=production`.
+- **`.env.example.full`** — Complete reference (~100+ variables). Includes everything in the quick-start file plus cloud file storage (AWS S3, Azure Blob, Google Cloud Storage), OAuth/SSO (Azure AD, Google OAuth, LDAP), SMS via Twilio, fine-grained HIPAA controls (session timeout, password age/history, audit retention), advanced security (IP whitelisting, geofencing, account lockout, cookie settings), compliance toggles (GDPR, CCPA, Section 508), feature flags, infrastructure ports (Nginx, Elasticsearch, MinIO, MailHog), and development tools (database seeding, profiling, mock email/SMS). Defaults to `ENVIRONMENT=development`.
+
+**Recommendation:** Start with `.env.example`. If you later need cloud storage, SSO, or advanced security tuning, add the relevant variables from `.env.example.full` — they are fully compatible.
+
+```bash
+# Most deployments
+cp .env.example .env
+
+# Advanced / production-hardened deployments
+cp .env.example.full .env
+```
+
+### Key Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|

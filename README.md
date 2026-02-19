@@ -164,6 +164,8 @@ openssl rand -hex 16  # ENCRYPTION_SALT
 
 docker compose up -d
 ```
+
+> **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft, LDAP), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
 </details>
 
 <details>
@@ -257,6 +259,39 @@ cd the-logbook
 
 Installs directly with systemd services (Ubuntu/Debian only).
 </details>
+
+### Choosing Your Configuration File
+
+Two environment templates are provided. Choose the one that fits your deployment:
+
+| | `.env.example` | `.env.example.full` |
+|---|---|---|
+| **Best for** | Quick setup, most deployments | Production hardening, advanced integrations |
+| **Variables** | ~30 | ~100+ |
+| **Default env** | `production` | `development` |
+| **Setup time** | 5 minutes | 15–30 minutes |
+
+**Use `.env.example` (recommended start)** if you want to get running quickly with sensible defaults. It covers security keys, database, Redis, CORS, ports, timezone, basic module toggles, email, and backups. This is sufficient for most single-server deployments.
+
+```bash
+cp .env.example .env
+```
+
+**Use `.env.example.full`** if you need any of the following:
+- Cloud file storage (AWS S3, Azure Blob, Google Cloud Storage)
+- OAuth / SSO providers (Microsoft Azure AD, Google OAuth, LDAP/Active Directory)
+- SMS notifications (Twilio)
+- Fine-grained HIPAA controls (session timeout, password age, audit retention)
+- Advanced security (IP whitelisting, geofencing, account lockout tuning, cookie settings)
+- Feature flags, compliance toggles (GDPR, CCPA, Section 508)
+- Infrastructure ports (Nginx, Elasticsearch, MinIO, MailHog)
+- Development tools (database seeding, profiling, mock email/SMS)
+
+```bash
+cp .env.example.full .env
+```
+
+Both files include inline comments explaining every variable and commands to generate required secrets. You can always start with `.env.example` and add variables from `.env.example.full` later as your needs grow — they are fully compatible.
 
 ### First Time Setup
 
