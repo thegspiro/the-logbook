@@ -1,7 +1,7 @@
 """Add departure clearance tables
 
 Revision ID: dc01a
-Revises: None
+Revises: 20260218_0900
 Create Date: 2026-02-19
 
 Creates the departure_clearances and departure_clearance_items tables
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = "dc01a"
-down_revision = None
+down_revision = "20260218_0900"
 branch_labels = None
 depends_on = None
 
