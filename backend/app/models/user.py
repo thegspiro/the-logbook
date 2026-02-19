@@ -41,7 +41,7 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.dialects import mysql
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
@@ -298,6 +298,10 @@ class User(Base):
         Index('idx_user_org_email', 'organization_id', 'email', unique=True),
         Index('idx_user_org_membership_number', 'organization_id', 'membership_number', unique=True),
     )
+
+    # Backward-compatible alias so ``selectinload(User.roles)`` and
+    # ``user.roles`` both resolve to the ``positions`` relationship.
+    roles = synonym('positions')
 
     @property
     def full_name(self) -> str:
