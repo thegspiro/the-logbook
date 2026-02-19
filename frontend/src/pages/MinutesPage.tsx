@@ -28,13 +28,13 @@ import { getErrorMessage } from '../utils/errorHandling';
 type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
-  { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800' },
+  { value: 'business', label: 'Business Meeting', color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400' },
   { value: 'special', label: 'Special Meeting', color: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400' },
   { value: 'committee', label: 'Committee Meeting', color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
-  { value: 'board', label: 'Board Meeting', color: 'bg-amber-100 text-amber-800' },
-  { value: 'trustee', label: 'Trustee Meeting', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'board', label: 'Board Meeting', color: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400' },
+  { value: 'trustee', label: 'Trustee Meeting', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400' },
   { value: 'executive', label: 'Executive Meeting', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400' },
-  { value: 'annual', label: 'Annual Meeting', color: 'bg-rose-100 text-rose-800' },
+  { value: 'annual', label: 'Annual Meeting', color: 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400' },
   { value: 'other', label: 'Other', color: 'bg-theme-surface-secondary text-theme-text-primary' },
 ];
 

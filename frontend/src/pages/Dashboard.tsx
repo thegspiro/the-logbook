@@ -413,7 +413,7 @@ const Dashboard: React.FC = () => {
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-green-400 text-2xl font-bold mt-1">{hours.training}</p>
+                  <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{hours.training}</p>
                 )}
               </div>
               <BookOpen className="w-8 h-8 text-green-400" aria-hidden="true" />
@@ -428,7 +428,7 @@ const Dashboard: React.FC = () => {
                 {loadingHours ? (
                   <div className="mt-1 h-8 w-14 bg-slate-700/50 animate-pulse rounded"></div>
                 ) : (
-                  <p className="text-yellow-400 text-2xl font-bold mt-1">{hours.standby}</p>
+                  <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{hours.standby}</p>
                 )}
               </div>
               <Shield className="w-8 h-8 text-yellow-400" aria-hidden="true" />
@@ -741,7 +741,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-3">
                       <div
                         className={`h-2 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
                         style={{ width: `${enrollment.progress_percentage}%` }}

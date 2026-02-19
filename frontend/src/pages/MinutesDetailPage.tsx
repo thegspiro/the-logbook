@@ -42,11 +42,11 @@ const MOTION_STATUS_BADGES: Record<string, string> = {
   passed: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
   tabled: 'bg-yellow-100 text-yellow-800',
-  withdrawn: 'bg-gray-100 text-gray-800',
+  withdrawn: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 const PRIORITY_BADGES: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-600',
+  low: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
   medium: 'bg-blue-100 text-blue-700',
   high: 'bg-orange-100 text-orange-700',
   urgent: 'bg-red-100 text-red-700',
@@ -56,7 +56,7 @@ const ACTION_STATUS_BADGES: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
   completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
   overdue: 'bg-red-100 text-red-800',
 };
 
@@ -1051,7 +1051,7 @@ export const MinutesDetailPage: React.FC = () => {
       {/* Link Event Modal */}
       {showLinkEventModal && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="link-event-title"
@@ -1104,7 +1104,7 @@ export const MinutesDetailPage: React.FC = () => {
       {/* Reject Modal */}
       {showRejectModal && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reject-title"

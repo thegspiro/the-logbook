@@ -40,7 +40,7 @@ export const AccessLogsTab: React.FC = () => {
       case 'PUT': return 'bg-yellow-100 text-yellow-800';
       case 'PATCH': return 'bg-orange-100 text-orange-800';
       case 'DELETE': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
     }
   };
 

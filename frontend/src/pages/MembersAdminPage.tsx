@@ -465,7 +465,7 @@ export const MembersAdminPage: React.FC = () => {
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === 'active'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}
                     >
                       {user.status}
@@ -576,7 +576,7 @@ export const MembersAdminPage: React.FC = () => {
       {/* Edit Profile Modal */}
       {editingProfile && profileUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-profile-title"
@@ -714,7 +714,7 @@ export const MembersAdminPage: React.FC = () => {
       {/* Role Assignment Modal (for View by Member) */}
       {editingRoles && selectedUser && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-roles-title"
@@ -791,7 +791,7 @@ export const MembersAdminPage: React.FC = () => {
       {/* Member Assignment Modal (for View by Role) */}
       {editingMembers && selectedRole && (
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
           aria-labelledby="manage-members-title"

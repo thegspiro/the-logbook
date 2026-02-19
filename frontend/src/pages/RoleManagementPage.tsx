@@ -227,7 +227,7 @@ export const RoleManagementPage: React.FC = () => {
         {/* Create/Edit Role Modal */}
         {showCreateModal && (
           <div
-            className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"

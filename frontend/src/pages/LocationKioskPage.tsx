@@ -126,9 +126,9 @@ const LocationKioskPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-8">
         <div className="text-center max-w-md">
-          <MapPin className="w-16 h-16 text-slate-500 mx-auto mb-6" />
+          <MapPin className="w-16 h-16 text-slate-400 mx-auto mb-6" />
           <h1 className="text-2xl font-bold text-slate-300 mb-4">Display Unavailable</h1>
-          <p className="text-slate-400">{error}</p>
+          <p className="text-slate-300">{error}</p>
         </div>
       </div>
     );
@@ -186,7 +186,7 @@ const LocationKioskPage: React.FC = () => {
               </div>
               <h2 className="text-4xl font-bold text-white mb-3">{currentEvent.event_name}</h2>
               {currentEvent.event_type && (
-                <p className="text-lg text-slate-400 capitalize mb-2">
+                <p className="text-lg text-slate-300 capitalize mb-2">
                   {currentEvent.event_type.replace('_', ' ')}
                 </p>
               )}
@@ -212,7 +212,7 @@ const LocationKioskPage: React.FC = () => {
             <p className="text-xl text-slate-300 font-medium">
               Scan with your phone to check in
             </p>
-            <p className="text-sm text-slate-500 mt-2">
+            <p className="text-sm text-slate-300 mt-2">
               You will be prompted to log in if needed
             </p>
           </div>
@@ -222,8 +222,8 @@ const LocationKioskPage: React.FC = () => {
             <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-slate-800 flex items-center justify-center">
               <MapPin className="w-12 h-12 text-slate-600" />
             </div>
-            <h2 className="text-3xl font-bold text-slate-400 mb-4">No Active Events</h2>
-            <p className="text-lg text-slate-500">
+            <h2 className="text-3xl font-bold text-slate-300 mb-4">No Active Events</h2>
+            <p className="text-lg text-slate-300">
               QR codes will appear here automatically when an event is scheduled in this room.
             </p>
           </div>

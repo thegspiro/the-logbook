@@ -163,9 +163,9 @@ export const MemberProfilePage: React.FC = () => {
       case 'failed':
         return 'bg-red-100 text-red-800';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
     }
   };
 
@@ -314,7 +314,7 @@ export const MemberProfilePage: React.FC = () => {
                     <span
                       key={role.id}
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        role.is_system ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                        role.is_system ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                       }`}
                     >
                       {role.name}
@@ -327,7 +327,7 @@ export const MemberProfilePage: React.FC = () => {
               className={`px-3 py-1 text-sm font-semibold rounded-full ${
                 user.status === 'active'
                   ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
               }`}
             >
               {user.status}

@@ -20,18 +20,18 @@ import type { ActionItemSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 
 const STATUS_BADGES: Record<string, string> = {
-  open: 'bg-yellow-100 text-yellow-800',
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
 const PRIORITY_BADGES: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-600',
-  medium: 'bg-blue-100 text-blue-700',
-  high: 'bg-orange-100 text-orange-700',
-  urgent: 'bg-red-100 text-red-700',
+  low: 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
 const ActionItemsPage: React.FC = () => {
@@ -99,11 +99,11 @@ const ActionItemsPage: React.FC = () => {
         </div>
         <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
           <p className="text-sm text-theme-text-muted">Open</p>
-          <p className="text-2xl font-bold text-blue-400">{open}</p>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{open}</p>
         </div>
         <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-4">
           <p className="text-sm text-theme-text-muted">Overdue</p>
-          <p className="text-2xl font-bold text-red-400">{overdue}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-400">{overdue}</p>
         </div>
       </div>
 

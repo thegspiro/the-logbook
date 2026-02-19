@@ -260,7 +260,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   type="text"
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
                   placeholder="Search members by name or badge number..."
                 />
                 {filteredMembers.length > 0 && (
@@ -272,7 +272,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         onClick={() => selectMember(member)}
                         className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between text-sm"
                       >
-                        <span className="text-white">
+                        <span className="text-theme-text-primary">
                           {member.first_name} {member.last_name}
                         </span>
                         {member.badge_number && (
@@ -306,7 +306,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value, user_id: '' }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-sm py-2 px-3 text-theme-text-primary focus:ring-blue-500 focus:border-blue-500 text-sm"
                 placeholder={formData.user_id ? formData.name : 'Or type a name manually'}
               />
             </div>
