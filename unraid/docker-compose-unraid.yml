@@ -250,9 +250,6 @@ services:
 networks:
   logbook-internal:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
 
 # ============================================
 # Volumes (Alternative to host paths)
